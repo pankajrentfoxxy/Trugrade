@@ -688,20 +688,15 @@ export const GRADE_CAP_RULES = Object.freeze({
   notMeasuredOnRequired: 'A' as Grade,
 });
 
-/** Areas whose absence or failure is material enough to cap a grade. */
-export const QC_REQUIRED_AREAS = Object.freeze([
-  'CHASSIS',
-  'LID',
-  'PALMREST',
-  'KEYBOARD',
-  'TRACKPAD',
-  'SCREEN',
-  'HINGES',
-  'PORTS',
-  'BATTERY',
-  'STORAGE',
-  'MEMORY',
-] as const);
+/**
+ * Areas whose absence or failure is material enough to cap a grade.
+ *
+ * All twelve. THERMALS is on the list deliberately: `07 §3.1` found DeviceSure
+ * treating an unmeasured thermal system as neutral, and "an unmeasured thermal
+ * system on a gaming laptop is a material unknown". Under r.7(5) we vouch for the
+ * grade, so a component nobody measured cannot quietly not count.
+ */
+export const QC_REQUIRED_AREAS = QC_AREAS;
 
 /** VR-113 */
 export const QC_AREA_SCORE = Object.freeze({ min: 0, max: 10 });

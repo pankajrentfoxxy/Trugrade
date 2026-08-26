@@ -51,6 +51,57 @@ const CONFIG: Array<[string, unknown, string]> = [
   ],
   ['qc.seal_code_prefix', SEAL_CODE_PREFIX_DEFAULT, 'Physical seal rolls are printed against this'],
   [
+    'qc.mode_first_listing',
+    'SUPERVISED',
+    'Q15 — our QC expert attends a vendor first listing in person. One visit, per vendor.',
+  ],
+  [
+    'qc.mode_steady_state',
+    'VENDOR_SELF_SERVE',
+    'Q15 — thereafter the vendor runs DeviceSure themselves on an activation key + USB agent.',
+  ],
+  [
+    'qc.auto_approve_min_score',
+    75,
+    'Q15 — a score STRICTLY ABOVE this auto-approves the listing. Necessary, not sufficient: see the five gates below.',
+  ],
+  [
+    'qc.auto_approve_block_on_fail',
+    true,
+    'A FAIL on a required area blocks whatever the aggregate says. 07 §3.1: a weighted mean of twelve components swallows one failure — eleven at 100 and one at 30 averages ~94, and the dead USB port disappears.',
+  ],
+  [
+    'qc.auto_approve_block_on_not_measured',
+    true,
+    'An unmeasured required area is a material unknown we would be vouching for under CP e-Comm r.7(5). A missing value is not a passing value.',
+  ],
+  [
+    'qc.auto_approve_require_grade_match',
+    true,
+    'Auto-listing at the vendor-declared grade when inspection found a different one is OUR misrepresentation under r.7(2), not theirs.',
+  ],
+  ['qc.auto_approve_require_seal', true, 'No seal, and no seal without a photograph.'],
+  [
+    'qc.auto_approve_require_serial_match',
+    true,
+    'serial_matches = FALSE is a hard stop: the label does not belong to the laptop.',
+  ],
+  [
+    'qc.score_clustering_alert_band',
+    5,
+    'Q15 risk — publishing the threshold creates an incentive to hit exactly 76. Flags a vendor with an anomalous share of units landing in [75, 80) for 100% audit recheck.',
+  ],
+  [
+    'qc.score_clustering_ratio_alert',
+    2.5,
+    'Observed-to-expected share in the band above which clustering is treated as gaming rather than chance.',
+  ],
+  [
+    'qc.score_clustering_min_sample',
+    20,
+    'Never flag clustering on a small sample — the same honesty rule as the headline average.',
+  ],
+  [
     'qc.min_sample_for_headline',
     10,
     'Q23 — below this a supply point shows "New supplier · N units", never a percentage. CCPA Misleading Advertisements Guidelines 2022.',
@@ -73,8 +124,8 @@ const CONFIG: Array<[string, unknown, string]> = [
   // --- tax -----------------------------------------------------------------
   [
     'tax.tds_applicable',
-    false,
-    'Q7 — s.393(1) Sl.8(ii) applies only if OUR turnover exceeded Rs 10 crore last FY. False keeps the code path inert, not zero-rated.',
+    true,
+    'Q7 ANSWERED 26 Aug 2026 — TrueTech exceeded Rs 10 crore in FY 2025-26, so s.393(1) Table Sl. No. 8(ii) applies to our purchases. Getting this wrong costs 30% of the purchase value as disallowed expenditure.',
   ],
   ['tax.tds_vendor_threshold_inr', 5000000, 'Rs 50 lakh per vendor per financial year'],
   ['tax.tds_rate_pct', 0.1, '0.1% above the threshold'],
@@ -126,18 +177,53 @@ const CONFIG: Array<[string, unknown, string]> = [
   ],
 ];
 
-async function seedConfig(): Promise<number> {
-  let written = 0;
+async function seedConfig(): Promise<{ added: number; updated: number }> {
+  let added = 0;
+  let updated = 0;
+
   for (const [key, value, note] of CONFIG) {
-    const existing = await prisma.platform_config.findFirst({ where: { key } });
-    if (existing) continue;
+    const [current] = await prisma.$queryRaw<
+      Array<{ value_json: unknown; changed_by: string | null }>
+    >`
+      SELECT value_json, changed_by FROM platform.platform_config
+      WHERE key = ${key} ORDER BY effective_from DESC LIMIT 1`;
+
+    const desired = JSON.stringify(value);
+
+    if (!current) {
+      await prisma.$executeRaw`
+        INSERT INTO platform.platform_config (key, value_json, description, effective_from)
+        VALUES (${key}, ${desired}::jsonb, ${note}, now())
+        ON CONFLICT (key, effective_from) DO NOTHING`;
+      added++;
+      continue;
+    }
+
+    if (JSON.stringify(current.value_json) === desired) continue;
+
+    // The default changed — a decision was answered, or a threshold retuned.
+    // Config is effective-dated, so that is a NEW row, never an overwrite: the
+    // old value stays readable, which is what lets you explain a report produced
+    // under the previous threshold.
+    //
+    // But only when nobody has edited it by hand. `changed_by` is set by the
+    // admin config editor, and a seed re-run must never quietly revert an ops
+    // decision made at 2am during an incident.
+    if (current.changed_by !== null) {
+      console.warn(
+        `  ! ${key}: default is now ${desired} but the live value was set by a person. Left alone.`,
+      );
+      continue;
+    }
+
     await prisma.$executeRaw`
       INSERT INTO platform.platform_config (key, value_json, description, effective_from)
-      VALUES (${key}, ${JSON.stringify(value)}::jsonb, ${note}, now())
+      VALUES (${key}, ${desired}::jsonb, ${note}, now())
       ON CONFLICT (key, effective_from) DO NOTHING`;
-    written++;
+    updated++;
   }
-  return written;
+
+  return { added, updated };
 }
 
 /**
@@ -184,7 +270,9 @@ async function main(): Promise<void> {
   console.log('Seeding reference data…');
 
   const config = await seedConfig();
-  console.log(`  platform_config: ${config} new key(s), ${CONFIG.length} total`);
+  console.log(
+    `  platform_config: ${config.added} added, ${config.updated} re-dated, ${CONFIG.length} total`,
+  );
 
   const rbac = await seedRbac();
   console.log(
