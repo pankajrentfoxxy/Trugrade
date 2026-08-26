@@ -1,0 +1,2904 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["catalog", "customer", "identity", "kyc", "listing", "logistics", "ops", "ordering", "payment", "platform", "procurement", "qc", "vendor"]
+}
+
+model brand {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String              @unique
+  slug              String              @unique
+  logo_key          String?
+  is_active         Boolean             @default(true)
+  series            series[]
+  vendor_capability vendor_capability[]
+
+  @@schema("catalog")
+}
+
+model catalog_change_log {
+  id           BigInt        @id @default(autoincrement())
+  sku_id       String        @db.Uuid
+  field        String
+  old_value    String?
+  new_value    String?
+  changed_by   String?       @db.Uuid
+  changed_at   DateTime      @default(now()) @db.Timestamptz(6)
+  user_account user_account? @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku          sku           @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model model {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  series_id    String   @db.Uuid
+  name         String
+  model_year   Int?
+  form_factor  String?
+  msrp_new_inr Decimal? @db.Decimal(14, 2)
+  description  String?
+  is_active    Boolean  @default(true)
+  series       series   @relation(fields: [series_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku          sku[]
+
+  @@unique([series_id, name])
+  @@schema("catalog")
+}
+
+model series {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  brand_id  String  @db.Uuid
+  name      String
+  slug      String
+  is_active Boolean @default(true)
+  model     model[]
+  brand     brand   @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([brand_id, name])
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model sku {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  model_id           String               @db.Uuid
+  sku_code           String               @unique
+  normalized_key     String               @unique
+  cpu_brand          String
+  cpu_family         String
+  cpu_model          String
+  cpu_generation     String
+  cores              Int?
+  threads            Int?
+  ram_gb             Int
+  ram_type           String?
+  ram_upgradable_to  Int?
+  storage_type       String
+  storage_gb         Int
+  gpu_type           String
+  gpu_model          String?
+  screen_size_inch   Decimal              @db.Decimal(4, 1)
+  resolution         String
+  panel_type         String?
+  is_touch           Boolean              @default(false)
+  os_supported       String
+  ports_json         Json?
+  weight_kg          Decimal?             @db.Decimal(5, 2)
+  battery_wh         Int?
+  charger_watt       Int?
+  hsn_code           String               @default("8471")
+  gst_rate           Decimal              @default(18.00) @db.Decimal(5, 2)
+  version            Int                  @default(1)
+  is_active          Boolean              @default(true)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  created_by         String?              @db.Uuid
+  catalog_change_log catalog_change_log[]
+  user_account       user_account?        @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model              model                @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku_image          sku_image[]
+  sku_request        sku_request[]
+  listing            listing[]
+  unit               unit[]
+  order_line         order_line[]
+  rfq                rfq[]
+  invoice_line       invoice_line[]
+
+  @@index([cpu_generation, ram_gb, storage_gb], map: "ix_sku_filter")
+  @@index([ports_json], map: "ix_sku_ports", type: Gin)
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sku_image {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku_id     String @db.Uuid
+  file_key   String
+  image_type String
+  sort_order Int    @default(0)
+  sku        sku    @relation(fields: [sku_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sku_request {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id   String        @db.Uuid
+  raw_brand       String
+  raw_model       String
+  raw_config      String
+  spec_url        String?
+  photo_key       String?
+  status          String        @default("PENDING")
+  resolved_sku_id String?       @db.Uuid
+  resolved_by     String?       @db.Uuid
+  resolved_at     DateTime?     @db.Timestamptz(6)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  user_account    user_account? @relation(fields: [resolved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku             sku?          @relation(fields: [resolved_sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization    organization  @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status, created_at], map: "ix_skureq_queue")
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model buyer_approval_policy {
+  id                                                                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                            String                         @db.Uuid
+  user_id                                                           String?                        @db.Uuid
+  role_id                                                           String?                        @db.Uuid
+  max_order_value                                                   Decimal?                       @db.Decimal(14, 2)
+  max_monthly_value                                                 Decimal?                       @db.Decimal(14, 2)
+  max_units_per_order                                               Int?
+  allowed_payment_modes                                             Unsupported("_payment_mode")[] @default(dbgenerated("ARRAY['PREPAID'::payment_mode]"))
+  requires_approval_above                                           Decimal?                       @db.Decimal(14, 2)
+  approver_user_id                                                  String?                        @db.Uuid
+  cost_centres_allowed                                              String[]
+  is_active                                                         Boolean                        @default(true)
+  user_account_buyer_approval_policy_approver_user_idTouser_account user_account?                  @relation("buyer_approval_policy_approver_user_idTouser_account", fields: [approver_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                                      organization                   @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role                                                              role?                          @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_buyer_approval_policy_user_idTouser_account          user_account?                  @relation("buyer_approval_policy_user_idTouser_account", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_approval                                                    order_approval[]
+
+  @@schema("customer")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model buyer_preference {
+  org_id                  String                            @id @db.Uuid
+  preferred_brands        String[]
+  preferred_grades        Unsupported("_grade_type")[]
+  min_qc_score            Int?
+  min_battery_band        Unsupported("battery_band")?
+  typical_ram_gb          Int?
+  typical_storage_gb      Int?
+  budget_min              Decimal?                          @db.Decimal(14, 2)
+  budget_max              Decimal?                          @db.Decimal(14, 2)
+  typical_order_qty       Int?
+  buying_frequency        String?
+  requires_warranty_min   Unsupported("warranty_duration")?
+  requires_data_wipe_cert Boolean                           @default(false)
+  updated_at              DateTime                          @default(now()) @db.Timestamptz(6)
+  organization            organization                      @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("customer")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model buyer_profile {
+  org_id                 String                         @id @db.Uuid
+  industry               String?
+  employee_count         Int?
+  annual_volume_estimate Int?
+  credit_limit           Decimal                        @default(0) @db.Decimal(14, 2)
+  credit_terms_days      Int                            @default(0)
+  credit_used            Decimal                        @default(0) @db.Decimal(14, 2)
+  payment_mode_allowed   Unsupported("_payment_mode")[] @default(dbgenerated("ARRAY['PREPAID'::payment_mode]"))
+  onboarding_status      Unsupported("org_status")      @default(dbgenerated("'REGISTERED'::org_status"))
+  verified_at            DateTime?                      @db.Timestamptz(6)
+  organization           organization                   @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("customer")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model credit_application {
+  id                                                                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                              String        @db.Uuid
+  requested_limit                                                     Decimal       @db.Decimal(14, 2)
+  requested_terms_days                                                Int
+  annual_turnover                                                     Decimal?      @db.Decimal(14, 2)
+  years_in_business                                                   Int?
+  financials_doc_id                                                   String?       @db.Uuid
+  bank_statement_doc_id                                               String?       @db.Uuid
+  security_deposit_amount                                             Decimal?      @db.Decimal(14, 2)
+  pdc_or_bg_details                                                   String?
+  credit_bureau_score                                                 Int?
+  internal_risk_grade                                                 String?
+  status                                                              String        @default("SUBMITTED")
+  approved_limit                                                      Decimal?      @db.Decimal(14, 2)
+  approved_terms_days                                                 Int?
+  reviewed_by                                                         String?       @db.Uuid
+  reviewed_at                                                         DateTime?     @db.Timestamptz(6)
+  review_notes                                                        String?
+  valid_until                                                         DateTime?     @db.Date
+  created_at                                                          DateTime      @default(now()) @db.Timestamptz(6)
+  kyc_document_credit_application_bank_statement_doc_idTokyc_document kyc_document? @relation("credit_application_bank_statement_doc_idTokyc_document", fields: [bank_statement_doc_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  kyc_document_credit_application_financials_doc_idTokyc_document     kyc_document? @relation("credit_application_financials_doc_idTokyc_document", fields: [financials_doc_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                                        organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account                                                        user_account? @relation(fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("customer")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model org_preference {
+  org_id                         String       @id @db.Uuid
+  notify_email                   Boolean      @default(true)
+  notify_sms                     Boolean      @default(true)
+  notify_whatsapp                Boolean      @default(true)
+  notify_push                    Boolean      @default(true)
+  notify_email_address           String?      @db.Citext
+  digest_frequency               String       @default("REALTIME")
+  quiet_hours_from               DateTime?    @db.Time(6)
+  quiet_hours_to                 DateTime?    @db.Time(6)
+  preferred_language             String       @default("en")
+  invoice_delivery_email         String?      @db.Citext
+  auto_accept_orders             Boolean      @default(false)
+  auto_resource_on_qc_fail       Boolean      @default(true)
+  default_shipping_address_id    String?      @db.Uuid
+  default_billing_gst_profile_id String?      @db.Uuid
+  po_required                    Boolean      @default(false)
+  updated_at                     DateTime     @default(now()) @db.Timestamptz(6)
+  gst_profile                    gst_profile? @relation(fields: [default_billing_gst_profile_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address                    org_address? @relation(fields: [default_shipping_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                   organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("customer")
+}
+
+model saved_search {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id            String       @db.Uuid
+  user_id           String       @db.Uuid
+  name              String
+  filters_json      Json
+  alert_enabled     Boolean      @default(false)
+  alert_price_below Decimal?     @db.Decimal(14, 2)
+  last_alerted_at   DateTime?    @db.Timestamptz(6)
+  created_at        DateTime     @default(now()) @db.Timestamptz(6)
+  organization      organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account      user_account @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("customer")
+}
+
+/// This table is a partition table and requires additional setup for migrations. Visit https://pris.ly/d/partition-tables for more info.
+model audit_log {
+  id            BigInt   @default(autoincrement())
+  actor_user_id String?  @db.Uuid
+  actor_org_id  String?  @db.Uuid
+  action        String
+  entity_type   String?
+  entity_id     String?
+  before_json   Json?
+  after_json    Json?
+  ip            String?  @db.Inet
+  user_agent    String?
+  request_id    String?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([id, created_at])
+  @@index([actor_user_id, created_at(sort: Desc)], map: "ix_audit_actor")
+  @@index([entity_type, entity_id], map: "ix_audit_entity")
+  @@index([request_id], map: "ix_audit_req")
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model contact_change_request {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String       @db.Uuid
+  field               String
+  old_value_masked    String
+  new_value           String
+  otp_old_verified_at DateTime?    @db.Timestamptz(6)
+  otp_new_verified_at DateTime?    @db.Timestamptz(6)
+  status              String       @default("PENDING")
+  notified_old_at     DateTime?    @db.Timestamptz(6)
+  ip                  String?      @db.Inet
+  user_agent          String?
+  created_at          DateTime     @default(now()) @db.Timestamptz(6)
+  completed_at        DateTime?    @db.Timestamptz(6)
+  user_account        user_account @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model org_address {
+  id                                             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                         String                      @db.Uuid
+  type                                           Unsupported("address_type")
+  label                                          String?
+  line1                                          String
+  line2                                          String?
+  city                                           String
+  state                                          String
+  state_code                                     String                      @db.Char(2)
+  pincode                                        String                      @db.Char(6)
+  contact_name                                   String
+  contact_mobile                                 String
+  landmark                                       String?
+  delivery_instructions                          String?
+  latitude                                       Decimal?                    @db.Decimal(9, 6)
+  longitude                                      Decimal?                    @db.Decimal(9, 6)
+  google_place_id                                String?
+  is_default                                     Boolean                     @default(false)
+  is_pickup_enabled                              Boolean                     @default(false)
+  is_billing_enabled                             Boolean                     @default(false)
+  is_active                                      Boolean                     @default(true)
+  verified_at                                    DateTime?                   @db.Timestamptz(6)
+  created_at                                     DateTime                    @default(now()) @db.Timestamptz(6)
+  org_preference                                 org_preference[]
+  organization                                   organization                @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  org_contact                                    org_contact[]
+  listing                                        listing[]
+  hub                                            hub[]
+  pickup_task                                    pickup_task[]
+  route_stop                                     route_stop[]
+  shipment_shipment_from_address_idToorg_address shipment[]                  @relation("shipment_from_address_idToorg_address")
+  shipment_shipment_to_address_idToorg_address   shipment[]                  @relation("shipment_to_address_idToorg_address")
+  order_order_billing_address_idToorg_address    order[]                     @relation("order_billing_address_idToorg_address")
+  order_order_shipping_address_idToorg_address   order[]                     @relation("order_shipping_address_idToorg_address")
+  qc_report                                      qc_report[]
+  qc_visit                                       qc_visit[]
+  vendor_facility                                vendor_facility?
+  vendor_profile                                 vendor_profile[]
+
+  @@index([pincode], map: "ix_addr_pincode")
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model org_contact {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id             String        @db.Uuid
+  contact_type       String
+  full_name          String
+  designation        String?
+  mobile             String
+  alternate_mobile   String?
+  email              String?       @db.Citext
+  whatsapp_number    String?
+  user_id            String?       @db.Uuid
+  address_id         String?       @db.Uuid
+  is_primary         Boolean       @default(false)
+  is_escalation      Boolean       @default(false)
+  available_from     DateTime?     @db.Time(6)
+  available_to       DateTime?     @db.Time(6)
+  preferred_language String        @default("en")
+  is_active          Boolean       @default(true)
+  org_address        org_address?  @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account       user_account? @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit           qc_visit[]
+
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model organization {
+  id                                                                   String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_type                                                             Unsupported("org_type")
+  legal_name                                                           String
+  trade_name                                                           String?
+  constitution                                                         Unsupported("constitution_type")?
+  status                                                               Unsupported("org_status")         @default(dbgenerated("'LEAD'::org_status"))
+  tier                                                                 Unsupported("vendor_tier")?       @default(dbgenerated("'BRONZE'::vendor_tier"))
+  risk_score                                                           Int?
+  transaction_model                                                    Unsupported("txn_model")          @default(dbgenerated("'AGENCY'::txn_model"))
+  related_org_id                                                       String?                           @db.Uuid
+  preferred_locale                                                     String                            @default("en")
+  website                                                              String?
+  year_established                                                     Int?
+  annual_turnover_band                                                 String?
+  employee_count_band                                                  String?
+  logo_key                                                             String?
+  about                                                                String?
+  profile_completeness_pct                                             Int                               @default(0)
+  first_order_at                                                       DateTime?                         @db.Timestamptz(6)
+  lifetime_gmv                                                         Decimal                           @default(0) @db.Decimal(14, 2)
+  created_at                                                           DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at                                                           DateTime                          @default(now()) @db.Timestamptz(6)
+  created_by                                                           String?                           @db.Uuid
+  updated_by                                                           String?                           @db.Uuid
+  deleted_at                                                           DateTime?                         @db.Timestamptz(6)
+  sku_request                                                          sku_request[]
+  buyer_approval_policy                                                buyer_approval_policy[]
+  buyer_preference                                                     buyer_preference?
+  buyer_profile                                                        buyer_profile?
+  credit_application                                                   credit_application[]
+  org_preference                                                       org_preference?
+  saved_search                                                         saved_search[]
+  org_address                                                          org_address[]
+  org_contact                                                          org_contact[]
+  organization                                                         organization?                     @relation("organizationToorganization", fields: [related_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_organization                                                   organization[]                    @relation("organizationToorganization")
+  user_account                                                         user_account[]
+  user_invitation                                                      user_invitation[]
+  user_role                                                            user_role[]
+  agreement_acceptance                                                 agreement_acceptance[]
+  bank_account                                                         bank_account[]
+  consent_record                                                       consent_record[]
+  gst_profile                                                          gst_profile[]
+  kyc_document                                                         kyc_document[]
+  kyc_review                                                           kyc_review[]
+  onboarding_progress                                                  onboarding_progress[]
+  pan_record                                                           pan_record?
+  profile_change_request                                               profile_change_request[]
+  registration_lead_registration_lead_converted_org_idToorganization   registration_lead?                @relation("registration_lead_converted_org_idToorganization")
+  registration_lead_registration_lead_referred_by_org_idToorganization registration_lead[]               @relation("registration_lead_referred_by_org_idToorganization")
+  tax_declaration                                                      tax_declaration[]
+  trade_reference                                                      trade_reference[]
+  verification_check                                                   verification_check[]
+  listing                                                              listing[]
+  unit                                                                 unit[]
+  pickup_task                                                          pickup_task[]
+  cart                                                                 cart[]
+  order                                                                order[]
+  rfq                                                                  rfq[]
+  rfq_quote                                                            rfq_quote[]
+  sub_order                                                            sub_order[]
+  invoice_invoice_issuer_org_idToorganization                          invoice[]                         @relation("invoice_issuer_org_idToorganization")
+  invoice_invoice_recipient_org_idToorganization                       invoice[]                         @relation("invoice_recipient_org_idToorganization")
+  ledger_entry                                                         ledger_entry[]
+  payment                                                              payment[]
+  payout                                                               payout[]
+  penalty                                                              penalty[]
+  buyer_review_buyer_review_buyer_org_idToorganization                 buyer_review[]                    @relation("buyer_review_buyer_org_idToorganization")
+  buyer_review_buyer_review_vendor_org_idToorganization                buyer_review[]                    @relation("buyer_review_vendor_org_idToorganization")
+  data_subject_request                                                 data_subject_request[]
+  dispute_dispute_against_org_idToorganization                         dispute[]                         @relation("dispute_against_org_idToorganization")
+  dispute_dispute_raised_by_org_idToorganization                       dispute[]                         @relation("dispute_raised_by_org_idToorganization")
+  return_request                                                       return_request[]
+  ticket                                                               ticket[]
+  vendor_scorecard                                                     vendor_scorecard[]
+  warranty_claim                                                       warranty_claim[]
+  qc_batch                                                             qc_batch[]
+  qc_visit                                                             qc_visit[]
+  vendor_capability                                                    vendor_capability[]
+  vendor_certification                                                 vendor_certification[]
+  vendor_facility                                                      vendor_facility[]
+  vendor_payout_preference                                             vendor_payout_preference?
+  vendor_profile                                                       vendor_profile?
+  vendor_sourcing_declaration                                          vendor_sourcing_declaration[]
+
+  @@index([legal_name(ops: raw("gin_trgm_ops"))], map: "ix_org_name_trgm", type: Gin)
+  @@index([org_type, status], map: "ix_org_type_status")
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model otp_request {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  target      String
+  purpose     String
+  code_hash   String
+  attempts    Int       @default(0)
+  expires_at  DateTime  @db.Timestamptz(6)
+  consumed_at DateTime? @db.Timestamptz(6)
+  ref_type    String?
+  ref_id      String?   @db.Uuid
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([target, purpose, created_at(sort: Desc)], map: "ix_otp_target")
+  @@schema("identity")
+}
+
+model permission {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String            @unique
+  module          String
+  description     String?
+  is_sensitive    Boolean           @default(false)
+  role_permission role_permission[]
+
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model pincode_master {
+  pincode                String                   @id @db.Char(6)
+  district               String
+  state                  String
+  state_code             String                   @db.Char(2)
+  zone                   String
+  is_metro               Boolean                  @default(false)
+  is_ncr                 Boolean                  @default(false)
+  pincode_serviceability pincode_serviceability[]
+
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model role {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                  String                  @unique
+  scope                 String
+  description           String?
+  buyer_approval_policy buyer_approval_policy[]
+  role_permission       role_permission[]
+  user_invitation       user_invitation[]
+  user_role             user_role[]
+
+  @@schema("identity")
+}
+
+model role_permission {
+  role_id       String     @db.Uuid
+  permission_id String     @db.Uuid
+  permission    permission @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role          role       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([role_id, permission_id])
+  @@schema("identity")
+}
+
+model session {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String       @db.Uuid
+  refresh_token_hash String       @unique
+  token_family_id    String       @db.Uuid
+  ip                 String?      @db.Inet
+  user_agent         String?
+  device_id          String?
+  expires_at         DateTime     @db.Timestamptz(6)
+  revoked_at         DateTime?    @db.Timestamptz(6)
+  created_at         DateTime     @default(now()) @db.Timestamptz(6)
+  user_account       user_account @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "ix_session_expiry")
+  @@index([token_family_id], map: "ix_session_family")
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_account {
+  id                                                                         String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                                     String                        @db.Uuid
+  full_name                                                                  String
+  email                                                                      String?                       @unique @db.Citext
+  mobile                                                                     String?                       @unique
+  email_verified_at                                                          DateTime?                     @db.Timestamptz(6)
+  mobile_verified_at                                                         DateTime?                     @db.Timestamptz(6)
+  password_hash                                                              String?
+  mfa_enabled                                                                Boolean                       @default(false)
+  mfa_secret_enc                                                             Bytes?
+  status                                                                     String                        @default("ACTIVE")
+  locale                                                                     String                        @default("en")
+  job_title                                                                  String?
+  department                                                                 String?
+  is_org_owner                                                               Boolean                       @default(false)
+  profile_photo_key                                                          String?
+  timezone                                                                   String                        @default("Asia/Kolkata")
+  onboarding_completed_at                                                    DateTime?                     @db.Timestamptz(6)
+  terms_accepted_version                                                     String?
+  last_login_at                                                              DateTime?                     @db.Timestamptz(6)
+  failed_login_count                                                         Int                           @default(0)
+  locked_until                                                               DateTime?                     @db.Timestamptz(6)
+  created_at                                                                 DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                                                                 DateTime                      @default(now()) @db.Timestamptz(6)
+  catalog_change_log                                                         catalog_change_log[]
+  sku                                                                        sku[]
+  sku_request                                                                sku_request[]
+  buyer_approval_policy_buyer_approval_policy_approver_user_idTouser_account buyer_approval_policy[]       @relation("buyer_approval_policy_approver_user_idTouser_account")
+  buyer_approval_policy_buyer_approval_policy_user_idTouser_account          buyer_approval_policy[]       @relation("buyer_approval_policy_user_idTouser_account")
+  credit_application                                                         credit_application[]
+  saved_search                                                               saved_search[]
+  contact_change_request                                                     contact_change_request[]
+  org_contact                                                                org_contact[]
+  session                                                                    session[]
+  organization                                                               organization                  @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_invitation_user_invitation_accepted_user_idTouser_account             user_invitation[]             @relation("user_invitation_accepted_user_idTouser_account")
+  user_invitation_user_invitation_invited_byTouser_account                   user_invitation[]             @relation("user_invitation_invited_byTouser_account")
+  user_role_user_role_granted_byTouser_account                               user_role[]                   @relation("user_role_granted_byTouser_account")
+  user_role_user_role_user_idTouser_account                                  user_role[]                   @relation("user_role_user_idTouser_account")
+  agreement_acceptance                                                       agreement_acceptance[]
+  blacklist_entry                                                            blacklist_entry[]
+  consent_record                                                             consent_record[]
+  kyc_document_kyc_document_reviewed_byTouser_account                        kyc_document[]                @relation("kyc_document_reviewed_byTouser_account")
+  kyc_document_kyc_document_uploaded_byTouser_account                        kyc_document[]                @relation("kyc_document_uploaded_byTouser_account")
+  kyc_review_kyc_review_reviewer_idTouser_account                            kyc_review[]                  @relation("kyc_review_reviewer_idTouser_account")
+  kyc_review_kyc_review_second_approver_idTouser_account                     kyc_review[]                  @relation("kyc_review_second_approver_idTouser_account")
+  profile_change_request                                                     profile_change_request[]
+  registration_lead                                                          registration_lead[]
+  tax_declaration                                                            tax_declaration[]
+  trade_reference                                                            trade_reference[]
+  verification_check                                                         verification_check[]
+  listing                                                                    listing[]
+  price_history                                                              price_history[]
+  stock_movement                                                             stock_movement[]
+  custody_event                                                              custody_event[]
+  rider                                                                      rider?
+  shipment                                                                   shipment[]
+  cart                                                                       cart[]
+  order                                                                      order[]
+  order_approval_order_approval_approver_user_idTouser_account               order_approval[]              @relation("order_approval_approver_user_idTouser_account")
+  order_approval_order_approval_requested_byTouser_account                   order_approval[]              @relation("order_approval_requested_byTouser_account")
+  penalty                                                                    penalty[]
+  settlement_run                                                             settlement_run[]
+  buyer_review                                                               buyer_review[]
+  data_subject_request_data_subject_request_handled_byTouser_account         data_subject_request[]        @relation("data_subject_request_handled_byTouser_account")
+  data_subject_request_data_subject_request_user_idTouser_account            data_subject_request[]        @relation("data_subject_request_user_idTouser_account")
+  platform_config                                                            platform_config[]
+  return_request                                                             return_request[]
+  ticket                                                                     ticket[]
+  ticket_message                                                             ticket_message[]
+  qc_audit_recheck                                                           qc_audit_recheck[]
+  qc_report                                                                  qc_report[]
+  qc_reverification                                                          qc_reverification[]
+  qc_seal                                                                    qc_seal[]
+  qc_technician                                                              qc_technician?
+  qc_visit                                                                   qc_visit[]
+  qc_visit_expense                                                           qc_visit_expense[]
+  vendor_profile                                                             vendor_profile[]
+  vendor_sourcing_declaration                                                vendor_sourcing_declaration[]
+
+  @@index([org_id, status], map: "ix_user_org")
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_invitation {
+  id                                                          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                      String        @db.Uuid
+  email                                                       String?       @db.Citext
+  mobile                                                      String?
+  full_name                                                   String
+  role_id                                                     String        @db.Uuid
+  invited_by                                                  String        @db.Uuid
+  token_hash                                                  String        @unique
+  status                                                      String        @default("PENDING")
+  expires_at                                                  DateTime      @db.Timestamptz(6)
+  accepted_at                                                 DateTime?     @db.Timestamptz(6)
+  accepted_user_id                                            String?       @db.Uuid
+  created_at                                                  DateTime      @default(now()) @db.Timestamptz(6)
+  user_account_user_invitation_accepted_user_idTouser_account user_account? @relation("user_invitation_accepted_user_idTouser_account", fields: [accepted_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_user_invitation_invited_byTouser_account       user_account  @relation("user_invitation_invited_byTouser_account", fields: [invited_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                                organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role                                                        role          @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("identity")
+}
+
+model user_role {
+  user_id                                         String        @db.Uuid
+  role_id                                         String        @db.Uuid
+  org_id                                          String        @db.Uuid
+  granted_by                                      String?       @db.Uuid
+  granted_at                                      DateTime      @default(now()) @db.Timestamptz(6)
+  expires_at                                      DateTime?     @db.Timestamptz(6)
+  user_account_user_role_granted_byTouser_account user_account? @relation("user_role_granted_byTouser_account", fields: [granted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                    organization  @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  role                                            role          @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_user_role_user_idTouser_account    user_account  @relation("user_role_user_idTouser_account", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, role_id, org_id])
+  @@schema("identity")
+}
+
+model agreement_acceptance {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id         String       @db.Uuid
+  user_id        String       @db.Uuid
+  agreement_code String
+  version        String
+  doc_hash       String
+  ip             String?      @db.Inet
+  user_agent     String?
+  esign_ref      String?
+  accepted_at    DateTime     @default(now()) @db.Timestamptz(6)
+  organization   organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account   user_account @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model bank_account {
+  id                      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                  String       @db.Uuid
+  purpose                 String       @default("PAYOUT")
+  account_holder_name     String
+  account_number_enc      Bytes
+  account_number_last4    String       @db.Char(4)
+  ifsc                    String       @db.Char(11)
+  bank_name               String?
+  branch                  String?
+  account_type            String       @default("CURRENT")
+  penny_drop_status       String       @default("PENDING")
+  penny_drop_name         String?
+  name_match_score        Decimal?     @db.Decimal(5, 2)
+  verified_at             DateTime?    @db.Timestamptz(6)
+  is_default              Boolean      @default(false)
+  is_verified_by_document Boolean      @default(false)
+  frozen_until            DateTime?    @db.Timestamptz(6)
+  created_at              DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime     @default(now()) @db.Timestamptz(6)
+  organization            organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payout                  payout[]
+
+  @@index([org_id, purpose], map: "ix_bank_org")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model blacklist_entry {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type  String
+  value_hash   String
+  reason       String
+  source       String
+  added_by     String?       @db.Uuid
+  active       Boolean       @default(true)
+  expires_at   DateTime?     @db.Timestamptz(6)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  user_account user_account? @relation(fields: [added_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([entity_type, value_hash])
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model consent_record {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id          String        @db.Uuid
+  user_id         String?       @db.Uuid
+  purpose         String
+  granted         Boolean
+  notice_version  String
+  notice_language String
+  channel         String
+  ip              String?       @db.Inet
+  user_agent      String?
+  granted_at      DateTime      @default(now()) @db.Timestamptz(6)
+  withdrawn_at    DateTime?     @db.Timestamptz(6)
+  organization    organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account    user_account? @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([org_id, purpose, granted_at(sort: Desc)], map: "ix_consent")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model gst_profile {
+  id                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                String           @db.Uuid
+  gstin                 String           @db.Char(15)
+  legal_name_as_per_gst String
+  trade_name            String?
+  state_code            String           @db.Char(2)
+  registration_type     String           @default("REGULAR")
+  status                String
+  api_verified_at       DateTime         @db.Timestamptz(6)
+  api_response_json     Json?
+  is_primary            Boolean          @default(false)
+  created_at            DateTime         @default(now()) @db.Timestamptz(6)
+  org_preference        org_preference[]
+  organization          organization     @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order                 order[]
+
+  @@unique([org_id, gstin])
+  @@index([state_code], map: "ix_gst_state")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model kyc_document {
+  id                                                                        String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                                    String                        @db.Uuid
+  doc_type                                                                  String
+  file_key                                                                  String
+  file_hash_sha256                                                          String
+  mime                                                                      String
+  size_bytes                                                                BigInt
+  status                                                                    Unsupported("doc_status")     @default(dbgenerated("'UPLOADED'::doc_status"))
+  rejection_reason                                                          String?
+  uploaded_by                                                               String?                       @db.Uuid
+  reviewed_by                                                               String?                       @db.Uuid
+  review_note                                                               String?
+  expires_on                                                                DateTime?                     @db.Date
+  created_at                                                                DateTime                      @default(now()) @db.Timestamptz(6)
+  credit_application_credit_application_bank_statement_doc_idTokyc_document credit_application[]          @relation("credit_application_bank_statement_doc_idTokyc_document")
+  credit_application_credit_application_financials_doc_idTokyc_document     credit_application[]          @relation("credit_application_financials_doc_idTokyc_document")
+  organization                                                              organization                  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account_kyc_document_reviewed_byTouser_account                       user_account?                 @relation("kyc_document_reviewed_byTouser_account", fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_kyc_document_uploaded_byTouser_account                       user_account?                 @relation("kyc_document_uploaded_byTouser_account", fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profile_change_request                                                    profile_change_request[]
+  tax_declaration                                                           tax_declaration[]
+  vendor_certification                                                      vendor_certification[]
+  vendor_sourcing_declaration                                               vendor_sourcing_declaration[]
+
+  @@index([file_hash_sha256], map: "ix_doc_hash")
+  @@index([org_id, doc_type, status], map: "ix_doc_org")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model kyc_review {
+  id                                                       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                   String        @db.Uuid
+  reviewer_id                                              String        @db.Uuid
+  decision                                                 String
+  reason_codes                                             String[]
+  notes                                                    String?
+  second_approver_id                                       String?       @db.Uuid
+  decided_at                                               DateTime      @default(now()) @db.Timestamptz(6)
+  organization                                             organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account_kyc_review_reviewer_idTouser_account        user_account  @relation("kyc_review_reviewer_idTouser_account", fields: [reviewer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_kyc_review_second_approver_idTouser_account user_account? @relation("kyc_review_second_approver_idTouser_account", fields: [second_approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([org_id, decided_at(sort: Desc)], map: "ix_kycrev_org")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model onboarding_progress {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id           String       @db.Uuid
+  step_code        String
+  step_order       Int
+  is_required      Boolean      @default(true)
+  status           String       @default("NOT_STARTED")
+  completion_pct   Int          @default(0)
+  blocking_reason  String?
+  first_started_at DateTime?    @db.Timestamptz(6)
+  completed_at     DateTime?    @db.Timestamptz(6)
+  last_saved_at    DateTime?    @db.Timestamptz(6)
+  draft_json       Json?
+  organization     organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([org_id, step_code])
+  @@schema("kyc")
+}
+
+model pan_record {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id          String       @unique @db.Uuid
+  pan_enc         Bytes
+  pan_last4       String       @db.Char(4)
+  pan_hash        String
+  name_as_per_pan String?
+  verified        Boolean      @default(false)
+  api_verified_at DateTime?    @db.Timestamptz(6)
+  organization    organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([pan_hash], map: "ix_pan_hash")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model profile_change_request {
+  id                      String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                  String        @db.Uuid
+  entity_type             String
+  entity_id               String        @db.Uuid
+  field                   String
+  old_value               String?
+  new_value               String
+  reason                  String
+  supporting_doc_id       String?       @db.Uuid
+  status                  String        @default("PENDING")
+  requires_reverification Boolean       @default(false)
+  reviewed_by             String?       @db.Uuid
+  reviewed_at             DateTime?     @db.Timestamptz(6)
+  review_note             String?
+  created_at              DateTime      @default(now()) @db.Timestamptz(6)
+  organization            organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account            user_account? @relation(fields: [reviewed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  kyc_document            kyc_document? @relation(fields: [supporting_doc_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model registration_lead {
+  id                                                              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  intended_org_type                                               Unsupported("org_type")
+  company_name_raw                                                String
+  contact_name                                                    String
+  mobile                                                          String
+  email                                                           String?                 @db.Citext
+  city                                                            String?
+  state_code                                                      String?                 @db.Char(2)
+  expected_monthly_volume                                         Int?
+  categories_dealt                                                String[]
+  source                                                          String                  @default("ORGANIC")
+  utm_source                                                      String?
+  utm_medium                                                      String?
+  utm_campaign                                                    String?
+  referred_by_org_id                                              String?                 @db.Uuid
+  referral_code                                                   String?
+  status                                                          String                  @default("NEW")
+  converted_org_id                                                String?                 @unique @db.Uuid
+  abandoned_at_step                                               String?
+  assigned_to                                                     String?                 @db.Uuid
+  last_contacted_at                                               DateTime?               @db.Timestamptz(6)
+  ip                                                              String?                 @db.Inet
+  user_agent                                                      String?
+  device_fingerprint                                              String?
+  created_at                                                      DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                                                      DateTime                @default(now()) @db.Timestamptz(6)
+  user_account                                                    user_account?           @relation(fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_registration_lead_converted_org_idToorganization   organization?           @relation("registration_lead_converted_org_idToorganization", fields: [converted_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_registration_lead_referred_by_org_idToorganization organization?           @relation("registration_lead_referred_by_org_idToorganization", fields: [referred_by_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([intended_org_type, status, created_at(sort: Desc)], map: "ix_lead_funnel")
+  @@index([mobile], map: "ix_lead_mobile")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tax_declaration {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id           String        @db.Uuid
+  declaration_type String
+  reference_number String
+  rate_pct         Decimal?      @db.Decimal(5, 2)
+  valid_from       DateTime      @db.Date
+  valid_to         DateTime      @db.Date
+  document_id      String?       @db.Uuid
+  status           String        @default("PENDING")
+  verified_by      String?       @db.Uuid
+  verified_at      DateTime?     @db.Timestamptz(6)
+  kyc_document     kyc_document? @relation(fields: [document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization     organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account     user_account? @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model trade_reference {
+  id                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                 String        @db.Uuid
+  company_name           String
+  contact_person         String
+  mobile                 String
+  email                  String?       @db.Citext
+  relationship           String
+  years_associated       Int?
+  monthly_business_value Decimal?      @db.Decimal(14, 2)
+  verification_status    String        @default("PENDING")
+  verification_notes     String?
+  verified_by            String?       @db.Uuid
+  verified_at            DateTime?     @db.Timestamptz(6)
+  organization           organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account           user_account? @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model verification_check {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id             String        @db.Uuid
+  check_type         String
+  input_value_masked String
+  input_hash         String
+  provider           String
+  status             String
+  response_summary   Json?
+  match_score        Decimal?      @db.Decimal(5, 2)
+  failure_reason     String?
+  cost_paise         Int?
+  latency_ms         Int?
+  attempt_no         Int           @default(1)
+  triggered_by       String?       @db.Uuid
+  checked_at         DateTime      @default(now()) @db.Timestamptz(6)
+  organization       organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account       user_account? @relation(fields: [triggered_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([input_hash], map: "ix_vcheck_hash")
+  @@index([org_id, check_type, checked_at(sort: Desc)], map: "ix_vcheck_org")
+  @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model grade_correction {
+  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id                 String                    @db.Uuid
+  listing_id              String?                   @db.Uuid
+  qc_report_id            String                    @db.Uuid
+  grade_declared          Unsupported("grade_type")
+  grade_corrected         Unsupported("grade_type")
+  reason                  String
+  price_before            Decimal?                  @db.Decimal(14, 2)
+  price_suggested         Decimal?                  @db.Decimal(14, 2)
+  vendor_notified_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  vendor_response         String?
+  vendor_responded_at     DateTime?                 @db.Timestamptz(6)
+  auto_applied_at         DateTime?                 @db.Timestamptz(6)
+  counts_against_accuracy Boolean                   @default(true)
+  listing                 listing?                  @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report               qc_report                 @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit                    unit                      @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([unit_id], map: "ix_gradecorr_unit")
+  @@index([listing_id, vendor_notified_at(sort: Desc)], map: "ix_gradecorr_vendor")
+  @@schema("listing")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model listing {
+  id                          String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id               String                             @db.Uuid
+  sku_id                      String                             @db.Uuid
+  grade                       Unsupported("grade_type")
+  condition_type              Unsupported("condition_type")
+  functional_status           Unsupported("functional_status")   @default(dbgenerated("'FULLY_FUNCTIONAL'::functional_status"))
+  battery_health_band         Unsupported("battery_band")
+  parts_status                Unsupported("parts_status_type")
+  parts_replaced              String[]
+  repair_history              Unsupported("repair_history_type") @default(dbgenerated("'NONE'::repair_history_type"))
+  data_wipe_status            Unsupported("wipe_status_type")    @default(dbgenerated("'VERIFIED_WIPED'::wipe_status_type"))
+  seller_warranty             Unsupported("warranty_duration")   @default(dbgenerated("'NONE'::warranty_duration"))
+  oem_warranty_remaining      Unsupported("oem_warranty_band")   @default(dbgenerated("'NONE'::oem_warranty_band"))
+  truetech_warranty           Unsupported("warranty_duration")   @default(dbgenerated("'NONE'::warranty_duration"))
+  unit_price                  Decimal                            @db.Decimal(14, 2)
+  gst_rate                    Decimal                            @default(18.00) @db.Decimal(5, 2)
+  moq                         Int                                @default(1)
+  dispatch_sla_hours          Int                                @default(48)
+  pickup_location_id          String                             @db.Uuid
+  qty_total                   Int                                @default(0)
+  qty_available               Int                                @default(0)
+  qty_reserved                Int                                @default(0)
+  status                      Unsupported("listing_status")      @default(dbgenerated("'DRAFT'::listing_status"))
+  sku_version_at_creation     Int                                @default(1)
+  approved_by                 String?                            @db.Uuid
+  approved_at                 DateTime?                          @db.Timestamptz(6)
+  expires_at                  DateTime?                          @db.Timestamptz(6)
+  created_at                  DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                           @default(now()) @db.Timestamptz(6)
+  qc_requested_at             DateTime?                          @db.Timestamptz(6)
+  qc_completed_at             DateTime?                          @db.Timestamptz(6)
+  qty_awaiting_qc             Int                                @default(0)
+  qty_qc_failed               Int                                @default(0)
+  grade_corrected_from        Unsupported("grade_type")?
+  qc_visit_id                 String?                            @db.Uuid
+  grade_correction            grade_correction[]
+  user_account                user_account?                      @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address                 org_address                        @relation(fields: [pickup_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit                    qc_visit?                          @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku                         sku                                @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                organization                       @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  listing_image               listing_image[]
+  listing_tier_price          listing_tier_price[]
+  price_history               price_history[]
+  unit                        unit[]
+  cart_item                   cart_item[]
+  order_line                  order_line[]
+  qc_visit_unit               qc_visit_unit[]
+  vendor_sourcing_declaration vendor_sourcing_declaration[]
+
+  @@index([sku_id, grade, status, unit_price], map: "ix_listing_offers")
+  @@index([vendor_org_id, status], map: "ix_listing_vendor")
+  @@schema("listing")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model listing_image {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id  String   @db.Uuid
+  file_key    String
+  image_type  String   @default("ACTUAL_UNIT")
+  hash        String
+  uploaded_at DateTime @default(now()) @db.Timestamptz(6)
+  listing     listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([hash], map: "ix_limg_hash")
+  @@schema("listing")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+model listing_tier_price {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id String  @db.Uuid
+  min_qty    Int
+  max_qty    Int?
+  unit_price Decimal @db.Decimal(14, 2)
+  listing    listing @relation(fields: [listing_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("listing")
+}
+
+model price_history {
+  id           BigInt        @id @default(autoincrement())
+  listing_id   String        @db.Uuid
+  old_price    Decimal?      @db.Decimal(14, 2)
+  new_price    Decimal       @db.Decimal(14, 2)
+  changed_by   String?       @db.Uuid
+  changed_at   DateTime      @default(now()) @db.Timestamptz(6)
+  user_account user_account? @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  listing      listing       @relation(fields: [listing_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([listing_id, changed_at(sort: Desc)], map: "ix_pricehist")
+  @@schema("listing")
+}
+
+model stock_movement {
+  id            BigInt                      @id @default(autoincrement())
+  unit_id       String                      @db.Uuid
+  from_status   Unsupported("unit_status")?
+  to_status     Unsupported("unit_status")
+  from_location String?
+  to_location   String?
+  reason        String?
+  actor_id      String?                     @db.Uuid
+  ref_type      String?
+  ref_id        String?                     @db.Uuid
+  occurred_at   DateTime                    @default(now()) @db.Timestamptz(6)
+  user_account  user_account?               @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit          unit                        @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([unit_id, occurred_at(sort: Desc)], map: "ix_stockmv_unit")
+  @@schema("listing")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model unit {
+  id                                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serial_number                          String
+  listing_id                             String?                    @db.Uuid
+  vendor_org_id                          String                     @db.Uuid
+  sku_id                                 String                     @db.Uuid
+  grade_declared                         Unsupported("grade_type")
+  grade_actual                           Unsupported("grade_type")?
+  status                                 Unsupported("unit_status") @default(dbgenerated("'CREATED'::unit_status"))
+  order_line_id                          String?                    @db.Uuid
+  qc_report_id                           String?                    @db.Uuid
+  hw_fingerprint_hash                    String?
+  oem_warranty_end                       DateTime?                  @db.Date
+  blacklist_checked_at                   DateTime?                  @db.Timestamptz(6)
+  location                               String                     @default("VENDOR")
+  hub_id                                 String?                    @db.Uuid
+  created_at                             DateTime                   @default(now()) @db.Timestamptz(6)
+  qc_visit_id                            String?                    @db.Uuid
+  qc_passed_at                           DateTime?                  @db.Timestamptz(6)
+  qc_valid_until                         DateTime?                  @db.Date
+  qc_score                               Int?
+  seal_id                                String?                    @db.Uuid
+  sealed_at                              DateTime?                  @db.Timestamptz(6)
+  battery_health_pct                     Decimal?                   @db.Decimal(5, 2)
+  is_sellable                            Boolean                    @default(false)
+  vendor_ask_price                       Decimal?                   @db.Decimal(14, 2)
+  purchase_price                         Decimal?                   @db.Decimal(14, 2)
+  valuation_method                       String                     @default("REGULAR")
+  itc_eligible                           Boolean                    @default(true)
+  retail_price                           Decimal?                   @db.Decimal(14, 2)
+  margin_rule_id                         String?                    @db.Uuid
+  supply_point_code                      String?
+  grade_correction                       grade_correction[]
+  stock_movement                         stock_movement[]
+  hub                                    hub?                       @relation(fields: [hub_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_hub")
+  order_line                             order_line?                @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_orderline")
+  qc_report_unit_qc_report_idToqc_report qc_report?                 @relation("unit_qc_report_idToqc_report", fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_qcreport")
+  listing                                listing?                   @relation(fields: [listing_id], references: [id], onUpdate: NoAction)
+  qc_visit                               qc_visit?                  @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_seal_unit_seal_idToqc_seal          qc_seal?                   @relation("unit_seal_idToqc_seal", fields: [seal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku                                    sku                        @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                           organization               @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  custody_event                          custody_event[]
+  shipment_unit                          shipment_unit[]
+  order_line_unit                        order_line_unit?
+  warranty                               warranty[]
+  warranty_claim                         warranty_claim[]
+  qc_report_qc_report_unit_idTounit      qc_report[]                @relation("qc_report_unit_idTounit")
+  qc_reverification                      qc_reverification[]
+  qc_seal_qc_seal_unit_idTounit          qc_seal[]                  @relation("qc_seal_unit_idTounit")
+  qc_tool_run                            qc_tool_run[]
+  qc_visit_unit                          qc_visit_unit[]
+  wipe_certificate                       wipe_certificate[]
+
+  @@index([hw_fingerprint_hash], map: "ix_unit_fp")
+  @@index([listing_id, status], map: "ix_unit_listing")
+  @@index([vendor_org_id, status], map: "ix_unit_vendor")
+  @@schema("listing")
+}
+
+model carrier {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String                   @unique
+  name                   String
+  adapter_key            String
+  config_json            Json?
+  supports_leg           String[]
+  is_active              Boolean                  @default(true)
+  priority               Int                      @default(100)
+  carrier_rate_card      carrier_rate_card[]
+  pincode_serviceability pincode_serviceability[]
+  shipment               shipment[]
+
+  @@schema("logistics")
+}
+
+model carrier_rate_card {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  carrier_id         String     @db.Uuid
+  from_zone          String
+  to_zone            String
+  weight_from_kg     Decimal    @db.Decimal(8, 2)
+  weight_to_kg       Decimal    @db.Decimal(8, 2)
+  base_rate          Decimal    @db.Decimal(14, 2)
+  per_kg_rate        Decimal    @default(0) @db.Decimal(14, 2)
+  fuel_surcharge_pct Decimal    @default(0) @db.Decimal(5, 2)
+  oda_surcharge      Decimal    @default(0) @db.Decimal(14, 2)
+  insurance_pct      Decimal    @default(0) @db.Decimal(5, 2)
+  min_charge         Decimal    @default(0) @db.Decimal(14, 2)
+  effective_from     DateTime   @db.Date
+  effective_to       DateTime?  @db.Date
+  carrier            carrier    @relation(fields: [carrier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shipment           shipment[]
+
+  @@index([carrier_id, from_zone, to_zone, weight_from_kg], map: "ix_ratecard")
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model custody_event {
+  id           BigInt        @id @default(autoincrement())
+  unit_id      String        @db.Uuid
+  from_party   String
+  to_party     String
+  actor_id     String?       @db.Uuid
+  scan_type    String
+  geo_lat      Decimal?      @db.Decimal(9, 6)
+  geo_lng      Decimal?      @db.Decimal(9, 6)
+  occurred_at  DateTime      @default(now()) @db.Timestamptz(6)
+  user_account user_account? @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit         unit          @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([unit_id, occurred_at], map: "ix_custody_unit")
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model delivery_attempt {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delivery_task_id String        @db.Uuid
+  attempt_no       Int
+  attempted_at     DateTime      @default(now()) @db.Timestamptz(6)
+  outcome          String
+  reason_note      String?
+  next_attempt_on  DateTime?     @db.Date
+  photo_keys       String[]
+  geo_lat          Decimal?      @db.Decimal(9, 6)
+  geo_lng          Decimal?      @db.Decimal(9, 6)
+  delivery_task    delivery_task @relation(fields: [delivery_task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([delivery_task_id, attempt_no])
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model delivery_task {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shipment_id      String             @db.Uuid
+  rider_id         String?            @db.Uuid
+  otp_hash         String?
+  attempts         Int                @default(0)
+  status           String             @default("PENDING")
+  photo_keys       String[]
+  delivered_at     DateTime?          @db.Timestamptz(6)
+  delivery_attempt delivery_attempt[]
+  rider            rider?             @relation(fields: [rider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shipment         shipment           @relation(fields: [shipment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route_stop       route_stop[]
+
+  @@schema("logistics")
+}
+
+model hub {
+  id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String      @unique
+  name                   String
+  address_id             String      @db.Uuid
+  is_active              Boolean     @default(true)
+  capacity_units_per_day Int?
+  serves_zones           String[]
+  unit                   unit[]
+  org_address            org_address @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_batch               qc_batch[]
+
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model pickup_task {
+  id                                                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sub_order_id                                      String       @db.Uuid
+  vendor_org_id                                     String       @db.Uuid
+  address_id                                        String       @db.Uuid
+  expected_serials                                  String[]
+  scanned_serials                                   String[]
+  otp_hash                                          String?
+  assigned_rider_id                                 String?      @db.Uuid
+  slot_from                                         DateTime?    @db.Timestamptz(6)
+  slot_to                                           DateTime?    @db.Timestamptz(6)
+  status                                            String       @default("PENDING")
+  completed_at                                      DateTime?    @db.Timestamptz(6)
+  expected_seals                                    String[]
+  scanned_seals                                     String[]
+  seals_intact                                      Boolean?
+  broken_seal_codes                                 String[]
+  route_stop_id                                     String?      @db.Uuid
+  org_address                                       org_address  @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rider                                             rider?       @relation(fields: [assigned_rider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route_stop_pickup_task_route_stop_idToroute_stop  route_stop?  @relation("pickup_task_route_stop_idToroute_stop", fields: [route_stop_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order                                         sub_order    @relation(fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                      organization @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route_stop_route_stop_pickup_task_idTopickup_task route_stop[] @relation("route_stop_pickup_task_idTopickup_task")
+
+  @@index([assigned_rider_id, status], map: "ix_pickup_rider")
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model pincode_serviceability {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pincode          String         @db.Char(6)
+  carrier_id       String         @db.Uuid
+  service_type     String
+  transit_days_min Int
+  transit_days_max Int
+  cod_available    Boolean        @default(false)
+  is_oda           Boolean        @default(false)
+  last_synced_at   DateTime       @default(now()) @db.Timestamptz(6)
+  carrier          carrier        @relation(fields: [carrier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pincode_master   pincode_master @relation(fields: [pincode], references: [pincode], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([pincode, carrier_id, service_type])
+  @@index([pincode, carrier_id], map: "ix_serviceability")
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model rider {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String          @unique @db.Uuid
+  phone         String
+  zone          String
+  vehicle_type  String
+  is_active     Boolean         @default(true)
+  delivery_task delivery_task[]
+  pickup_task   pickup_task[]
+  user_account  user_account    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route_plan    route_plan[]
+
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model route_plan {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plan_date           DateTime       @db.Date
+  rider_id            String?        @db.Uuid
+  technician_id       String?        @db.Uuid
+  vehicle_id          String?        @db.Uuid
+  zone                String
+  purpose             String
+  total_stops         Int            @default(0)
+  completed_stops     Int            @default(0)
+  planned_distance_km Decimal?       @db.Decimal(8, 2)
+  actual_distance_km  Decimal?       @db.Decimal(8, 2)
+  status              String         @default("PLANNED")
+  started_at          DateTime?      @db.Timestamptz(6)
+  completed_at        DateTime?      @db.Timestamptz(6)
+  rider               rider?         @relation(fields: [rider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_technician       qc_technician? @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicle             vehicle?       @relation(fields: [vehicle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route_stop          route_stop[]
+
+  @@index([plan_date, zone, status], map: "ix_routeplan")
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model route_stop {
+  id                                                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  route_plan_id                                      String         @db.Uuid
+  sequence_no                                        Int
+  stop_type                                          String
+  address_id                                         String         @db.Uuid
+  pickup_task_id                                     String?        @db.Uuid
+  delivery_task_id                                   String?        @db.Uuid
+  qc_visit_id                                        String?        @db.Uuid
+  eta                                                DateTime?      @db.Timestamptz(6)
+  arrived_at                                         DateTime?      @db.Timestamptz(6)
+  departed_at                                        DateTime?      @db.Timestamptz(6)
+  status                                             String         @default("PENDING")
+  skip_reason                                        String?
+  pickup_task_pickup_task_route_stop_idToroute_stop  pickup_task[]  @relation("pickup_task_route_stop_idToroute_stop")
+  org_address                                        org_address    @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  delivery_task                                      delivery_task? @relation(fields: [delivery_task_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pickup_task_route_stop_pickup_task_idTopickup_task pickup_task?   @relation("route_stop_pickup_task_idTopickup_task", fields: [pickup_task_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit                                           qc_visit?      @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route_plan                                         route_plan     @relation(fields: [route_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([route_plan_id, sequence_no])
+  @@schema("logistics")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model routing_rule {
+  id                    String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  priority              Int
+  name                  String
+  from_is_ncr           Boolean?
+  to_is_ncr             Boolean?
+  same_city             Boolean?
+  min_units             Int?
+  max_units             Int?
+  min_value             Decimal?                    @db.Decimal(14, 2)
+  max_value             Decimal?                    @db.Decimal(14, 2)
+  min_vendor_tier       Unsupported("vendor_tier")?
+  seal_must_be_intact   Boolean                     @default(true)
+  multi_vendor_order    Boolean?
+  route_type            Unsupported("route_type")
+  carrier_code          String
+  fallback_carrier_code String?
+  is_active             Boolean                     @default(true)
+  effective_from        DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  shipment              shipment[]
+
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model shipment {
+  id                                                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leg                                               Unsupported("shipment_leg")
+  sub_order_id                                      String?                        @db.Uuid
+  carrier_id                                        String                         @db.Uuid
+  from_address_id                                   String                         @db.Uuid
+  to_address_id                                     String                         @db.Uuid
+  awb_number                                        String?                        @unique
+  mode                                              String
+  declared_value                                    Decimal                        @db.Decimal(14, 2)
+  weight_kg                                         Decimal?                       @db.Decimal(8, 2)
+  boxes                                             Int                            @default(1)
+  freight_cost                                      Decimal?                       @db.Decimal(14, 2)
+  seal_id                                           String?
+  status                                            Unsupported("shipment_status") @default(dbgenerated("'CREATED'::shipment_status"))
+  pickup_slot_from                                  DateTime?                      @db.Timestamptz(6)
+  pickup_slot_to                                    DateTime?                      @db.Timestamptz(6)
+  dispatched_at                                     DateTime?                      @db.Timestamptz(6)
+  delivered_at                                      DateTime?                      @db.Timestamptz(6)
+  label_key                                         String?
+  pod_key                                           String?
+  created_at                                        DateTime                       @default(now()) @db.Timestamptz(6)
+  route_type                                        Unsupported("route_type")      @default(dbgenerated("'VIA_HUB'::route_type"))
+  routing_rule_id                                   String?                        @db.Uuid
+  seal_verified_at                                  DateTime?                      @db.Timestamptz(6)
+  seal_verified_by                                  String?                        @db.Uuid
+  quoted_freight                                    Decimal?                       @db.Decimal(14, 2)
+  rate_card_id                                      String?                        @db.Uuid
+  eta_from                                          DateTime?                      @db.Timestamptz(6)
+  eta_to                                            DateTime?                      @db.Timestamptz(6)
+  delivery_task                                     delivery_task[]
+  carrier                                           carrier                        @relation(fields: [carrier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_shipment_from_address_idToorg_address org_address                    @relation("shipment_from_address_idToorg_address", fields: [from_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  carrier_rate_card                                 carrier_rate_card?             @relation(fields: [rate_card_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  routing_rule                                      routing_rule?                  @relation(fields: [routing_rule_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account                                      user_account?                  @relation(fields: [seal_verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order                                         sub_order?                     @relation(fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_shipment_to_address_idToorg_address   org_address                    @relation("shipment_to_address_idToorg_address", fields: [to_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shipment_unit                                     shipment_unit[]
+
+  @@index([status, created_at(sort: Desc)], map: "ix_shipment_st")
+  @@index([sub_order_id, leg], map: "ix_shipment_sub")
+  @@schema("logistics")
+}
+
+/// This table is a partition table and requires additional setup for migrations. Visit https://pris.ly/d/partition-tables for more info.
+model shipment_tracking {
+  id          BigInt   @default(autoincrement())
+  shipment_id String   @db.Uuid
+  status_code String
+  description String?
+  location    String?
+  raw_payload Json?
+  occurred_at DateTime @db.Timestamptz(6)
+
+  @@id([id, occurred_at])
+  @@schema("logistics")
+}
+
+model shipment_unit {
+  shipment_id   String   @db.Uuid
+  unit_id       String   @db.Uuid
+  serial_number String
+  shipment      shipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  unit          unit     @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([shipment_id, unit_id])
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vehicle {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  registration_no    String       @unique
+  vehicle_type       String
+  capacity_units     Int
+  owned_by           String       @default("INHOUSE")
+  insurance_valid_to DateTime?    @db.Date
+  puc_valid_to       DateTime?    @db.Date
+  is_active          Boolean      @default(true)
+  route_plan         route_plan[]
+
+  @@schema("logistics")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model job_run {
+  id            BigInt    @id @default(autoincrement())
+  job_name      String
+  started_at    DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at   DateTime? @db.Timestamptz(6)
+  status        String    @default("RUNNING")
+  rows_affected Int?
+  detail_json   Json?
+  error         String?
+
+  @@index([job_name, started_at(sort: Desc)], map: "ix_job_run_name_started")
+  @@schema("ops")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model partitioned_table {
+  table_schema     String
+  table_name       String
+  partition_key    String
+  months_ahead     Int     @default(3)
+  retention_months Int?
+  is_active        Boolean @default(true)
+
+  @@id([table_schema, table_name])
+  @@schema("ops")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cart {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  buyer_org_id String       @db.Uuid
+  user_id      String       @db.Uuid
+  status       String       @default("OPEN")
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime     @default(now()) @db.Timestamptz(6)
+  organization organization @relation(fields: [buyer_org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account user_account @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cart_item    cart_item[]
+
+  @@index([buyer_org_id, status], map: "ix_cart_org")
+  @@schema("ordering")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cart_item {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cart_id             String   @db.Uuid
+  listing_id          String   @db.Uuid
+  qty                 Int
+  unit_price_snapshot Decimal  @db.Decimal(14, 2)
+  added_at            DateTime @default(now()) @db.Timestamptz(6)
+  cart                cart     @relation(fields: [cart_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  listing             listing  @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([cart_id, listing_id])
+  @@schema("ordering")
+}
+
+model order {
+  id                                                 String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_number                                       String                        @unique
+  buyer_org_id                                       String                        @db.Uuid
+  buyer_user_id                                      String                        @db.Uuid
+  billing_gst_profile_id                             String                        @db.Uuid
+  billing_address_id                                 String                        @db.Uuid
+  shipping_address_id                                String                        @db.Uuid
+  buyer_po_number                                    String?
+  cost_centre                                        String?
+  subtotal                                           Decimal                       @db.Decimal(14, 2)
+  gst_total                                          Decimal                       @db.Decimal(14, 2)
+  freight_total                                      Decimal                       @default(0) @db.Decimal(14, 2)
+  tcs_amount                                         Decimal                       @default(0) @db.Decimal(14, 2)
+  grand_total                                        Decimal                       @db.Decimal(14, 2)
+  payment_mode                                       Unsupported("payment_mode")   @default(dbgenerated("'PREPAID'::payment_mode"))
+  payment_status                                     Unsupported("payment_status") @default(dbgenerated("'PENDING'::payment_status"))
+  status                                             Unsupported("order_status")   @default(dbgenerated("'CREATED'::order_status"))
+  placed_at                                          DateTime                      @default(now()) @db.Timestamptz(6)
+  stock_hold_expires_at                              DateTime?                     @db.Timestamptz(6)
+  org_address_order_billing_address_idToorg_address  org_address                   @relation("order_billing_address_idToorg_address", fields: [billing_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  gst_profile                                        gst_profile                   @relation(fields: [billing_gst_profile_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                       organization                  @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account                                       user_account                  @relation(fields: [buyer_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_order_shipping_address_idToorg_address org_address                   @relation("order_shipping_address_idToorg_address", fields: [shipping_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_approval                                     order_approval[]
+  sub_order                                          sub_order[]
+  payment                                            payment[]
+  buyer_review                                       buyer_review[]
+  dispute                                            dispute[]
+
+  @@index([buyer_org_id, status, placed_at(sort: Desc)], map: "ix_order_buyer")
+  @@schema("ordering")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model order_approval {
+  id                                                         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                                                   String                 @db.Uuid
+  requested_by                                               String                 @db.Uuid
+  approver_user_id                                           String                 @db.Uuid
+  status                                                     String                 @default("PENDING")
+  order_value                                                Decimal                @db.Decimal(14, 2)
+  policy_id                                                  String?                @db.Uuid
+  comment                                                    String?
+  requested_at                                               DateTime               @default(now()) @db.Timestamptz(6)
+  decided_at                                                 DateTime?              @db.Timestamptz(6)
+  expires_at                                                 DateTime               @db.Timestamptz(6)
+  user_account_order_approval_approver_user_idTouser_account user_account           @relation("order_approval_approver_user_idTouser_account", fields: [approver_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order                                                      order                  @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  buyer_approval_policy                                      buyer_approval_policy? @relation(fields: [policy_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_order_approval_requested_byTouser_account     user_account           @relation("order_approval_requested_byTouser_account", fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("ordering")
+}
+
+/// This table is a partition table and requires additional setup for migrations. Visit https://pris.ly/d/partition-tables for more info.
+model order_event {
+  id           BigInt   @default(autoincrement())
+  order_id     String?  @db.Uuid
+  sub_order_id String?  @db.Uuid
+  event_type   String
+  from_status  String?
+  to_status    String?
+  actor_id     String?  @db.Uuid
+  note         String?
+  payload_json Json?
+  occurred_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([id, occurred_at])
+  @@index([order_id, occurred_at(sort: Desc)], map: "ix_oevent_order")
+  @@schema("ordering")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model order_line {
+  id              String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sub_order_id    String                      @db.Uuid
+  listing_id      String                      @db.Uuid
+  sku_id          String                      @db.Uuid
+  grade           Unsupported("grade_type")
+  qty             Int
+  unit_price      Decimal                     @db.Decimal(14, 2)
+  gst_rate        Decimal                     @db.Decimal(5, 2)
+  gst_amount      Decimal                     @db.Decimal(14, 2)
+  line_total      Decimal                     @db.Decimal(14, 2)
+  status          Unsupported("order_status") @default(dbgenerated("'CONFIRMED'::order_status"))
+  fulfilled_qty   Int                         @default(0)
+  cancelled_qty   Int                         @default(0)
+  unit            unit[]
+  listing         listing                     @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku             sku                         @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order       sub_order                   @relation(fields: [sub_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order_line_unit order_line_unit[]
+  penalty         penalty[]
+  refund          refund[]
+
+  @@schema("ordering")
+}
+
+model order_line_unit {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_line_id  String                     @db.Uuid
+  unit_id        String                     @unique @db.Uuid
+  serial_number  String
+  qc_report_id   String?                    @db.Uuid
+  status         Unsupported("unit_status") @default(dbgenerated("'RESERVED'::unit_status"))
+  qc_report      qc_report?                 @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_olu_qcreport")
+  order_line     order_line                 @relation(fields: [order_line_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  unit           unit                       @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  return_request return_request[]
+
+  @@index([serial_number], map: "ix_olu_serial")
+  @@schema("ordering")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model rfq {
+  id               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rfq_number       String                     @unique
+  buyer_org_id     String                     @db.Uuid
+  sku_id           String                     @db.Uuid
+  grade            Unsupported("grade_type")?
+  qty              Int
+  target_price     Decimal?                   @db.Decimal(14, 2)
+  delivery_pincode String                     @db.Char(6)
+  needed_by        DateTime?                  @db.Date
+  status           String                     @default("OPEN")
+  expires_at       DateTime                   @db.Timestamptz(6)
+  created_at       DateTime                   @default(now()) @db.Timestamptz(6)
+  organization     organization               @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku              sku                        @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rfq_quote        rfq_quote[]
+
+  @@schema("ordering")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model rfq_quote {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rfq_id        String       @db.Uuid
+  vendor_org_id String       @db.Uuid
+  unit_price    Decimal      @db.Decimal(14, 2)
+  qty_committed Int
+  dispatch_days Int
+  validity      DateTime     @db.Timestamptz(6)
+  status        String       @default("SUBMITTED")
+  message       String?
+  created_at    DateTime     @default(now()) @db.Timestamptz(6)
+  rfq           rfq          @relation(fields: [rfq_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organization  organization @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([rfq_id, vendor_org_id])
+  @@schema("ordering")
+}
+
+model sub_order {
+  id                                      String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                                String                      @db.Uuid
+  sub_order_number                        String                      @unique
+  vendor_org_id                           String                      @db.Uuid
+  subtotal                                Decimal                     @db.Decimal(14, 2)
+  gst_total                               Decimal                     @db.Decimal(14, 2)
+  freight                                 Decimal                     @default(0) @db.Decimal(14, 2)
+  commission_amount                       Decimal                     @default(0) @db.Decimal(14, 2)
+  status                                  Unsupported("order_status") @default(dbgenerated("'CONFIRMED'::order_status"))
+  dispatch_sla_due_at                     DateTime?                   @db.Timestamptz(6)
+  accepted_at                             DateTime?                   @db.Timestamptz(6)
+  rejected_at                             DateTime?                   @db.Timestamptz(6)
+  invoice_id                              String?                     @db.Uuid
+  pickup_task                             pickup_task[]
+  shipment                                shipment[]
+  order_line                              order_line[]
+  invoice_sub_order_invoice_idToinvoice   invoice?                    @relation("sub_order_invoice_idToinvoice", fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_suborder_invoice")
+  order                                   order                       @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organization                            organization                @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_invoice_sub_order_idTosub_order invoice[]                   @relation("invoice_sub_order_idTosub_order")
+
+  @@index([vendor_org_id, status], map: "ix_suborder_vendor")
+  @@schema("ordering")
+}
+
+model commission_rule {
+  id             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_tier    Unsupported("vendor_tier")?
+  sku_category   String?
+  min_value      Decimal?                    @db.Decimal(14, 2)
+  max_value      Decimal?                    @db.Decimal(14, 2)
+  rate_pct       Decimal                     @db.Decimal(5, 2)
+  effective_from DateTime                    @db.Date
+
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model eway_bill {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_id     String    @unique @db.Uuid
+  ewb_number     String?
+  ewb_date       DateTime? @db.Timestamptz(6)
+  valid_upto     DateTime? @db.Timestamptz(6)
+  transporter_id String?
+  vehicle_no     String?
+  awb_number     String?
+  distance_km    Int
+  status         String    @default("PENDING")
+  invoice        invoice   @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model invoice {
+  id                                                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_number                                      String                      @unique
+  type                                                Unsupported("invoice_type")
+  issuer_org_id                                       String                      @db.Uuid
+  recipient_org_id                                    String                      @db.Uuid
+  sub_order_id                                        String?                     @db.Uuid
+  invoice_date                                        DateTime                    @db.Date
+  place_of_supply                                     String                      @db.Char(2)
+  taxable_value                                       Decimal                     @db.Decimal(14, 2)
+  cgst                                                Decimal                     @default(0) @db.Decimal(14, 2)
+  sgst                                                Decimal                     @default(0) @db.Decimal(14, 2)
+  igst                                                Decimal                     @default(0) @db.Decimal(14, 2)
+  cess                                                Decimal                     @default(0) @db.Decimal(14, 2)
+  total                                               Decimal                     @db.Decimal(14, 2)
+  irn                                                 String?                     @unique
+  ack_no                                              String?
+  ack_date                                            DateTime?                   @db.Timestamptz(6)
+  signed_qr                                           String?
+  irp_status                                          String                      @default("PENDING")
+  pdf_key                                             String?
+  original_invoice_id                                 String?                     @db.Uuid
+  created_at                                          DateTime                    @default(now()) @db.Timestamptz(6)
+  sub_order_sub_order_invoice_idToinvoice             sub_order[]                 @relation("sub_order_invoice_idToinvoice")
+  eway_bill                                           eway_bill?
+  organization_invoice_issuer_org_idToorganization    organization                @relation("invoice_issuer_org_idToorganization", fields: [issuer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice                                             invoice?                    @relation("invoiceToinvoice", fields: [original_invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_invoice                                       invoice[]                   @relation("invoiceToinvoice")
+  organization_invoice_recipient_org_idToorganization organization                @relation("invoice_recipient_org_idToorganization", fields: [recipient_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order_invoice_sub_order_idTosub_order           sub_order?                  @relation("invoice_sub_order_idTosub_order", fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_line                                        invoice_line[]
+
+  @@index([recipient_org_id, invoice_date(sort: Desc)], map: "ix_invoice_recipient")
+  @@schema("payment")
+}
+
+model invoice_line {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_id     String   @db.Uuid
+  sku_id         String?  @db.Uuid
+  description    String
+  hsn            String
+  qty            Int
+  unit_price     Decimal  @db.Decimal(14, 2)
+  taxable_value  Decimal  @db.Decimal(14, 2)
+  gst_rate       Decimal  @db.Decimal(5, 2)
+  gst_amount     Decimal  @db.Decimal(14, 2)
+  serial_numbers String[]
+  invoice        invoice  @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sku            sku?     @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ledger_entry {
+  id           BigInt        @id @default(autoincrement())
+  entry_date   DateTime      @db.Date
+  account_code String
+  org_id       String?       @db.Uuid
+  debit        Decimal       @default(0) @db.Decimal(14, 2)
+  credit       Decimal       @default(0) @db.Decimal(14, 2)
+  currency     String        @default("INR") @db.Char(3)
+  ref_type     String
+  ref_id       String?       @db.Uuid
+  narration    String
+  batch_id     String        @db.Uuid
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  organization organization? @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([batch_id], map: "ix_ledger_batch")
+  @@index([org_id, entry_date], map: "ix_ledger_org")
+  @@index([ref_type, ref_id], map: "ix_ledger_ref")
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payment {
+  id           String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id     String                        @db.Uuid
+  buyer_org_id String                        @db.Uuid
+  gateway      String
+  gateway_ref  String
+  method       String
+  amount       Decimal                       @db.Decimal(14, 2)
+  status       Unsupported("payment_status") @default(dbgenerated("'PENDING'::payment_status"))
+  captured_at  DateTime?                     @db.Timestamptz(6)
+  raw_payload  Json?
+  created_at   DateTime                      @default(now()) @db.Timestamptz(6)
+  organization organization                  @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order        order                         @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refund       refund[]
+
+  @@unique([gateway, gateway_ref])
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payout {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  settlement_run_id  String         @db.Uuid
+  vendor_org_id      String         @db.Uuid
+  bank_account_id    String         @db.Uuid
+  gross              Decimal        @db.Decimal(14, 2)
+  commission         Decimal        @default(0) @db.Decimal(14, 2)
+  commission_gst     Decimal        @default(0) @db.Decimal(14, 2)
+  logistics_recovery Decimal        @default(0) @db.Decimal(14, 2)
+  penalties          Decimal        @default(0) @db.Decimal(14, 2)
+  tds_amount         Decimal        @default(0) @db.Decimal(14, 2)
+  adjustments        Decimal        @default(0) @db.Decimal(14, 2)
+  net_amount         Decimal        @db.Decimal(14, 2)
+  utr                String?        @unique
+  status             String         @default("PENDING")
+  paid_at            DateTime?      @db.Timestamptz(6)
+  advice_key         String?
+  bank_account       bank_account   @relation(fields: [bank_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  settlement_run     settlement_run @relation(fields: [settlement_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       organization   @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([vendor_org_id, status], map: "ix_payout_vendor")
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model penalty {
+  id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id String                      @db.Uuid
+  order_line_id String?                     @db.Uuid
+  type          Unsupported("penalty_type")
+  amount        Decimal                     @db.Decimal(14, 2)
+  reason        String
+  waived_by     String?                     @db.Uuid
+  waived_reason String?
+  applied_at    DateTime                    @default(now()) @db.Timestamptz(6)
+  order_line    order_line?                 @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization  organization                @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account  user_account?               @relation(fields: [waived_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_mismatch   qc_mismatch[]
+
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model refund {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payment_id    String      @db.Uuid
+  order_line_id String?     @db.Uuid
+  amount        Decimal     @db.Decimal(14, 2)
+  reason        String
+  status        String      @default("PENDING")
+  gateway_ref   String?
+  processed_at  DateTime?   @db.Timestamptz(6)
+  order_line    order_line? @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment       payment     @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model settlement_run {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cycle_start      DateTime      @db.Date
+  cycle_end        DateTime      @db.Date
+  run_date         DateTime      @db.Date
+  status           String        @default("DRAFT")
+  total_gross      Decimal?      @db.Decimal(14, 2)
+  total_commission Decimal?      @db.Decimal(14, 2)
+  total_tds        Decimal?      @db.Decimal(14, 2)
+  total_net        Decimal?      @db.Decimal(14, 2)
+  executed_by      String?       @db.Uuid
+  payout           payout[]
+  user_account     user_account? @relation(fields: [executed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model buyer_review {
+  id                                                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                                              String        @db.Uuid
+  buyer_org_id                                          String        @db.Uuid
+  vendor_org_id                                         String        @db.Uuid
+  rating                                                Int
+  comment                                               String?
+  is_published                                          Boolean       @default(false)
+  moderated_by                                          String?       @db.Uuid
+  created_at                                            DateTime      @default(now()) @db.Timestamptz(6)
+  organization_buyer_review_buyer_org_idToorganization  organization  @relation("buyer_review_buyer_org_idToorganization", fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account                                          user_account? @relation(fields: [moderated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order                                                 order         @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_buyer_review_vendor_org_idToorganization organization  @relation("buyer_review_vendor_org_idToorganization", fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([order_id, vendor_org_id])
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model data_subject_request {
+  id                                                         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                     String        @db.Uuid
+  user_id                                                    String?       @db.Uuid
+  type                                                       String
+  status                                                     String        @default("RECEIVED")
+  requested_at                                               DateTime      @default(now()) @db.Timestamptz(6)
+  completed_at                                               DateTime?     @db.Timestamptz(6)
+  handled_by                                                 String?       @db.Uuid
+  outcome_notes                                              String?
+  user_account_data_subject_request_handled_byTouser_account user_account? @relation("data_subject_request_handled_byTouser_account", fields: [handled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                               organization  @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_data_subject_request_user_idTouser_account    user_account? @relation("data_subject_request_user_idTouser_account", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model dispute {
+  id                                                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                                            String       @db.Uuid
+  raised_by_org_id                                    String       @db.Uuid
+  against_org_id                                      String       @db.Uuid
+  category                                            String
+  amount_disputed                                     Decimal?     @db.Decimal(14, 2)
+  status                                              String       @default("OPEN")
+  committee_decision                                  String?
+  decided_at                                          DateTime?    @db.Timestamptz(6)
+  organization_dispute_against_org_idToorganization   organization @relation("dispute_against_org_idToorganization", fields: [against_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order                                               order        @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_dispute_raised_by_org_idToorganization organization @relation("dispute_raised_by_org_idToorganization", fields: [raised_by_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model event_outbox {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_name    String
+  payload_json  Json
+  trace_id      String?
+  actor_user_id String?   @db.Uuid
+  occurred_at   DateTime  @default(now()) @db.Timestamptz(6)
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  last_error    String?
+  dispatched_at DateTime? @db.Timestamptz(6)
+  next_retry_at DateTime? @db.Timestamptz(6)
+
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model feature_flag {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  rollout_pct Int      @default(0)
+  org_scope   String[] @db.Uuid
+
+  @@schema("platform")
+}
+
+/// This table is a partition table and requires additional setup for migrations. Visit https://pris.ly/d/partition-tables for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model integration_log {
+  id             BigInt   @default(autoincrement())
+  provider       String
+  endpoint       String
+  request_hash   String?
+  status_code    Int?
+  latency_ms     Int?
+  error          String?
+  correlation_id String?
+  occurred_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([id, occurred_at])
+  @@schema("platform")
+}
+
+/// This table is a partition table and requires additional setup for migrations. Visit https://pris.ly/d/partition-tables for more info.
+model notification_log {
+  id            BigInt   @default(autoincrement())
+  org_id        String?  @db.Uuid
+  user_id       String?  @db.Uuid
+  channel       String
+  template_code String
+  payload_json  Json?
+  status        String
+  provider_ref  String?
+  sent_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([id, sent_at])
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model notification_template {
+  id                   String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                 String
+  channel              String
+  locale               String  @default("en")
+  subject              String?
+  body                 String
+  provider_template_id String?
+  version              Int     @default(1)
+  is_active            Boolean @default(true)
+
+  @@unique([code, channel, locale, version])
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model platform_config {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key            String
+  value_json     Json
+  effective_from DateTime      @default(now()) @db.Timestamptz(6)
+  changed_by     String?       @db.Uuid
+  version        Int           @default(1)
+  user_account   user_account? @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([key, effective_from], map: "uq_platform_config_key_from")
+  @@index([key, effective_from(sort: Desc)], map: "ix_config_key")
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model return_qc {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  return_request_id String         @unique @db.Uuid
+  qc_report_id      String         @db.Uuid
+  fingerprint_match Boolean
+  verdict           String
+  liable_party      String
+  notes             String?
+  qc_report         qc_report      @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  return_request    return_request @relation(fields: [return_request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model return_request {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  return_number      String          @unique
+  order_line_unit_id String          @db.Uuid
+  buyer_org_id       String          @db.Uuid
+  reason_code        String
+  description        String?
+  evidence_keys      String[]
+  status             String          @default("RAISED")
+  raised_at          DateTime        @default(now()) @db.Timestamptz(6)
+  approved_by        String?         @db.Uuid
+  resolution         String?
+  return_qc          return_qc?
+  user_account       user_account?   @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       organization    @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_line_unit    order_line_unit @relation(fields: [order_line_unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ticket {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_number    String           @unique
+  org_id           String           @db.Uuid
+  category         String
+  priority         String           @default("NORMAL")
+  subject          String
+  status           String           @default("OPEN")
+  assigned_to      String?          @db.Uuid
+  sla_due_at       DateTime?        @db.Timestamptz(6)
+  closure_otp_hash String?
+  closed_at        DateTime?        @db.Timestamptz(6)
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+  user_account     user_account?    @relation(fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization     organization     @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ticket_message   ticket_message[]
+
+  @@index([status, sla_due_at], map: "ix_ticket_sla")
+  @@schema("platform")
+}
+
+model ticket_message {
+  id           BigInt        @id @default(autoincrement())
+  ticket_id    String        @db.Uuid
+  sender_id    String?       @db.Uuid
+  body         String
+  attachments  String[]
+  is_internal  Boolean       @default(false)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  user_account user_account? @relation(fields: [sender_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ticket       ticket        @relation(fields: [ticket_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("platform")
+}
+
+model vendor_scorecard {
+  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id    String                      @db.Uuid
+  period_start     DateTime                    @db.Date
+  period_end       DateTime                    @db.Date
+  qc_pass_rate     Decimal?                    @db.Decimal(5, 2)
+  grade_accuracy   Decimal?                    @db.Decimal(5, 2)
+  ontime_dispatch  Decimal?                    @db.Decimal(5, 2)
+  acceptance_rate  Decimal?                    @db.Decimal(5, 2)
+  return_rate      Decimal?                    @db.Decimal(5, 2)
+  dispute_rate     Decimal?                    @db.Decimal(5, 2)
+  buyer_rating_avg Decimal?                    @db.Decimal(3, 2)
+  listing_hygiene  Decimal?                    @db.Decimal(5, 2)
+  units_in_period  Int
+  composite_score  Decimal?                    @db.Decimal(5, 2)
+  tier             Unsupported("vendor_tier")?
+  computed_at      DateTime                    @default(now()) @db.Timestamptz(6)
+  organization     organization                @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([vendor_org_id, period_end])
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model warranty {
+  id             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id        String                           @db.Uuid
+  provider       Unsupported("warranty_provider")
+  start_date     DateTime                         @db.Date
+  end_date       DateTime                         @db.Date
+  terms_version  String
+  status         String                           @default("ACTIVE")
+  unit           unit                             @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warranty_claim warranty_claim[]
+
+  @@index([unit_id, status], map: "ix_warranty_unit")
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model warranty_claim {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warranty_id   String       @db.Uuid
+  unit_id       String       @db.Uuid
+  buyer_org_id  String       @db.Uuid
+  issue_type    String
+  description   String
+  status        String       @default("OPEN")
+  resolution    String?
+  cost          Decimal?     @db.Decimal(14, 2)
+  qc_report_ref String?      @db.Uuid
+  closed_at     DateTime?    @db.Timestamptz(6)
+  created_at    DateTime     @default(now()) @db.Timestamptz(6)
+  organization  organization @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report     qc_report?   @relation(fields: [qc_report_ref], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit          unit         @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warranty      warranty     @relation(fields: [warranty_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("platform")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_area_result {
+  id           BigInt    @id @default(autoincrement())
+  qc_report_id String    @db.Uuid
+  area         String
+  score        Decimal   @db.Decimal(5, 2)
+  max_score    Decimal   @db.Decimal(5, 2)
+  status       String
+  details_json Json?
+  qc_report    qc_report @relation(fields: [qc_report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([qc_report_id, area])
+  @@schema("qc")
+}
+
+model qc_audit_recheck {
+  id                                                       String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  original_report_id                                       String       @db.Uuid
+  recheck_report_id                                        String       @db.Uuid
+  divergence_json                                          Json?
+  auditor_id                                               String       @db.Uuid
+  created_at                                               DateTime     @default(now()) @db.Timestamptz(6)
+  user_account                                             user_account @relation(fields: [auditor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report_qc_audit_recheck_original_report_idToqc_report qc_report    @relation("qc_audit_recheck_original_report_idToqc_report", fields: [original_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report_qc_audit_recheck_recheck_report_idToqc_report  qc_report    @relation("qc_audit_recheck_recheck_report_idToqc_report", fields: [recheck_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_batch {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batch_number   String        @unique
+  hub_id         String        @db.Uuid
+  source_type    String
+  vendor_org_id  String?       @db.Uuid
+  expected_units Int
+  received_units Int           @default(0)
+  status         String        @default("OPEN")
+  opened_at      DateTime      @default(now()) @db.Timestamptz(6)
+  closed_at      DateTime?     @db.Timestamptz(6)
+  hub            hub           @relation(fields: [hub_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization   organization? @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report      qc_report[]
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_hardware_detected {
+  qc_report_id        String    @id @db.Uuid
+  hw_serial           String
+  hw_model            String?
+  bios_version        String?
+  bios_date           DateTime? @db.Date
+  cpu_detected        String?
+  cores               Int?
+  threads             Int?
+  ram_detected_gb     Int
+  ram_modules         Int?
+  ram_type            String?
+  ram_speed_mhz       Int?
+  storage_type        String?
+  storage_detected_gb Int?
+  storage_model       String?
+  smart_status        String?
+  power_on_hours      Int?
+  tbw_gb              Int?
+  gpu_detected        String?
+  panel_id            String?
+  screen_size         Decimal?  @db.Decimal(4, 1)
+  battery_design_wh   Int?
+  battery_full_wh     Int?
+  battery_health_pct  Decimal?  @db.Decimal(5, 2)
+  cycle_count         Int?
+  wifi_chip           String?
+  bt_present          Boolean?
+  tpm_version         String?
+  secure_boot         Boolean?
+  bios_locked         Boolean   @default(false)
+  mdm_locked          Boolean   @default(false)
+  computrace_active   Boolean   @default(false)
+  raw_json            Json?
+  qc_report           qc_report @relation(fields: [qc_report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_mismatch {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  qc_report_id      String    @db.Uuid
+  field             String
+  declared_value    String
+  actual_value      String
+  severity          String
+  resolution        String?
+  discount_amount   Decimal?  @db.Decimal(14, 2)
+  buyer_notified_at DateTime  @default(now()) @db.Timestamptz(6)
+  buyer_decision_at DateTime? @db.Timestamptz(6)
+  penalty_id        String?   @db.Uuid
+  penalty           penalty?  @relation(fields: [penalty_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_mismatch_penalty")
+  qc_report         qc_report @relation(fields: [qc_report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_photo {
+  id           BigInt    @id @default(autoincrement())
+  qc_report_id String    @db.Uuid
+  angle        String
+  file_key     String
+  hash         String
+  captured_at  DateTime  @default(now()) @db.Timestamptz(6)
+  qc_report    qc_report @relation(fields: [qc_report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_report {
+  id                                                              String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id                                                         String                          @db.Uuid
+  batch_id                                                        String?                         @db.Uuid
+  technician_id                                                   String                          @db.Uuid
+  device_cert_id                                                  String
+  agent_version                                                   String
+  started_at                                                      DateTime                        @db.Timestamptz(6)
+  completed_at                                                    DateTime?                       @db.Timestamptz(6)
+  qc_score                                                        Int?
+  verdict                                                         Unsupported("qc_verdict")?
+  grade_proposed                                                  Unsupported("grade_type")?
+  grade_final                                                     Unsupported("grade_type")?
+  grade_override_reason                                           String?
+  report_pdf_key                                                  String?
+  signature                                                       String
+  nonce                                                           String                          @unique
+  verification_code                                               String?                         @unique
+  visit_id                                                        String?                         @db.Uuid
+  tool_run_id                                                     String?                         @db.Uuid
+  location_type                                                   Unsupported("qc_location_type") @default(dbgenerated("'VENDOR_SITE'::qc_location_type"))
+  location_address_id                                             String?                         @db.Uuid
+  valid_until                                                     DateTime?                       @db.Date
+  superseded_by_id                                                String?                         @db.Uuid
+  is_current                                                      Boolean                         @default(true)
+  grade_correction                                                grade_correction[]
+  unit_unit_qc_report_idToqc_report                               unit[]                          @relation("unit_qc_report_idToqc_report")
+  order_line_unit                                                 order_line_unit[]
+  return_qc                                                       return_qc[]
+  warranty_claim                                                  warranty_claim[]
+  qc_area_result                                                  qc_area_result[]
+  qc_audit_recheck_qc_audit_recheck_original_report_idToqc_report qc_audit_recheck[]              @relation("qc_audit_recheck_original_report_idToqc_report")
+  qc_audit_recheck_qc_audit_recheck_recheck_report_idToqc_report  qc_audit_recheck[]              @relation("qc_audit_recheck_recheck_report_idToqc_report")
+  qc_hardware_detected                                            qc_hardware_detected?
+  qc_mismatch                                                     qc_mismatch[]
+  qc_photo                                                        qc_photo[]
+  qc_batch                                                        qc_batch?                       @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address                                                     org_address?                    @relation(fields: [location_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report                                                       qc_report?                      @relation("qc_reportToqc_report", fields: [superseded_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_qc_report                                                 qc_report[]                     @relation("qc_reportToqc_report")
+  user_account                                                    user_account                    @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_tool_run                                                     qc_tool_run?                    @relation(fields: [tool_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit_qc_report_unit_idTounit                                    unit                            @relation("qc_report_unit_idTounit", fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit                                                        qc_visit?                       @relation(fields: [visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_reverification                                               qc_reverification[]
+  qc_seal                                                         qc_seal[]
+  qc_visit_unit                                                   qc_visit_unit[]
+
+  @@index([batch_id, verdict], map: "ix_qcrep_batch")
+  @@index([unit_id], map: "ix_qcrep_unit")
+  @@index([visit_id], map: "ix_qcrep_visit")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_reverification {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id             String        @db.Uuid
+  original_report_id  String        @db.Uuid
+  trigger             String
+  method              String
+  performed_by        String?       @db.Uuid
+  performed_at        DateTime      @default(now()) @db.Timestamptz(6)
+  seal_code_scanned   String?
+  seal_intact         Boolean?
+  serial_scanned      String?
+  serial_matches      Boolean?
+  fingerprint_hash    String?
+  fingerprint_matches Boolean?
+  outcome             String
+  photo_keys          String[]
+  notes               String?
+  qc_report           qc_report     @relation(fields: [original_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account        user_account? @relation(fields: [performed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit                unit          @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([unit_id, performed_at(sort: Desc)], map: "ix_reverif_unit")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_sampling_rule {
+  id                      String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_tier             Unsupported("vendor_tier")?
+  min_units_inspected     Int                         @default(0)
+  min_pass_rate           Decimal?                    @db.Decimal(5, 2)
+  min_grade_accuracy      Decimal?                    @db.Decimal(5, 2)
+  sample_pct              Int
+  always_full_above_value Decimal?                    @db.Decimal(14, 2)
+  effective_from          DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  is_active               Boolean                     @default(true)
+
+  @@unique([vendor_tier, effective_from], map: "uq_sampling_tier_from")
+  @@schema("qc")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_seal {
+  id                         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  seal_code                  String                     @unique
+  unit_id                    String                     @db.Uuid
+  qc_report_id               String                     @db.Uuid
+  applied_by                 String                     @db.Uuid
+  applied_at                 DateTime                   @default(now()) @db.Timestamptz(6)
+  applied_photo_key          String
+  status                     Unsupported("seal_status") @default(dbgenerated("'APPLIED'::seal_status"))
+  verified_at                DateTime?                  @db.Timestamptz(6)
+  verified_by                String?                    @db.Uuid
+  verified_photo_key         String?
+  broken_at                  DateTime?                  @db.Timestamptz(6)
+  broken_reason              String?
+  replaced_by_seal_id        String?                    @db.Uuid
+  unit_unit_seal_idToqc_seal unit[]                     @relation("unit_seal_idToqc_seal")
+  qc_technician              qc_technician              @relation(fields: [applied_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report                  qc_report                  @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_seal                    qc_seal?                   @relation("qc_sealToqc_seal", fields: [replaced_by_seal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_qc_seal              qc_seal[]                  @relation("qc_sealToqc_seal")
+  unit_qc_seal_unit_idTounit unit                       @relation("qc_seal_unit_idTounit", fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account               user_account?              @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([unit_id, status], map: "ix_seal_unit")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_technician {
+  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                 String                    @unique @db.Uuid
+  employee_code           String                    @unique
+  home_pincode            String                    @db.Char(6)
+  zones                   String[]
+  certified_tools         String[]
+  device_cert_id          String?                   @unique
+  daily_capacity_units    Int                       @default(40)
+  max_sites_per_day       Int                       @default(3)
+  employment_type         String                    @default("INHOUSE")
+  divergence_rate         Decimal?                  @db.Decimal(5, 2)
+  units_inspected_total   Int                       @default(0)
+  is_active               Boolean                   @default(true)
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  route_plan              route_plan[]
+  qc_seal                 qc_seal[]
+  user_account            user_account              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit                qc_visit[]
+  technician_availability technician_availability[]
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_tolerance_rule {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  field           String
+  comparison      String
+  tolerance_value String?
+  severity        String
+  is_blocking     Boolean  @default(false)
+  effective_from  DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_tool_provider {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String        @unique
+  name                String
+  vendor_company      String?
+  integration_type    String
+  report_format       String
+  field_map_json      Json
+  supports_wipe       Boolean       @default(false)
+  wipe_standard       String?
+  licence_expiry      DateTime?     @db.Date
+  licence_seats       Int?
+  cost_per_scan_paise Int?
+  is_active           Boolean       @default(true)
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  qc_tool_run         qc_tool_run[]
+  qc_visit            qc_visit[]
+
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_tool_run {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_unit_id    String?          @db.Uuid
+  unit_id          String           @db.Uuid
+  tool_provider_id String           @db.Uuid
+  tool_version     String
+  tool_run_id      String?
+  device_cert_id   String
+  raw_report_key   String?
+  raw_report_json  Json?
+  raw_report_hash  String
+  parse_status     String           @default("PENDING")
+  parse_error      String?
+  serial_from_tool String?
+  serial_matches   Boolean?
+  started_at       DateTime?        @db.Timestamptz(6)
+  completed_at     DateTime?        @db.Timestamptz(6)
+  signature        String?
+  nonce            String?          @unique
+  ingested_at      DateTime         @default(now()) @db.Timestamptz(6)
+  qc_report        qc_report[]
+  qc_tool_provider qc_tool_provider @relation(fields: [tool_provider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit             unit             @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit_unit    qc_visit_unit?   @relation(fields: [visit_unit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tool_provider_id, tool_run_id])
+  @@index([unit_id, ingested_at(sort: Desc)], map: "ix_toolrun_unit")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model qc_visit {
+  id                    String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_number          String                         @unique
+  vendor_org_id         String                         @db.Uuid
+  facility_id           String                         @db.Uuid
+  address_id            String                         @db.Uuid
+  requested_by          String?                        @db.Uuid
+  requested_at          DateTime                       @default(now()) @db.Timestamptz(6)
+  units_requested       Int
+  units_presented       Int?
+  units_inspected       Int                            @default(0)
+  units_passed          Int                            @default(0)
+  units_grade_corrected Int                            @default(0)
+  units_failed          Int                            @default(0)
+  units_absent          Int                            @default(0)
+  technician_id         String?                        @db.Uuid
+  tool_provider_id      String?                        @db.Uuid
+  scheduled_date        DateTime?                      @db.Date
+  slot_from             DateTime?                      @db.Time(6)
+  slot_to               DateTime?                      @db.Time(6)
+  status                Unsupported("qc_visit_status") @default(dbgenerated("'REQUESTED'::qc_visit_status"))
+  arrived_at            DateTime?                      @db.Timestamptz(6)
+  started_at            DateTime?                      @db.Timestamptz(6)
+  completed_at          DateTime?                      @db.Timestamptz(6)
+  arrival_geo_lat       Decimal?                       @db.Decimal(9, 6)
+  arrival_geo_lng       Decimal?                       @db.Decimal(9, 6)
+  geo_variance_metres   Int?
+  vendor_contact_id     String?                        @db.Uuid
+  vendor_otp_hash       String?
+  vendor_signoff_at     DateTime?                      @db.Timestamptz(6)
+  vendor_signoff_name   String?
+  visit_fee             Decimal                        @default(0) @db.Decimal(14, 2)
+  fee_bearer            String                         @default("TRUETECH")
+  fee_waiver_reason     String?
+  reschedule_count      Int                            @default(0)
+  cancellation_reason   String?
+  notes                 String?
+  listing               listing[]
+  unit                  unit[]
+  route_stop            route_stop[]
+  qc_report             qc_report[]
+  org_address           org_address                    @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor_facility       vendor_facility                @relation(fields: [facility_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account          user_account?                  @relation(fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_technician         qc_technician?                 @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_tool_provider      qc_tool_provider?              @relation(fields: [tool_provider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_contact           org_contact?                   @relation(fields: [vendor_contact_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization          organization                   @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit_expense      qc_visit_expense[]
+  qc_visit_unit         qc_visit_unit[]
+
+  @@index([technician_id, scheduled_date], map: "ix_visit_tech")
+  @@index([vendor_org_id, status], map: "ix_visit_vendor")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model qc_visit_expense {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_id     String        @db.Uuid
+  expense_type String
+  amount       Decimal       @db.Decimal(14, 2)
+  distance_km  Decimal?      @db.Decimal(8, 2)
+  receipt_key  String?
+  approved_by  String?       @db.Uuid
+  approved_at  DateTime?     @db.Timestamptz(6)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  user_account user_account? @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit     qc_visit      @relation(fields: [visit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+model qc_visit_unit {
+  id               String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_id         String                         @db.Uuid
+  unit_id          String                         @db.Uuid
+  serial_number    String
+  listing_id       String?                        @db.Uuid
+  sequence_no      Int?
+  outcome          Unsupported("qc_unit_outcome") @default(dbgenerated("'PENDING'::qc_unit_outcome"))
+  qc_report_id     String?                        @db.Uuid
+  absent_reason    String?
+  started_at       DateTime?                      @db.Timestamptz(6)
+  completed_at     DateTime?                      @db.Timestamptz(6)
+  duration_seconds Int?
+  qc_tool_run      qc_tool_run[]
+  listing          listing?                       @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report        qc_report?                     @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit             unit                           @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit         qc_visit                       @relation(fields: [visit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([visit_id, unit_id])
+  @@index([unit_id], map: "ix_visitunit_unit")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model technician_availability {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  technician_id String        @db.Uuid
+  the_date      DateTime      @db.Date
+  slot_from     DateTime      @db.Time(6)
+  slot_to       DateTime      @db.Time(6)
+  status        String        @default("AVAILABLE")
+  note          String?
+  qc_technician qc_technician @relation(fields: [technician_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([technician_id, the_date, slot_from])
+  @@index([the_date, status], map: "ix_tech_avail")
+  @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model wipe_certificate {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id             String   @db.Uuid
+  method              String
+  standard            String   @default("NIST_800_88_PURGE")
+  passes              Int      @default(1)
+  verification_status String
+  certificate_key     String?
+  hash                String?
+  issued_at           DateTime @default(now()) @db.Timestamptz(6)
+  unit                unit     @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+model facility_holiday {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  facility_id     String          @db.Uuid
+  holiday_date    DateTime        @db.Date
+  reason          String?
+  vendor_facility vendor_facility @relation(fields: [facility_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([facility_id, holiday_date])
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model facility_hours {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  facility_id     String          @db.Uuid
+  day_of_week     Int
+  open_time       DateTime?       @db.Time(6)
+  close_time      DateTime?       @db.Time(6)
+  is_closed       Boolean         @default(false)
+  vendor_facility vendor_facility @relation(fields: [facility_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([facility_id, day_of_week])
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_capability {
+  id                          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                      String       @db.Uuid
+  brand_id                    String?      @db.Uuid
+  category                    String
+  monthly_capacity_units      Int
+  typical_grade_mix           Json?
+  avg_price_band_min          Decimal?     @db.Decimal(14, 2)
+  avg_price_band_max          Decimal?     @db.Decimal(14, 2)
+  sourcing_channels           String[]
+  can_provide_serials_upfront Boolean      @default(true)
+  has_inhouse_testing         Boolean      @default(false)
+  has_inhouse_repair          Boolean      @default(false)
+  lead_time_days              Int          @default(2)
+  is_active                   Boolean      @default(true)
+  brand                       brand?       @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vcap_brand")
+  organization                organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_certification {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id              String        @db.Uuid
+  cert_type           String
+  issuing_body        String
+  certificate_number  String
+  valid_from          DateTime      @db.Date
+  valid_to            DateTime      @db.Date
+  document_id         String?       @db.Uuid
+  verification_status String        @default("PENDING")
+  shows_badge         Boolean       @default(false)
+  kyc_document        kyc_document? @relation(fields: [document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization        organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_facility {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                 String             @db.Uuid
+  address_id             String             @unique @db.Uuid
+  facility_type          String
+  storage_capacity_units Int?
+  has_loading_dock       Boolean            @default(false)
+  vehicle_access         String             @default("TEMPO")
+  lift_available         Boolean            @default(true)
+  staff_count            Int?
+  testing_stations       Int?
+  is_pickup_enabled      Boolean            @default(true)
+  special_instructions   String?
+  qc_visit               qc_visit[]
+  facility_holiday       facility_holiday[]
+  facility_hours         facility_hours[]
+  org_address            org_address        @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization           organization       @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_payout_preference {
+  org_id                  String       @id @db.Uuid
+  preferred_cycle         String       @default("WEEKLY")
+  preferred_day_of_week   Int?
+  min_payout_threshold    Decimal      @default(1000) @db.Decimal(14, 2)
+  auto_reinvest           Boolean      @default(false)
+  invoice_upload_required Boolean      @default(false)
+  organization            organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_profile {
+  org_id                     String                    @id @db.Uuid
+  business_category          String
+  incorporation_date         DateTime?                 @db.Date
+  monthly_volume_estimate    Int?
+  pickup_default_location_id String?                   @db.Uuid
+  commission_rate_override   Decimal?                  @db.Decimal(5, 2)
+  exposure_limit             Decimal?                  @db.Decimal(14, 2)
+  settlement_cycle           String                    @default("WEEKLY")
+  msme_udyam_no              String?
+  onboarding_status          Unsupported("org_status") @default(dbgenerated("'REGISTERED'::org_status"))
+  verified_at                DateTime?                 @db.Timestamptz(6)
+  verified_by                String?                   @db.Uuid
+  organization               organization              @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  org_address                org_address?              @relation(fields: [pickup_default_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account               user_account?             @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("vendor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vendor_sourcing_declaration {
+  id                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                 String        @db.Uuid
+  listing_id             String?       @db.Uuid
+  source_type            String
+  source_org_name        String?
+  acquisition_invoice_no String?
+  acquisition_date       DateTime?     @db.Date
+  supporting_doc_id      String?       @db.Uuid
+  declared_by            String        @db.Uuid
+  declared_at            DateTime      @default(now()) @db.Timestamptz(6)
+  listing                listing?      @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vsd_listing")
+  user_account           user_account  @relation(fields: [declared_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization           organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  kyc_document           kyc_document? @relation(fields: [supporting_doc_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("vendor")
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "// incremental": "off: nest-cli deletes outDir before building, which strands a stale .tsbuildinfo and produces a half-empty dist",
+    "incremental": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+}

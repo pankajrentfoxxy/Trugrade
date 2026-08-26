@@ -10,3 +10,6 @@ onlyBuiltDependencies:
   - "@swc/core"
   - "@sentry/cli"
   - unrs-resolver
+  - argon2
+  - "@nestjs/core"
+  - msgpackr-extract

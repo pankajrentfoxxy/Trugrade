@@ -1,0 +1,11 @@
+{
+  "extends": "@trugrade/config/tsconfig/node.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": { "src/*": ["src/*"] }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
