@@ -5,10 +5,17 @@ import { CatalogService } from './catalog.service';
 import { SkuRepository } from './internal/sku.repository';
 import { ConditionImageService } from './internal/condition-image.service';
 import { SkuRequestService } from './internal/sku-request.service';
+import { SkuImportService } from './internal/sku-import.service';
 
 @Module({
   imports: [PrismaModule, ClockModule],
-  providers: [CatalogService, SkuRepository, ConditionImageService, SkuRequestService],
+  providers: [
+    CatalogService,
+    SkuRepository,
+    ConditionImageService,
+    SkuRequestService,
+    SkuImportService,
+  ],
   exports: [CatalogService],
 })
 export class CatalogModule {}
