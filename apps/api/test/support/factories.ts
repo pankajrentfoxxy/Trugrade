@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { skuNormalizedKey } from '@trugrade/contracts';
 import { testDb } from './db';
 
 /**
@@ -125,9 +126,36 @@ export async function makeCatalog(
   const skuId = randomUUID();
   const uniq = randomUUID().slice(0, 8);
 
-  await db.$executeRaw`INSERT INTO catalog.brand (id, name, slug) VALUES (${brandId}::uuid, ${brand + ' ' + uniq}, ${'brand-' + uniq})`;
+  // Each factory call needs its own brand, or a second call collides on
+  // catalog.brand.name UNIQUE.
+  const brandName = `${brand} ${uniq}`;
+
+  await db.$executeRaw`INSERT INTO catalog.brand (id, name, slug) VALUES (${brandId}::uuid, ${brandName}, ${'brand-' + uniq})`;
   await db.$executeRaw`INSERT INTO catalog.series (id, brand_id, name, slug) VALUES (${seriesId}::uuid, ${brandId}::uuid, 'Latitude', ${'latitude-' + uniq})`;
   await db.$executeRaw`INSERT INTO catalog.model (id, series_id, name) VALUES (${modelId}::uuid, ${seriesId}::uuid, ${model})`;
+
+  // The key comes from the shared generator, never hand-written here.
+  //
+  // It used to be a string literal with a uniq suffix glued on, which made the
+  // fixture the second code path Task 2 exists to prevent: the factory's key and
+  // the application's key for the same row were different strings, so a test
+  // could not detect that the two had diverged — the exact defect the dedupe
+  // guarantee is supposed to catch.
+  const normalizedKey = skuNormalizedKey({
+    brand: brandName,
+    model,
+    cpuFamily: 'Core i5',
+    cpuModel: 'i5-1145G7',
+    ramGb: 16,
+    storageGb: 512,
+    storageType: 'NVME_SSD',
+    screenSizeIn: 13.3,
+    screenResolution: 'FHD',
+    gpu: 'INTEGRATED',
+    os: 'Windows 11 Pro',
+    isTouch: false,
+  });
+
   await db.$executeRaw`
     INSERT INTO catalog.sku (id, model_id, sku_code, normalized_key, cpu_brand, cpu_family,
                              cpu_model, cpu_generation, ram_gb, storage_type, storage_gb,
@@ -135,7 +163,7 @@ export async function makeCatalog(
                              hsn_code, gst_rate)
     VALUES (${skuId}::uuid, ${modelId}::uuid,
             ${(overrides.skuCode ?? 'DEL-LAT5320-I5-16-512') + '-' + uniq},
-            ${'dell|latitude_5320|core_i5|i5_1145g7|16|512|nvme_ssd|' + uniq},
+            ${normalizedKey},
             'Intel', 'Core i5', 'i5-1145G7', '11th', 16, 'NVME_SSD', 512,
             'INTEGRATED', 13.3, 'FHD', false, 'Windows 11 Pro', '84713010', 18)`;
 
