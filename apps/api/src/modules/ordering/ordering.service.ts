@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../shared/db/prisma.service';
 
 /**
  * The public interface of the `ordering` module.
@@ -17,11 +18,27 @@ import { Injectable } from '@nestjs/common';
 export interface IOrderingService {
   /** Liveness of this module's own dependencies, surfaced on /health. */
   selfCheck(): Promise<{ ok: boolean; detail?: string }>;
+
+  /**
+   * Orders that reached the buyer, for the storefront's public figures.
+   *
+   * DELIVERED and not "shipped" or "paid": the public page reports outcomes a
+   * buyer would recognise as one, and only ordering knows which of its statuses
+   * that is. A caller filtering `ordering."order"` itself would pin that
+   * judgement outside the module that owns the state machine.
+   */
+  countDelivered(): Promise<number>;
 }
 
 @Injectable()
 export class OrderingService implements IOrderingService {
+  constructor(private readonly prisma: PrismaService) {}
+
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
     return { ok: true };
+  }
+
+  async countDelivered(): Promise<number> {
+    return this.prisma.db.order.count({ where: { status: 'DELIVERED' } });
   }
 }

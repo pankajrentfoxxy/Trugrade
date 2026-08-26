@@ -8,5 +8,9 @@
  * Anything added here becomes something another module may depend on, so adding
  * to this file is an architectural decision, not a convenience.
  */
-export { type IVendorService, VendorService } from './vendor.service';
+export {
+  type IVendorService,
+  type VendorReviewCaptures,
+  VendorService,
+} from './vendor.service';
 export { VendorModule } from './vendor.module';

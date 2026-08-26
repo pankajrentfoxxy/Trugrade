@@ -8,15 +8,19 @@ import {
 } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
+import { AppConfig } from '../../../shared/config';
 import {
   BankVerificationPort,
   GstinVerificationPort,
+  NotificationPort,
   PanVerificationPort,
+  type NotificationChannel,
   type VerificationOutcome,
   type VerificationResult,
 } from '../../../shared/adapters/ports';
 import {
   ConflictError,
+  PreconditionFailedError,
   RateLimitedError,
   ValidationError,
 } from '../../../shared/errors/domain-errors';
@@ -47,6 +51,22 @@ const FRAUD_FLAG_DISTINCT_VALUES = 3;
 
 /** Exponential backoff for automatic provider retries. Never consumes an attempt. */
 export const PROVIDER_RETRY_SCHEDULE_SECONDS = [30, 120, 600, 3600];
+
+/** `platform_config` key holding the post-change payout freeze, in hours. */
+const FREEZE_HOURS_KEY = 'kyc.bank_change_freeze_hours';
+
+/** The DLT/Meta template the owner alert is sent under, on every channel. */
+export const BANK_CHANGE_ALERT_TEMPLATE = 'BANK_ACCOUNT_CHANGED';
+
+/**
+ * The column-encryption key outside production.
+ *
+ * `PII_ENCRYPTION_KEY` is required in production by the env loader precisely
+ * because this column exists; a dev machine and CI still have to produce a
+ * ciphertext, and a fixed local key is honest about being local. What must never
+ * happen is a readable account number sitting in a column named `_enc`.
+ */
+const DEV_PII_KEY = 'trugrade-local-pii-key';
 
 export type CheckType =
   | 'GSTIN'
@@ -80,6 +100,17 @@ export interface VerificationOutcomeView {
   willRetryAutomatically: boolean;
 }
 
+/** What `changeBankAccount` did, in the order it did it. */
+export interface BankAccountChangeResult {
+  /** The penny-drop. A non-PASS means nothing below it happened. */
+  verification: VerificationOutcomeView;
+  accountId: string | null;
+  /** Payouts to this account are refused by the database until this instant. */
+  frozenUntil: Date | null;
+  /** Channels the owner alert was accepted on. Empty is an incident, not a state. */
+  alertedVia: NotificationChannel[];
+}
+
 @Injectable()
 export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
@@ -90,6 +121,8 @@ export class VerificationService {
     private readonly gstin: GstinVerificationPort,
     private readonly pan: PanVerificationPort,
     private readonly bank: BankVerificationPort,
+    private readonly notifications: NotificationPort,
+    private readonly config: AppConfig,
   ) {}
 
   /** VR-META-03: support staff never see a full value, and we can still rate-limit. */
@@ -389,6 +422,225 @@ export class VerificationService {
         ? `Verified · ${(result.data as { beneficiaryName: string }).beneficiaryName} · ${(result.data as { bankName: string }).bankName}`
         : 'Verified.',
     });
+  }
+
+  /**
+   * Change the account we pay a vendor into. Penny-drop, freeze, alert.
+   *
+   * PHASE_01 exit criterion, and the reason all three are one method rather than
+   * three: **this is an account-takeover control, and a control assembled by its
+   * callers is a control one caller will assemble wrong.** The threat is not a
+   * typo. It is somebody with a session redirecting the payout account to their
+   * own and collecting the next run. Against that threat the penny-drop alone is
+   * worthless — the attacker's own account passes it — so the two parts that
+   * actually defend anything are the freeze, which buys a day, and the alert,
+   * which spends that day telling the owner.
+   *
+   * The order below is deliberate and every step is a refusal:
+   *
+   *   1. **Can the owner be warned at all?** Checked FIRST, before the penny-drop,
+   *      because the penny-drop costs a rupee and consumes one of five daily
+   *      attempts, and because an org whose owner is unreachable must not be able
+   *      to change its payout account *at all* — a silent redirect is the exact
+   *      outcome this criterion exists to prevent. Refusing here is unhelpful to
+   *      a badly-configured org and correct against the threat.
+   *   2. **Penny-drop.** A non-PASS writes nothing: no row, no freeze, no alarm.
+   *      A name mismatch is a human's problem rather than a takeover, and firing
+   *      "your payout account was changed" over a change that did not happen is
+   *      how an alert stops being read.
+   *   3. **Write and freeze, in one transaction.** The old account is demoted and
+   *      the new one inserted together. Half of that is an org with no payout
+   *      account, which is a worse failure than the change not happening.
+   *   4. **Alert, after the commit.** A false alarm on a rolled-back change would
+   *      train the owner to ignore the one that matters, and the freeze is
+   *      durable by then — so the ordering favours never crying wolf over warning
+   *      a fraction of a second earlier.
+   *
+   * Every registered channel of the owner is used, never just the one the session
+   * arrived on. That is what "a channel they did not initiate the change from"
+   * means in practice: an attacker holds whatever they phished, one mailbox or
+   * one SIM, and the warning has to leave by a door they are not standing in.
+   * There is no suppression switch and deliberately no "do not alert me" flag.
+   */
+  async changeBankAccount(input: {
+    orgId: string;
+    actorUserId: string;
+    accountNumber: string;
+    ifsc: string;
+    accountHolderName: string;
+    accountType?: 'CURRENT' | 'SAVINGS' | 'CC' | 'OD';
+  }): Promise<BankAccountChangeResult> {
+    const targets = await this.ownerAlertTargets(input.orgId);
+    if (targets.length === 0) {
+      throw new PreconditionFailedError(
+        'We cannot change a payout account without being able to warn the account owner. Add a mobile number or email address for the owner first, then try again.',
+        { reason: 'bank_change_owner_unreachable', orgId: input.orgId },
+      );
+    }
+
+    const verification = await this.pennyDrop(
+      input.accountNumber,
+      input.ifsc,
+      input.accountHolderName,
+      { orgId: input.orgId },
+      input.actorUserId,
+    );
+    if (verification.outcome !== 'PASS') {
+      return { verification, accountId: null, frozenUntil: null, alertedVia: [] };
+    }
+
+    const hours = await this.freezeHours();
+    const now = this.clock.now();
+    const frozenUntil = new Date(now.getTime() + hours * 3_600_000);
+    const last4 = input.accountNumber.slice(-4);
+    const ifsc = input.ifsc.toUpperCase();
+    const resolved = verification.resolved as
+      | { beneficiaryName?: string; bankName?: string; branch?: string }
+      | undefined;
+
+    const accountId = await this.prisma.runInTransaction(async () => {
+      // One default payout account per org, so no payout run ever has to choose.
+      await this.prisma.db.bank_account.updateMany({
+        where: { org_id: input.orgId, purpose: 'PAYOUT', is_default: true },
+        data: { is_default: false, updated_at: now },
+      });
+
+      // pgcrypto, with the key the env loader already demands in production for
+      // exactly this column. Raw SQL because the encryption has to happen inside
+      // the database call: reading the key into JS, encrypting there and handing
+      // Prisma a Buffer would put the plaintext in a second place for no gain.
+      const [row] = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        INSERT INTO kyc.bank_account
+          (org_id, purpose, account_holder_name, account_number_enc, account_number_last4,
+           ifsc, bank_name, branch, account_type, penny_drop_status, penny_drop_name,
+           name_match_score, verified_at, is_default, frozen_until, created_at, updated_at)
+        VALUES
+          (${input.orgId}::uuid, 'PAYOUT', ${input.accountHolderName},
+           pgp_sym_encrypt(${input.accountNumber}, ${this.piiKey()}),
+           ${last4}, ${ifsc},
+           ${resolved?.bankName ?? null}, ${resolved?.branch ?? null},
+           ${input.accountType ?? 'CURRENT'}, 'SUCCESS',
+           ${resolved?.beneficiaryName ?? null},
+           ${verification.matchScore ?? null}, ${now}, TRUE, ${frozenUntil}, ${now}, ${now})
+        RETURNING id`;
+      return row!.id;
+    });
+
+    const alertedVia = await this.alertOwner(targets, {
+      last4,
+      ifsc,
+      frozenUntil,
+      hours,
+      orgId: input.orgId,
+    });
+
+    if (alertedVia.length === 0) {
+      // The freeze holds regardless — it is the half of this control that does
+      // not depend on a third party. But a freeze nobody was told about expires
+      // silently in a day, so this is an incident and not a debug line.
+      this.logger.error(
+        `BANK CHANGE ALERT UNDELIVERED: org ${input.orgId} changed its payout account to ` +
+          `...${last4} and every owner channel refused the warning. ` +
+          `The freeze expires ${frozenUntil.toISOString()}.`,
+      );
+    }
+
+    return { verification, accountId, frozenUntil, alertedVia };
+  }
+
+  /**
+   * Where the owner can be reached, out of band.
+   *
+   * The **owner**, not the actor and not the org's contact list. Takeover by a
+   * lesser user inside the org is a real shape of this attack, and alerting the
+   * person who made the change would tell the attacker their change went through
+   * and tell nobody else anything.
+   */
+  private async ownerAlertTargets(
+    orgId: string,
+  ): Promise<Array<{ channel: NotificationChannel; to: string }>> {
+    const owner = await this.prisma.db.user_account.findFirst({
+      where: { org_id: orgId, is_org_owner: true, status: 'ACTIVE' },
+      select: { mobile: true, email: true },
+      orderBy: { created_at: 'asc' },
+    });
+    if (!owner) return [];
+
+    // An unverified contact point is used anyway. A warning delivered to an
+    // address we never round-tripped is still a warning, and withholding it over
+    // a missing tick would be choosing tidiness over the entire point.
+    return [
+      ...(owner.mobile ? [{ channel: 'SMS' as const, to: owner.mobile }] : []),
+      ...(owner.email ? [{ channel: 'EMAIL' as const, to: String(owner.email) }] : []),
+    ];
+  }
+
+  /** Fan out, survive an individual failure, report what was accepted. */
+  private async alertOwner(
+    targets: Array<{ channel: NotificationChannel; to: string }>,
+    vars: { last4: string; ifsc: string; frozenUntil: Date; hours: number; orgId: string },
+  ): Promise<NotificationChannel[]> {
+    const variables = {
+      last4: vars.last4,
+      ifsc: vars.ifsc,
+      freezeHours: String(vars.hours),
+      frozenUntil: vars.frozenUntil.toISOString(),
+    };
+
+    const receipts = await Promise.all(
+      targets.map(async (t) => {
+        try {
+          const receipt = await this.notifications.send({
+            channel: t.channel,
+            to: t.to,
+            templateCode: BANK_CHANGE_ALERT_TEMPLATE,
+            locale: 'en',
+            variables,
+            // Transactional without qualification. A security alert is not
+            // marketing and must not consult a preference an attacker holding
+            // the session could have turned off a minute earlier.
+            isTransactional: true,
+          });
+          return receipt.accepted ? t.channel : null;
+        } catch (e) {
+          // One dead provider must not stop the other channel, and must never
+          // unwind a freeze that is already committed.
+          this.logger.error(
+            `Bank-change alert failed on ${t.channel} for org ${vars.orgId}: ${(e as Error).message}`,
+          );
+          return null;
+        }
+      }),
+    );
+
+    return receipts.filter((c): c is NotificationChannel => c !== null);
+  }
+
+  /**
+   * The freeze window, through `v_current_config` rather than the table.
+   *
+   * The view applies the effective date; the table would sometimes answer with a
+   * row that does not apply yet. A missing or nonsensical value throws rather
+   * than falling back to 24 — silently substituting a number nobody configured is
+   * how a control ends up running at a setting that was deliberately changed and
+   * quietly ignored.
+   */
+  private async freezeHours(): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<Array<{ value_json: unknown }>>`
+      SELECT value_json FROM platform.v_current_config WHERE key = ${FREEZE_HOURS_KEY}`;
+    const v = row?.value_json;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+      throw new PreconditionFailedError("We can't do that just now. Please try again shortly.", {
+        reason: row ? 'malformed_platform_config' : 'missing_platform_config',
+        key: FREEZE_HOURS_KEY,
+        value: v,
+      });
+    }
+    return v;
+  }
+
+  private piiKey(): string {
+    return this.config.get('PII_ENCRYPTION_KEY') ?? DEV_PII_KEY;
   }
 
   // -------------------------------------------------------------------------

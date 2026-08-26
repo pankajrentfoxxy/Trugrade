@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { skuNormalizedKey, type SkuKeyParts } from '@trugrade/contracts';
+import { skuNormalizedKey, validateRow, type SkuKeyParts } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import {
@@ -8,6 +8,8 @@ import {
   ValidationError,
 } from '../../../shared/errors/domain-errors';
 import { SkuRepository } from './sku.repository';
+import { SkuImportService } from './sku-import.service';
+import { CatalogChangeLogService } from './catalog-change-log.service';
 
 /**
  * A vendor will always have a machine that is not in the catalog.
@@ -45,6 +47,17 @@ export interface SkuRequestDraft {
   };
 }
 
+/** One pending request, as the ops worklist shows it. */
+export interface SkuRequestQueueRow {
+  id: string;
+  vendorOrgId: string;
+  rawBrand: string;
+  rawModel: string;
+  rawConfig: string;
+  createdAt: Date;
+  ageHours: number;
+}
+
 export interface NearMatch {
   skuId: string;
   skuCode: string;
@@ -60,6 +73,8 @@ export class SkuRequestService {
     private readonly prisma: PrismaService,
     private readonly clock: ClockPort,
     private readonly skus: SkuRepository,
+    private readonly importer: SkuImportService,
+    private readonly changeLog: CatalogChangeLogService,
   ) {}
 
   /**
@@ -197,6 +212,71 @@ export class SkuRequestService {
       // saying out loud rather than reporting a silent success.
       throw new ConflictError('That request has already been decided.');
     }
+
+    // A merge is a catalog decision with a vendor on the other end of it, so it
+    // belongs in the same log as an edit to the SKU itself. Anchored on the SKU
+    // rather than the request: "everything that ever happened to this SKU" is
+    // the question the log gets asked, and a request id answers none of it.
+    await this.changeLog.record({
+      entityType: 'sku',
+      entityId: input.skuId,
+      action: 'MERGE',
+      field: 'sku_request',
+      newValue: input.requestId,
+      reason: `SKU request ${input.requestId} mapped onto ${sku.skuCode}`,
+      actorId: input.resolvedBy,
+    });
+  }
+
+  /**
+   * Ops approves: the machine really is new, so the SKU gets created.
+   *
+   * The specification comes from the reviewer, not from the request — the vendor
+   * submitted free text ("i5 16gb 512 ssd"), and a parser confident enough to
+   * turn that into a master-catalog row is a parser confident enough to be
+   * wrong about a machine every later listing inherits.
+   *
+   * It goes through the importer's `upsert` rather than an INSERT of its own, so
+   * the normalised key, the canonicalisation of "NVMe" and the change log entry
+   * are byte-for-byte what the CSV path produces. That also means approval is
+   * *idempotent on the key*: if the reviewer types a specification we already
+   * carry, the answer is the existing SKU and the request is recorded as MAPPED
+   * rather than NEW — which is the honest label, and the RESOLVED_NEW /
+   * RESOLVED_MAPPED ratio is the signal that catalog search is failing vendors.
+   */
+  async approve(input: {
+    requestId: string;
+    spec: Record<string, string>;
+    resolvedBy: string;
+  }): Promise<{ skuId: string; outcome: 'created' | 'merged' }> {
+    // The same validator the CSV importer runs, on the same column names. A
+    // second one here would be a second opinion about what a valid machine is.
+    const parsed = validateRow(input.spec, 1);
+    if (!parsed.value) {
+      // Every problem in one message rather than one field error per column.
+      // `validateRow` reports free text keyed to a CSV column name, which is not
+      // a form field id, and inventing `spec.0`, `spec.1` would give the console
+      // keys it cannot attach to anything — a form that highlights nothing is
+      // worse than a sentence that names all four mistakes.
+      throw new ValidationError(parsed.errors.join(' '), { spec: parsed.errors[0]! });
+    }
+
+    const { id, outcome } = await this.importer.upsert(
+      parsed.value,
+      input.resolvedBy,
+      `SKU request ${input.requestId} approved`,
+    );
+
+    const n = await this.prisma.$executeRaw`
+      UPDATE catalog.sku_request
+         SET status = ${outcome === 'created' ? 'RESOLVED_NEW' : 'RESOLVED_MAPPED'},
+             resolved_sku_id = ${id}::uuid,
+             resolved_by = ${input.resolvedBy}::uuid,
+             resolved_at = ${this.clock.now()}
+       WHERE id = ${input.requestId}::uuid AND status = 'PENDING'`;
+    if (n === 0) throw new ConflictError('That request has already been decided.');
+
+    return { skuId: id, outcome };
   }
 
   async reject(input: { requestId: string; resolvedBy: string; reason: string }): Promise<void> {
@@ -213,20 +293,60 @@ export class SkuRequestService {
              resolved_at = ${this.clock.now()}
        WHERE id = ${input.requestId}::uuid AND status = 'PENDING'`;
     if (n === 0) throw new ConflictError('That request has already been decided.');
+
+    // A rejection changes no row in the catalog, which is exactly why it has to
+    // be logged: the reason is what the vendor is owed, and `sku_request` has no
+    // column to keep it in — the row records who decided and when, and drops the
+    // only part that explains the decision.
+    //
+    // entity_type is 'sku' because `chk_change_log_entity` has no 'sku_request'
+    // value and widening a CHECK is a migration this lane does not own. entity_id
+    // is therefore a request id here and sku_id is explicitly null, so the
+    // "everything that happened to this SKU" query cannot pick it up by accident.
+    await this.changeLog.record({
+      entityType: 'sku',
+      entityId: input.requestId,
+      action: 'UPDATE',
+      field: 'sku_request',
+      newValue: 'REJECTED',
+      reason: input.reason.trim(),
+      actorId: input.resolvedBy,
+      skuId: null,
+    });
+  }
+
+  /**
+   * The worklist as the review screen needs it: each request with the SKUs it
+   * most likely already is.
+   *
+   * The candidates are recomputed on read rather than stored with the request,
+   * because the catalog moves underneath the queue — a request that had no match
+   * on Monday matches exactly the SKU somebody imported on Tuesday, and a
+   * snapshot taken at submission would show the reviewer the stale answer and
+   * invite them to create the duplicate.
+   *
+   * ponytail: one trigram query per request, so the default page of 25 is 25
+   * round trips against a GIN index. It is an ops screen with a single-digit
+   * queue on a normal day; if the queue is ever long enough for this to hurt,
+   * the fix is one lateral join, not a cache.
+   */
+  async reviewQueue(limit = 25): Promise<Array<SkuRequestQueueRow & { nearMatches: NearMatch[] }>> {
+    const rows = await this.queue(limit);
+    return Promise.all(
+      rows.map(async (r) => ({
+        ...r,
+        nearMatches: await this.nearMatches({
+          vendorOrgId: r.vendorOrgId,
+          rawBrand: r.rawBrand,
+          rawModel: r.rawModel,
+          rawConfig: r.rawConfig,
+        }),
+      })),
+    );
   }
 
   /** The ops worklist, oldest first — the SLA is measured from submission. */
-  async queue(limit = 100): Promise<
-    Array<{
-      id: string;
-      vendorOrgId: string;
-      rawBrand: string;
-      rawModel: string;
-      rawConfig: string;
-      createdAt: Date;
-      ageHours: number;
-    }>
-  > {
+  async queue(limit = 100): Promise<SkuRequestQueueRow[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{
         id: string;

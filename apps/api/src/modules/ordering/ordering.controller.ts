@@ -1,0 +1,143 @@
+import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { uuidSchema } from '@trugrade/contracts';
+import { RequirePermissions } from '../../shared/auth/guards';
+import { ZodValidationPipe } from '../../shared/http/http';
+import {
+  addCartItemSchema,
+  createCartSchema,
+  requirementIntakeSchema,
+  type AddCartItemDto,
+  type CreateCartDto,
+  type RequirementIntakeDto,
+} from './dto/ordering.dto';
+import { CartService, type CartSummary, type CartView } from './internal/cart.service';
+import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
+
+/**
+ * The authenticated buyer's cart and bulk-requirement intake.
+ *
+ * Two rules govern every handler here.
+ *
+ * **1. No customer-facing response may contain a vendor identifier at any
+ * depth.** Under the merchant-of-record model there is exactly one seller — us —
+ * so a vendor's legal name, trade name, GSTIN, PAN, address line, contact
+ * details, ask price or `org_id` in any of these payloads is a P0 defect
+ * (VR-099, `IDN-080`…`IDN-094`). The guarantee is not care taken in this file:
+ * every response type below is an explicit allow-list built field by field in
+ * the service, and a Prisma row is never returned. A blacklist would fail open
+ * the moment somebody adds a column.
+ *
+ * **2. The vocabulary is the buyer's.** "Sub-order", "vendor" and "supplier" do
+ * not appear in a route, a field name or a message here, because to the buyer
+ * this is one order from one seller with one invoice. What the cart does show is
+ * where machines dispatch from, as `Supply Point A · Gurugram` and nothing
+ * finer.
+ *
+ * Validation is a Zod schema per endpoint through `ZodValidationPipe` rather
+ * than a global pipe (VR-META-01), so the client and the server run the
+ * identical constant.
+ */
+@Controller('buyer')
+export class OrderingController {
+  constructor(
+    private readonly carts: CartService,
+    private readonly requirements: RfqIntakeService,
+  ) {}
+
+  // -------------------------------------------------------------------------
+  // Carts
+  // -------------------------------------------------------------------------
+
+  /**
+   * A named cart. Multiple open ones per person is the feature, not an accident:
+   * a procurement head sourcing for three departments at once needs three, and
+   * `uq_cart_active_name` is what keeps them distinguishable.
+   */
+  @Post('carts')
+  @RequirePermissions('ordering.cart.write')
+  create(@Body(new ZodValidationPipe(createCartSchema)) body: CreateCartDto): Promise<CartSummary> {
+    return this.carts.create(body.name);
+  }
+
+  @Get('carts')
+  @RequirePermissions('ordering.own.read')
+  list(): Promise<CartSummary[]> {
+    return this.carts.listOpen();
+  }
+
+  /**
+   * The cart, with availability checked at the moment of the call.
+   *
+   * A GET that reads live state rather than a stored total, because the stored
+   * total is wrong the instant somebody else buys the last machine — and a cart
+   * that quietly keeps offering a unit whose QC expired overnight is the failure
+   * this endpoint exists to prevent.
+   */
+  @Get('carts/:cartId')
+  @RequirePermissions('ordering.own.read')
+  view(@Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string): Promise<CartView> {
+    return this.carts.view(cartId);
+  }
+
+  /**
+   * 200 rather than 201: the same request creates a line or changes the quantity
+   * on one that already exists (`UNIQUE (cart_id, listing_id)`), and a status
+   * code that flips between the two makes every client branch on it to find out
+   * which happened. The body is the whole cart either way, so the page can
+   * re-render from one response.
+   */
+  @Post('carts/:cartId/items')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  addItem(
+    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
+    @Body(new ZodValidationPipe(addCartItemSchema)) body: AddCartItemDto,
+  ): Promise<CartView> {
+    return this.carts.addLine(cartId, body.listingId, body.qty);
+  }
+
+  /** 200 and the updated cart, not 204: the totals and the shortfalls both moved. */
+  @Delete('carts/:cartId/items/:itemId')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  removeItem(
+    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
+    @Param('itemId', new ZodValidationPipe(uuidSchema)) itemId: string,
+  ): Promise<CartView> {
+    return this.carts.removeLine(cartId, itemId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Bulk requirement intake
+  // -------------------------------------------------------------------------
+
+  /**
+   * A requirement list, as a filled form or an uploaded CSV.
+   *
+   * One route for both because they are the same intake with the same outcome; a
+   * client that has to choose a URL by input type ends up with two code paths
+   * for one screen.
+   *
+   * 200 rather than 201 even though rows are recorded: the useful answer is the
+   * classification — what we can fill now, what we cannot, and which rows did
+   * not parse — and that is meaningful whether or not anything was created.
+   *
+   * **Nothing here is visible to any vendor.** Sourcing against a requirement is
+   * our job under the merchant-of-record model, not a bidding process; see the
+   * service for why that distinction is load bearing rather than a preference.
+   */
+  @Post('requirements')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  submitRequirements(
+    @Body(new ZodValidationPipe(requirementIntakeSchema)) body: RequirementIntakeDto,
+  ): Promise<RequirementIntakeResult> {
+    if ('csv' in body) {
+      const { rows, rejected } = this.requirements.fromCsv(body.csv);
+      return this.requirements.intake(rows, rejected);
+    }
+    // A typed form row has already been validated by the same schema the CSV
+    // rows go through, so it needs no line number of its own beyond its position.
+    return this.requirements.intake(body.rows.map((value, i) => ({ line: i + 1, value })));
+  }
+}

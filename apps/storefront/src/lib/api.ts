@@ -63,3 +63,23 @@ export const getBrands = (): Promise<BrandSummary[] | null> =>
 /** Grade bands change with a policy decision, not with stock. */
 export const getGrades = (): Promise<GradeDefinition[] | null> =>
   get<GradeDefinition[]>('/public/grades', 300);
+
+export interface PublicOffer {
+  skuId: string;
+  brand: string;
+  model: string;
+  spec: string;
+  grade: 'A_PLUS' | 'A' | 'B';
+  /** Decimal string, never a float. Money does not survive a round trip as one. */
+  fromPrice: string;
+  unitsAvailable: number;
+  supplyPoints: number;
+  avgQcScore: number;
+  batteryMin: number;
+  batteryMax: number;
+  sampleSerial: string;
+}
+
+/** Thirty seconds: stock moves, and a stale grid offers machines that are gone. */
+export const getOffers = (): Promise<PublicOffer[] | null> =>
+  get<PublicOffer[]>('/public/offers', 30);

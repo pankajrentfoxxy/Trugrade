@@ -20,6 +20,8 @@ export {
   type VendorUnitView,
   type VendorImageView,
   type AddUnitsOutcome,
+  type ListingAvailability,
+  type PublicOffer,
   type ListingRow,
   type ListingStatus,
   type UnitRow,

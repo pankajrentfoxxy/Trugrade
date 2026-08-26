@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ClockPort } from '../../shared/clock';
+import { PrismaService } from '../../shared/db/prisma.service';
 import { QcRepository } from './internal/qc.repository';
 
 /**
@@ -14,11 +15,13 @@ import { QcRepository } from './internal/qc.repository';
  * reports, area results, hardware detected, photos, seals, mismatches,
  * re-verifications, sampling rules, wipe certificates, audit rechecks.
  *
- * Deliberately still one method. The services that follow — ingestion, the
+ * Deliberately still small. The services that follow — ingestion, the
  * tolerance engine and verdict, grade correction, scheduling, sealing and the
  * aggregates — add to this interface when they land and another module actually
  * needs to call them. A method added here in advance of a caller is a network
- * contract nobody has agreed to.
+ * contract nobody has agreed to; `countCurrentReports` is here because the
+ * storefront's public counter asked for it and would otherwise have read
+ * `qc.qc_report` from the catalog module.
  *
  * Other modules reach this through `src/modules/qc` (the barrel) and nothing
  * else. `internal/`, `entities/` and `dto/` are private, and the
@@ -27,6 +30,17 @@ import { QcRepository } from './internal/qc.repository';
 export interface IQcService {
   /** Liveness of this module's own dependencies, surfaced on /health. */
   selfCheck(): Promise<{ ok: boolean; detail?: string }>;
+
+  /**
+   * How many units carry a current inspection — the storefront's headline
+   * number.
+   *
+   * `is_current` is the filter that matters and it is qc's own bookkeeping: a
+   * re-inspection supersedes its predecessor rather than deleting it, so a
+   * caller counting `qc_report` rows would publish the number of inspections
+   * ever performed and call it the number of machines checked.
+   */
+  countCurrentReports(): Promise<number>;
 }
 
 @Injectable()
@@ -34,6 +48,7 @@ export class QcService implements IQcService {
   constructor(
     private readonly repo: QcRepository,
     private readonly clock: ClockPort,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -66,5 +81,9 @@ export class QcService implements IQcService {
       return { ok: false, detail: 'The DEVICESURE tool provider is missing or inactive.' };
     }
     return { ok: true };
+  }
+
+  async countCurrentReports(): Promise<number> {
+    return this.prisma.db.qc_report.count({ where: { is_current: true } });
   }
 }

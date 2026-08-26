@@ -465,15 +465,28 @@ export class PricingService {
    * `purchasePrice` are not passed: Rule 32(5) margin valuation is per serial,
    * and the specific serial is not known until allocation — the ordering lane
    * calls the same `landedPrice` helper with them at that point.
+   *
+   * `freight` is REQUIRED here for the same reason it is required on
+   * `landedPrice` itself. It was briefly `freight?: Money` coalesced to
+   * `Money.ZERO`, which re-introduced one layer up exactly the defect the
+   * contracts helper had just removed: a lane nobody could price became a lane
+   * that was free, and the difference is a price misrepresentation under CP
+   * e-Comm r.6(5) rather than a rounding curiosity. `logistics` models an
+   * unquotable lane as a discriminated union with `amount: null` so the caller
+   * has to look; a default here is what stops it having to.
+   *
+   * So the decision sits with the caller, who is the only one who knows whether
+   * the lane was quotable. Genuinely free delivery passes `Money.ZERO` on
+   * purpose. Not knowing the freight is not a number, and must not render as one.
    */
   async landedPriceForBuyer(
     listingId: string,
-    opts: { deliveryStateCode: string; ourStateCode: string; freight?: Money },
+    opts: { deliveryStateCode: string; ourStateCode: string; freight: Money },
   ): Promise<LandedPrice> {
     const listing = await this.requireListing(listingId);
     return landedPrice({
       sellingPrice: listing.unitPrice,
-      freight: opts.freight ?? Money.ZERO,
+      freight: opts.freight,
       gstRatePct: listing.gstRate,
       deliveryStateCode: opts.deliveryStateCode,
       ourStateCode: opts.ourStateCode,

@@ -1,6 +1,6 @@
 import { BRAND } from '@trugrade/config/brand';
 import { ThemeToggle } from '@trugrade/ui';
-import { getBrands, getGrades, getStats } from '../lib/api';
+import { getBrands, getGrades, getOffers, getStats } from '../lib/api';
 import { FilterRail } from './FilterRail';
 import { SearchBar } from './SearchBar';
 
@@ -24,6 +24,8 @@ import { SearchBar } from './SearchBar';
  * stock is inspected.
  */
 export const revalidate = 60;
+
+const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 
 const CATEGORIES = [
   'All laptops',
@@ -56,7 +58,12 @@ const PROCESS = [
 ] as const;
 
 export default async function HomePage(): Promise<React.JSX.Element> {
-  const [stats, brands, grades] = await Promise.all([getStats(), getBrands(), getGrades()]);
+  const [stats, brands, grades, offers] = await Promise.all([
+    getStats(),
+    getBrands(),
+    getGrades(),
+    getOffers(),
+  ]);
 
   const inspected = stats?.unitsInspected ?? 0;
   const sellable = stats?.unitsSellable ?? 0;
@@ -242,8 +249,65 @@ export default async function HomePage(): Promise<React.JSX.Element> {
               </div>
 
               {/* 4c — PRODUCT GRID, or the truth about there being none. */}
-              {sellable > 0 ? (
-                <div className="pgrid" />
+              {offers && offers.length > 0 ? (
+                <div className="pgrid">
+                  {offers.map((o) => (
+                    <div className="pc" key={`${o.skuId}-${o.grade}`}>
+                      <div className="im">
+                        {/* Viewfinder brackets, and the real serial beneath them.
+                            The brackets assert THIS UNIT WAS CAPTURED, so they
+                            only appear because sampleSerial is a serial we hold. */}
+                        <span className="vf tl" />
+                        <span className="vf tr" />
+                        <span className="vf bl" />
+                        <span className="vf br" />
+                        <span className="gr">{GRADE_LABEL[o.grade]}</span>
+                        <span className="qc">QC {o.avgQcScore}</span>
+                        <span className="sn">{o.sampleSerial}</span>
+                        <svg
+                          width="84"
+                          height="48"
+                          viewBox="0 0 150 80"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden="true"
+                        >
+                          <rect x="27" y="10" width="96" height="56" rx="3" />
+                          <path d="M12 70 h126 l-8 -4 H20 z" />
+                        </svg>
+                      </div>
+                      <div className="bd">
+                        <b>
+                          {o.brand} {o.model}
+                        </b>
+                        <span className="spec">{o.spec}</span>
+                        {/* The number no competitor can print, because printing
+                            it means having opened the machine. */}
+                        <span className="bat">
+                          BAT{' '}
+                          <i>
+                            <b style={{ width: `${o.batteryMin}%` }} />
+                          </i>{' '}
+                          {o.batteryMin}–{o.batteryMax}%
+                        </span>
+                        <div className="pr">
+                          ₹{Number(o.fromPrice).toLocaleString('en-IN')}{' '}
+                          <small>from · incl. GST</small>
+                        </div>
+                        <div className="meta">
+                          <span>
+                            {o.supplyPoints} supply point{o.supplyPoints === 1 ? '' : 's'}
+                          </span>
+                          <b>{o.unitsAvailable} units</b>
+                        </div>
+                      </div>
+                      <a className="cta" href="#board">
+                        Compare suppliers
+                      </a>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="empty">
                   <h3>No inspected stock yet</h3>

@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { ValidationError } from '../../../shared/errors/domain-errors';
+import { CatalogChangeLogService } from './catalog-change-log.service';
 
 /**
  * Bulk SKU import.
@@ -36,6 +37,7 @@ export class SkuImportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: ClockPort,
+    private readonly changeLog: CatalogChangeLogService,
   ) {}
 
   /** Every key already in the catalog, for classification. */
@@ -70,7 +72,7 @@ export class SkuImportService {
 
     for (const row of parsed.rows) {
       if (!row.value) continue;
-      const outcome = await this.upsert(row.value, actorId);
+      const { outcome } = await this.upsert(row.value, actorId);
       if (outcome === 'created') created++;
       else merged++;
     }
@@ -87,13 +89,22 @@ export class SkuImportService {
   /**
    * One row, in its own transaction.
    *
+   * Public because the SKU request queue commits exactly one row through it when
+   * ops approves a request. Two paths that both create a master-catalog SKU must
+   * canonicalise, dedupe on `normalized_key` and log identically, and the only
+   * way to guarantee that is for there to be one of them.
+   *
    * Per-row rather than one transaction for the file: a 200-row import that
    * rolls back entirely because line 173 has a typo wastes the 172 good rows,
    * and ops then has to edit the file and re-run the whole thing. The dry run is
    * what makes partial application safe to offer — nobody commits without having
    * seen the outcomes first.
    */
-  private async upsert(row: SkuImportRow, actorId: string): Promise<'created' | 'merged'> {
+  async upsert(
+    row: SkuImportRow,
+    actorId: string,
+    reason = 'bulk import',
+  ): Promise<{ id: string; outcome: 'created' | 'merged' }> {
     return this.prisma.runInTransaction(async () => {
       const brandId = await this.ensureBrand(row.brand);
       const seriesId = await this.ensureSeries(brandId, row.series);
@@ -113,8 +124,16 @@ export class SkuImportService {
                  hsn_code = ${row.hsnCode}, updated_at = ${this.clock.now()}
            WHERE id = ${existing.id}::uuid`;
 
-        await this.logChange(existing.id, 'sku', 'UPDATE', 'bulk import', actorId);
-        return 'merged';
+        await this.changeLog.record({
+          entityType: 'sku',
+          entityId: existing.id,
+          action: 'UPDATE',
+          field: 'row',
+          newValue: row.normalizedKey,
+          reason,
+          actorId,
+        });
+        return { id: existing.id, outcome: 'merged' };
       }
 
       const skuCode = row.skuCode ?? (await this.generateSkuCode(row));
@@ -130,24 +149,17 @@ export class SkuImportService {
                 ${row.hsnCode}, ${actorId}::uuid)
         RETURNING id`;
 
-      await this.logChange(inserted!.id, 'sku', 'CREATE', 'bulk import', actorId);
-      return 'created';
+      await this.changeLog.record({
+        entityType: 'sku',
+        entityId: inserted!.id,
+        action: 'CREATE',
+        field: 'row',
+        newValue: skuCode,
+        reason,
+        actorId,
+      });
+      return { id: inserted!.id, outcome: 'created' };
     });
-  }
-
-  private async logChange(
-    entityId: string,
-    entityType: string,
-    action: string,
-    reason: string,
-    actorId: string,
-  ): Promise<void> {
-    await this.prisma.$executeRaw`
-      INSERT INTO catalog.catalog_change_log
-        (entity_type, entity_id, sku_id, action, field, new_value, reason, changed_by)
-      VALUES (${entityType}, ${entityId}::uuid,
-              ${entityType === 'sku' ? entityId : null}::uuid,
-              ${action}, 'row', 'imported', ${reason}, ${actorId}::uuid)`;
   }
 
   private slug(s: string): string {

@@ -16,8 +16,7 @@
     "test:unit": "jest",
     "test": "jest",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build",
-    "test:a11y": "jest --config jest.a11y.config.js"
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@trugrade/config": "workspace:*",

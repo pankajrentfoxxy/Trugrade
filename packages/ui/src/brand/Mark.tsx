@@ -46,7 +46,7 @@ export function Wordmark({ className }: { className?: string }): React.JSX.Eleme
   const name = BRAND.nameLower;
   const split = Math.min(3, name.length);
   return (
-    <span className={cn('font-display text-h2 font-bold tracking-[-0.045em] lowercase', className)}>
+    <span className={cn('font-sans text-h2 font-bold tracking-[-0.045em] lowercase', className)}>
       <span className="text-ink">{name.slice(0, split)}</span>
       <span className="text-acc">{name.slice(split)}</span>
     </span>

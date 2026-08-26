@@ -308,3 +308,328 @@ export const visitFilterSchema = paginationSchema.extend({
   scheduledTo: z.string().date().optional(),
 });
 export type VisitFilterDto = z.infer<typeof visitFilterSchema>;
+
+// ---------------------------------------------------------------------------
+// The QC console and the technician app, over HTTP
+// ---------------------------------------------------------------------------
+
+/**
+ * A `HH:MM` or `HH:MM:SS` slot boundary.
+ *
+ * `qc_visit.slot_from` is a `time`, and `SchedulingService.normaliseTime()`
+ * already turns both forms into what the column returns. This only refuses the
+ * shapes that would reach it as an unparseable bind.
+ */
+export const slotTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Expected a time like 09:30.');
+
+/**
+ * The technician app's replay key.
+ *
+ * Every mutating request its outbox sends carries one — in the body and as an
+ * `idempotency-key` header — and `qc_report.nonce` / `qc_tool_run.nonce` are
+ * UNIQUE, so a replayed row lands on the constraint rather than creating a
+ * second inspection. The console does not send one: it is not replaying
+ * anything, and a nonce it invented per submit would dedupe nothing.
+ */
+export const nonceSchema = z.string().min(8).max(128);
+
+/**
+ * The visit board's filter, as the **console** spells it.
+ *
+ * `from`/`to` rather than the `scheduledFrom`/`scheduledTo` of
+ * `visitFilterSchema` above, because `apps/console/src/routes/qc/VisitBoard.tsx`
+ * builds the query string and the client is the contract. The two mean the same
+ * thing, and the rename happens at the call site rather than in the column.
+ */
+export const visitBoardQuerySchema = z.object({
+  status: qcVisitStatusSchema.optional(),
+  vendorOrgId: uuidSchema.optional(),
+  technicianId: uuidSchema.optional(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+});
+export type VisitBoardQueryDto = z.infer<typeof visitBoardQuerySchema>;
+
+/** `GET /qc/schedule?from=` — omit `from` for the week containing today. */
+export const scheduleQuerySchema = z.object({ from: z.string().date().optional() });
+export type ScheduleQueryDto = z.infer<typeof scheduleQuerySchema>;
+
+/** `GET /qc/technician/route?date=` — the signed-in technician's day. */
+export const routeQuerySchema = z.object({ date: z.string().date() });
+export type RouteQueryDto = z.infer<typeof routeQuerySchema>;
+
+/**
+ * Booking a visit: the request and the slot, in one call.
+ *
+ * `schedule` is nested rather than four sibling optionals because the four
+ * fields are one decision — a date with no slot is not a half-booking, it is a
+ * row `SchedulingService.schedule()` refuses. Omit the whole object to file a
+ * REQUESTED visit that ops will schedule later.
+ */
+export const createVisitSchema = z.object({
+  vendorOrgId: uuidSchema,
+  facilityId: uuidSchema,
+  addressId: uuidSchema,
+  unitsRequested: z.number().int().min(1).max(1000),
+  /** The manifest, where it is already known. Units may also be added later. */
+  unitIds: z.array(uuidSchema).max(1000).optional(),
+  notes: z.string().max(2000).optional(),
+  schedule: z
+    .object({
+      scheduledDate: z.string().date(),
+      slotFrom: slotTimeSchema,
+      slotTo: slotTimeSchema,
+      technicianId: uuidSchema.optional(),
+    })
+    .optional(),
+});
+export type CreateVisitDto = z.infer<typeof createVisitSchema>;
+
+/**
+ * Arrival at the vendor's site.
+ *
+ * The technician app also sends `accuracyMetres`, `capturedAt` and its nonce;
+ * zod strips what is not declared, and only the coordinates change anything.
+ * `capturedAt` is deliberately not honoured — the arrival instant is the
+ * server's clock, because a device clock is the one input a technician can set.
+ */
+export const checkInSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  nonce: nonceSchema.optional(),
+});
+export type CheckInDto = z.infer<typeof checkInSchema>;
+
+/** Three-valued on purpose: "we did not check" is not "no". */
+export const tristateSchema = z.enum(['YES', 'NO', 'UNKNOWN']);
+
+export const manualAreaResultSchema = z.object({
+  area: qcAreaCodeSchema,
+  status: qcAreaStatusSchema,
+  score: z.number().int().min(0).max(100),
+  maxScore: z.number().int().min(1).max(100),
+  note: z.string().max(500).nullable().optional(),
+});
+
+/**
+ * What a technician can read off a machine without a tool.
+ *
+ * Every field is nullable, and null means **not reported** rather than zero — a
+ * cycle count of 0 on a worn battery is a form defaulting, not a measurement
+ * (07 §2). The hardware row is written only when there is something in it.
+ */
+export const manualHardwareSchema = z.object({
+  ramDetectedGb: z.number().int().min(1).max(512).nullable(),
+  ramModules: z.number().int().min(0).max(8).nullable(),
+  storageType: z.string().max(32).nullable(),
+  storageDetectedGb: z.number().int().min(1).max(65_536).nullable(),
+  smartStatus: z.enum(SMART_STATUSES).nullable(),
+  batteryHealthPct: z.number().int().min(0).max(100).nullable(),
+  cycleCount: z.number().int().min(0).max(10_000).nullable(),
+  biosLocked: tristateSchema,
+  mdmLocked: tristateSchema,
+  computraceActive: tristateSchema,
+});
+
+export const manualPhotoSchema = z.object({
+  angle: qcPhotoAngleSchema,
+  fileKey: fileKeySchema,
+  hash: sha256Schema,
+});
+
+/**
+ * The web console's full manual inspection — the Phase 4 fallback that has to
+ * work with no mobile app in the building.
+ *
+ * It mirrors `ManualInspectionPayload` in `apps/console/src/routes/qc/types.ts`
+ * field for field. `qcScore`, the two grades and `verdict` are the technician's
+ * reading and are recorded as exactly that; the server re-derives all four
+ * through `VerdictService`, and its answer is what the report ends up carrying.
+ * Sending them anyway is what makes a disagreement visible instead of invisible.
+ */
+export const manualReportSchema = z.object({
+  visitId: uuidSchema,
+  visitUnitId: uuidSchema,
+  unitId: uuidSchema,
+  technicianId: uuidSchema,
+  serialScanned: z.string().min(1).max(64),
+  serialMatches: z.boolean(),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime(),
+  areaResults: z.array(manualAreaResultSchema).max(QC_AREA_CODES.length),
+  /** Named, so an unmeasured area is a decision on the record and not a gap. */
+  areasNotMeasured: z.array(qcAreaCodeSchema).max(QC_AREA_CODES.length),
+  hardware: manualHardwareSchema,
+  photos: z.array(manualPhotoSchema).max(QC_PHOTO_ANGLES.length),
+  seal: z
+    .object({ sealCode: sealCodeSchema, photoKey: fileKeySchema, photoHash: sha256Schema })
+    .nullable(),
+  qcScore: z.number().int().min(0).max(100),
+  gradeProposed: gradeSchema.nullable(),
+  gradeFinal: gradeSchema.nullable(),
+  gradeOverrideReason: z.string().max(1000).nullable(),
+  verdict: qcVerdictValueSchema,
+  notes: z.string().max(2000).nullable(),
+  nonce: nonceSchema.optional(),
+});
+export type ManualReportDto = z.infer<typeof manualReportSchema>;
+
+/**
+ * The technician app's finished unit — the same event arriving from the other
+ * client.
+ *
+ * It differs from `manualReportSchema` in one way that matters: photographs
+ * travel as **hashes**, not keys, because the app uploaded them through a
+ * pre-signed PUT whose key the server derived from the hash. Resolving the hash
+ * back to that key server-side is what makes a resumed upload idempotent.
+ */
+export const unitResultSchema = z.object({
+  unitId: uuidSchema,
+  scannedSerial: z.string().min(1).max(64),
+  serialMatches: z.boolean(),
+  /** Epoch milliseconds, as the device recorded them. */
+  startedAt: z.number().int().positive(),
+  completedAt: z.number().int().positive(),
+  durationSeconds: z.number().int().min(0).optional(),
+  areaResults: z.array(manualAreaResultSchema).max(QC_AREA_CODES.length).optional(),
+  photoHashes: z.array(z.object({ angle: z.string().max(32), sha256: sha256Schema })).max(16),
+  sealCode: sealCodeSchema.nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  gradeOverride: gradeSchema.nullable().optional(),
+  nonce: nonceSchema,
+});
+export type UnitResultDto = z.infer<typeof unitResultSchema>;
+
+/** `CHECK (length(btrim(reason)) >= 3)` sits behind every column these land in. */
+export const reasonSchema = z.string().trim().min(3).max(500);
+
+export const untestableSchema = z.object({
+  reason: reasonSchema,
+  serialScanned: z.string().max(64).optional(),
+  nonce: nonceSchema.optional(),
+});
+export type UntestableDto = z.infer<typeof untestableSchema>;
+
+export const absentSchema = z.object({
+  absentReason: reasonSchema,
+  nonce: nonceSchema.optional(),
+});
+export type AbsentDto = z.infer<typeof absentSchema>;
+
+/** The seal, applied and photographed. `applied_photo_key` is NOT NULL. */
+export const applySealSchema = z.object({
+  unitId: uuidSchema,
+  sealCode: sealCodeSchema,
+  appliedPhotoSha256: sha256Schema,
+  nonce: nonceSchema.optional(),
+});
+export type ApplySealDto = z.infer<typeof applySealSchema>;
+
+export const signoffSchema = z.object({
+  otp: z.string().regex(/^\d{4,8}$/, 'Enter the code from the SMS.'),
+  contactName: z.string().trim().min(2).max(120),
+  nonce: nonceSchema.optional(),
+});
+export type SignoffDto = z.infer<typeof signoffSchema>;
+
+/**
+ * A visit expense. `amountInr` is a decimal **string** all the way down.
+ *
+ * `qc_visit_expense.amount` feeds `qc.v_visit_economics`, which is the number
+ * that decides whether QC-at-source pays for itself. A float that loses a paisa
+ * per receipt makes that number quietly wrong.
+ */
+export const expenseSchema = z.object({
+  category: z.enum([
+    'TRAVEL',
+    'FUEL',
+    'TOLL',
+    'PARKING',
+    'FOOD',
+    'ACCOMMODATION',
+    'TOOL_LICENCE',
+    'OTHER',
+  ]),
+  amountInr: z.string().regex(/^\d{1,9}(\.\d{1,2})?$/, 'Send the amount as a decimal string.'),
+  distanceKm: z.number().min(0).max(5000).nullable().optional(),
+  receiptSha256: sha256Schema.nullable().optional(),
+  note: z.string().max(500).optional(),
+  nonce: nonceSchema.optional(),
+});
+export type ExpenseDto = z.infer<typeof expenseSchema>;
+
+/**
+ * A sampling rule, as the console's form posts it.
+ *
+ * The three percentages arrive as strings because the columns are
+ * `NUMERIC(5,2)` and the form renders them straight back; they are converted
+ * once, at the call site, rather than at four of them.
+ */
+export const samplingRuleSchema = z.object({
+  vendorTier: vendorTierSchema,
+  minUnitsInspected: z.number().int().min(0).max(100_000),
+  minPassRate: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/),
+  minGradeAccuracy: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/),
+  samplePct: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/),
+  alwaysFullAboveValue: z
+    .string()
+    .regex(/^\d{1,12}(\.\d{1,2})?$/)
+    .nullable(),
+  effectiveFrom: z.string().date(),
+});
+export type SamplingRuleDto = z.infer<typeof samplingRuleSchema>;
+
+/**
+ * The field map, edited in the console: OUR column -> THEIR payload path.
+ *
+ * Both sides are constrained. A key is a `qc_hardware_detected` column name and
+ * a value is a dotted path into the provider's JSON, so neither may be an
+ * object — a nested map parses to garbage the first time the generic parser
+ * walks it, and the failure surfaces as a hardware row full of nulls rather
+ * than as an error anybody sees.
+ */
+export const fieldMapSchema = z.object({
+  fieldMapJson: z.record(
+    z.string().regex(/^[a-z][a-z0-9_]{0,63}$/, 'Keys are qc_hardware_detected column names.'),
+    z.string().min(1).max(256),
+  ),
+});
+export type FieldMapDto = z.infer<typeof fieldMapSchema>;
+
+/** Recording an audit recheck against the report it re-inspected. */
+export const auditRecheckSchema = z.object({ recheckReportId: uuidSchema });
+export type AuditRecheckDto = z.infer<typeof auditRecheckSchema>;
+
+/**
+ * The QC manager's ruling on a disputed grade correction.
+ *
+ * `upheld` defaults to TRUE because the console's only button says "uphold the
+ * dispute" — and because the safe default on an ambiguous body is the one that
+ * does *not* silently re-grade a vendor's machine.
+ */
+export const disputeRulingSchema = z.object({
+  upheld: z.boolean().optional(),
+  note: z.string().max(1000).optional(),
+});
+export type DisputeRulingDto = z.infer<typeof disputeRulingSchema>;
+
+/**
+ * A photograph the technician app is about to PUT.
+ *
+ * The object key is derived from the content hash, so the sign request and the
+ * confirmation that follows it carry the identical facts and a resumed upload
+ * cannot produce a second object.
+ */
+export const photoSignSchema = z.object({
+  purpose: z.enum(['QC_PHOTO', 'SEAL', 'EXPENSE_RECEIPT']),
+  sha256: sha256Schema,
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  bytes: z.number().int().min(1).max(15 * 1024 * 1024),
+  angle: z.string().max(32).optional(),
+  visitUnitId: uuidSchema.nullable().optional(),
+  expenseLocalId: z.string().max(64).nullable().optional(),
+  nonce: nonceSchema.optional(),
+});
+export type PhotoSignDto = z.infer<typeof photoSignSchema>;
