@@ -106,12 +106,12 @@ describe('ToleranceBand — a missing value must never render as a passing one',
 
 describe('Evidence — every number carries its denominator', () => {
   it('shows the value with its sample size', () => {
-    render(<Evidence value={98} pct denominator={412} denominatorLabel="units" />);
-    expect(screen.getByText('412 units')).toBeInTheDocument();
+    render(<Evidence value={98} pct denominator={412} denominatorLabel="units inspected" />);
+    expect(screen.getByText('412 units inspected')).toBeInTheDocument();
   });
 
   it('suppresses the headline number below the sample threshold', () => {
-    render(<Evidence value={100} pct denominator={3} denominatorLabel="units" minSample={10} />);
+    render(<Evidence value={100} pct denominator={3} denominatorLabel="units inspected" minSample={10} />);
     expect(screen.queryByText(/100/)).not.toBeInTheDocument();
     expect(screen.getByText('New supplier')).toBeInTheDocument();
     expect(screen.getByText('3 units inspected')).toBeInTheDocument();

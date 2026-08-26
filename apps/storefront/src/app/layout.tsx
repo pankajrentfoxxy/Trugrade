@@ -3,6 +3,7 @@ import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { THEME_PREPAINT_SCRIPT } from '@trugrade/ui';
 import '@trugrade/ui/globals.css';
 import './globals.css';
+import './storefront.css';
 
 export const metadata: Metadata = {
   title: { default: BRAND.name, template: `%s · ${BRAND.name}` },

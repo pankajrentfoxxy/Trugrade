@@ -8,7 +8,16 @@ export interface EvidenceProps {
   pct?: boolean;
   /** The sample size the value was computed over. */
   denominator: number;
-  /** What the denominator counts, e.g. "units". */
+  /**
+   * The WHOLE phrase the denominator counts, e.g. "units inspected" or
+   * "orders delivered" — not just the noun.
+   *
+   * This used to be a noun with " inspected" appended by the component, which
+   * rendered "0 units inspected inspected" the moment a caller wrote the full
+   * phrase, and the nonsense "0 orders delivered inspected" for anything that
+   * was not an inspection. A component that completes someone else's sentence
+   * can only be right about one kind of sentence.
+   */
   denominatorLabel?: string;
   /**
    * Below this, no headline number is shown at all — `New supplier · 3 units
@@ -33,7 +42,7 @@ export function Evidence({
   value,
   pct = false,
   denominator,
-  denominatorLabel = 'units',
+  denominatorLabel = 'units inspected',
   minSample = 10,
   smallSampleLabel = 'New supplier',
   className,
@@ -46,7 +55,7 @@ export function Evidence({
       >
         <span className="text-body-sm text-ink-2">{smallSampleLabel}</span>
         <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-2">
-          {denominator} {denominatorLabel} inspected
+          {denominator} {denominatorLabel}
         </span>
       </span>
     );
