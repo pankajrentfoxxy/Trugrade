@@ -1,45 +1,54 @@
 'use strict';
 
 /**
- * Trugrade design system — the "Anodised" palette.
- * 08_BRAND_SYSTEM.md §4–§5. Supersedes the "New_plan" navy/cyan/orange tokens in
- * _CONTEXT.md and Part 1 of 03_UX_SPEC.md.
+ * Trugrade design system — the "Workbench" palette.
+ * 08_BRAND_SYSTEM.md §4–§5, revised 26 Aug 2026. Replaces the cobalt "Anodised"
+ * set entirely.
  *
- * Every colour is a CSS custom property so the light/dark/system triple lives in
- * one place (packages/ui/src/globals.css) and Tailwind never hard-codes a hex.
- * Rule: signal blue means "measured". It is never decoration.
+ * Every colour is a CSS custom property, so the single light theme lives in one
+ * place (packages/ui/src/globals.css) and Tailwind never hard-codes a hex.
+ *
+ * Two rules the token names themselves enforce:
+ *   - `acc` is the ONLY accent, and it means "primary action, measured value or
+ *     active state". There is no second brand colour to reach for.
+ *   - `warn` has no `-wash`. WARN renders outlined, never filled (rule 4), so a
+ *     background token for it would be a footgun.
  */
 
-/** `<alpha-value>` support without duplicating every token as an rgb triple. */
 const v = (name) => `var(--${name})`;
 
 module.exports = {
-  darkMode: ['class', '[data-theme="dark"]'],
+  // Single theme by design. `dark:` is not wired to a media query — the dark
+  // band is compositional, via `.tg-dark` and the `dark` / `on-dark` tokens.
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
+        paper: v('paper'),
+        sheet: { DEFAULT: v('sheet'), 2: v('sheet-2') },
         ink: { DEFAULT: v('ink'), 2: v('ink-2'), 3: v('ink-3'), 4: v('ink-4') },
-        ground: v('ground'),
-        surface: { DEFAULT: v('surface'), 2: v('surface-2') },
-        rule: { DEFAULT: v('rule'), 2: v('rule-2') },
-        band: v('band'),
-        signal: {
-          DEFAULT: v('signal'),
-          hi: v('signal-hi'),
-          wash: v('signal-wash'),
-          ink: v('signal-ink'),
-        },
+        rule: { DEFAULT: v('rule'), 2: v('rule-2'), 3: v('rule-3') },
+        dark: { DEFAULT: v('dark'), 2: v('dark-2') },
+        'on-dark': { DEFAULT: v('on-dark'), 2: v('on-dark-2'), 3: v('on-dark-3') },
+        acc: { DEFAULT: v('acc'), hi: v('acc-hi'), lit: v('acc-lit'), wash: v('acc-wash') },
         pass: { DEFAULT: v('pass'), wash: v('pass-wash') },
-        warn: { DEFAULT: v('warn'), wash: v('warn-wash') },
+        warn: v('warn'),
         fail: { DEFAULT: v('fail'), wash: v('fail-wash') },
       },
       fontFamily: {
         display: ['var(--font-display)', 'Instrument Sans', 'system-ui', 'sans-serif'],
-        sans: ['var(--font-body)', 'IBM Plex Sans', 'system-ui', 'sans-serif'],
+        sans: [
+          'var(--font-body)',
+          'IBM Plex Sans',
+          // Hindi stays inside the same family rather than bolting on an
+          // unrelated face — the decisive reason for choosing Plex.
+          'IBM Plex Sans Devanagari',
+          'system-ui',
+          'sans-serif',
+        ],
         mono: ['var(--font-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       fontSize: {
-        // 08_BRAND_SYSTEM.md §5 type scale. [size, {lineHeight, weight, letterSpacing}]
         'display-1': [
           'clamp(36px,5.6vw,60px)',
           { lineHeight: '1.02', fontWeight: '700', letterSpacing: '-0.02em' },
@@ -61,19 +70,16 @@ module.exports = {
         data: ['13px', { lineHeight: '1.4', fontWeight: '500' }],
       },
       spacing: {
-        // The scale that did not exist anywhere in the prototypes.
-        1: '2px',
-        2: '4px',
-        3: '8px',
-        4: '12px',
-        5: '16px',
-        6: '20px',
-        7: '24px',
-        8: '32px',
-        9: '40px',
-        10: '48px',
-        11: '64px',
-        12: '80px',
+        // The scale that did not exist anywhere in the old prototypes.
+        1: '4px',
+        2: '8px',
+        3: '12px',
+        4: '16px',
+        5: '24px',
+        6: '32px',
+        7: '48px',
+        8: '64px',
+        9: '88px',
       },
       borderRadius: {
         xs: 'var(--r-xs)',
@@ -106,14 +112,10 @@ module.exports = {
     },
   },
   plugins: [
-    /** `tabular-nums` is mandatory anywhere digits stack. Make it one class. */
     function ({ addUtilities }) {
       addUtilities({
         '.tnum': { fontVariantNumeric: 'tabular-nums' },
-        '.focus-ring': {
-          outline: '2px solid var(--signal)',
-          outlineOffset: '3px',
-        },
+        '.focus-ring': { outline: '2px solid var(--acc)', outlineOffset: '3px' },
       });
     },
   ],

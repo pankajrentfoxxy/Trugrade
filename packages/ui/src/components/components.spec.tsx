@@ -10,6 +10,7 @@
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { axe } from 'jest-axe';
+import { BRAND } from '@trugrade/config/brand';
 import { ToleranceBand } from './ToleranceBand';
 import { Evidence } from './Evidence';
 import {
@@ -132,7 +133,7 @@ describe('GradeBadge — a grade is a position on a scale, not a verdict', () =>
     for (const grade of ['A_PLUS', 'A', 'B'] as const) {
       const { container } = render(<GradeBadge grade={grade} />);
       const badge = container.querySelector('[data-testid="grade-badge"]')!;
-      expect(badge.className).toContain('bg-surface-2');
+      expect(badge.className).toContain('bg-sheet-2');
       expect(badge.className).not.toMatch(/bg-(pass|warn|fail)/);
     }
   });
@@ -165,7 +166,7 @@ describe('ScoreRing', () => {
     const { container: low } = render(<ScoreRing value={72} />);
     expect(low.innerHTML).toContain('var(--warn)');
     const { container: high } = render(<ScoreRing value={92} />);
-    expect(high.innerHTML).toContain('var(--signal)');
+    expect(high.innerHTML).toContain('var(--acc)');
   });
 
   it('clamps a value outside 0-100 rather than drawing off the ring', () => {
@@ -308,8 +309,8 @@ describe('RepresentativeImage — the caption cannot be omitted', () => {
 describe('brand', () => {
   it('the mark is labelled and the dot is signal blue', () => {
     const { container } = render(<Mark />);
-    expect(screen.getByRole('img', { name: 'Trugrade' })).toBeInTheDocument();
-    expect(container.innerHTML).toContain('var(--signal)');
+    expect(screen.getByRole('img', { name: BRAND.name })).toBeInTheDocument();
+    expect(container.innerHTML).toContain('var(--acc)');
   });
 
   it('the wordmark comes from the brand token, not a literal', () => {

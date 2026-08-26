@@ -127,6 +127,27 @@ priority | category | brand | grade | value_from | value_to | target_margin_pct 
 
 Nullable predicate columns mean "don't care", exactly like the routing rules in Phase 8. Ops tunes margins without a code release.
 
+### The payout basis — decided, and it is not the obvious one
+
+Two models were considered. **Build model A.**
+
+| | **A · Vendor names their net payout** ✅ | B · Discount off our listed price ❌ |
+|---|---|---|
+| Mechanic | Vendor says "₹28,000". We add our charge → ₹32,100 | We list at ₹32,100 and pay ₹32,100 less an agreed % |
+| Vendor certainty | Known at listing time, unchangeable | Floats with every pricing decision we make |
+
+**Why B breaks, concretely:**
+- **Freight varies by destination.** The landed price to Chennai differs from Gurugram. Under B a vendor's payout would depend on where the buyer happens to be — they will never accept it.
+- **Discounting becomes a negotiation.** Drop a price to win a large order and either the vendor's payout drops (they refuse to be discounted) or our margin absorbs all of it.
+- **Grade corrections turn into pricing arguments.** We correct A→B and reprice; under B the vendor's payout changes because of *our* decision, so every correction is disputed as a pricing trick rather than a finding about the machine.
+- **Tax needs a fixed purchase price per serial.** Rule 32(5) margin computation and the immutable `valuation_method` both require it. A floating payout makes the position indefensible.
+
+**The reconciliation — build this, it is what makes A acceptable to vendors.** Present A in B's language. The vendor enters ₹28,000; the wizard shows them *"Trugrade commission: 12.8%"* live. They get the percentage conversation they expect; the contract stays anchored to a fixed rupee amount.
+
+Add `vendor.vendor_payout_preference.pricing_mode ∈ ('NET_PAYOUT','COMMISSION')`, default `NET_PAYOUT`. In `COMMISSION` mode the vendor names an expected sale price and an agreed rate, and the system **derives and immediately freezes** the net payout. Both modes converge on the same stored value.
+
+**The non-negotiable rule in either mode:** `unit.purchase_price` is written when the PO is raised (Phase 6) and is **immutable thereafter** — same guarantee as `valuation_method`, enforced by trigger. Nothing that happens to the retail price afterwards touches what we owe.
+
 **Selling price computation.** The customer's price is the vendor's asking price plus our charge — that is the whole formula, and the vendor's number is never shown to a buyer.
 
 ```

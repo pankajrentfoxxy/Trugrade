@@ -1,0 +1,10 @@
+{
+  "extends": "@trugrade/config/tsconfig/react-lib.json",
+  "compilerOptions": {
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src", "test", "vite.config.ts", "tailwind.config.ts"]
+}

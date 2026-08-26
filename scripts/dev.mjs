@@ -43,7 +43,7 @@ step('Seeding');
 sh('pnpm', ['--filter', '@trugrade/api', 'db:seed']);
 
 // 5. Everything else, in parallel, until Ctrl-C.
-step('Starting apps  (API :4000 - Mailpit :8026 - MinIO console :9011)');
+step('Starting apps  (storefront :3000 - console :5173 - API :4000 - Mailpit :8026 - MinIO :9011)');
 const child = spawn('pnpm', ['turbo', 'run', 'dev', '--parallel'], {
   stdio: 'inherit',
   shell: process.platform === 'win32',

@@ -32,7 +32,7 @@ const clamp = (n: number): number => Math.max(0, Math.min(100, n));
  *
  * Three states, and the third is the one that matters:
  *
- *   within tolerance   signal-blue dot inside the wash band. Calm.
+ *   within tolerance   accent dot inside the wash band. Calm.
  *   out of tolerance   fail-red dot outside the band. The gap is the loudest
  *                      thing on screen — correct, because that gap is the business.
  *   NOT MEASURED       **no dot at all**, band at 45% opacity, label in ink-3.
@@ -58,11 +58,11 @@ export function ToleranceBand({
   return (
     <div className={cn('flex flex-col gap-2', className)} data-testid="tolerance-band">
       <div className="flex items-baseline justify-between gap-4">
-        <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{label}</span>
+        <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-2">{label}</span>
         <span
           className={cn(
             'font-mono text-data tnum',
-            !measured && 'text-ink-3',
+            !measured && 'text-ink-2',
             measured && outOfTolerance && 'text-fail',
             measured && !outOfTolerance && 'text-ink-2',
           )}
@@ -88,14 +88,14 @@ export function ToleranceBand({
 
         {/* the band a grade permits */}
         <div
-          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-xs bg-signal-wash"
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-xs bg-acc-wash"
           style={{ left: `${left}%`, width: `${width}%` }}
         />
 
         {/* declared: a hollow tick */}
         {declared !== undefined && (
           <div
-            className="absolute top-0 h-3 w-0.5 -translate-x-1/2 bg-ink-4"
+            className="absolute top-0 h-3 w-0.5 -translate-x-1/2 bg-ink-3"
             style={{ left: `${clamp(declared)}%` }}
             data-testid="tolerance-declared"
           />
@@ -106,7 +106,7 @@ export function ToleranceBand({
           <div
             className={cn(
               'absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
-              outOfTolerance ? 'bg-fail' : 'bg-signal',
+              outOfTolerance ? 'bg-fail' : 'bg-acc',
             )}
             style={{ left: `${clamp(found)}%` }}
             data-testid="tolerance-found"

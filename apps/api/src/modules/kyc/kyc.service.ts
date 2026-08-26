@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { normaliseEmail, normaliseGstin, normaliseMobile } from '@trugrade/contracts';
 import { PrismaService } from '../../shared/db/prisma.service';
 import { ClockPort } from '../../shared/clock';
+import { EventBus } from '../../shared/events';
 import { AuditService } from '../identity';
 import {
   ConflictError,
@@ -65,6 +66,7 @@ export class KycService implements IKycService {
     private readonly verification: VerificationService,
     private readonly consent: ConsentService,
     private readonly audit: AuditService,
+    private readonly bus: EventBus,
   ) {}
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
@@ -426,6 +428,24 @@ export class KycService implements IKycService {
             : {}),
         },
       });
+
+      // Inside the transaction, because `publish` only writes an outbox row.
+      // A vendor whose approval rolls back must not end up holding a working
+      // DeviceSure licence, and calling the QC platform inline here would either
+      // hold this transaction open across a network hop or do exactly that.
+      if (input.decision === 'APPROVED') {
+        if (org.org_type === 'VENDOR') {
+          await this.bus.publish('vendor.verified', {
+            orgId: input.orgId,
+            verifiedBy: input.reviewerId,
+          });
+        } else if (org.org_type === 'BUYER') {
+          await this.bus.publish('buyer.verified', {
+            orgId: input.orgId,
+            verifiedBy: input.reviewerId,
+          });
+        }
+      }
     });
 
     await this.audit.record({

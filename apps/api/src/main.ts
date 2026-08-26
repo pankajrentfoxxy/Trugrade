@@ -5,6 +5,9 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AppConfig } from './shared/config';
+// Root import, not the '/brand' subpath: this app is on moduleResolution "Node"
+// (node10), which ignores exports maps. The root re-exports BRAND.
+import { BRAND } from '@trugrade/config';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
@@ -31,7 +34,9 @@ async function bootstrap(): Promise<void> {
 
   const port = config.get('API_PORT');
   await app.listen(port);
-  new Logger('Bootstrap').log(`Trugrade API listening on :${port} (${config.get('NODE_ENV')})`);
+  new Logger('Bootstrap').log(
+    `${BRAND.name} API listening on :${port} (${config.get('NODE_ENV')})`,
+  );
 }
 
 void bootstrap();

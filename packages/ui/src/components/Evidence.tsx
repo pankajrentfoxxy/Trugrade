@@ -45,7 +45,7 @@ export function Evidence({
         data-testid="evidence-small-sample"
       >
         <span className="text-body-sm text-ink-2">{smallSampleLabel}</span>
-        <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+        <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-2">
           {denominator} {denominatorLabel} inspected
         </span>
       </span>
@@ -58,7 +58,7 @@ export function Evidence({
         {value}
         {pct ? '%' : ''}
       </span>
-      <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+      <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-2">
         {denominator.toLocaleString('en-IN')} {denominatorLabel}
       </span>
     </span>

@@ -59,59 +59,47 @@ A **tolerance gauge**: two end ticks, a rail, a pale mark where the grade was *d
 
 ---
 
-## 4. Palette — "Anodised"
+## 4. Palette — "Workbench" *(revised 26 Aug 2026 — replaces the earlier cobalt "Anodised" set)*
 
-Taken from the material of the product: graphite chassis, calibration paper, one signal blue meaning *measured*.
+The first draft used a cobalt-blue signal. It was rejected as too cold for a business selling reassurance, and the rejection was correct: blue reads clinical, and this brand needs to read *warm and certain*.
+
+**Committed palette: warm paper, ink black, one burnt-amber accent.** Light-first, high contrast, document-like. The page should feel like a well-set specification sheet, not a tech startup.
 
 ### `globals.css`
 
 ```css
 :root{
+  /* grounds — warm, not cream. #F4F1EA is the generic default; this is cooler and greyer */
+  --paper:#F7F5F0; --sheet:#FFFFFF; --sheet-2:#FBFAF6;
   /* ink */
-  --ink:#14181D; --ink-2:#3D4650; --ink-3:#68727E; --ink-4:#8F98A3;
-  /* grounds */
-  --ground:#EFF1EE; --surface:#FFFFFF; --surface-2:#F7F8F6;
-  --rule:#DCDFDA; --rule-2:#E9EBE7; --band:#D3D7D1;
-  /* signal — measured values and the primary action ONLY */
-  --signal:#1F3CE0; --signal-hi:#1730B8; --signal-wash:#E8EBFD; --signal-ink:#1730B8;
+  --ink:#17181A; --ink-2:#4B4B48; --ink-3:#77766F; --ink-4:#A5A39B;
+  --rule:#E3DFD5; --rule-2:#EFEBE2; --rule-3:#F4F1EA;
+  /* dark band — footer, supplier section, the inspection card */
+  --dark:#17181A; --dark-2:#212226;
+  --on-dark:#F4F1EA; --on-dark-2:#A5A39B; --on-dark-3:#75746D;
+  /* accent — burnt amber. Primary actions, the found-dot, active state. NOTHING else. */
+  --acc:#B4611C; --acc-hi:#8F4C14; --acc-lit:#E08A3C; --acc-wash:#FBEFE3;
   /* semantic — test outcomes ONLY */
-  --pass:#0E7A55; --pass-wash:#E3F2EB;
-  --warn:#8A5709; --warn-wash:#FAEFDD;
-  --fail:#A82A1C; --fail-wash:#FBE9E6;
-  /* elevation */
-  --sh-1:0 1px 2px rgba(20,24,29,.05);
-  --sh-2:0 1px 2px rgba(20,24,29,.05), 0 10px 26px rgba(20,24,29,.07);
-  --sh-3:0 20px 48px rgba(20,24,29,.14);
-  /* spacing scale — this did not exist anywhere in the old prototypes */
-  --s-1:2px; --s-2:4px; --s-3:8px; --s-4:12px; --s-5:16px; --s-6:20px;
-  --s-7:24px; --s-8:32px; --s-9:40px; --s-10:48px; --s-11:64px; --s-12:80px;
-  /* radii — flatter than the old system; instruments are not pill-shaped */
-  --r-xs:3px; --r-sm:5px; --r:7px; --r-lg:10px; --r-xl:14px;
-  --maxw:1160px;
+  --pass:#166E4E; --pass-wash:#E4F0EA;
+  --warn:#8A5A12;                    /* render WARN outlined, never filled — see rule 4 */
+  --fail:#A32A1B; --fail-wash:#FAE9E6;
+  /* spacing — did not exist anywhere in the old prototypes */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+  --s6:32px; --s7:48px; --s8:64px; --s9:88px;
+  /* radii — flat. Instruments are not pill-shaped. */
+  --r-xs:3px; --r-sm:5px; --r:6px; --r-lg:10px; --r-xl:14px;
+  --maxw:1180px;
 }
-
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --ink:#E8EBEE; --ink-2:#AAB3BE; --ink-3:#7E8792; --ink-4:#616A75;
-    --ground:#0B0E12; --surface:#151A20; --surface-2:#1B2129;
-    --rule:#28303A; --rule-2:#212932; --band:#2C3540;
-    --signal:#7B90FF; --signal-hi:#9AAAFF; --signal-wash:#151E43; --signal-ink:#9AAAFF;
-    --pass:#3FBE8C; --pass-wash:#0D2A20;
-    --warn:#DFA351; --warn-wash:#2C2110;
-    --fail:#F0806E; --fail-wash:#2F1712;
-    --sh-1:0 1px 2px rgba(0,0,0,.4);
-    --sh-2:0 1px 2px rgba(0,0,0,.4), 0 10px 26px rgba(0,0,0,.34);
-    --sh-3:0 20px 48px rgba(0,0,0,.5);
-  }
-}
-:root[data-theme="dark"]{ /* repeat the dark block verbatim so the toggle wins both ways */ }
 ```
 
-**Rules that stop this drifting:**
+**This is a deliberately single-theme design.** A B2B storefront that flips to dark mode is solving a problem nobody has, and two themes doubles the QA surface across ~135 routes. The dark band (`--dark`) is used *compositionally* — footer, supplier section, inspection card — not as an alternate theme. Paint `body` background explicitly from `--paper` so the page never borrows a host ground.
 
-1. **Signal blue is a meaning, not a decoration.** The moment it appears on a hero background or a marketing badge, the tolerance dot stops meaning anything.
-2. **Grades are not semantic colours.** A+, A and B are all sellable — they are set in neutral type with a tolerance band beside them. Green, amber and red are reserved for PASS, WARN and FAIL. A grade is a position on a scale; an outcome is a verdict. Colouring them the same way conflates the two, and this is the mistake the DeviceSure certificate currently makes.
-3. **Style through tokens only.** Never declare a colour inside a `@media` or `[data-theme]` block — that is how a page renders one theme's text on the other theme's ground.
+**Four rules that stop this drifting:**
+
+1. **The accent is a meaning, not a decoration.** Burnt amber marks a primary action, a measured value, or an active state. The moment it appears as a background wash on a marketing band, the tolerance dot stops meaning anything.
+2. **Grades are not semantic colours.** A+, A and B are all sellable — neutral type in a neutral chip. Green and red are reserved for PASS and FAIL. A grade is a position on a scale; an outcome is a verdict. Colouring them alike conflates the two — the mistake the DeviceSure certificate currently makes.
+3. **Style through tokens only.** No literal hex outside this block.
+4. **WARN renders outlined, never filled.** `--warn` sits close to the accent in hue; keeping it an outline chip means the two are never confusable at a glance. PASS and FAIL fill normally.
 
 ---
 
@@ -241,6 +229,36 @@ Four rules. They are also four of your legal obligations under Rule 7 — honest
 | Everywhere | Replace every literal `gorefurbo` with `BRAND.name` |
 
 **Do it before Phase 5.** The build pack already treats the brand as a single token, so today this is a days-long change. After Phase 5 the name is in schema seeds, the invoice series, notification templates, the e-invoice payload and the certificate face — and it becomes a month.
+
+---
+
+## 10b. Storefront information architecture — rebuilt from research
+
+**The old prototypes were a B2C shopping layout.** Hero → trust badges → browse by brand → browse by use case → grades → stats → two doors. That is the Amazon pattern, and it is wrong for this buyer.
+
+Research that drove the rebuild ([Shopify Enterprise](https://www.shopify.com/enterprise/blog/b2b-ecommerce-experience), [Baymard B2B](https://baymard.com/research/business-to-business), [SwiftOtter](https://swiftotter.com/blogs/ux-quoting-vs-direct-checkout-b2b-ecommerce)):
+
+| Finding | What it changes |
+|---|---|
+| **100% of B2B buyers want self-service; 61% want a completely rep-free purchase** | No "contact sales" funnel. Prices and stock visible without an account. |
+| **68% stopped buying online after an ordering mistake** | Accuracy over flair. Quantities, lead times and totals must be unambiguous everywhere. |
+| **Real-time stock and delivery estimates are the top stated requirement** | Stock depth and ships-in are columns on the main board, not detail-page footnotes. |
+| **67% switch suppliers over a bad online experience** | The storefront is a retention surface, not a brochure. |
+| **Pricing errors and wrong inventory are the two biggest distrust triggers** | One landed figure, GST inclusive, never revealed progressively. |
+| **Buyers need both fast checkout and a quote path** | Standard stock → add to order. Bulk requirement → the requirement bar. Don't force one path. |
+
+### The six blocks, in order
+
+A procurement head arrives with a requirement, not curiosity. The page is a tool, not a pitch.
+
+1. **Header** — thin, functional. Available stock · How we test · Sell with us. Sign in / Create account.
+2. **The ask** — a **requirement sentence**, not a search box: *"I need [40] laptops for [office work] at up to [₹35,000] each, delivered to [122002] by [end of month]."* Fill-in-the-blank fields inline. This replaces search + filter rail + browse-by-brand + browse-by-use-case with one control that states its own options. Four proof numbers beneath it, no more.
+3. **Live supply** — **the largest thing on the page.** Real models with grade, landed price, units available, suppliers holding it, ships-in. One row expands to show the supply points, which teaches the whole model in a single glance: *pick the machine, then pick who supplies it.* A supplier below the sample threshold shows "New supplier · 3 units tested" and no score.
+4. **How we test** — three items, not a section per idea, beside a real inspection report card showing `Thermal sensors — Not measured`. That one line does more for trust than any badge row.
+5. **Suppliers** — one dark band, four facts, one action.
+6. **Footer** — with the Rule 4(2) legal block and the grievance officer.
+
+**What was deleted, and why:** browse-by-brand (a buyer with a requirement does not shop by brand), browse-by-use-case (the requirement sentence covers it), the separate grades section (folded into the board's grade column plus a linked page), the standalone stats bar (folded into block 2), the trust-badge row (replaced by a real report), the second hero image. **Nine sections became six**, and the differentiator moved from position four to position three.
 
 ---
 

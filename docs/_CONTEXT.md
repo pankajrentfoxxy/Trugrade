@@ -61,8 +61,8 @@ Flow:
 | Database | **PostgreSQL 16**, schema-per-module (12 schemas) |
 | ORM | **Prisma** (multiSchema preview feature) |
 | Cache / locks / queue | **Redis 7** + **BullMQ** |
-| Frontend | **Next.js 15 App Router + TypeScript + Tailwind + shadcn/ui**, in a **Turborepo** |
-| Frontend apps | `apps/storefront` (public + customer portal, SSR for SEO) · `apps/console` (vendor portal + admin portal, one app, role-routed) |
+| Frontend | **TypeScript + Tailwind + shadcn/ui**, in a **Turborepo** |
+| Frontend apps | `apps/storefront` — **Next.js 15 App Router**, public + customer portal, SSR/ISR for SEO · `apps/console` — **Vite + React + React Router**, vendor portal + admin portal in one role-routed app, no SEO so no SSR. *(Console revised 26 Aug 2026 to match DeviceSure's existing `apps/web`, which the team has already built.)* |
 | Mobile | **Expo / React Native** — Technician (QC) app + Rider app. *(Changed from the earlier Flutter plan because the team knows React.)* |
 | QC desktop tool | Client's existing **QC .exe** — integrated via a signed JSON report contract + ingestion API |
 | Files | **S3 (ap-south-1) + CloudFront**, signed URLs only, magic-byte validation, EXIF strip |

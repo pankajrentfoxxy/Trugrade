@@ -3,133 +3,108 @@
 @tailwind utilities;
 
 /**
- * Trugrade — the "Anodised" palette.
- * 08_BRAND_SYSTEM.md §4. Supersedes the navy/cyan/orange tokens in _CONTEXT.md
- * and Part 1 of 03_UX_SPEC.md. There is no orange in this system.
+ * Trugrade — the "Workbench" palette.
+ * 08_BRAND_SYSTEM.md §4, revised 26 Aug 2026. **Replaces the cobalt "Anodised"
+ * set entirely** — blue read clinical, and this brand sells reassurance.
  *
- * Three rules keep this from drifting:
- *   1. Signal blue is a MEANING, not a decoration. It marks a measured value and
- *      the primary action, and nothing else. The moment it appears on a hero
- *      background the tolerance dot stops meaning anything.
- *   2. Grades are NOT semantic colours. A+, A and B are all sellable — neutral
- *      type with a tolerance band beside them. Green/amber/red are reserved for
- *      PASS/WARN/FAIL. A grade is a position on a scale; an outcome is a verdict.
- *   3. Never declare a colour inside a @media or [data-theme] block that is not
- *      also declared on bare :root. That is how a page renders one theme's text
- *      on the other theme's ground.
+ * Warm paper, ink black, one burnt-amber accent. Light-first, high contrast,
+ * document-like. The page should feel like a well-set specification sheet.
+ *
+ * **Deliberately single-theme.** A B2B storefront that flips to dark mode is
+ * solving a problem nobody has, and two themes double the QA surface across
+ * ~135 routes. `--dark` is used *compositionally* — footer, supplier section,
+ * inspection card — not as an alternate theme.
+ *
+ * Four rules that stop this drifting:
+ *   1. The accent is a MEANING, not a decoration. Burnt amber marks a primary
+ *      action, a measured value, or an active state. The moment it appears as a
+ *      background wash on a marketing band, the tolerance dot stops meaning
+ *      anything.
+ *   2. Grades are not semantic colours. A+, A and B are all sellable — neutral
+ *      type in a neutral chip. Green and red are reserved for PASS and FAIL.
+ *   3. Style through tokens only. No literal hex outside this block.
+ *   4. WARN renders OUTLINED, never filled. `--warn` sits close to the accent in
+ *      hue; an outline chip means the two are never confusable at a glance.
  */
 
 @layer base {
   :root {
+    /* grounds — warm, not cream */
+    --paper: #f7f5f0;
+    --sheet: #ffffff;
+    --sheet-2: #fbfaf6;
+
     /* ink */
-    --ink: #14181d;
-    --ink-2: #3d4650;
-    --ink-3: #68727e;
-    --ink-4: #8f98a3;
+    --ink: #17181a;
+    --ink-2: #4b4b48;
+    --ink-3: #77766f;
+    --ink-4: #a5a39b;
 
-    /* grounds */
-    --ground: #eff1ee;
-    --surface: #ffffff;
-    --surface-2: #f7f8f6;
-    --rule: #dcdfda;
-    --rule-2: #e9ebe7;
-    --band: #d3d7d1;
+    --rule: #e3dfd5;
+    --rule-2: #efebe2;
+    --rule-3: #f4f1ea;
 
-    /* signal — measured values and the primary action ONLY */
-    --signal: #1f3ce0;
-    --signal-hi: #1730b8;
-    --signal-wash: #e8ebfd;
-    --signal-ink: #1730b8;
+    /* dark band — footer, supplier section, the inspection card */
+    --dark: #17181a;
+    --dark-2: #212226;
+    --on-dark: #f4f1ea;
+    --on-dark-2: #a5a39b;
+    --on-dark-3: #75746d;
+
+    /* accent — burnt amber. Primary actions, the found-dot, active state. NOTHING else. */
+    --acc: #b4611c;
+    --acc-hi: #8f4c14;
+    --acc-lit: #e08a3c;
+    --acc-wash: #fbefe3;
 
     /* semantic — test outcomes ONLY */
-    --pass: #0e7a55;
-    --pass-wash: #e3f2eb;
-    --warn: #8a5709;
-    --warn-wash: #faefdd;
-    --fail: #a82a1c;
-    --fail-wash: #fbe9e6;
+    --pass: #166e4e;
+    --pass-wash: #e4f0ea;
+    --warn: #8a5a12; /* outlined, never filled — rule 4 */
+    --fail: #a32a1b;
+    --fail-wash: #fae9e6;
 
-    /* elevation */
-    --sh-1: 0 1px 2px rgba(20, 24, 29, 0.05);
-    --sh-2: 0 1px 2px rgba(20, 24, 29, 0.05), 0 10px 26px rgba(20, 24, 29, 0.07);
-    --sh-3: 0 20px 48px rgba(20, 24, 29, 0.14);
+    /* spacing — did not exist anywhere in the old prototypes */
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 24px;
+    --s6: 32px;
+    --s7: 48px;
+    --s8: 64px;
+    --s9: 88px;
 
-    /* radii — flatter than the old system; instruments are not pill-shaped */
+    /* radii — flat. Instruments are not pill-shaped. */
     --r-xs: 3px;
     --r-sm: 5px;
-    --r: 7px;
+    --r: 6px;
     --r-lg: 10px;
     --r-xl: 14px;
 
-    --maxw: 1160px;
+    --maxw: 1180px;
+
+    /* elevation — restrained; a specification sheet does not float */
+    --sh-1: 0 1px 2px rgba(23, 24, 26, 0.05);
+    --sh-2: 0 1px 2px rgba(23, 24, 26, 0.05), 0 10px 26px rgba(23, 24, 26, 0.07);
+    --sh-3: 0 20px 48px rgba(23, 24, 26, 0.14);
 
     --font-display: 'Instrument Sans', system-ui, sans-serif;
-    --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans', 'IBM Plex Sans Devanagari', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  }
-
-  /* System preference. Guarded so an explicit light choice still wins. */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) {
-      --ink: #e8ebee;
-      --ink-2: #aab3be;
-      --ink-3: #7e8792;
-      --ink-4: #616a75;
-      --ground: #0b0e12;
-      --surface: #151a20;
-      --surface-2: #1b2129;
-      --rule: #28303a;
-      --rule-2: #212932;
-      --band: #2c3540;
-      --signal: #7b90ff;
-      --signal-hi: #9aaaff;
-      --signal-wash: #151e43;
-      --signal-ink: #9aaaff;
-      --pass: #3fbe8c;
-      --pass-wash: #0d2a20;
-      --warn: #dfa351;
-      --warn-wash: #2c2110;
-      --fail: #f0806e;
-      --fail-wash: #2f1712;
-      --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --sh-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px rgba(0, 0, 0, 0.34);
-      --sh-3: 0 20px 48px rgba(0, 0, 0, 0.5);
-    }
-  }
-
-  /* Explicit choice. Repeated verbatim so the toggle wins in both directions. */
-  :root[data-theme='dark'] {
-    --ink: #e8ebee;
-    --ink-2: #aab3be;
-    --ink-3: #7e8792;
-    --ink-4: #616a75;
-    --ground: #0b0e12;
-    --surface: #151a20;
-    --surface-2: #1b2129;
-    --rule: #28303a;
-    --rule-2: #212932;
-    --band: #2c3540;
-    --signal: #7b90ff;
-    --signal-hi: #9aaaff;
-    --signal-wash: #151e43;
-    --signal-ink: #9aaaff;
-    --pass: #3fbe8c;
-    --pass-wash: #0d2a20;
-    --warn: #dfa351;
-    --warn-wash: #2c2110;
-    --fail: #f0806e;
-    --fail-wash: #2f1712;
-    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --sh-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px rgba(0, 0, 0, 0.34);
-    --sh-3: 0 20px 48px rgba(0, 0, 0, 0.5);
   }
 
   html {
     -webkit-text-size-adjust: 100%;
   }
 
+  /**
+   * Painted explicitly so the page never borrows a host ground. There is no
+   * dark-theme block: the design commits to one look, and `--dark` is a
+   * compositional band inside it.
+   */
   body {
-    background: var(--ground);
+    background: var(--paper);
     color: var(--ink);
     font-family: var(--font-body);
     font-size: 16px;
@@ -138,19 +113,23 @@
   }
 
   /**
-   * The focus ring is signal blue, 2px, 3px offset — never removed, never a
+   * The focus ring is the accent, 2px, 3px offset — never removed, never a
    * colour that fails contrast. The old prototypes used a cyan ring at 2.64:1;
    * the indicator itself failed WCAG. Do not reproduce it.
    */
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-    outline: 2px solid var(--signal);
+    outline: 2px solid var(--acc);
     outline-offset: 3px;
     border-radius: var(--r-xs);
   }
 
+  /* On the dark band the accent alone is not enough separation. */
+  :where(.on-dark) :where(a, button, input, [tabindex]):focus-visible {
+    outline-color: var(--acc-lit);
+  }
+
   /* Digits that stack must align. Ten prices that do not is the difference
      between a tool and a toy. */
-  :where(td, th) :where(.tnum),
   .tnum {
     font-variant-numeric: tabular-nums;
   }
@@ -171,10 +150,15 @@
   .tg-container {
     max-width: var(--maxw);
     margin-inline: auto;
-    padding-inline: 20px;
+    padding-inline: var(--s5);
   }
 
-  /* Screen-reader-only, for the labels that carry meaning colour cannot. */
+  /** The compositional dark band. Sets its own ground and its own ink. */
+  .tg-dark {
+    background: var(--dark);
+    color: var(--on-dark);
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;

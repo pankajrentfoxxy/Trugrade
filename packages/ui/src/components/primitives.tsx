@@ -13,12 +13,18 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Signal blue with white text (7.4:1). Replaces the old navy-on-orange;
-        // there is no orange in this system.
-        primary: 'bg-signal text-white hover:bg-signal-hi active:translate-y-px',
-        secondary: 'bg-surface-2 text-ink border border-rule hover:bg-ground',
-        ghost: 'bg-transparent text-ink-2 hover:bg-surface-2',
-        link: 'bg-transparent text-signal-ink underline underline-offset-4 hover:text-signal',
+        /**
+         * `--acc-hi`, not `--acc`.
+         *
+         * White on `--acc` (#B4611C) measures 4.499:1 — below the 4.5:1 AA floor
+         * by a thousandth, which is a fail. `--acc-hi` (#8F4C14) is 6.54:1.
+         * `--acc` remains the accent for the mark, the found-dot and borders,
+         * where it carries no text.
+         */
+        primary: 'bg-acc-hi text-white hover:bg-acc active:translate-y-px',
+        secondary: 'bg-sheet-2 text-ink border border-rule hover:bg-paper',
+        ghost: 'bg-transparent text-ink-2 hover:bg-sheet-2',
+        link: 'bg-transparent text-acc-hi underline underline-offset-4 hover:text-acc',
         danger: 'bg-fail text-white hover:opacity-90',
       },
       size: {
@@ -154,7 +160,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
         aria-describedby={describedBy || undefined}
         readOnly={verifyState === 'verifying' || props.readOnly}
         className={cn(
-          'h-11 rounded border bg-surface px-4 text-body-sm text-ink placeholder:text-ink-4',
+          // placeholder:text-ink-3 — ink-4 measures 2.53:1, which fails both the
+          // text floor and the 3:1 floor for meaningful graphics.
+          'h-11 rounded border bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3',
           'transition-colors',
           mono && 'font-mono uppercase tracking-wide',
           error || verifyState === 'rejected' ? 'border-fail' : 'border-rule',
@@ -165,13 +173,15 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       />
 
       {hint && !error && (
-        <p id={`${inputId}-hint`} className="text-body-sm text-ink-3">
+        // --ink-2, not --ink-3: ink-3 measures 4.19:1 on the paper ground, and a
+        // hint is as likely to sit on paper as on a sheet.
+        <p id={`${inputId}-hint`} className="text-body-sm text-ink-2">
           {hint}
         </p>
       )}
 
       {verifyState === 'verifying' && (
-        <p className="text-body-sm text-ink-3" role="status">
+        <p className="text-body-sm text-ink-2" role="status">
           Checking…
         </p>
       )}
@@ -200,12 +210,15 @@ const pillVariants = cva(
   {
     variants: {
       tone: {
-        neutral: 'bg-surface-2 text-ink-2 border border-rule',
-        info: 'bg-signal-wash text-signal-ink',
+        neutral: 'bg-sheet-2 text-ink-2 border border-rule',
+        info: 'bg-acc-wash text-acc-hi',
         pass: 'bg-pass-wash text-pass',
-        warn: 'bg-warn-wash text-warn',
+        // Rule 4: outlined, never filled. --warn sits close to the accent in
+        // hue, and a filled warn chip is confusable with a primary action at a
+        // glance. PASS and FAIL fill normally; WARN does not.
+        warn: 'bg-transparent text-warn border border-warn',
         fail: 'bg-fail-wash text-fail',
-        processing: 'bg-surface-2 text-ink-2 border border-rule',
+        processing: 'bg-sheet-2 text-ink-2 border border-rule',
       },
     },
     defaultVariants: { tone: 'neutral' },
@@ -255,7 +268,7 @@ export interface GradeBadgeProps {
 }
 
 /**
- * A grade badge is **neutral** — `--surface-2` ground, `--rule` border, ink text.
+ * A grade badge is **neutral** — `--sheet-2` ground, `--rule` border, ink text.
  *
  * A+, A and B are all sellable. Colouring them green/amber/red conflates a
  * position on a scale with a verdict, which is the mistake the DeviceSure
@@ -270,15 +283,17 @@ export function GradeBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-sm border bg-surface-2 px-3 py-1',
+        'inline-flex items-center gap-2 rounded-sm border bg-sheet-2 px-3 py-1',
         'font-mono text-data font-semibold text-ink',
-        variant === 'declared' ? 'border-dashed border-ink-4' : 'border-rule',
+        // border-ink-3 rather than ink-4: a dashed border that carries meaning
+        // is a meaningful graphic and needs 3:1. ink-4 is 2.53:1.
+        variant === 'declared' ? 'border-dashed border-ink-3' : 'border-rule',
         className,
       )}
       data-testid="grade-badge"
     >
       {variant === 'corrected' && previousGrade && (
-        <span className="text-ink-4 line-through">{GRADE_LABEL[previousGrade]}</span>
+        <span className="text-ink-3 line-through">{GRADE_LABEL[previousGrade]}</span>
       )}
       <span>{GRADE_LABEL[grade]}</span>
       {variant === 'declared' && (
@@ -300,7 +315,7 @@ export interface ScoreRingProps {
   className?: string;
 }
 
-/** Signal blue, turning `--warn` below 80. Replaces the old tri-arc ring. */
+/** The accent, turning `--warn` below 80. Replaces the old tri-arc ring. */
 export function ScoreRing({
   value,
   size = 58,
@@ -335,7 +350,7 @@ export function ScoreRing({
             cy={size / 2}
             r={r}
             fill="none"
-            stroke={pct < 80 ? 'var(--warn)' : 'var(--signal)'}
+            stroke={pct < 80 ? 'var(--warn)' : 'var(--acc)'}
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={`${(pct / 100) * circumference} ${circumference}`}
@@ -419,12 +434,12 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-4 rounded-lg border border-rule bg-surface p-11 text-center',
+        'flex flex-col items-center gap-4 rounded-lg border border-rule bg-sheet p-11 text-center',
         className,
       )}
     >
       <h3 className="font-display text-h3 text-ink">{title}</h3>
-      {body && <p className="max-w-prose text-body-sm text-ink-3">{body}</p>}
+      {body && <p className="max-w-prose text-body-sm text-ink-2">{body}</p>}
       {action}
     </div>
   );
@@ -484,14 +499,14 @@ export function RepresentativeImage({
       <img
         src={src}
         alt={alt}
-        className="w-full rounded-lg border border-rule bg-surface-2 object-cover"
+        className="w-full rounded-lg border border-rule bg-sheet-2 object-cover"
       />
-      <figcaption className="text-body-sm text-ink-3">
+      <figcaption className="text-body-sm text-ink-2">
         Representative image of Grade {GRADE_LABEL[grade]} condition.{' '}
         {passportHref ? (
           <>
             Your unit&rsquo;s actual inspection report and photographs are on its{' '}
-            <a href={passportHref} className="text-signal-ink underline underline-offset-2">
+            <a href={passportHref} className="text-acc-hi underline underline-offset-2">
               unit passport
             </a>
             .

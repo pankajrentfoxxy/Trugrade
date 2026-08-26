@@ -15,7 +15,10 @@
     },
     "./eslint": "./eslint/index.js",
     "./eslint/plugin": "./eslint/plugin.js",
-    "./tailwind": "./tailwind-preset.js",
+    "./tailwind": {
+      "types": "./tailwind-preset.d.ts",
+      "default": "./tailwind-preset.js"
+    },
     "./tsconfig/base.json": "./tsconfig/base.json",
     "./tsconfig/node.json": "./tsconfig/node.json",
     "./tsconfig/next.json": "./tsconfig/next.json",
@@ -25,7 +28,8 @@
     "dist",
     "eslint",
     "tsconfig",
-    "tailwind-preset.js"
+    "tailwind-preset.js",
+    "tailwind-preset.d.ts"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

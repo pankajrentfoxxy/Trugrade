@@ -2,8 +2,8 @@ import type { Preview } from '@storybook/react';
 import '../src/globals.css';
 
 /**
- * Every story renders in both themes. The `a11y` addon runs axe on each one, and
- * a violation fails CI — a component with an axe violation does not ship.
+ * The `a11y` addon runs axe on every story, and a violation fails CI — a
+ * component with an axe violation does not ship.
  */
 const preview: Preview = {
   parameters: {
@@ -19,16 +19,15 @@ const preview: Preview = {
       },
     },
   },
-  globalTypes: {
-    theme: {
-      description: 'Theme',
-      defaultValue: 'light',
-      toolbar: { icon: 'circlehollow', items: ['light', 'dark'], dynamicTitle: true },
-    },
-  },
+  /**
+   * No theme toggle. The Workbench palette is deliberately single-theme — a B2B
+   * storefront that flips to dark mode is solving a problem nobody has, and two
+   * themes double the QA surface across ~135 routes. The dark band is
+   * compositional, so a story that needs it wraps itself in `.tg-dark`.
+   */
   decorators: [
-    (Story, context) => {
-      document.documentElement.setAttribute('data-theme', context.globals.theme as string);
+    (Story) => {
+      document.documentElement.removeAttribute('data-theme');
       return Story();
     },
   ],

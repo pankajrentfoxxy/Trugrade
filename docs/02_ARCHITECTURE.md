@@ -73,12 +73,18 @@ gorefurbo/
 
 ### 1.2 Two web apps, not one, not three
 
-| App | Serves | Why separate |
-|---|---|---|
-| `apps/storefront` | Public marketplace + customer portal | Needs SSR/ISR for SEO, is the only app exposed to anonymous traffic, and has a completely different threat model |
-| `apps/console` | Vendor portal + admin portal | Authenticated-only, no SEO, heavy tables and forms, can ship as a mostly-client app. Vendor and admin share 80% of their component surface and 100% of their data-grid infrastructure — splitting them would duplicate that for no security gain, because the real boundary is RBAC at the API, not the bundle |
+| App | Framework | Serves | Why |
+|---|---|---|---|
+| `apps/storefront` | **Next.js 15, App Router** | Public marketplace + customer portal | Needs SSR/ISR for SEO on model, brand and category pages. The only app exposed to anonymous traffic, and it has a completely different threat model |
+| `apps/console` | **Vite + React + React Router** | Vendor portal + admin portal | Authenticated-only, zero SEO value, heavy tables and forms. SSR is pure overhead here, and the Vite dev server is materially faster to work against |
 
-**Never** put admin code in the storefront bundle. The admin console must not be reachable from the public origin.
+**Revised 26 Aug 2026, after reading the DeviceSure repo.** The console was originally specified as Next.js for uniformity. Change it to Vite + React, because DeviceSure's `apps/web` is already exactly this — Vite, React, React Router, Vitest — and the team has built it once. Reusing a pattern they have working beats a second Next.js app whose server-component and caching model they would be learning under deadline, for a dashboard that renders nothing to a search engine.
+
+`packages/ui` is plain React, so both apps consume it unchanged. Two build tools is a real cost; a small team fighting App Router caching on an authenticated admin grid is a larger one.
+
+Vendor and admin stay in **one** console app. They share ~80% of their component surface and 100% of their data-grid infrastructure, and the real boundary is RBAC at the API, not the bundle.
+
+**Never** put admin code in the storefront bundle. The console must not be reachable from the public origin.
 
 ### 1.3 Stack, decided
 
@@ -89,7 +95,7 @@ gorefurbo/
 | ORM | **Prisma** with `multiSchema` | Type-safe; the generated types become the shared contract between API and web. Use raw SQL through `$queryRaw` for the three hot paths in §4 — do not fight the ORM there. |
 | Cache / locks | **Redis 7** | Stock reservation locks, sessions, rate limits, idempotency keys. |
 | Jobs | **BullMQ** on the same Redis | Verification calls, notifications, carrier polling, partition creation, drift checks, QC expiry sweeps. |
-| Web | **Next.js 15 App Router + Tailwind + shadcn/ui** in a **Turborepo** | One design system, two apps, shared `packages/ui` and `packages/contracts`. |
+| Web | **Next.js 15 (storefront) + Vite/React (console)**, Tailwind + shadcn/ui, in a **Turborepo** | One design system, two apps, shared `packages/ui` and `packages/contracts`. SSR where SEO pays for it; Vite where it does not. Mirrors DeviceSure's existing `apps/web`. |
 | Mobile | **Expo / React Native** | Changed from the earlier Flutter plan **because your team knows React**. One language across five apps beats a marginally better mobile runtime nobody on the team can debug. |
 | Files | **S3 (ap-south-1) + CloudFront** | Signed URLs only. Magic-byte validation, EXIF strip, virus scan on upload. |
 | Auth | JWT access 15 min + rotating refresh in an httpOnly cookie, session record in Redis | Revocability. TOTP MFA mandatory for admin roles and the vendor owner role — that login can change where money is paid. |

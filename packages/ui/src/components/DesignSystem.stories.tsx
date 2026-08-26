@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import * as React from 'react';
+import { BRAND } from '@trugrade/config/brand';
 import { ToleranceBand } from './ToleranceBand';
 import { Evidence } from './Evidence';
+import { CommissionReadout } from './CommissionReadout';
 import {
   Button,
   Input,
@@ -16,7 +18,7 @@ import {
 import { Logo, Mark, Wordmark } from '../brand/Mark';
 
 const meta: Meta = {
-  title: 'Trugrade/Design system',
+  title: `${BRAND.name}/Design system`,
   parameters: { layout: 'padded' },
 };
 export default meta;
@@ -203,6 +205,25 @@ export const Placeholders: StoryObj = {
         title="No inspected stock matches all 6 filters"
         body="Battery health above 90% and Grade A+ together rule out everything currently listed. Try removing one."
         action={<Button variant="primary">Clear filters</Button>}
+      />
+    </div>
+  ),
+};
+
+export const Commission: StoryObj = {
+  name: 'Commission readout — a percentage over a fixed amount',
+  render: () => (
+    <div className="max-w-sm">
+      <CommissionReadout
+        netPayoutRupees="28000"
+        grade="A"
+        rule={{
+          targetMarginPct: 12,
+          floorMarginPct: 4,
+          warrantyTopUpMonths: 3,
+          reservePctByGrade: { A_PLUS: 0.8, A: 1.2, B: 2.0 },
+        }}
+        vendorWarrantyMonths={3}
       />
     </div>
   ),

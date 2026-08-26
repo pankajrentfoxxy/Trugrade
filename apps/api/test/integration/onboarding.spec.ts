@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
+import { EventBus } from '../../src/shared/events/event-bus';
 import { ContextModule, RequestContextService } from '../../src/shared/db/org-scope';
 import { RedisService, RateLimiter, LockService } from '../../src/shared/redis/redis.service';
 import { TokenService } from '../../src/shared/auth/token.service';
@@ -106,6 +107,9 @@ beforeAll(async () => {
       VerificationService,
       ConsentService,
       KycService,
+      // Approving a vendor now publishes vendor.verified, so the module that
+      // owns the outbox has to be here too.
+      EventBus,
     ],
   }).compile();
 

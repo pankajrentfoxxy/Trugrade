@@ -16,6 +16,7 @@ model brand {
   logo_key          String?
   is_active         Boolean             @default(true)
   series            series[]
+  margin_rule       margin_rule[]
   vendor_capability vendor_capability[]
 
   @@schema("catalog")
@@ -110,6 +111,7 @@ model sku {
   order_line         order_line[]
   rfq                rfq[]
   invoice_line       invoice_line[]
+  vendor_sku_quality vendor_sku_quality[]
 
   @@index([cpu_generation, ram_gb, storage_gb], map: "ix_sku_filter")
   @@index([ports_json], map: "ix_sku_ports", type: Gin)
@@ -328,44 +330,45 @@ model contact_change_request {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model org_address {
-  id                                             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_id                                         String           @db.Uuid
-  type                                           address_type
-  label                                          String?
-  line1                                          String
-  line2                                          String?
-  city                                           String
-  state                                          String
-  state_code                                     String           @db.Char(2)
-  pincode                                        String           @db.Char(6)
-  contact_name                                   String
-  contact_mobile                                 String
-  landmark                                       String?
-  delivery_instructions                          String?
-  latitude                                       Decimal?         @db.Decimal(9, 6)
-  longitude                                      Decimal?         @db.Decimal(9, 6)
-  google_place_id                                String?
-  is_default                                     Boolean          @default(false)
-  is_pickup_enabled                              Boolean          @default(false)
-  is_billing_enabled                             Boolean          @default(false)
-  is_active                                      Boolean          @default(true)
-  verified_at                                    DateTime?        @db.Timestamptz(6)
-  created_at                                     DateTime         @default(now()) @db.Timestamptz(6)
-  org_preference                                 org_preference[]
-  organization                                   organization     @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  org_contact                                    org_contact[]
-  listing                                        listing[]
-  hub                                            hub[]
-  pickup_task                                    pickup_task[]
-  route_stop                                     route_stop[]
-  shipment_shipment_from_address_idToorg_address shipment[]       @relation("shipment_from_address_idToorg_address")
-  shipment_shipment_to_address_idToorg_address   shipment[]       @relation("shipment_to_address_idToorg_address")
-  order_order_billing_address_idToorg_address    order[]          @relation("order_billing_address_idToorg_address")
-  order_order_shipping_address_idToorg_address   order[]          @relation("order_shipping_address_idToorg_address")
-  qc_report                                      qc_report[]
-  qc_visit                                       qc_visit[]
-  vendor_facility                                vendor_facility?
-  vendor_profile                                 vendor_profile[]
+  id                                                               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                           String            @db.Uuid
+  type                                                             address_type
+  label                                                            String?
+  line1                                                            String
+  line2                                                            String?
+  city                                                             String
+  state                                                            String
+  state_code                                                       String            @db.Char(2)
+  pincode                                                          String            @db.Char(6)
+  contact_name                                                     String
+  contact_mobile                                                   String
+  landmark                                                         String?
+  delivery_instructions                                            String?
+  latitude                                                         Decimal?          @db.Decimal(9, 6)
+  longitude                                                        Decimal?          @db.Decimal(9, 6)
+  google_place_id                                                  String?
+  is_default                                                       Boolean           @default(false)
+  is_pickup_enabled                                                Boolean           @default(false)
+  is_billing_enabled                                               Boolean           @default(false)
+  is_active                                                        Boolean           @default(true)
+  verified_at                                                      DateTime?         @db.Timestamptz(6)
+  created_at                                                       DateTime          @default(now()) @db.Timestamptz(6)
+  org_preference                                                   org_preference[]
+  organization                                                     organization      @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  org_contact                                                      org_contact[]
+  listing                                                          listing[]
+  hub                                                              hub[]
+  pickup_task                                                      pickup_task[]
+  route_stop                                                       route_stop[]
+  shipment_shipment_from_address_idToorg_address                   shipment[]        @relation("shipment_from_address_idToorg_address")
+  shipment_shipment_to_address_idToorg_address                     shipment[]        @relation("shipment_to_address_idToorg_address")
+  order_order_billing_address_idToorg_address                      order[]           @relation("order_billing_address_idToorg_address")
+  order_order_shipping_address_idToorg_address                     order[]           @relation("order_shipping_address_idToorg_address")
+  qc_report                                                        qc_report[]
+  qc_visit                                                         qc_visit[]
+  vendor_facility                                                  vendor_facility?
+  vendor_facility_vendor_facility_dispatch_address_idToorg_address vendor_facility[] @relation("vendor_facility_dispatch_address_idToorg_address")
+  vendor_profile                                                   vendor_profile[]
 
   @@index([pincode], map: "ix_addr_pincode")
   @@schema("identity")
@@ -480,9 +483,12 @@ model organization {
   return_request                                                       return_request[]
   ticket                                                               ticket[]
   vendor_scorecard                                                     vendor_scorecard[]
+  warranty                                                             warranty[]
   warranty_claim                                                       warranty_claim[]
   qc_batch                                                             qc_batch[]
   qc_visit                                                             qc_visit[]
+  vendor_quality                                                       vendor_quality?
+  vendor_sku_quality                                                   vendor_sku_quality[]
   vendor_capability                                                    vendor_capability[]
   vendor_certification                                                 vendor_certification[]
   vendor_facility                                                      vendor_facility[]
@@ -660,6 +666,7 @@ model user_account {
   return_request                                                             return_request[]
   ticket                                                                     ticket[]
   ticket_message                                                             ticket_message[]
+  margin_rule                                                                margin_rule[]
   qc_audit_recheck                                                           qc_audit_recheck[]
   qc_report                                                                  qc_report[]
   qc_reverification                                                          qc_reverification[]
@@ -1104,6 +1111,8 @@ model listing {
   qty_qc_failed               Int                           @default(0)
   grade_corrected_from        grade_type?
   qc_visit_id                 String?                       @db.Uuid
+  vendor_warranty_months      Int                           @default(0)
+  vendor_warranty_scope       Json?
   grade_correction            grade_correction[]
   user_account                user_account?                 @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   org_address                 org_address                   @relation(fields: [pickup_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2277,15 +2286,21 @@ model vendor_scorecard {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model warranty {
-  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  unit_id        String            @db.Uuid
-  provider       warranty_provider
-  start_date     DateTime          @db.Date
-  end_date       DateTime          @db.Date
-  terms_version  String
-  status         String            @default("ACTIVE")
-  unit           unit              @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  warranty_claim warranty_claim[]
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id                String           @db.Uuid
+  start_date             DateTime         @db.Date
+  end_date               DateTime         @db.Date
+  terms_version          String
+  status                 String           @default("ACTIVE")
+  total_months           Int              @default(6)
+  vendor_backed_months   Int              @default(0)
+  platform_backed_months Int              @default(0)
+  vendor_org_id          String?          @db.Uuid
+  reserve_amount         Decimal?         @db.Decimal(14, 2)
+  reserve_released_at    DateTime?        @db.Timestamptz(6)
+  unit                   unit             @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization           organization?    @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warranty_claim         warranty_claim[]
 
   @@index([unit_id, status], map: "ix_warranty_unit")
   @@schema("platform")
@@ -2827,6 +2842,7 @@ model vendor_capability {
   has_inhouse_repair          Boolean      @default(false)
   lead_time_days              Int          @default(2)
   is_active                   Boolean      @default(true)
+  can_dropship                Boolean      @default(true)
   brand                       brand?       @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_vcap_brand")
   organization                organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -2853,23 +2869,25 @@ model vendor_certification {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model vendor_facility {
-  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_id                 String             @db.Uuid
-  address_id             String             @unique @db.Uuid
-  facility_type          String
-  storage_capacity_units Int?
-  has_loading_dock       Boolean            @default(false)
-  vehicle_access         String             @default("TEMPO")
-  lift_available         Boolean            @default(true)
-  staff_count            Int?
-  testing_stations       Int?
-  is_pickup_enabled      Boolean            @default(true)
-  special_instructions   String?
-  qc_visit               qc_visit[]
-  facility_holiday       facility_holiday[]
-  facility_hours         facility_hours[]
-  org_address            org_address        @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization           organization       @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                                                           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                       String             @db.Uuid
+  address_id                                                   String             @unique @db.Uuid
+  facility_type                                                String
+  storage_capacity_units                                       Int?
+  has_loading_dock                                             Boolean            @default(false)
+  vehicle_access                                               String             @default("TEMPO")
+  lift_available                                               Boolean            @default(true)
+  staff_count                                                  Int?
+  testing_stations                                             Int?
+  is_pickup_enabled                                            Boolean            @default(true)
+  special_instructions                                         String?
+  dispatch_address_id                                          String?            @db.Uuid
+  qc_visit                                                     qc_visit[]
+  facility_holiday                                             facility_holiday[]
+  facility_hours                                               facility_hours[]
+  org_address                                                  org_address        @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_vendor_facility_dispatch_address_idToorg_address org_address?       @relation("vendor_facility_dispatch_address_idToorg_address", fields: [dispatch_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                                 organization       @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("vendor")
 }
@@ -2882,6 +2900,7 @@ model vendor_payout_preference {
   min_payout_threshold    Decimal      @default(1000) @db.Decimal(14, 2)
   auto_reinvest           Boolean      @default(false)
   invoice_upload_required Boolean      @default(false)
+  pricing_mode            String       @default("NET_PAYOUT")
   organization            organization @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("vendor")
@@ -2901,6 +2920,15 @@ model vendor_profile {
   onboarding_status          org_status    @default(REGISTERED)
   verified_at                DateTime?     @db.Timestamptz(6)
   verified_by                String?       @db.Uuid
+  default_warranty_months    Int           @default(0)
+  default_warranty_scope     Json?
+  devicesure_org_id          String?
+  devicesure_licence_key     String?
+  devicesure_status          String        @default("NONE")
+  devicesure_issued_at       DateTime?     @db.Timestamptz(6)
+  devicesure_revoked_at      DateTime?     @db.Timestamptz(6)
+  qc_mode                    String        @default("SUPERVISED")
+  first_supervised_visit_at  DateTime?     @db.Timestamptz(6)
   organization               organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   org_address                org_address?  @relation(fields: [pickup_default_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user_account               user_account? @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2999,6 +3027,67 @@ model onboarding_step_definition {
 
   @@unique([org_type, step_code])
   @@schema("kyc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model margin_rule {
+  id                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  priority               Int
+  category               String?
+  brand_id               String?       @db.Uuid
+  grade                  grade_type?
+  value_from             Decimal?      @db.Decimal(14, 2)
+  value_to               Decimal?      @db.Decimal(14, 2)
+  target_margin_pct      Decimal       @db.Decimal(6, 3)
+  floor_margin_pct       Decimal       @db.Decimal(6, 3)
+  warranty_top_up_months Int           @default(3)
+  reserve_pct_by_grade   Json?
+  effective_from         DateTime      @default(dbgenerated("CURRENT_DATE")) @db.Date
+  effective_to           DateTime?     @db.Date
+  approved_by            String?       @db.Uuid
+  is_active              Boolean       @default(true)
+  created_at             DateTime      @default(now()) @db.Timestamptz(6)
+  user_account           user_account? @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  brand                  brand?        @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("procurement")
+}
+
+model vendor_quality {
+  vendor_org_id      String       @id @db.Uuid
+  units_inspected    Int          @default(0)
+  avg_qc_score       Decimal?     @db.Decimal(5, 2)
+  median_qc_score    Decimal?     @db.Decimal(5, 2)
+  battery_health_min Int?
+  battery_health_max Int?
+  grade_corrections  Int          @default(0)
+  grade_accuracy_pct Decimal?     @db.Decimal(5, 2)
+  last_inspected_at  DateTime?    @db.Timestamptz(6)
+  computed_at        DateTime     @default(now()) @db.Timestamptz(6)
+  organization       organization @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("qc")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model vendor_sku_quality {
+  vendor_org_id      String       @db.Uuid
+  sku_id             String       @db.Uuid
+  grade              grade_type
+  units_inspected    Int          @default(0)
+  avg_qc_score       Decimal?     @db.Decimal(5, 2)
+  median_qc_score    Decimal?     @db.Decimal(5, 2)
+  battery_health_min Int?
+  battery_health_max Int?
+  grade_corrections  Int          @default(0)
+  grade_accuracy_pct Decimal?     @db.Decimal(5, 2)
+  last_inspected_at  DateTime?    @db.Timestamptz(6)
+  computed_at        DateTime     @default(now()) @db.Timestamptz(6)
+  sku                sku          @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       organization @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([vendor_org_id, sku_id, grade])
+  @@schema("qc")
 }
 
 enum address_type {

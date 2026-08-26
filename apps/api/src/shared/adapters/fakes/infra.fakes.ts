@@ -283,7 +283,7 @@ export class FakeQcPlatform extends QcPlatformPort {
 
   /**
    * The enforcement mechanism the whole quality model rests on: suspend a vendor
-   * in Trugrade and their agents stop certifying (07 §5.1).
+   * on the platform and their agents stop certifying (07 §5.1).
    */
   async revokeVendorLicence(organizationId: string, _reason: string): Promise<void> {
     const licence = this.licences.get(organizationId);

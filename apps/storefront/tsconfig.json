@@ -1,0 +1,15 @@
+{
+  "extends": "@trugrade/config/tsconfig/next.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": [
+    "next-env.d.ts",
+    "src",
+    "next.config.mjs",
+    "tailwind.config.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

@@ -7,3 +7,5 @@ export * from './roles';
 export * from './qc-verdict';
 export * from './spec-match';
 export * from './upload';
+export * from './pricing';
+export * from './vendor-onboarding';

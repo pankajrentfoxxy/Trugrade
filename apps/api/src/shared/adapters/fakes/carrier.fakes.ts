@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+// Root import, not the '/brand' subpath: this app is on moduleResolution "Node"
+// (node10), which ignores exports maps. The root re-exports BRAND.
+import { BRAND } from '@trugrade/config';
 import {
   CarrierPort,
   type CreateShipmentInput,
@@ -145,7 +148,7 @@ export class FakeDelhivery extends BaseFakeCarrier {
   /** Prepaid accounts need ≥ ₹500 to manifest. A silent production failure mode. */
   walletBalanceInr = 5000;
   /** Must match the registered warehouse name exactly, case-sensitive. */
-  registeredWarehouses = new Set<string>(['Trugrade Gurugram Hub']);
+  registeredWarehouses = new Set<string>([`${BRAND.name} Gurugram Hub`]);
 
   protected override validate(input: CreateShipmentInput): void {
     if (this.walletBalanceInr < 500) {

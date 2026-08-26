@@ -34,6 +34,12 @@ If you want to reverse that decision, tell me — but reverse it now, not in Pha
 | **`07_DEVICESURE_INTEGRATION.md`** | Review of DeviceSure v0.1.0 with eight defects found in the sample certificate, plus the real integration contract. **Replaces `02_ARCHITECTURE.md` §5.3 and rewrites Phase 4 Task 2** | Before Phase 4 |
 | **`08_BRAND_SYSTEM.md`** | **The name is decided: Trugrade.** Full brand system — mark, "Anodised" palette, typography, the tolerance-band component, voice, and the codebase change list. **Supersedes the design tokens in `_CONTEXT.md` and Part 1 of `03_UX_SPEC.md`** | Before Phase 0 |
 
+### If Phase 0 and Phase 1 are already built — read this first
+
+**`PHASE_00_01_RETROFIT.md`** brings completed work up to the six decisions made since those phases were written: the rename to **Trugrade**, the replacement design system, the console moving from Next.js to Vite, four new vendor-onboarding captures, the payout basis and its freeze rule, and five schema additions. **3–4 days now; a month if left until after Phase 5.** Paste it into Claude Code before starting Phase 2.
+
+**`Trugrade_Business_Overview.pdf`** is the 13-page stakeholder document — the business model, the money followed through one laptop, how vendors are paid, and the decisions needed. Written for a non-technical reader.
+
 ### The build prompts
 
 Each is a self-contained prompt. Everything between the `═══` markers is what you paste into Claude Code.

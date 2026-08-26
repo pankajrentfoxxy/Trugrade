@@ -13,6 +13,7 @@ import {
 import type { org_type as OrgTypeEnum, org_status as OrgStatusEnum } from '@prisma/client';
 import { PrismaService } from '../../shared/db/prisma.service';
 import { ClockPort } from '../../shared/clock';
+import { EventBus } from '../../shared/events';
 import { RateLimiter } from '../../shared/redis/redis.service';
 import { TokenService, type IssuedTokens } from '../../shared/auth/token.service';
 import {
@@ -88,6 +89,7 @@ export class IdentityService implements IIdentityService {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly limiter: RateLimiter,
+    private readonly bus: EventBus,
   ) {}
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
@@ -529,6 +531,18 @@ export class IdentityService implements IIdentityService {
       UPDATE identity.session SET revoked_at = now()
       WHERE user_id IN (SELECT id FROM identity.user_account WHERE org_id = ${orgId}::uuid)
         AND revoked_at IS NULL`;
+
+    // Revoking sessions stops them logging in. It does NOT stop their already
+    // licensed DeviceSure agents from certifying machines, which is what would
+    // actually keep suspended stock flowing. The vendor module listens for this.
+    if (before.orgType === 'VENDOR') {
+      await this.bus.publish('vendor.suspended', {
+        orgId,
+        reason,
+        suspendedBy: actorUserId,
+        revokeQcLicence: true,
+      });
+    }
 
     await this.audit.record({
       action: 'identity.organization.suspended',
