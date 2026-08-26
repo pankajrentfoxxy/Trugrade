@@ -1,12 +1,20 @@
 /**
  * The PUBLIC barrel for `identity`.
  *
- * Re-export only: the service interface, the concrete service token, the module,
- * this module's event payload types, and any DTO that is genuinely part of the
- * contract. Never a repository, never an entity, never an internal DTO.
- *
- * Anything added here becomes something another module may depend on, so adding
- * to this file is an architectural decision, not a convenience.
+ * Adding to this file is an architectural decision: everything here becomes
+ * something another module may depend on, and therefore something that cannot
+ * change without coordinating. Repositories and internal DTOs never appear.
  */
-export { type IIdentityService, IdentityService } from './identity.service';
+export {
+  type IIdentityService,
+  IdentityService,
+  type AuthenticatedUser,
+  type OrganizationSummary,
+  type OrgType,
+} from './identity.service';
 export { IdentityModule } from './identity.module';
+
+// `kyc` records its review decisions and its verification attempts through these.
+export { AuditService, type AuditEntry, maskValue, redact } from './internal/audit.service';
+export { OtpService, type IssueOtpResult } from './internal/otp.service';
+export { PasswordService, type PasswordCheckResult } from './internal/password.service';

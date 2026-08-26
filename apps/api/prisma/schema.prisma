@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["catalog", "customer", "identity", "kyc", "listing", "logistics", "ops", "ordering", "payment", "platform", "procurement", "qc", "vendor"]
+  schemas  = ["catalog", "customer", "identity", "kyc", "listing", "logistics", "ops", "ordering", "payment", "platform", "procurement", "public", "qc", "vendor"]
 }
 
 model brand {
@@ -152,22 +152,22 @@ model sku_request {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model buyer_approval_policy {
-  id                                                                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_id                                                            String                         @db.Uuid
-  user_id                                                           String?                        @db.Uuid
-  role_id                                                           String?                        @db.Uuid
-  max_order_value                                                   Decimal?                       @db.Decimal(14, 2)
-  max_monthly_value                                                 Decimal?                       @db.Decimal(14, 2)
+  id                                                                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                                            String           @db.Uuid
+  user_id                                                           String?          @db.Uuid
+  role_id                                                           String?          @db.Uuid
+  max_order_value                                                   Decimal?         @db.Decimal(14, 2)
+  max_monthly_value                                                 Decimal?         @db.Decimal(14, 2)
   max_units_per_order                                               Int?
-  allowed_payment_modes                                             Unsupported("_payment_mode")[] @default(dbgenerated("ARRAY['PREPAID'::payment_mode]"))
-  requires_approval_above                                           Decimal?                       @db.Decimal(14, 2)
-  approver_user_id                                                  String?                        @db.Uuid
+  allowed_payment_modes                                             payment_mode[]   @default([PREPAID])
+  requires_approval_above                                           Decimal?         @db.Decimal(14, 2)
+  approver_user_id                                                  String?          @db.Uuid
   cost_centres_allowed                                              String[]
-  is_active                                                         Boolean                        @default(true)
-  user_account_buyer_approval_policy_approver_user_idTouser_account user_account?                  @relation("buyer_approval_policy_approver_user_idTouser_account", fields: [approver_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                                                      organization                   @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  role                                                              role?                          @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account_buyer_approval_policy_user_idTouser_account          user_account?                  @relation("buyer_approval_policy_user_idTouser_account", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  is_active                                                         Boolean          @default(true)
+  user_account_buyer_approval_policy_approver_user_idTouser_account user_account?    @relation("buyer_approval_policy_approver_user_idTouser_account", fields: [approver_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                                      organization     @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role                                                              role?            @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_buyer_approval_policy_user_idTouser_account          user_account?    @relation("buyer_approval_policy_user_idTouser_account", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   order_approval                                                    order_approval[]
 
   @@schema("customer")
@@ -175,38 +175,38 @@ model buyer_approval_policy {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model buyer_preference {
-  org_id                  String                            @id @db.Uuid
+  org_id                  String             @id @db.Uuid
   preferred_brands        String[]
-  preferred_grades        Unsupported("_grade_type")[]
+  preferred_grades        grade_type[]
   min_qc_score            Int?
-  min_battery_band        Unsupported("battery_band")?
+  min_battery_band        battery_band?
   typical_ram_gb          Int?
   typical_storage_gb      Int?
-  budget_min              Decimal?                          @db.Decimal(14, 2)
-  budget_max              Decimal?                          @db.Decimal(14, 2)
+  budget_min              Decimal?           @db.Decimal(14, 2)
+  budget_max              Decimal?           @db.Decimal(14, 2)
   typical_order_qty       Int?
   buying_frequency        String?
-  requires_warranty_min   Unsupported("warranty_duration")?
-  requires_data_wipe_cert Boolean                           @default(false)
-  updated_at              DateTime                          @default(now()) @db.Timestamptz(6)
-  organization            organization                      @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  requires_warranty_min   warranty_duration?
+  requires_data_wipe_cert Boolean            @default(false)
+  updated_at              DateTime           @default(now()) @db.Timestamptz(6)
+  organization            organization       @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("customer")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model buyer_profile {
-  org_id                 String                         @id @db.Uuid
+  org_id                 String         @id @db.Uuid
   industry               String?
   employee_count         Int?
   annual_volume_estimate Int?
-  credit_limit           Decimal                        @default(0) @db.Decimal(14, 2)
-  credit_terms_days      Int                            @default(0)
-  credit_used            Decimal                        @default(0) @db.Decimal(14, 2)
-  payment_mode_allowed   Unsupported("_payment_mode")[] @default(dbgenerated("ARRAY['PREPAID'::payment_mode]"))
-  onboarding_status      Unsupported("org_status")      @default(dbgenerated("'REGISTERED'::org_status"))
-  verified_at            DateTime?                      @db.Timestamptz(6)
-  organization           organization                   @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  credit_limit           Decimal        @default(0) @db.Decimal(14, 2)
+  credit_terms_days      Int            @default(0)
+  credit_used            Decimal        @default(0) @db.Decimal(14, 2)
+  payment_mode_allowed   payment_mode[] @default([PREPAID])
+  onboarding_status      org_status     @default(REGISTERED)
+  verified_at            DateTime?      @db.Timestamptz(6)
+  organization           organization   @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("customer")
 }
@@ -328,40 +328,40 @@ model contact_change_request {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model org_address {
-  id                                             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_id                                         String                      @db.Uuid
-  type                                           Unsupported("address_type")
+  id                                             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                                         String           @db.Uuid
+  type                                           address_type
   label                                          String?
   line1                                          String
   line2                                          String?
   city                                           String
   state                                          String
-  state_code                                     String                      @db.Char(2)
-  pincode                                        String                      @db.Char(6)
+  state_code                                     String           @db.Char(2)
+  pincode                                        String           @db.Char(6)
   contact_name                                   String
   contact_mobile                                 String
   landmark                                       String?
   delivery_instructions                          String?
-  latitude                                       Decimal?                    @db.Decimal(9, 6)
-  longitude                                      Decimal?                    @db.Decimal(9, 6)
+  latitude                                       Decimal?         @db.Decimal(9, 6)
+  longitude                                      Decimal?         @db.Decimal(9, 6)
   google_place_id                                String?
-  is_default                                     Boolean                     @default(false)
-  is_pickup_enabled                              Boolean                     @default(false)
-  is_billing_enabled                             Boolean                     @default(false)
-  is_active                                      Boolean                     @default(true)
-  verified_at                                    DateTime?                   @db.Timestamptz(6)
-  created_at                                     DateTime                    @default(now()) @db.Timestamptz(6)
+  is_default                                     Boolean          @default(false)
+  is_pickup_enabled                              Boolean          @default(false)
+  is_billing_enabled                             Boolean          @default(false)
+  is_active                                      Boolean          @default(true)
+  verified_at                                    DateTime?        @db.Timestamptz(6)
+  created_at                                     DateTime         @default(now()) @db.Timestamptz(6)
   org_preference                                 org_preference[]
-  organization                                   organization                @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organization                                   organization     @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   org_contact                                    org_contact[]
   listing                                        listing[]
   hub                                            hub[]
   pickup_task                                    pickup_task[]
   route_stop                                     route_stop[]
-  shipment_shipment_from_address_idToorg_address shipment[]                  @relation("shipment_from_address_idToorg_address")
-  shipment_shipment_to_address_idToorg_address   shipment[]                  @relation("shipment_to_address_idToorg_address")
-  order_order_billing_address_idToorg_address    order[]                     @relation("order_billing_address_idToorg_address")
-  order_order_shipping_address_idToorg_address   order[]                     @relation("order_shipping_address_idToorg_address")
+  shipment_shipment_from_address_idToorg_address shipment[]       @relation("shipment_from_address_idToorg_address")
+  shipment_shipment_to_address_idToorg_address   shipment[]       @relation("shipment_to_address_idToorg_address")
+  order_order_billing_address_idToorg_address    order[]          @relation("order_billing_address_idToorg_address")
+  order_order_shipping_address_idToorg_address   order[]          @relation("order_shipping_address_idToorg_address")
   qc_report                                      qc_report[]
   qc_visit                                       qc_visit[]
   vendor_facility                                vendor_facility?
@@ -401,31 +401,34 @@ model org_contact {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model organization {
-  id                                                                   String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_type                                                             Unsupported("org_type")
+  id                                                                   String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_type                                                             org_type
   legal_name                                                           String
   trade_name                                                           String?
-  constitution                                                         Unsupported("constitution_type")?
-  status                                                               Unsupported("org_status")         @default(dbgenerated("'LEAD'::org_status"))
-  tier                                                                 Unsupported("vendor_tier")?       @default(dbgenerated("'BRONZE'::vendor_tier"))
+  constitution                                                         constitution_type?
+  status                                                               org_status                    @default(LEAD)
+  tier                                                                 vendor_tier?                  @default(BRONZE)
   risk_score                                                           Int?
-  transaction_model                                                    Unsupported("txn_model")          @default(dbgenerated("'AGENCY'::txn_model"))
-  related_org_id                                                       String?                           @db.Uuid
-  preferred_locale                                                     String                            @default("en")
+  transaction_model                                                    txn_model                     @default(AGENCY)
+  related_org_id                                                       String?                       @db.Uuid
+  preferred_locale                                                     String                        @default("en")
   website                                                              String?
   year_established                                                     Int?
   annual_turnover_band                                                 String?
   employee_count_band                                                  String?
   logo_key                                                             String?
   about                                                                String?
-  profile_completeness_pct                                             Int                               @default(0)
-  first_order_at                                                       DateTime?                         @db.Timestamptz(6)
-  lifetime_gmv                                                         Decimal                           @default(0) @db.Decimal(14, 2)
-  created_at                                                           DateTime                          @default(now()) @db.Timestamptz(6)
-  updated_at                                                           DateTime                          @default(now()) @db.Timestamptz(6)
-  created_by                                                           String?                           @db.Uuid
-  updated_by                                                           String?                           @db.Uuid
-  deleted_at                                                           DateTime?                         @db.Timestamptz(6)
+  profile_completeness_pct                                             Int                           @default(0)
+  first_order_at                                                       DateTime?                     @db.Timestamptz(6)
+  lifetime_gmv                                                         Decimal                       @default(0) @db.Decimal(14, 2)
+  created_at                                                           DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                                                           DateTime                      @default(now()) @db.Timestamptz(6)
+  created_by                                                           String?                       @db.Uuid
+  updated_by                                                           String?                       @db.Uuid
+  deleted_at                                                           DateTime?                     @db.Timestamptz(6)
+  submitted_for_review_at                                              DateTime?                     @db.Timestamptz(6)
+  review_sla_due_at                                                    DateTime?                     @db.Timestamptz(6)
+  onboarding_completed_at                                              DateTime?                     @db.Timestamptz(6)
   sku_request                                                          sku_request[]
   buyer_approval_policy                                                buyer_approval_policy[]
   buyer_preference                                                     buyer_preference?
@@ -435,13 +438,14 @@ model organization {
   saved_search                                                         saved_search[]
   org_address                                                          org_address[]
   org_contact                                                          org_contact[]
-  organization                                                         organization?                     @relation("organizationToorganization", fields: [related_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  other_organization                                                   organization[]                    @relation("organizationToorganization")
+  organization                                                         organization?                 @relation("organizationToorganization", fields: [related_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_organization                                                   organization[]                @relation("organizationToorganization")
   user_account                                                         user_account[]
   user_invitation                                                      user_invitation[]
   user_role                                                            user_role[]
   agreement_acceptance                                                 agreement_acceptance[]
   bank_account                                                         bank_account[]
+  blacklist_hit                                                        blacklist_hit[]
   consent_record                                                       consent_record[]
   gst_profile                                                          gst_profile[]
   kyc_document                                                         kyc_document[]
@@ -449,8 +453,8 @@ model organization {
   onboarding_progress                                                  onboarding_progress[]
   pan_record                                                           pan_record?
   profile_change_request                                               profile_change_request[]
-  registration_lead_registration_lead_converted_org_idToorganization   registration_lead?                @relation("registration_lead_converted_org_idToorganization")
-  registration_lead_registration_lead_referred_by_org_idToorganization registration_lead[]               @relation("registration_lead_referred_by_org_idToorganization")
+  registration_lead_registration_lead_converted_org_idToorganization   registration_lead?            @relation("registration_lead_converted_org_idToorganization")
+  registration_lead_registration_lead_referred_by_org_idToorganization registration_lead[]           @relation("registration_lead_referred_by_org_idToorganization")
   tax_declaration                                                      tax_declaration[]
   trade_reference                                                      trade_reference[]
   verification_check                                                   verification_check[]
@@ -462,17 +466,17 @@ model organization {
   rfq                                                                  rfq[]
   rfq_quote                                                            rfq_quote[]
   sub_order                                                            sub_order[]
-  invoice_invoice_issuer_org_idToorganization                          invoice[]                         @relation("invoice_issuer_org_idToorganization")
-  invoice_invoice_recipient_org_idToorganization                       invoice[]                         @relation("invoice_recipient_org_idToorganization")
+  invoice_invoice_issuer_org_idToorganization                          invoice[]                     @relation("invoice_issuer_org_idToorganization")
+  invoice_invoice_recipient_org_idToorganization                       invoice[]                     @relation("invoice_recipient_org_idToorganization")
   ledger_entry                                                         ledger_entry[]
   payment                                                              payment[]
   payout                                                               payout[]
   penalty                                                              penalty[]
-  buyer_review_buyer_review_buyer_org_idToorganization                 buyer_review[]                    @relation("buyer_review_buyer_org_idToorganization")
-  buyer_review_buyer_review_vendor_org_idToorganization                buyer_review[]                    @relation("buyer_review_vendor_org_idToorganization")
+  buyer_review_buyer_review_buyer_org_idToorganization                 buyer_review[]                @relation("buyer_review_buyer_org_idToorganization")
+  buyer_review_buyer_review_vendor_org_idToorganization                buyer_review[]                @relation("buyer_review_vendor_org_idToorganization")
   data_subject_request                                                 data_subject_request[]
-  dispute_dispute_against_org_idToorganization                         dispute[]                         @relation("dispute_against_org_idToorganization")
-  dispute_dispute_raised_by_org_idToorganization                       dispute[]                         @relation("dispute_raised_by_org_idToorganization")
+  dispute_dispute_against_org_idToorganization                         dispute[]                     @relation("dispute_against_org_idToorganization")
+  dispute_dispute_raised_by_org_idToorganization                       dispute[]                     @relation("dispute_raised_by_org_idToorganization")
   return_request                                                       return_request[]
   ticket                                                               ticket[]
   vendor_scorecard                                                     vendor_scorecard[]
@@ -493,16 +497,21 @@ model organization {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model otp_request {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  target      String
-  purpose     String
-  code_hash   String
-  attempts    Int       @default(0)
-  expires_at  DateTime  @db.Timestamptz(6)
-  consumed_at DateTime? @db.Timestamptz(6)
-  ref_type    String?
-  ref_id      String?   @db.Uuid
-  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  target            String
+  purpose           String
+  code_hash         String
+  attempts          Int           @default(0)
+  expires_at        DateTime      @db.Timestamptz(6)
+  consumed_at       DateTime?     @db.Timestamptz(6)
+  ref_type          String?
+  ref_id            String?       @db.Uuid
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  resend_of_id      String?       @db.Uuid
+  channel           String        @default("SMS")
+  burned_at         DateTime?     @db.Timestamptz(6)
+  otp_request       otp_request?  @relation("otp_requestTootp_request", fields: [resend_of_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_otp_request otp_request[] @relation("otp_requestTootp_request")
 
   @@index([target, purpose, created_at(sort: Desc)], map: "ix_otp_target")
   @@schema("identity")
@@ -601,6 +610,9 @@ model user_account {
   locked_until                                                               DateTime?                     @db.Timestamptz(6)
   created_at                                                                 DateTime                      @default(now()) @db.Timestamptz(6)
   updated_at                                                                 DateTime                      @default(now()) @db.Timestamptz(6)
+  password_changed_at                                                        DateTime?                     @db.Timestamptz(6)
+  password_expires_at                                                        DateTime?                     @db.Timestamptz(6)
+  mfa_enrolled_at                                                            DateTime?                     @db.Timestamptz(6)
   catalog_change_log                                                         catalog_change_log[]
   sku                                                                        sku[]
   sku_request                                                                sku_request[]
@@ -610,6 +622,7 @@ model user_account {
   saved_search                                                               saved_search[]
   contact_change_request                                                     contact_change_request[]
   org_contact                                                                org_contact[]
+  password_history                                                           password_history[]
   session                                                                    session[]
   organization                                                               organization                  @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user_invitation_user_invitation_accepted_user_idTouser_account             user_invitation[]             @relation("user_invitation_accepted_user_idTouser_account")
@@ -747,16 +760,17 @@ model bank_account {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model blacklist_entry {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  entity_type  String
-  value_hash   String
-  reason       String
-  source       String
-  added_by     String?       @db.Uuid
-  active       Boolean       @default(true)
-  expires_at   DateTime?     @db.Timestamptz(6)
-  created_at   DateTime      @default(now()) @db.Timestamptz(6)
-  user_account user_account? @relation(fields: [added_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type   String
+  value_hash    String
+  reason        String
+  source        String
+  added_by      String?         @db.Uuid
+  active        Boolean         @default(true)
+  expires_at    DateTime?       @db.Timestamptz(6)
+  created_at    DateTime        @default(now()) @db.Timestamptz(6)
+  user_account  user_account?   @relation(fields: [added_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  blacklist_hit blacklist_hit[]
 
   @@unique([entity_type, value_hash])
   @@schema("kyc")
@@ -815,13 +829,18 @@ model kyc_document {
   file_hash_sha256                                                          String
   mime                                                                      String
   size_bytes                                                                BigInt
-  status                                                                    Unsupported("doc_status")     @default(dbgenerated("'UPLOADED'::doc_status"))
+  status                                                                    doc_status                    @default(UPLOADED)
   rejection_reason                                                          String?
   uploaded_by                                                               String?                       @db.Uuid
   reviewed_by                                                               String?                       @db.Uuid
   review_note                                                               String?
   expires_on                                                                DateTime?                     @db.Date
   created_at                                                                DateTime                      @default(now()) @db.Timestamptz(6)
+  document_date                                                             DateTime?                     @db.Date
+  original_filename                                                         String?
+  exif_stripped_at                                                          DateTime?                     @db.Timestamptz(6)
+  av_scanned_at                                                             DateTime?                     @db.Timestamptz(6)
+  av_verdict                                                                String?
   credit_application_credit_application_bank_statement_doc_idTokyc_document credit_application[]          @relation("credit_application_bank_statement_doc_idTokyc_document")
   credit_application_credit_application_financials_doc_idTokyc_document     credit_application[]          @relation("credit_application_financials_doc_idTokyc_document")
   organization                                                              organization                  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -916,35 +935,37 @@ model profile_change_request {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model registration_lead {
-  id                                                              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  intended_org_type                                               Unsupported("org_type")
+  id                                                              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  intended_org_type                                               org_type
   company_name_raw                                                String
   contact_name                                                    String
   mobile                                                          String
-  email                                                           String?                 @db.Citext
+  email                                                           String?              @db.Citext
   city                                                            String?
-  state_code                                                      String?                 @db.Char(2)
+  state_code                                                      String?              @db.Char(2)
   expected_monthly_volume                                         Int?
   categories_dealt                                                String[]
-  source                                                          String                  @default("ORGANIC")
+  source                                                          String               @default("ORGANIC")
   utm_source                                                      String?
   utm_medium                                                      String?
   utm_campaign                                                    String?
-  referred_by_org_id                                              String?                 @db.Uuid
+  referred_by_org_id                                              String?              @db.Uuid
   referral_code                                                   String?
-  status                                                          String                  @default("NEW")
-  converted_org_id                                                String?                 @unique @db.Uuid
+  status                                                          String               @default("NEW")
+  converted_org_id                                                String?              @unique @db.Uuid
   abandoned_at_step                                               String?
-  assigned_to                                                     String?                 @db.Uuid
-  last_contacted_at                                               DateTime?               @db.Timestamptz(6)
-  ip                                                              String?                 @db.Inet
+  assigned_to                                                     String?              @db.Uuid
+  last_contacted_at                                               DateTime?            @db.Timestamptz(6)
+  ip                                                              String?              @db.Inet
   user_agent                                                      String?
   device_fingerprint                                              String?
-  created_at                                                      DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at                                                      DateTime                @default(now()) @db.Timestamptz(6)
-  user_account                                                    user_account?           @relation(fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization_registration_lead_converted_org_idToorganization   organization?           @relation("registration_lead_converted_org_idToorganization", fields: [converted_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization_registration_lead_referred_by_org_idToorganization organization?           @relation("registration_lead_referred_by_org_idToorganization", fields: [referred_by_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at                                                      DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                                                      DateTime             @default(now()) @db.Timestamptz(6)
+  blacklist_hit                                                   blacklist_hit[]
+  user_account                                                    user_account?        @relation(fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_registration_lead_converted_org_idToorganization   organization?        @relation("registration_lead_converted_org_idToorganization", fields: [converted_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_registration_lead_referred_by_org_idToorganization organization?        @relation("registration_lead_referred_by_org_idToorganization", fields: [referred_by_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  verification_check                                              verification_check[]
 
   @@index([intended_org_type, status, created_at(sort: Desc)], map: "ix_lead_funnel")
   @@index([mobile], map: "ix_lead_mobile")
@@ -994,49 +1015,52 @@ model trade_reference {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model verification_check {
-  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_id             String        @db.Uuid
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id             String?            @db.Uuid
   check_type         String
   input_value_masked String
   input_hash         String
   provider           String
   status             String
   response_summary   Json?
-  match_score        Decimal?      @db.Decimal(5, 2)
+  match_score        Decimal?           @db.Decimal(5, 2)
   failure_reason     String?
   cost_paise         Int?
   latency_ms         Int?
-  attempt_no         Int           @default(1)
-  triggered_by       String?       @db.Uuid
-  checked_at         DateTime      @default(now()) @db.Timestamptz(6)
-  organization       organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  user_account       user_account? @relation(fields: [triggered_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  attempt_no         Int                @default(1)
+  triggered_by       String?            @db.Uuid
+  checked_at         DateTime           @default(now()) @db.Timestamptz(6)
+  lead_id            String?            @db.Uuid
+  registration_lead  registration_lead? @relation(fields: [lead_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       organization?      @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account       user_account?      @relation(fields: [triggered_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([input_hash], map: "ix_vcheck_hash")
   @@index([org_id, check_type, checked_at(sort: Desc)], map: "ix_vcheck_org")
+  @@index([input_hash, checked_at(sort: Desc)], map: "ix_verification_hash_recent")
   @@schema("kyc")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model grade_correction {
-  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  unit_id                 String                    @db.Uuid
-  listing_id              String?                   @db.Uuid
-  qc_report_id            String                    @db.Uuid
-  grade_declared          Unsupported("grade_type")
-  grade_corrected         Unsupported("grade_type")
+  id                      String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id                 String     @db.Uuid
+  listing_id              String?    @db.Uuid
+  qc_report_id            String     @db.Uuid
+  grade_declared          grade_type
+  grade_corrected         grade_type
   reason                  String
-  price_before            Decimal?                  @db.Decimal(14, 2)
-  price_suggested         Decimal?                  @db.Decimal(14, 2)
-  vendor_notified_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  price_before            Decimal?   @db.Decimal(14, 2)
+  price_suggested         Decimal?   @db.Decimal(14, 2)
+  vendor_notified_at      DateTime   @default(now()) @db.Timestamptz(6)
   vendor_response         String?
-  vendor_responded_at     DateTime?                 @db.Timestamptz(6)
-  auto_applied_at         DateTime?                 @db.Timestamptz(6)
-  counts_against_accuracy Boolean                   @default(true)
-  listing                 listing?                  @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_report               qc_report                 @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit                    unit                      @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor_responded_at     DateTime?  @db.Timestamptz(6)
+  auto_applied_at         DateTime?  @db.Timestamptz(6)
+  counts_against_accuracy Boolean    @default(true)
+  listing                 listing?   @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report               qc_report  @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit                    unit       @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([unit_id], map: "ix_gradecorr_unit")
   @@index([listing_id, vendor_notified_at(sort: Desc)], map: "ix_gradecorr_vendor")
@@ -1045,47 +1069,47 @@ model grade_correction {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model listing {
-  id                          String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  vendor_org_id               String                             @db.Uuid
-  sku_id                      String                             @db.Uuid
-  grade                       Unsupported("grade_type")
-  condition_type              Unsupported("condition_type")
-  functional_status           Unsupported("functional_status")   @default(dbgenerated("'FULLY_FUNCTIONAL'::functional_status"))
-  battery_health_band         Unsupported("battery_band")
-  parts_status                Unsupported("parts_status_type")
+  id                          String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id               String                        @db.Uuid
+  sku_id                      String                        @db.Uuid
+  grade                       grade_type
+  condition_type              condition_type
+  functional_status           functional_status             @default(FULLY_FUNCTIONAL)
+  battery_health_band         battery_band
+  parts_status                parts_status_type
   parts_replaced              String[]
-  repair_history              Unsupported("repair_history_type") @default(dbgenerated("'NONE'::repair_history_type"))
-  data_wipe_status            Unsupported("wipe_status_type")    @default(dbgenerated("'VERIFIED_WIPED'::wipe_status_type"))
-  seller_warranty             Unsupported("warranty_duration")   @default(dbgenerated("'NONE'::warranty_duration"))
-  oem_warranty_remaining      Unsupported("oem_warranty_band")   @default(dbgenerated("'NONE'::oem_warranty_band"))
-  truetech_warranty           Unsupported("warranty_duration")   @default(dbgenerated("'NONE'::warranty_duration"))
-  unit_price                  Decimal                            @db.Decimal(14, 2)
-  gst_rate                    Decimal                            @default(18.00) @db.Decimal(5, 2)
-  moq                         Int                                @default(1)
-  dispatch_sla_hours          Int                                @default(48)
-  pickup_location_id          String                             @db.Uuid
-  qty_total                   Int                                @default(0)
-  qty_available               Int                                @default(0)
-  qty_reserved                Int                                @default(0)
-  status                      Unsupported("listing_status")      @default(dbgenerated("'DRAFT'::listing_status"))
-  sku_version_at_creation     Int                                @default(1)
-  approved_by                 String?                            @db.Uuid
-  approved_at                 DateTime?                          @db.Timestamptz(6)
-  expires_at                  DateTime?                          @db.Timestamptz(6)
-  created_at                  DateTime                           @default(now()) @db.Timestamptz(6)
-  updated_at                  DateTime                           @default(now()) @db.Timestamptz(6)
-  qc_requested_at             DateTime?                          @db.Timestamptz(6)
-  qc_completed_at             DateTime?                          @db.Timestamptz(6)
-  qty_awaiting_qc             Int                                @default(0)
-  qty_qc_failed               Int                                @default(0)
-  grade_corrected_from        Unsupported("grade_type")?
-  qc_visit_id                 String?                            @db.Uuid
+  repair_history              repair_history_type           @default(NONE)
+  data_wipe_status            wipe_status_type              @default(VERIFIED_WIPED)
+  seller_warranty             warranty_duration             @default(NONE)
+  oem_warranty_remaining      oem_warranty_band             @default(NONE)
+  truetech_warranty           warranty_duration             @default(NONE)
+  unit_price                  Decimal                       @db.Decimal(14, 2)
+  gst_rate                    Decimal                       @default(18.00) @db.Decimal(5, 2)
+  moq                         Int                           @default(1)
+  dispatch_sla_hours          Int                           @default(48)
+  pickup_location_id          String                        @db.Uuid
+  qty_total                   Int                           @default(0)
+  qty_available               Int                           @default(0)
+  qty_reserved                Int                           @default(0)
+  status                      listing_status                @default(DRAFT)
+  sku_version_at_creation     Int                           @default(1)
+  approved_by                 String?                       @db.Uuid
+  approved_at                 DateTime?                     @db.Timestamptz(6)
+  expires_at                  DateTime?                     @db.Timestamptz(6)
+  created_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                      @default(now()) @db.Timestamptz(6)
+  qc_requested_at             DateTime?                     @db.Timestamptz(6)
+  qc_completed_at             DateTime?                     @db.Timestamptz(6)
+  qty_awaiting_qc             Int                           @default(0)
+  qty_qc_failed               Int                           @default(0)
+  grade_corrected_from        grade_type?
+  qc_visit_id                 String?                       @db.Uuid
   grade_correction            grade_correction[]
-  user_account                user_account?                      @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  org_address                 org_address                        @relation(fields: [pickup_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_visit                    qc_visit?                          @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku                         sku                                @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                organization                       @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account                user_account?                 @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address                 org_address                   @relation(fields: [pickup_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit                    qc_visit?                     @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku                         sku                           @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                organization                  @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   listing_image               listing_image[]
   listing_tier_price          listing_tier_price[]
   price_history               price_history[]
@@ -1142,19 +1166,19 @@ model price_history {
 }
 
 model stock_movement {
-  id            BigInt                      @id @default(autoincrement())
-  unit_id       String                      @db.Uuid
-  from_status   Unsupported("unit_status")?
-  to_status     Unsupported("unit_status")
+  id            BigInt        @id @default(autoincrement())
+  unit_id       String        @db.Uuid
+  from_status   unit_status?
+  to_status     unit_status
   from_location String?
   to_location   String?
   reason        String?
-  actor_id      String?                     @db.Uuid
+  actor_id      String?       @db.Uuid
   ref_type      String?
-  ref_id        String?                     @db.Uuid
-  occurred_at   DateTime                    @default(now()) @db.Timestamptz(6)
-  user_account  user_account?               @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit          unit                        @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ref_id        String?       @db.Uuid
+  occurred_at   DateTime      @default(now()) @db.Timestamptz(6)
+  user_account  user_account? @relation(fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit          unit          @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([unit_id, occurred_at(sort: Desc)], map: "ix_stockmv_unit")
   @@schema("listing")
@@ -1163,55 +1187,55 @@ model stock_movement {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model unit {
-  id                                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serial_number                          String
-  listing_id                             String?                    @db.Uuid
-  vendor_org_id                          String                     @db.Uuid
-  sku_id                                 String                     @db.Uuid
-  grade_declared                         Unsupported("grade_type")
-  grade_actual                           Unsupported("grade_type")?
-  status                                 Unsupported("unit_status") @default(dbgenerated("'CREATED'::unit_status"))
-  order_line_id                          String?                    @db.Uuid
-  qc_report_id                           String?                    @db.Uuid
+  listing_id                             String?             @db.Uuid
+  vendor_org_id                          String              @db.Uuid
+  sku_id                                 String              @db.Uuid
+  grade_declared                         grade_type
+  grade_actual                           grade_type?
+  status                                 unit_status         @default(CREATED)
+  order_line_id                          String?             @db.Uuid
+  qc_report_id                           String?             @db.Uuid
   hw_fingerprint_hash                    String?
-  oem_warranty_end                       DateTime?                  @db.Date
-  blacklist_checked_at                   DateTime?                  @db.Timestamptz(6)
-  location                               String                     @default("VENDOR")
-  hub_id                                 String?                    @db.Uuid
-  created_at                             DateTime                   @default(now()) @db.Timestamptz(6)
-  qc_visit_id                            String?                    @db.Uuid
-  qc_passed_at                           DateTime?                  @db.Timestamptz(6)
-  qc_valid_until                         DateTime?                  @db.Date
+  oem_warranty_end                       DateTime?           @db.Date
+  blacklist_checked_at                   DateTime?           @db.Timestamptz(6)
+  location                               String              @default("VENDOR")
+  hub_id                                 String?             @db.Uuid
+  created_at                             DateTime            @default(now()) @db.Timestamptz(6)
+  qc_visit_id                            String?             @db.Uuid
+  qc_passed_at                           DateTime?           @db.Timestamptz(6)
+  qc_valid_until                         DateTime?           @db.Date
   qc_score                               Int?
-  seal_id                                String?                    @db.Uuid
-  sealed_at                              DateTime?                  @db.Timestamptz(6)
-  battery_health_pct                     Decimal?                   @db.Decimal(5, 2)
-  is_sellable                            Boolean                    @default(false)
-  vendor_ask_price                       Decimal?                   @db.Decimal(14, 2)
-  purchase_price                         Decimal?                   @db.Decimal(14, 2)
-  valuation_method                       String                     @default("REGULAR")
-  itc_eligible                           Boolean                    @default(true)
-  retail_price                           Decimal?                   @db.Decimal(14, 2)
-  margin_rule_id                         String?                    @db.Uuid
+  seal_id                                String?             @db.Uuid
+  sealed_at                              DateTime?           @db.Timestamptz(6)
+  battery_health_pct                     Decimal?            @db.Decimal(5, 2)
+  is_sellable                            Boolean             @default(false)
+  vendor_ask_price                       Decimal?            @db.Decimal(14, 2)
+  purchase_price                         Decimal?            @db.Decimal(14, 2)
+  valuation_method                       String              @default("REGULAR")
+  itc_eligible                           Boolean             @default(true)
+  retail_price                           Decimal?            @db.Decimal(14, 2)
+  margin_rule_id                         String?             @db.Uuid
   supply_point_code                      String?
   grade_correction                       grade_correction[]
   stock_movement                         stock_movement[]
-  hub                                    hub?                       @relation(fields: [hub_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_hub")
-  order_line                             order_line?                @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_orderline")
-  qc_report_unit_qc_report_idToqc_report qc_report?                 @relation("unit_qc_report_idToqc_report", fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_qcreport")
-  listing                                listing?                   @relation(fields: [listing_id], references: [id], onUpdate: NoAction)
-  qc_visit                               qc_visit?                  @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_seal_unit_seal_idToqc_seal          qc_seal?                   @relation("unit_seal_idToqc_seal", fields: [seal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku                                    sku                        @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                           organization               @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hub                                    hub?                @relation(fields: [hub_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_hub")
+  order_line                             order_line?         @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_orderline")
+  qc_report_unit_qc_report_idToqc_report qc_report?          @relation("unit_qc_report_idToqc_report", fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_unit_qcreport")
+  listing                                listing?            @relation(fields: [listing_id], references: [id], onUpdate: NoAction)
+  qc_visit                               qc_visit?           @relation(fields: [qc_visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_seal_unit_seal_idToqc_seal          qc_seal?            @relation("unit_seal_idToqc_seal", fields: [seal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku                                    sku                 @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                           organization        @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   custody_event                          custody_event[]
   shipment_unit                          shipment_unit[]
   order_line_unit                        order_line_unit?
   warranty                               warranty[]
   warranty_claim                         warranty_claim[]
-  qc_report_qc_report_unit_idTounit      qc_report[]                @relation("qc_report_unit_idTounit")
+  qc_report_qc_report_unit_idTounit      qc_report[]         @relation("qc_report_unit_idTounit")
   qc_reverification                      qc_reverification[]
-  qc_seal_qc_seal_unit_idTounit          qc_seal[]                  @relation("qc_seal_unit_idTounit")
+  qc_seal_qc_seal_unit_idTounit          qc_seal[]           @relation("qc_seal_unit_idTounit")
   qc_tool_run                            qc_tool_run[]
   qc_visit_unit                          qc_visit_unit[]
   wipe_certificate                       wipe_certificate[]
@@ -1448,7 +1472,7 @@ model route_stop {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model routing_rule {
-  id                    String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   priority              Int
   name                  String
   from_is_ncr           Boolean?
@@ -1456,16 +1480,16 @@ model routing_rule {
   same_city             Boolean?
   min_units             Int?
   max_units             Int?
-  min_value             Decimal?                    @db.Decimal(14, 2)
-  max_value             Decimal?                    @db.Decimal(14, 2)
-  min_vendor_tier       Unsupported("vendor_tier")?
-  seal_must_be_intact   Boolean                     @default(true)
+  min_value             Decimal?     @db.Decimal(14, 2)
+  max_value             Decimal?     @db.Decimal(14, 2)
+  min_vendor_tier       vendor_tier?
+  seal_must_be_intact   Boolean      @default(true)
   multi_vendor_order    Boolean?
-  route_type            Unsupported("route_type")
+  route_type            route_type
   carrier_code          String
   fallback_carrier_code String?
-  is_active             Boolean                     @default(true)
-  effective_from        DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
+  is_active             Boolean      @default(true)
+  effective_from        DateTime     @default(dbgenerated("CURRENT_DATE")) @db.Date
   shipment              shipment[]
 
   @@schema("logistics")
@@ -1474,43 +1498,43 @@ model routing_rule {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model shipment {
-  id                                                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  leg                                               Unsupported("shipment_leg")
-  sub_order_id                                      String?                        @db.Uuid
-  carrier_id                                        String                         @db.Uuid
-  from_address_id                                   String                         @db.Uuid
-  to_address_id                                     String                         @db.Uuid
-  awb_number                                        String?                        @unique
+  id                                                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leg                                               shipment_leg
+  sub_order_id                                      String?            @db.Uuid
+  carrier_id                                        String             @db.Uuid
+  from_address_id                                   String             @db.Uuid
+  to_address_id                                     String             @db.Uuid
+  awb_number                                        String?            @unique
   mode                                              String
-  declared_value                                    Decimal                        @db.Decimal(14, 2)
-  weight_kg                                         Decimal?                       @db.Decimal(8, 2)
-  boxes                                             Int                            @default(1)
-  freight_cost                                      Decimal?                       @db.Decimal(14, 2)
+  declared_value                                    Decimal            @db.Decimal(14, 2)
+  weight_kg                                         Decimal?           @db.Decimal(8, 2)
+  boxes                                             Int                @default(1)
+  freight_cost                                      Decimal?           @db.Decimal(14, 2)
   seal_id                                           String?
-  status                                            Unsupported("shipment_status") @default(dbgenerated("'CREATED'::shipment_status"))
-  pickup_slot_from                                  DateTime?                      @db.Timestamptz(6)
-  pickup_slot_to                                    DateTime?                      @db.Timestamptz(6)
-  dispatched_at                                     DateTime?                      @db.Timestamptz(6)
-  delivered_at                                      DateTime?                      @db.Timestamptz(6)
+  status                                            shipment_status    @default(CREATED)
+  pickup_slot_from                                  DateTime?          @db.Timestamptz(6)
+  pickup_slot_to                                    DateTime?          @db.Timestamptz(6)
+  dispatched_at                                     DateTime?          @db.Timestamptz(6)
+  delivered_at                                      DateTime?          @db.Timestamptz(6)
   label_key                                         String?
   pod_key                                           String?
-  created_at                                        DateTime                       @default(now()) @db.Timestamptz(6)
-  route_type                                        Unsupported("route_type")      @default(dbgenerated("'VIA_HUB'::route_type"))
-  routing_rule_id                                   String?                        @db.Uuid
-  seal_verified_at                                  DateTime?                      @db.Timestamptz(6)
-  seal_verified_by                                  String?                        @db.Uuid
-  quoted_freight                                    Decimal?                       @db.Decimal(14, 2)
-  rate_card_id                                      String?                        @db.Uuid
-  eta_from                                          DateTime?                      @db.Timestamptz(6)
-  eta_to                                            DateTime?                      @db.Timestamptz(6)
+  created_at                                        DateTime           @default(now()) @db.Timestamptz(6)
+  route_type                                        route_type         @default(VIA_HUB)
+  routing_rule_id                                   String?            @db.Uuid
+  seal_verified_at                                  DateTime?          @db.Timestamptz(6)
+  seal_verified_by                                  String?            @db.Uuid
+  quoted_freight                                    Decimal?           @db.Decimal(14, 2)
+  rate_card_id                                      String?            @db.Uuid
+  eta_from                                          DateTime?          @db.Timestamptz(6)
+  eta_to                                            DateTime?          @db.Timestamptz(6)
   delivery_task                                     delivery_task[]
-  carrier                                           carrier                        @relation(fields: [carrier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  org_address_shipment_from_address_idToorg_address org_address                    @relation("shipment_from_address_idToorg_address", fields: [from_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  carrier_rate_card                                 carrier_rate_card?             @relation(fields: [rate_card_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  routing_rule                                      routing_rule?                  @relation(fields: [routing_rule_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account                                      user_account?                  @relation(fields: [seal_verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sub_order                                         sub_order?                     @relation(fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  org_address_shipment_to_address_idToorg_address   org_address                    @relation("shipment_to_address_idToorg_address", fields: [to_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  carrier                                           carrier            @relation(fields: [carrier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_shipment_from_address_idToorg_address org_address        @relation("shipment_from_address_idToorg_address", fields: [from_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  carrier_rate_card                                 carrier_rate_card? @relation(fields: [rate_card_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  routing_rule                                      routing_rule?      @relation(fields: [routing_rule_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account                                      user_account?      @relation(fields: [seal_verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order                                         sub_order?         @relation(fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_shipment_to_address_idToorg_address   org_address        @relation("shipment_to_address_idToorg_address", fields: [to_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   shipment_unit                                     shipment_unit[]
 
   @@index([status, created_at(sort: Desc)], map: "ix_shipment_st")
@@ -1618,30 +1642,30 @@ model cart_item {
 }
 
 model order {
-  id                                                 String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  order_number                                       String                        @unique
-  buyer_org_id                                       String                        @db.Uuid
-  buyer_user_id                                      String                        @db.Uuid
-  billing_gst_profile_id                             String                        @db.Uuid
-  billing_address_id                                 String                        @db.Uuid
-  shipping_address_id                                String                        @db.Uuid
+  id                                                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_number                                       String           @unique
+  buyer_org_id                                       String           @db.Uuid
+  buyer_user_id                                      String           @db.Uuid
+  billing_gst_profile_id                             String           @db.Uuid
+  billing_address_id                                 String           @db.Uuid
+  shipping_address_id                                String           @db.Uuid
   buyer_po_number                                    String?
   cost_centre                                        String?
-  subtotal                                           Decimal                       @db.Decimal(14, 2)
-  gst_total                                          Decimal                       @db.Decimal(14, 2)
-  freight_total                                      Decimal                       @default(0) @db.Decimal(14, 2)
-  tcs_amount                                         Decimal                       @default(0) @db.Decimal(14, 2)
-  grand_total                                        Decimal                       @db.Decimal(14, 2)
-  payment_mode                                       Unsupported("payment_mode")   @default(dbgenerated("'PREPAID'::payment_mode"))
-  payment_status                                     Unsupported("payment_status") @default(dbgenerated("'PENDING'::payment_status"))
-  status                                             Unsupported("order_status")   @default(dbgenerated("'CREATED'::order_status"))
-  placed_at                                          DateTime                      @default(now()) @db.Timestamptz(6)
-  stock_hold_expires_at                              DateTime?                     @db.Timestamptz(6)
-  org_address_order_billing_address_idToorg_address  org_address                   @relation("order_billing_address_idToorg_address", fields: [billing_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  gst_profile                                        gst_profile                   @relation(fields: [billing_gst_profile_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                                       organization                  @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account                                       user_account                  @relation(fields: [buyer_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  org_address_order_shipping_address_idToorg_address org_address                   @relation("order_shipping_address_idToorg_address", fields: [shipping_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subtotal                                           Decimal          @db.Decimal(14, 2)
+  gst_total                                          Decimal          @db.Decimal(14, 2)
+  freight_total                                      Decimal          @default(0) @db.Decimal(14, 2)
+  tcs_amount                                         Decimal          @default(0) @db.Decimal(14, 2)
+  grand_total                                        Decimal          @db.Decimal(14, 2)
+  payment_mode                                       payment_mode     @default(PREPAID)
+  payment_status                                     payment_status   @default(PENDING)
+  status                                             order_status     @default(CREATED)
+  placed_at                                          DateTime         @default(now()) @db.Timestamptz(6)
+  stock_hold_expires_at                              DateTime?        @db.Timestamptz(6)
+  org_address_order_billing_address_idToorg_address  org_address      @relation("order_billing_address_idToorg_address", fields: [billing_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  gst_profile                                        gst_profile      @relation(fields: [billing_gst_profile_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                                       organization     @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account                                       user_account     @relation(fields: [buyer_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address_order_shipping_address_idToorg_address org_address      @relation("order_shipping_address_idToorg_address", fields: [shipping_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   order_approval                                     order_approval[]
   sub_order                                          sub_order[]
   payment                                            payment[]
@@ -1693,23 +1717,23 @@ model order_event {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model order_line {
-  id              String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sub_order_id    String                      @db.Uuid
-  listing_id      String                      @db.Uuid
-  sku_id          String                      @db.Uuid
-  grade           Unsupported("grade_type")
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sub_order_id    String            @db.Uuid
+  listing_id      String            @db.Uuid
+  sku_id          String            @db.Uuid
+  grade           grade_type
   qty             Int
-  unit_price      Decimal                     @db.Decimal(14, 2)
-  gst_rate        Decimal                     @db.Decimal(5, 2)
-  gst_amount      Decimal                     @db.Decimal(14, 2)
-  line_total      Decimal                     @db.Decimal(14, 2)
-  status          Unsupported("order_status") @default(dbgenerated("'CONFIRMED'::order_status"))
-  fulfilled_qty   Int                         @default(0)
-  cancelled_qty   Int                         @default(0)
+  unit_price      Decimal           @db.Decimal(14, 2)
+  gst_rate        Decimal           @db.Decimal(5, 2)
+  gst_amount      Decimal           @db.Decimal(14, 2)
+  line_total      Decimal           @db.Decimal(14, 2)
+  status          order_status      @default(CONFIRMED)
+  fulfilled_qty   Int               @default(0)
+  cancelled_qty   Int               @default(0)
   unit            unit[]
-  listing         listing                     @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku             sku                         @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sub_order       sub_order                   @relation(fields: [sub_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  listing         listing           @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku             sku               @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order       sub_order         @relation(fields: [sub_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   order_line_unit order_line_unit[]
   penalty         penalty[]
   refund          refund[]
@@ -1718,15 +1742,15 @@ model order_line {
 }
 
 model order_line_unit {
-  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  order_line_id  String                     @db.Uuid
-  unit_id        String                     @unique @db.Uuid
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_line_id  String           @db.Uuid
+  unit_id        String           @unique @db.Uuid
   serial_number  String
-  qc_report_id   String?                    @db.Uuid
-  status         Unsupported("unit_status") @default(dbgenerated("'RESERVED'::unit_status"))
-  qc_report      qc_report?                 @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_olu_qcreport")
-  order_line     order_line                 @relation(fields: [order_line_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  unit           unit                       @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report_id   String?          @db.Uuid
+  status         unit_status      @default(RESERVED)
+  qc_report      qc_report?       @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_olu_qcreport")
+  order_line     order_line       @relation(fields: [order_line_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  unit           unit             @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   return_request return_request[]
 
   @@index([serial_number], map: "ix_olu_serial")
@@ -1735,20 +1759,20 @@ model order_line_unit {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model rfq {
-  id               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  rfq_number       String                     @unique
-  buyer_org_id     String                     @db.Uuid
-  sku_id           String                     @db.Uuid
-  grade            Unsupported("grade_type")?
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rfq_number       String       @unique
+  buyer_org_id     String       @db.Uuid
+  sku_id           String       @db.Uuid
+  grade            grade_type?
   qty              Int
-  target_price     Decimal?                   @db.Decimal(14, 2)
-  delivery_pincode String                     @db.Char(6)
-  needed_by        DateTime?                  @db.Date
-  status           String                     @default("OPEN")
-  expires_at       DateTime                   @db.Timestamptz(6)
-  created_at       DateTime                   @default(now()) @db.Timestamptz(6)
-  organization     organization               @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku              sku                        @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  target_price     Decimal?     @db.Decimal(14, 2)
+  delivery_pincode String       @db.Char(6)
+  needed_by        DateTime?    @db.Date
+  status           String       @default("OPEN")
+  expires_at       DateTime     @db.Timestamptz(6)
+  created_at       DateTime     @default(now()) @db.Timestamptz(6)
+  organization     organization @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku              sku          @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rfq_quote        rfq_quote[]
 
   @@schema("ordering")
@@ -1774,39 +1798,39 @@ model rfq_quote {
 }
 
 model sub_order {
-  id                                      String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  order_id                                String                      @db.Uuid
-  sub_order_number                        String                      @unique
-  vendor_org_id                           String                      @db.Uuid
-  subtotal                                Decimal                     @db.Decimal(14, 2)
-  gst_total                               Decimal                     @db.Decimal(14, 2)
-  freight                                 Decimal                     @default(0) @db.Decimal(14, 2)
-  commission_amount                       Decimal                     @default(0) @db.Decimal(14, 2)
-  status                                  Unsupported("order_status") @default(dbgenerated("'CONFIRMED'::order_status"))
-  dispatch_sla_due_at                     DateTime?                   @db.Timestamptz(6)
-  accepted_at                             DateTime?                   @db.Timestamptz(6)
-  rejected_at                             DateTime?                   @db.Timestamptz(6)
-  invoice_id                              String?                     @db.Uuid
+  id                                      String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id                                String        @db.Uuid
+  sub_order_number                        String        @unique
+  vendor_org_id                           String        @db.Uuid
+  subtotal                                Decimal       @db.Decimal(14, 2)
+  gst_total                               Decimal       @db.Decimal(14, 2)
+  freight                                 Decimal       @default(0) @db.Decimal(14, 2)
+  commission_amount                       Decimal       @default(0) @db.Decimal(14, 2)
+  status                                  order_status  @default(CONFIRMED)
+  dispatch_sla_due_at                     DateTime?     @db.Timestamptz(6)
+  accepted_at                             DateTime?     @db.Timestamptz(6)
+  rejected_at                             DateTime?     @db.Timestamptz(6)
+  invoice_id                              String?       @db.Uuid
   pickup_task                             pickup_task[]
   shipment                                shipment[]
   order_line                              order_line[]
-  invoice_sub_order_invoice_idToinvoice   invoice?                    @relation("sub_order_invoice_idToinvoice", fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_suborder_invoice")
-  order                                   order                       @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  organization                            organization                @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  invoice_invoice_sub_order_idTosub_order invoice[]                   @relation("invoice_sub_order_idTosub_order")
+  invoice_sub_order_invoice_idToinvoice   invoice?      @relation("sub_order_invoice_idToinvoice", fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_suborder_invoice")
+  order                                   order         @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organization                            organization  @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice_invoice_sub_order_idTosub_order invoice[]     @relation("invoice_sub_order_idTosub_order")
 
   @@index([vendor_org_id, status], map: "ix_suborder_vendor")
   @@schema("ordering")
 }
 
 model commission_rule {
-  id             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  vendor_tier    Unsupported("vendor_tier")?
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_tier    vendor_tier?
   sku_category   String?
-  min_value      Decimal?                    @db.Decimal(14, 2)
-  max_value      Decimal?                    @db.Decimal(14, 2)
-  rate_pct       Decimal                     @db.Decimal(5, 2)
-  effective_from DateTime                    @db.Date
+  min_value      Decimal?     @db.Decimal(14, 2)
+  max_value      Decimal?     @db.Decimal(14, 2)
+  rate_pct       Decimal      @db.Decimal(5, 2)
+  effective_from DateTime     @db.Date
 
   @@schema("payment")
 }
@@ -1830,35 +1854,35 @@ model eway_bill {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model invoice {
-  id                                                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoice_number                                      String                      @unique
-  type                                                Unsupported("invoice_type")
-  issuer_org_id                                       String                      @db.Uuid
-  recipient_org_id                                    String                      @db.Uuid
-  sub_order_id                                        String?                     @db.Uuid
-  invoice_date                                        DateTime                    @db.Date
-  place_of_supply                                     String                      @db.Char(2)
-  taxable_value                                       Decimal                     @db.Decimal(14, 2)
-  cgst                                                Decimal                     @default(0) @db.Decimal(14, 2)
-  sgst                                                Decimal                     @default(0) @db.Decimal(14, 2)
-  igst                                                Decimal                     @default(0) @db.Decimal(14, 2)
-  cess                                                Decimal                     @default(0) @db.Decimal(14, 2)
-  total                                               Decimal                     @db.Decimal(14, 2)
-  irn                                                 String?                     @unique
+  id                                                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_number                                      String         @unique
+  type                                                invoice_type
+  issuer_org_id                                       String         @db.Uuid
+  recipient_org_id                                    String         @db.Uuid
+  sub_order_id                                        String?        @db.Uuid
+  invoice_date                                        DateTime       @db.Date
+  place_of_supply                                     String         @db.Char(2)
+  taxable_value                                       Decimal        @db.Decimal(14, 2)
+  cgst                                                Decimal        @default(0) @db.Decimal(14, 2)
+  sgst                                                Decimal        @default(0) @db.Decimal(14, 2)
+  igst                                                Decimal        @default(0) @db.Decimal(14, 2)
+  cess                                                Decimal        @default(0) @db.Decimal(14, 2)
+  total                                               Decimal        @db.Decimal(14, 2)
+  irn                                                 String?        @unique
   ack_no                                              String?
-  ack_date                                            DateTime?                   @db.Timestamptz(6)
+  ack_date                                            DateTime?      @db.Timestamptz(6)
   signed_qr                                           String?
-  irp_status                                          String                      @default("PENDING")
+  irp_status                                          String         @default("PENDING")
   pdf_key                                             String?
-  original_invoice_id                                 String?                     @db.Uuid
-  created_at                                          DateTime                    @default(now()) @db.Timestamptz(6)
-  sub_order_sub_order_invoice_idToinvoice             sub_order[]                 @relation("sub_order_invoice_idToinvoice")
+  original_invoice_id                                 String?        @db.Uuid
+  created_at                                          DateTime       @default(now()) @db.Timestamptz(6)
+  sub_order_sub_order_invoice_idToinvoice             sub_order[]    @relation("sub_order_invoice_idToinvoice")
   eway_bill                                           eway_bill?
-  organization_invoice_issuer_org_idToorganization    organization                @relation("invoice_issuer_org_idToorganization", fields: [issuer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  invoice                                             invoice?                    @relation("invoiceToinvoice", fields: [original_invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  other_invoice                                       invoice[]                   @relation("invoiceToinvoice")
-  organization_invoice_recipient_org_idToorganization organization                @relation("invoice_recipient_org_idToorganization", fields: [recipient_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sub_order_invoice_sub_order_idTosub_order           sub_order?                  @relation("invoice_sub_order_idTosub_order", fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization_invoice_issuer_org_idToorganization    organization   @relation("invoice_issuer_org_idToorganization", fields: [issuer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice                                             invoice?       @relation("invoiceToinvoice", fields: [original_invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_invoice                                       invoice[]      @relation("invoiceToinvoice")
+  organization_invoice_recipient_org_idToorganization organization   @relation("invoice_recipient_org_idToorganization", fields: [recipient_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sub_order_invoice_sub_order_idTosub_order           sub_order?     @relation("invoice_sub_order_idTosub_order", fields: [sub_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   invoice_line                                        invoice_line[]
 
   @@index([recipient_org_id, invoice_date(sort: Desc)], map: "ix_invoice_recipient")
@@ -1908,19 +1932,19 @@ model ledger_entry {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model payment {
-  id           String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  order_id     String                        @db.Uuid
-  buyer_org_id String                        @db.Uuid
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id     String         @db.Uuid
+  buyer_org_id String         @db.Uuid
   gateway      String
   gateway_ref  String
   method       String
-  amount       Decimal                       @db.Decimal(14, 2)
-  status       Unsupported("payment_status") @default(dbgenerated("'PENDING'::payment_status"))
-  captured_at  DateTime?                     @db.Timestamptz(6)
+  amount       Decimal        @db.Decimal(14, 2)
+  status       payment_status @default(PENDING)
+  captured_at  DateTime?      @db.Timestamptz(6)
   raw_payload  Json?
-  created_at   DateTime                      @default(now()) @db.Timestamptz(6)
-  organization organization                  @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  order        order                         @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  organization organization   @relation(fields: [buyer_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order        order          @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   refund       refund[]
 
   @@unique([gateway, gateway_ref])
@@ -1955,18 +1979,18 @@ model payout {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model penalty {
-  id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  vendor_org_id String                      @db.Uuid
-  order_line_id String?                     @db.Uuid
-  type          Unsupported("penalty_type")
-  amount        Decimal                     @db.Decimal(14, 2)
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id String        @db.Uuid
+  order_line_id String?       @db.Uuid
+  type          penalty_type
+  amount        Decimal       @db.Decimal(14, 2)
   reason        String
-  waived_by     String?                     @db.Uuid
+  waived_by     String?       @db.Uuid
   waived_reason String?
-  applied_at    DateTime                    @default(now()) @db.Timestamptz(6)
-  order_line    order_line?                 @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization  organization                @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account  user_account?               @relation(fields: [waived_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  applied_at    DateTime      @default(now()) @db.Timestamptz(6)
+  order_line    order_line?   @relation(fields: [order_line_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization  organization  @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account  user_account? @relation(fields: [waived_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   qc_mismatch   qc_mismatch[]
 
   @@schema("payment")
@@ -2148,6 +2172,7 @@ model platform_config {
   effective_from DateTime      @default(now()) @db.Timestamptz(6)
   changed_by     String?       @db.Uuid
   version        Int           @default(1)
+  description    String?
   user_account   user_account? @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([key, effective_from], map: "uq_platform_config_key_from")
@@ -2228,23 +2253,23 @@ model ticket_message {
 }
 
 model vendor_scorecard {
-  id               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  vendor_org_id    String                      @db.Uuid
-  period_start     DateTime                    @db.Date
-  period_end       DateTime                    @db.Date
-  qc_pass_rate     Decimal?                    @db.Decimal(5, 2)
-  grade_accuracy   Decimal?                    @db.Decimal(5, 2)
-  ontime_dispatch  Decimal?                    @db.Decimal(5, 2)
-  acceptance_rate  Decimal?                    @db.Decimal(5, 2)
-  return_rate      Decimal?                    @db.Decimal(5, 2)
-  dispute_rate     Decimal?                    @db.Decimal(5, 2)
-  buyer_rating_avg Decimal?                    @db.Decimal(3, 2)
-  listing_hygiene  Decimal?                    @db.Decimal(5, 2)
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_org_id    String       @db.Uuid
+  period_start     DateTime     @db.Date
+  period_end       DateTime     @db.Date
+  qc_pass_rate     Decimal?     @db.Decimal(5, 2)
+  grade_accuracy   Decimal?     @db.Decimal(5, 2)
+  ontime_dispatch  Decimal?     @db.Decimal(5, 2)
+  acceptance_rate  Decimal?     @db.Decimal(5, 2)
+  return_rate      Decimal?     @db.Decimal(5, 2)
+  dispute_rate     Decimal?     @db.Decimal(5, 2)
+  buyer_rating_avg Decimal?     @db.Decimal(3, 2)
+  listing_hygiene  Decimal?     @db.Decimal(5, 2)
   units_in_period  Int
-  composite_score  Decimal?                    @db.Decimal(5, 2)
-  tier             Unsupported("vendor_tier")?
-  computed_at      DateTime                    @default(now()) @db.Timestamptz(6)
-  organization     organization                @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  composite_score  Decimal?     @db.Decimal(5, 2)
+  tier             vendor_tier?
+  computed_at      DateTime     @default(now()) @db.Timestamptz(6)
+  organization     organization @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([vendor_org_id, period_end])
   @@schema("platform")
@@ -2252,14 +2277,14 @@ model vendor_scorecard {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model warranty {
-  id             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  unit_id        String                           @db.Uuid
-  provider       Unsupported("warranty_provider")
-  start_date     DateTime                         @db.Date
-  end_date       DateTime                         @db.Date
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id        String            @db.Uuid
+  provider       warranty_provider
+  start_date     DateTime          @db.Date
+  end_date       DateTime          @db.Date
   terms_version  String
-  status         String                           @default("ACTIVE")
-  unit           unit                             @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  status         String            @default("ACTIVE")
+  unit           unit              @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   warranty_claim warranty_claim[]
 
   @@index([unit_id, status], map: "ix_warranty_unit")
@@ -2412,49 +2437,49 @@ model qc_photo {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model qc_report {
-  id                                                              String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  unit_id                                                         String                          @db.Uuid
-  batch_id                                                        String?                         @db.Uuid
-  technician_id                                                   String                          @db.Uuid
+  id                                                              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_id                                                         String                @db.Uuid
+  batch_id                                                        String?               @db.Uuid
+  technician_id                                                   String                @db.Uuid
   device_cert_id                                                  String
   agent_version                                                   String
-  started_at                                                      DateTime                        @db.Timestamptz(6)
-  completed_at                                                    DateTime?                       @db.Timestamptz(6)
+  started_at                                                      DateTime              @db.Timestamptz(6)
+  completed_at                                                    DateTime?             @db.Timestamptz(6)
   qc_score                                                        Int?
-  verdict                                                         Unsupported("qc_verdict")?
-  grade_proposed                                                  Unsupported("grade_type")?
-  grade_final                                                     Unsupported("grade_type")?
+  verdict                                                         qc_verdict?
+  grade_proposed                                                  grade_type?
+  grade_final                                                     grade_type?
   grade_override_reason                                           String?
   report_pdf_key                                                  String?
   signature                                                       String
-  nonce                                                           String                          @unique
-  verification_code                                               String?                         @unique
-  visit_id                                                        String?                         @db.Uuid
-  tool_run_id                                                     String?                         @db.Uuid
-  location_type                                                   Unsupported("qc_location_type") @default(dbgenerated("'VENDOR_SITE'::qc_location_type"))
-  location_address_id                                             String?                         @db.Uuid
-  valid_until                                                     DateTime?                       @db.Date
-  superseded_by_id                                                String?                         @db.Uuid
-  is_current                                                      Boolean                         @default(true)
+  nonce                                                           String                @unique
+  verification_code                                               String?               @unique
+  visit_id                                                        String?               @db.Uuid
+  tool_run_id                                                     String?               @db.Uuid
+  location_type                                                   qc_location_type      @default(VENDOR_SITE)
+  location_address_id                                             String?               @db.Uuid
+  valid_until                                                     DateTime?             @db.Date
+  superseded_by_id                                                String?               @db.Uuid
+  is_current                                                      Boolean               @default(true)
   grade_correction                                                grade_correction[]
-  unit_unit_qc_report_idToqc_report                               unit[]                          @relation("unit_qc_report_idToqc_report")
+  unit_unit_qc_report_idToqc_report                               unit[]                @relation("unit_qc_report_idToqc_report")
   order_line_unit                                                 order_line_unit[]
   return_qc                                                       return_qc[]
   warranty_claim                                                  warranty_claim[]
   qc_area_result                                                  qc_area_result[]
-  qc_audit_recheck_qc_audit_recheck_original_report_idToqc_report qc_audit_recheck[]              @relation("qc_audit_recheck_original_report_idToqc_report")
-  qc_audit_recheck_qc_audit_recheck_recheck_report_idToqc_report  qc_audit_recheck[]              @relation("qc_audit_recheck_recheck_report_idToqc_report")
+  qc_audit_recheck_qc_audit_recheck_original_report_idToqc_report qc_audit_recheck[]    @relation("qc_audit_recheck_original_report_idToqc_report")
+  qc_audit_recheck_qc_audit_recheck_recheck_report_idToqc_report  qc_audit_recheck[]    @relation("qc_audit_recheck_recheck_report_idToqc_report")
   qc_hardware_detected                                            qc_hardware_detected?
   qc_mismatch                                                     qc_mismatch[]
   qc_photo                                                        qc_photo[]
-  qc_batch                                                        qc_batch?                       @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  org_address                                                     org_address?                    @relation(fields: [location_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_report                                                       qc_report?                      @relation("qc_reportToqc_report", fields: [superseded_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  other_qc_report                                                 qc_report[]                     @relation("qc_reportToqc_report")
-  user_account                                                    user_account                    @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_tool_run                                                     qc_tool_run?                    @relation(fields: [tool_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit_qc_report_unit_idTounit                                    unit                            @relation("qc_report_unit_idTounit", fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_visit                                                        qc_visit?                       @relation(fields: [visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_batch                                                        qc_batch?             @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address                                                     org_address?          @relation(fields: [location_address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report                                                       qc_report?            @relation("qc_reportToqc_report", fields: [superseded_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_qc_report                                                 qc_report[]           @relation("qc_reportToqc_report")
+  user_account                                                    user_account          @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_tool_run                                                     qc_tool_run?          @relation(fields: [tool_run_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit_qc_report_unit_idTounit                                    unit                  @relation("qc_report_unit_idTounit", fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit                                                        qc_visit?             @relation(fields: [visit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   qc_reverification                                               qc_reverification[]
   qc_seal                                                         qc_seal[]
   qc_visit_unit                                                   qc_visit_unit[]
@@ -2494,15 +2519,15 @@ model qc_reverification {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model qc_sampling_rule {
-  id                      String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  vendor_tier             Unsupported("vendor_tier")?
-  min_units_inspected     Int                         @default(0)
-  min_pass_rate           Decimal?                    @db.Decimal(5, 2)
-  min_grade_accuracy      Decimal?                    @db.Decimal(5, 2)
+  id                      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendor_tier             vendor_tier?
+  min_units_inspected     Int          @default(0)
+  min_pass_rate           Decimal?     @db.Decimal(5, 2)
+  min_grade_accuracy      Decimal?     @db.Decimal(5, 2)
   sample_pct              Int
-  always_full_above_value Decimal?                    @db.Decimal(14, 2)
-  effective_from          DateTime                    @default(dbgenerated("CURRENT_DATE")) @db.Date
-  is_active               Boolean                     @default(true)
+  always_full_above_value Decimal?     @db.Decimal(14, 2)
+  effective_from          DateTime     @default(dbgenerated("CURRENT_DATE")) @db.Date
+  is_active               Boolean      @default(true)
 
   @@unique([vendor_tier, effective_from], map: "uq_sampling_tier_from")
   @@schema("qc")
@@ -2510,27 +2535,27 @@ model qc_sampling_rule {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model qc_seal {
-  id                         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  seal_code                  String                     @unique
-  unit_id                    String                     @db.Uuid
-  qc_report_id               String                     @db.Uuid
-  applied_by                 String                     @db.Uuid
-  applied_at                 DateTime                   @default(now()) @db.Timestamptz(6)
+  id                         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  seal_code                  String        @unique
+  unit_id                    String        @db.Uuid
+  qc_report_id               String        @db.Uuid
+  applied_by                 String        @db.Uuid
+  applied_at                 DateTime      @default(now()) @db.Timestamptz(6)
   applied_photo_key          String
-  status                     Unsupported("seal_status") @default(dbgenerated("'APPLIED'::seal_status"))
-  verified_at                DateTime?                  @db.Timestamptz(6)
-  verified_by                String?                    @db.Uuid
+  status                     seal_status   @default(APPLIED)
+  verified_at                DateTime?     @db.Timestamptz(6)
+  verified_by                String?       @db.Uuid
   verified_photo_key         String?
-  broken_at                  DateTime?                  @db.Timestamptz(6)
+  broken_at                  DateTime?     @db.Timestamptz(6)
   broken_reason              String?
-  replaced_by_seal_id        String?                    @db.Uuid
-  unit_unit_seal_idToqc_seal unit[]                     @relation("unit_seal_idToqc_seal")
-  qc_technician              qc_technician              @relation(fields: [applied_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_report                  qc_report                  @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_seal                    qc_seal?                   @relation("qc_sealToqc_seal", fields: [replaced_by_seal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  other_qc_seal              qc_seal[]                  @relation("qc_sealToqc_seal")
-  unit_qc_seal_unit_idTounit unit                       @relation("qc_seal_unit_idTounit", fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account               user_account?              @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replaced_by_seal_id        String?       @db.Uuid
+  unit_unit_seal_idToqc_seal unit[]        @relation("unit_seal_idToqc_seal")
+  qc_technician              qc_technician @relation(fields: [applied_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report                  qc_report     @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_seal                    qc_seal?      @relation("qc_sealToqc_seal", fields: [replaced_by_seal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_qc_seal              qc_seal[]     @relation("qc_sealToqc_seal")
+  unit_qc_seal_unit_idTounit unit          @relation("qc_seal_unit_idTounit", fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account               user_account? @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([unit_id, status], map: "ix_seal_unit")
   @@schema("qc")
@@ -2633,53 +2658,53 @@ model qc_tool_run {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model qc_visit {
-  id                    String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  visit_number          String                         @unique
-  vendor_org_id         String                         @db.Uuid
-  facility_id           String                         @db.Uuid
-  address_id            String                         @db.Uuid
-  requested_by          String?                        @db.Uuid
-  requested_at          DateTime                       @default(now()) @db.Timestamptz(6)
+  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_number          String             @unique
+  vendor_org_id         String             @db.Uuid
+  facility_id           String             @db.Uuid
+  address_id            String             @db.Uuid
+  requested_by          String?            @db.Uuid
+  requested_at          DateTime           @default(now()) @db.Timestamptz(6)
   units_requested       Int
   units_presented       Int?
-  units_inspected       Int                            @default(0)
-  units_passed          Int                            @default(0)
-  units_grade_corrected Int                            @default(0)
-  units_failed          Int                            @default(0)
-  units_absent          Int                            @default(0)
-  technician_id         String?                        @db.Uuid
-  tool_provider_id      String?                        @db.Uuid
-  scheduled_date        DateTime?                      @db.Date
-  slot_from             DateTime?                      @db.Time(6)
-  slot_to               DateTime?                      @db.Time(6)
-  status                Unsupported("qc_visit_status") @default(dbgenerated("'REQUESTED'::qc_visit_status"))
-  arrived_at            DateTime?                      @db.Timestamptz(6)
-  started_at            DateTime?                      @db.Timestamptz(6)
-  completed_at          DateTime?                      @db.Timestamptz(6)
-  arrival_geo_lat       Decimal?                       @db.Decimal(9, 6)
-  arrival_geo_lng       Decimal?                       @db.Decimal(9, 6)
+  units_inspected       Int                @default(0)
+  units_passed          Int                @default(0)
+  units_grade_corrected Int                @default(0)
+  units_failed          Int                @default(0)
+  units_absent          Int                @default(0)
+  technician_id         String?            @db.Uuid
+  tool_provider_id      String?            @db.Uuid
+  scheduled_date        DateTime?          @db.Date
+  slot_from             DateTime?          @db.Time(6)
+  slot_to               DateTime?          @db.Time(6)
+  status                qc_visit_status    @default(REQUESTED)
+  arrived_at            DateTime?          @db.Timestamptz(6)
+  started_at            DateTime?          @db.Timestamptz(6)
+  completed_at          DateTime?          @db.Timestamptz(6)
+  arrival_geo_lat       Decimal?           @db.Decimal(9, 6)
+  arrival_geo_lng       Decimal?           @db.Decimal(9, 6)
   geo_variance_metres   Int?
-  vendor_contact_id     String?                        @db.Uuid
+  vendor_contact_id     String?            @db.Uuid
   vendor_otp_hash       String?
-  vendor_signoff_at     DateTime?                      @db.Timestamptz(6)
+  vendor_signoff_at     DateTime?          @db.Timestamptz(6)
   vendor_signoff_name   String?
-  visit_fee             Decimal                        @default(0) @db.Decimal(14, 2)
-  fee_bearer            String                         @default("TRUETECH")
+  visit_fee             Decimal            @default(0) @db.Decimal(14, 2)
+  fee_bearer            String             @default("TRUETECH")
   fee_waiver_reason     String?
-  reschedule_count      Int                            @default(0)
+  reschedule_count      Int                @default(0)
   cancellation_reason   String?
   notes                 String?
   listing               listing[]
   unit                  unit[]
   route_stop            route_stop[]
   qc_report             qc_report[]
-  org_address           org_address                    @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  vendor_facility       vendor_facility                @relation(fields: [facility_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account          user_account?                  @relation(fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_technician         qc_technician?                 @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_tool_provider      qc_tool_provider?              @relation(fields: [tool_provider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  org_contact           org_contact?                   @relation(fields: [vendor_contact_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization          organization                   @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_address           org_address        @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor_facility       vendor_facility    @relation(fields: [facility_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account          user_account?      @relation(fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_technician         qc_technician?     @relation(fields: [technician_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_tool_provider      qc_tool_provider?  @relation(fields: [tool_provider_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  org_contact           org_contact?       @relation(fields: [vendor_contact_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization          organization       @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   qc_visit_expense      qc_visit_expense[]
   qc_visit_unit         qc_visit_unit[]
 
@@ -2706,23 +2731,23 @@ model qc_visit_expense {
 }
 
 model qc_visit_unit {
-  id               String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  visit_id         String                         @db.Uuid
-  unit_id          String                         @db.Uuid
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_id         String          @db.Uuid
+  unit_id          String          @db.Uuid
   serial_number    String
-  listing_id       String?                        @db.Uuid
+  listing_id       String?         @db.Uuid
   sequence_no      Int?
-  outcome          Unsupported("qc_unit_outcome") @default(dbgenerated("'PENDING'::qc_unit_outcome"))
-  qc_report_id     String?                        @db.Uuid
+  outcome          qc_unit_outcome @default(PENDING)
+  qc_report_id     String?         @db.Uuid
   absent_reason    String?
-  started_at       DateTime?                      @db.Timestamptz(6)
-  completed_at     DateTime?                      @db.Timestamptz(6)
+  started_at       DateTime?       @db.Timestamptz(6)
+  completed_at     DateTime?       @db.Timestamptz(6)
   duration_seconds Int?
   qc_tool_run      qc_tool_run[]
-  listing          listing?                       @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_report        qc_report?                     @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit             unit                           @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  qc_visit         qc_visit                       @relation(fields: [visit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  listing          listing?        @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_report        qc_report?      @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit             unit            @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qc_visit         qc_visit        @relation(fields: [visit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([visit_id, unit_id])
   @@index([unit_id], map: "ix_visitunit_unit")
@@ -2864,21 +2889,21 @@ model vendor_payout_preference {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model vendor_profile {
-  org_id                     String                    @id @db.Uuid
+  org_id                     String        @id @db.Uuid
   business_category          String
-  incorporation_date         DateTime?                 @db.Date
+  incorporation_date         DateTime?     @db.Date
   monthly_volume_estimate    Int?
-  pickup_default_location_id String?                   @db.Uuid
-  commission_rate_override   Decimal?                  @db.Decimal(5, 2)
-  exposure_limit             Decimal?                  @db.Decimal(14, 2)
-  settlement_cycle           String                    @default("WEEKLY")
+  pickup_default_location_id String?       @db.Uuid
+  commission_rate_override   Decimal?      @db.Decimal(5, 2)
+  exposure_limit             Decimal?      @db.Decimal(14, 2)
+  settlement_cycle           String        @default("WEEKLY")
   msme_udyam_no              String?
-  onboarding_status          Unsupported("org_status") @default(dbgenerated("'REGISTERED'::org_status"))
-  verified_at                DateTime?                 @db.Timestamptz(6)
-  verified_by                String?                   @db.Uuid
-  organization               organization              @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  org_address                org_address?              @relation(fields: [pickup_default_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_account               user_account?             @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  onboarding_status          org_status    @default(REGISTERED)
+  verified_at                DateTime?     @db.Timestamptz(6)
+  verified_by                String?       @db.Uuid
+  organization               organization  @relation(fields: [org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  org_address                org_address?  @relation(fields: [pickup_default_location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account               user_account? @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@schema("vendor")
 }
@@ -2901,4 +2926,445 @@ model vendor_sourcing_declaration {
   kyc_document           kyc_document? @relation(fields: [supporting_doc_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@schema("vendor")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model password_history {
+  id            BigInt       @id @default(autoincrement())
+  user_id       String       @db.Uuid
+  password_hash String
+  created_at    DateTime     @default(now()) @db.Timestamptz(6)
+  user_account  user_account @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, created_at(sort: Desc)], map: "ix_password_history_user")
+  @@schema("identity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model blacklist_hit {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lead_id            String?            @db.Uuid
+  org_id             String?            @db.Uuid
+  entity_type        String
+  value_hash         String
+  blacklist_entry_id String             @db.Uuid
+  checked_at         DateTime           @default(now()) @db.Timestamptz(6)
+  stage              String
+  blacklist_entry    blacklist_entry    @relation(fields: [blacklist_entry_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  registration_lead  registration_lead? @relation(fields: [lead_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       organization?      @relation(fields: [org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([org_id, checked_at(sort: Desc)], map: "ix_blacklist_hit_org")
+  @@schema("kyc")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model document_type_rule {
+  doc_type        String  @id
+  label           String
+  max_age_days    Int?
+  requires_expiry Boolean @default(false)
+  max_files       Int     @default(3)
+  is_sensitive    Boolean @default(false)
+
+  @@schema("kyc")
+}
+
+model onboarding_field_requirement {
+  id                          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_type                    org_type
+  step_code                   String
+  field_code                  String
+  label                       String
+  required_for_constitutions  String[]
+  forbidden_for_constitutions String[]
+  help_text                   String?
+
+  @@unique([org_type, step_code, field_code])
+  @@schema("kyc")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model onboarding_step_definition {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_type                 org_type
+  step_code                String
+  step_order               Int
+  title                    String
+  purpose_note             String?
+  estimated_minutes        Int?
+  is_required              Boolean  @default(true)
+  applies_to_constitutions String[]
+  is_active                Boolean  @default(true)
+
+  @@unique([org_type, step_code])
+  @@schema("kyc")
+}
+
+enum address_type {
+  REGISTERED
+  BILLING
+  SHIPPING
+  PICKUP
+  HUB
+
+  @@schema("public")
+}
+
+enum battery_band {
+  EXCELLENT_90_PLUS
+  GOOD_80_89
+  FAIR_70_79
+  LOW_BELOW_70
+  UNKNOWN
+
+  @@schema("public")
+}
+
+enum condition_type {
+  LIKE_NEW
+  UNBOXED
+  REFURBISHED
+  USED_TESTED
+
+  @@schema("public")
+}
+
+enum constitution_type {
+  PROPRIETORSHIP
+  PARTNERSHIP
+  LLP
+  PVT_LTD
+  LTD
+  TRUST
+  SOCIETY
+  OTHER
+
+  @@schema("public")
+}
+
+enum doc_status {
+  UPLOADED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+
+  @@schema("public")
+}
+
+enum functional_status {
+  FULLY_FUNCTIONAL
+  MINOR_ISSUE
+  LIMITED
+  NON_FUNCTIONAL
+
+  @@schema("public")
+}
+
+enum grade_type {
+  A_PLUS
+  A
+  B
+
+  @@schema("public")
+}
+
+enum invoice_type {
+  PROFORMA
+  TAX
+  COMMISSION
+  CREDIT_NOTE
+  DEBIT_NOTE
+
+  @@schema("public")
+}
+
+enum listing_status {
+  DRAFT
+  AWAITING_QC
+  QC_IN_PROGRESS
+  PENDING_APPROVAL
+  ACTIVE
+  PARTIALLY_ACTIVE
+  PAUSED
+  OUT_OF_STOCK
+  REJECTED
+  SUSPENDED
+  EXPIRED
+  DELISTED
+
+  @@schema("public")
+}
+
+enum oem_warranty_band {
+  NONE
+  LT_3M
+  M3_6
+  M6_12
+  M12_PLUS
+
+  @@schema("public")
+}
+
+enum order_status {
+  CREATED
+  AWAITING_APPROVAL
+  PAYMENT_PENDING
+  CONFIRMED
+  VENDOR_ACCEPTED
+  VENDOR_REJECTED
+  PICKUP_SCHEDULED
+  PICKED_UP
+  AT_HUB
+  QC_IN_PROGRESS
+  QC_HOLD
+  QC_CLEARED
+  INVOICED
+  PACKED
+  DISPATCHED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  PARTIALLY_FULFILLED
+  COMPLETED
+  CANCELLED
+  RTO
+  RETURNED
+  REFUNDED
+
+  @@schema("public")
+}
+
+enum org_status {
+  LEAD
+  REGISTERED
+  PROFILE_SUBMITTED
+  KYC_SUBMITTED
+  UNDER_REVIEW
+  INFO_REQUESTED
+  VERIFIED
+  REJECTED
+  SUSPENDED
+  DEACTIVATED
+  BLACKLISTED
+
+  @@schema("public")
+}
+
+enum org_type {
+  VENDOR
+  BUYER
+  INTERNAL
+
+  @@schema("public")
+}
+
+enum parts_status_type {
+  ALL_ORIGINAL
+  OEM_REPLACED
+  COMPATIBLE_REPLACED
+  MIXED
+
+  @@schema("public")
+}
+
+enum payment_mode {
+  PREPAID
+  PARTIAL_ADVANCE
+  CREDIT
+
+  @@schema("public")
+}
+
+enum payment_status {
+  PENDING
+  AUTHORIZED
+  PAID
+  PARTIALLY_PAID
+  FAILED
+  REFUNDED
+  CREDIT
+
+  @@schema("public")
+}
+
+enum penalty_type {
+  LATE_DISPATCH
+  QC_MISMATCH
+  CANCELLATION
+  SHORT_SUPPLY
+  GRADE_INFLATION
+  OTHER
+
+  @@schema("public")
+}
+
+enum qc_location_type {
+  VENDOR_SITE
+  HUB
+  BUYER_SITE
+  THIRD_PARTY_LAB
+
+  @@schema("public")
+}
+
+enum qc_unit_outcome {
+  PENDING
+  PASS
+  PASS_GRADE_CORRECTED
+  PASS_WITH_NOTE
+  FAIL
+  UNTESTABLE
+  ABSENT
+
+  @@schema("public")
+}
+
+enum qc_verdict {
+  PASS
+  PASS_WITH_NOTE
+  MISMATCH
+  FAIL
+
+  @@schema("public")
+}
+
+enum qc_visit_status {
+  REQUESTED
+  QUOTED
+  SCHEDULED
+  TECH_ASSIGNED
+  EN_ROUTE
+  IN_PROGRESS
+  COMPLETED
+  PARTIALLY_COMPLETED
+  CANCELLED
+  NO_SHOW_VENDOR
+  NO_SHOW_TECH
+  RESCHEDULED
+
+  @@schema("public")
+}
+
+enum repair_history_type {
+  NONE
+  MINOR
+  MAJOR
+
+  @@schema("public")
+}
+
+enum route_type {
+  DIRECT
+  VIA_HUB
+  CONSOLIDATED
+
+  @@schema("public")
+}
+
+enum seal_status {
+  APPLIED
+  INTACT
+  BROKEN
+  MISSING
+  REPLACED
+
+  @@schema("public")
+}
+
+enum shipment_leg {
+  INBOUND
+  OUTBOUND
+  RETURN
+
+  @@schema("public")
+}
+
+enum shipment_status {
+  CREATED
+  SCHEDULED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  RTO
+  CANCELLED
+
+  @@schema("public")
+}
+
+enum txn_model {
+  AGENCY
+  BUY_SELL
+
+  @@schema("public")
+}
+
+enum unit_status {
+  CREATED
+  AWAITING_QC
+  QC_SCHEDULED
+  QC_SEALED
+  LISTED
+  RESERVED
+  PICKUP_SCHEDULED
+  PICKED_UP
+  RECEIVED_AT_HUB
+  QC_IN_PROGRESS
+  QC_PASSED
+  QC_MISMATCH
+  QC_FAILED
+  QC_EXPIRED
+  SEAL_BROKEN
+  PACKED
+  DISPATCHED
+  DELIVERED
+  RETURN_REQUESTED
+  RETURN_IN_TRANSIT
+  RETURN_QC
+  RETURNED_TO_VENDOR
+  SCRAPPED
+
+  @@schema("public")
+}
+
+enum vendor_tier {
+  WATCHLIST
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+
+  @@schema("public")
+}
+
+enum warranty_duration {
+  NONE
+  D7
+  D30
+  M3
+  M6
+  M12
+
+  @@schema("public")
+}
+
+enum warranty_provider {
+  OEM
+  SELLER
+  TRUETECH
+  EXTENDED
+  NONE
+
+  @@schema("public")
+}
+
+enum wipe_status_type {
+  VERIFIED_WIPED
+  CERTIFICATE_AVAILABLE
+  NOT_APPLICABLE
+
+  @@schema("public")
 }

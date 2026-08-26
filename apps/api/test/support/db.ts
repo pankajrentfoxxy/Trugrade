@@ -88,6 +88,22 @@ export function testDb(): PrismaClient {
   return client;
 }
 
+let seeded = false;
+
+/**
+ * Reference data, from the same functions the CLI seed uses.
+ *
+ * Two copies of this was a real bug: the test database kept the fifteen legacy
+ * roles while the code expected twenty-four, and every test that assigned a role
+ * failed in a way that looked like a bug in the code rather than in the fixture.
+ */
+export async function seedTestReference(db: PrismaClient = testDb()): Promise<void> {
+  if (seeded) return;
+  const { seedReference } = await import('../../prisma/seed/reference');
+  await seedReference(db);
+  seeded = true;
+}
+
 export async function closeTestDb(): Promise<void> {
   await client?.$disconnect();
   client = undefined;
@@ -115,9 +131,14 @@ export async function truncateAll(db: PrismaClient = testDb()): Promise<void> {
       -- partition children are truncated via their parent
       AND tablename !~ '_[0-9]{4}_[0-9]{2}$'
       -- keep the seeded reference rows the migrations wrote
+      -- Reference data. Some of it is seeded by the seed script, some by the
+      -- migrations themselves — and truncating the latter is unrecoverable
+      -- without re-migrating, which is how a suite starts failing on "0 steps".
       AND tablename NOT IN ('platform_config','qc_tolerance_rule','qc_sampling_rule',
                             'routing_rule','carrier','commission_rule','role','permission',
-                            'role_permission','qc_tool_provider')
+                            'role_permission','qc_tool_provider',
+                            'onboarding_step_definition','onboarding_field_requirement',
+                            'document_type_rule','partitioned_table')
   `;
   if (!rows.length) return;
   truncateStatement = `TRUNCATE TABLE ${rows.map((r) => r.full_name).join(', ')} RESTART IDENTITY CASCADE`;

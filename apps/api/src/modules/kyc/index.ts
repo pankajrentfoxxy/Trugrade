@@ -1,12 +1,11 @@
 /**
  * The PUBLIC barrel for `kyc`.
  *
- * Re-export only: the service interface, the concrete service token, the module,
- * this module's event payload types, and any DTO that is genuinely part of the
- * contract. Never a repository, never an entity, never an internal DTO.
- *
- * Anything added here becomes something another module may depend on, so adding
- * to this file is an architectural decision, not a convenience.
+ * Only the service interface and the module. The onboarding engine, the
+ * verification retry policy and the consent ledger are all internal: another
+ * module wanting an onboarding decision asks for the decision, never for the
+ * table it was derived from.
  */
-export { type IKycService, KycService } from './kyc.service';
+export { type IKycService, KycService, type OnboardingSummary } from './kyc.service';
 export { KycModule } from './kyc.module';
+export { type ConsentPurpose, CONSENT_PURPOSES } from './internal/consent.service';
