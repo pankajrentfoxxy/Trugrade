@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { z } from 'zod';
 import {
   accountHolderNameSchema,
@@ -11,6 +24,7 @@ import { ZodValidationPipe } from '../../shared/http/http';
 import { ForbiddenError } from '../../shared/errors/domain-errors';
 import { RequestContextService, type Principal } from '../../shared/db/org-scope';
 import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.service';
+import { ValidationError } from '../../shared/errors/domain-errors';
 import { AuditService, IdentityService, type OrganizationSummary } from '../identity';
 import { VendorService, type VendorReviewCaptures } from '../vendor';
 import { KycService, type OnboardingSummary, type ReviewQueueItem } from './kyc.service';
@@ -21,15 +35,23 @@ import {
   type VerificationOutcomeView,
 } from './internal/verification.service';
 import {
+  DocumentService,
+  type DocumentTypeRuleView,
+  type UploadedBytes,
+  type KycDocumentView,
+} from './internal/document.service';
+import {
   consentPurposeSchema,
   createLeadBodySchema,
   pennyDropBodySchema,
   recordConsentBodySchema,
   requestFixBodySchema,
   reviewDecisionBodySchema,
+  replaceDocumentBodySchema,
   reviewQueueQuerySchema,
   saveStepBodySchema,
   stepCodeSchema,
+  uploadDocumentBodySchema,
   verifyGstinBodySchema,
   verifyPanBodySchema,
   type CreateLeadBodyDto,
@@ -39,6 +61,8 @@ import {
   type ReviewDecisionBodyDto,
   type ReviewQueueQueryDto,
   type SaveStepBodyDto,
+  type ReplaceDocumentBodyDto,
+  type UploadDocumentBodyDto,
   type VerifyGstinBodyDto,
   type VerifyPanBodyDto,
 } from './dto/kyc.dto';
@@ -274,6 +298,7 @@ export class OnboardingController {
     // seam rule is not in play; adding a pass-through would only put a second
     // signature between the route and the control it invokes.
     private readonly verification: VerificationService,
+    private readonly documents: DocumentService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -533,6 +558,141 @@ export class OnboardingController {
   verifications(@CurrentUser() user: Principal): ReturnType<KycService['verificationHistory']> {
     return this.kyc.verificationHistory({ orgId: ownOrgId(user) });
   }
+
+  // -------------------------------------------------------------------------
+  // Documents — buyer step 5, vendor step 6
+  // -------------------------------------------------------------------------
+
+  /**
+   * What this applicant has to supply, and the rules each one is held to.
+   *
+   * The wizard needs this before it can render the step at all: the list is
+   * `kyc.document_type_rule` data, not a constant, so ops can add a document
+   * type without a release. A hard-coded list in the client is a list that goes
+   * stale silently and asks a vendor for a document we stopped needing.
+   */
+  @Get('documents/types')
+  documentTypes(): Promise<DocumentTypeRuleView[]> {
+    return this.documents.types();
+  }
+
+  /** Everything this org has uploaded, with each one's review state. */
+  @Get('documents')
+  listDocuments(@CurrentUser() user: Principal): Promise<KycDocumentView[]> {
+    return this.documents.list(ownOrgId(user));
+  }
+
+  /**
+   * Upload one document.
+   *
+   * `multipart/form-data`, one file per request rather than an array, because
+   * the step shows per-file progress and a per-file error. A batch endpoint
+   * would have to invent a partial-success shape, and "three of your five
+   * uploaded" is a worse thing to render than five independent rows.
+   *
+   * Everything that decides whether these bytes are acceptable — the magic-byte
+   * sniff, the size cap, the EXIF strip, the document-age rule — lives in
+   * `DocumentService`, and none of it trusts anything the client said. The
+   * declared MIME type and `Content-Length` reach the service only so a
+   * contradiction with the actual bytes can be detected.
+   */
+  @Post('documents')
+  @HttpCode(201)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadDocument(
+    @CurrentUser() user: Principal,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body(new ZodValidationPipe(uploadDocumentBodySchema)) body: UploadDocumentBodyDto,
+  ): Promise<KycDocumentView> {
+    return this.documents.upload({
+      orgId: ownOrgId(user),
+      uploadedBy: user.userId,
+      docType: body.docType,
+      documentDate: parseDocumentDate(body.documentDate),
+      file: requireFile(file),
+    });
+  }
+
+  /**
+   * Replace the bytes behind a document, keeping its id.
+   *
+   * Keeping the id is the point: a credit application's bank statement or a
+   * vendor certification already references this row, and delete-then-upload
+   * would silently break the reference while looking like it worked.
+   */
+  @Put('documents/:documentId')
+  replaceDocument(
+    @CurrentUser() user: Principal,
+    @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body(new ZodValidationPipe(replaceDocumentBodySchema)) body: ReplaceDocumentBodyDto,
+  ): Promise<KycDocumentView> {
+    return this.documents.replace({
+      orgId: ownOrgId(user),
+      uploadedBy: user.userId,
+      documentId,
+      documentDate: parseDocumentDate(body.documentDate),
+      file: requireFile(file),
+    });
+  }
+
+  @Delete('documents/:documentId')
+  @HttpCode(204)
+  removeDocument(
+    @CurrentUser() user: Principal,
+    @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
+  ): Promise<void> {
+    return this.documents.remove(ownOrgId(user), documentId, user.userId);
+  }
+
+  /**
+   * A short-lived signed URL for the applicant's own document.
+   *
+   * The bytes never travel through the API. `file_key` is an internal S3 path
+   * and must not reach a client — it is the kind of identifier that leaks an
+   * org slug into a URL somebody then pastes into a support ticket.
+   */
+  @Get('documents/:documentId/url')
+  documentUrl(
+    @CurrentUser() user: Principal,
+    @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
+  ): Promise<{ url: string; expiresInSeconds: number }> {
+    return this.documents.downloadUrl(ownOrgId(user), documentId);
+  }
+}
+
+/**
+ * A multipart request with no file part is a client bug, not a validation
+ * failure the applicant can act on — but it still has to say something true
+ * rather than throw a TypeError three frames down inside the service.
+ */
+function requireFile(file: Express.Multer.File | undefined): UploadedBytes {
+  if (!file) {
+    throw new ValidationError('No file was attached. Choose a file and try again.', {
+      file: 'Attach the file you want to upload.',
+    });
+  }
+  return {
+    bytes: file.buffer,
+    declaredMime: file.mimetype,
+    filename: file.originalname,
+    declaredSize: file.size,
+  };
+}
+
+/**
+ * The shape is already checked by the DTO; this only turns it into a Date, and
+ * refuses a date that parses but is not real — 2026-02-31 passes the regex.
+ */
+function parseDocumentDate(value: string | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || !parsed.toISOString().startsWith(value)) {
+    throw new ValidationError(`${value} is not a real date.`, {
+      documentDate: 'Enter the date printed on the document, as YYYY-MM-DD.',
+    });
+  }
+  return parsed;
 }
 
 // ===========================================================================

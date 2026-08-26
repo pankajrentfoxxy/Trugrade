@@ -25,6 +25,11 @@ export { CommissionReadout, type CommissionReadoutProps } from './components/Com
 
 export {
   DataTable,
+  /**
+   * The same component under the name the backlog uses. Density (60/46/34 row
+   * heights) comes from `data-density` on the app root, never from a prop.
+   */
+  DataBoard,
   type DataTableProps,
   type Column,
   type SortDirection,
@@ -63,7 +68,54 @@ export {
   type UploadedFile,
   type UploadStatus,
   formatFileSize,
+  OtpInput,
+  type OtpInputProps,
 } from './components/forms';
+
+/* Archetype D — flow. */
+export {
+  StepRail,
+  type StepRailProps,
+  FormSection,
+  type FormSectionProps,
+  WhyRail,
+  type WhyRailProps,
+  type WhyRailItem,
+} from './components/flow';
+
+/* Archetype C — record. */
+export {
+  RecordHeader,
+  type RecordHeaderProps,
+  type RecordIdentifier,
+  SidePanel,
+  type SidePanelProps,
+  Timeline,
+  type TimelineProps,
+  type TimelineEvent,
+  AddressCard,
+  type AddressCardProps,
+  type Address,
+} from './components/record';
+
+/* Archetype E — workspace. */
+export {
+  KpiRow,
+  type KpiRowProps,
+  type Kpi,
+  type KpiCount,
+  type KpiPercentage,
+  QueueList,
+  type QueueListProps,
+  type QueueItem,
+  byBreach,
+} from './components/workspace';
+
+export {
+  DocumentViewer,
+  type DocumentViewerProps,
+  type DocumentPage,
+} from './components/DocumentViewer';
 
 export {
   PriceBreakup,

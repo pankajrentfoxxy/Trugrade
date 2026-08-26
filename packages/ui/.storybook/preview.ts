@@ -12,22 +12,62 @@ const preview: Preview = {
     a11y: {
       config: {
         rules: [
-          // WCAG 2.2 AA. Contrast pairs are verified in 08_BRAND_SYSTEM.md §9;
-          // this catches the ones a designer changes later.
+          // WCAG 2.2 AA. Contrast pairs are verified in 09_FRONTEND_LOCKED.md §9
+          // and recomputed in `tokens.spec.ts`; this catches the ones a designer
+          // changes later.
           { id: 'color-contrast', enabled: true },
         ],
       },
     },
   },
+
   /**
-   * No theme toggle. The Workbench palette is deliberately single-theme — a B2B
-   * storefront that flips to dark mode is solving a problem nobody has, and two
-   * themes double the QA surface across ~135 routes. The dark band is
-   * compositional, so a story that needs it wraps itself in `.tg-dark`.
+   * Two toolbars, both writing an attribute on `<html>`, because that is
+   * exactly how the real apps do it — `data-t` from `packages/ui`'s theme
+   * module, `data-density` from the app root. Neither is a decorator that wraps
+   * the story in a themed `<div>`: the tokens are defined on `:root[data-t=…]`,
+   * so a wrapper would get the default theme and every story would lie.
+   *
+   * `?globals=theme:light` sets it from a URL, which is how the screenshot pass
+   * captures both themes without clicking anything.
    */
+  globalTypes: {
+    theme: {
+      description: 'Darkroom theme. Dark is the default; light is an opt-out.',
+      toolbar: {
+        title: 'Theme',
+        icon: 'circlehollow',
+        items: [
+          { value: 'dark', title: 'Dark' },
+          { value: 'light', title: 'Light' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+    density: {
+      description: 'Storefront 60px rows · vendor 46px · admin 34px.',
+      toolbar: {
+        title: 'Density',
+        icon: 'component',
+        items: [
+          { value: 'comfortable', title: 'Comfortable — storefront' },
+          { value: 'default', title: 'Default — vendor' },
+          { value: 'compact', title: 'Compact — admin' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: { theme: 'dark', density: 'default' },
+
   decorators: [
-    (Story) => {
-      document.documentElement.removeAttribute('data-theme');
+    (Story, context) => {
+      const root = document.documentElement;
+      root.setAttribute('data-t', context.globals.theme === 'light' ? 'light' : 'dark');
+      // "default" is the absence of the attribute, same as an app that never
+      // sets one — so the default path is the one that gets exercised.
+      if (context.globals.density === 'default') root.removeAttribute('data-density');
+      else root.setAttribute('data-density', String(context.globals.density));
       return Story();
     },
   ],

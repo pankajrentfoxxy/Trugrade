@@ -1,7 +1,34 @@
 import * as React from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { Button, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
 import { changeControlFor, type ChangeControl } from '@trugrade/contracts';
+
+/** The three things a reviewer can do, in the API's own vocabulary. */
+type Decision = 'APPROVED' | 'REJECTED' | 'INFO_REQUESTED';
+
+/**
+ * One route for all three, and not `steps/:stepKey/request-fix`.
+ *
+ * Request-fix sends a single *step* back, and this screen has no step in hand —
+ * a reviewer here is looking at the application as a whole. So "request more
+ * information" is `INFO_REQUESTED` on the decision route, which is also what
+ * puts the application back in front of the applicant with the note attached.
+ *
+ * The error envelope is read the way `SkuRequests` reads it: the domain filter
+ * nests the sentence under `error`, and a refusal whose explanation is thrown
+ * away leaves the reviewer with a status code and no idea what to fix.
+ */
+async function postDecision(orgId: string, decision: Decision, notes?: string): Promise<void> {
+  const res = await fetch(`/api/kyc/orgs/${orgId}/decision`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ decision, notes }),
+  });
+  if (res.ok) return;
+  const payload = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  throw new Error(payload?.error?.message ?? `That decision did not go through (${res.status}).`);
+}
 
 export interface VendorReviewData {
   orgId: string;
@@ -61,8 +88,14 @@ function NotCaptured(): React.JSX.Element {
 
 export function VendorReviewRoute(): React.JSX.Element {
   const { orgId } = useParams<{ orgId: string }>();
+  const navigate = useNavigate();
   const [data, setData] = React.useState<VendorReviewData | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  /** Which decision is waiting on its note. Both refusals need one. */
+  const [pending, setPending] = React.useState<Exclude<Decision, 'APPROVED'> | null>(null);
+  const [notes, setNotes] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+  const [failure, setFailure] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -80,6 +113,22 @@ export function VendorReviewRoute(): React.JSX.Element {
       cancelled = true;
     };
   }, [orgId]);
+
+  async function decide(decision: Decision): Promise<void> {
+    if (!orgId || submitting) return;
+    setSubmitting(true);
+    setFailure(null);
+    try {
+      await postDecision(orgId, decision, notes.trim() || undefined);
+      // Back to the queue: the application this screen was about is no longer in
+      // it, and leaving the reviewer on a decided application is how the same
+      // one gets decided twice.
+      navigate('/kyc');
+    } catch (e) {
+      setFailure((e as Error).message);
+      setSubmitting(false);
+    }
+  }
 
   if (error) return <EmptyState title="Application did not load" body={error} />;
   if (!data) return <Skeleton lines={8} />;
@@ -167,13 +216,79 @@ export function VendorReviewRoute(): React.JSX.Element {
         </Field>
       </section>
 
+      {/*
+        A reason-disabled button is `aria-disabled`, not `disabled` — it stays
+        focusable so the reason can be read, which also means it still fires a
+        click. The gap check belongs on the handler as well as the attribute.
+      */}
       <div className="mt-7 flex items-center gap-3">
-        <Button variant="primary" disabledReason={missing.length > 0 ? gapReason(missing) : ''}>
+        <Button
+          variant="primary"
+          disabledReason={missing.length > 0 ? gapReason(missing) : ''}
+          loading={submitting && pending === null}
+          onClick={() => {
+            if (missing.length === 0) void decide('APPROVED');
+          }}
+        >
           Approve
         </Button>
-        <Button variant="secondary">Request more information</Button>
-        <Button variant="danger">Reject</Button>
+        <Button variant="secondary" onClick={() => setPending('INFO_REQUESTED')}>
+          Request more information
+        </Button>
+        <Button variant="danger" onClick={() => setPending('REJECTED')}>
+          Reject
+        </Button>
       </div>
+
+      {/*
+        Both refusals are read verbatim by the applicant and the API refuses one
+        without a note. Asking for it here, rather than letting the request come
+        back 422, is the difference between a reviewer writing a sentence and a
+        reviewer seeing an error they did not cause.
+      */}
+      {pending !== null && (
+        <div className="mt-5 border-t border-rule-2 pt-5">
+          <label htmlFor="decision-notes" className="text-body-sm text-ink">
+            {pending === 'REJECTED'
+              ? 'Why is this being rejected? The applicant reads this.'
+              : 'What do you need from them? The applicant reads this.'}
+          </label>
+          <textarea
+            id="decision-notes"
+            className="mt-2 w-full rounded border border-rule bg-sheet p-3 text-body text-ink"
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+          <div className="mt-3 flex items-center gap-3">
+            <Button
+              variant={pending === 'REJECTED' ? 'danger' : 'primary'}
+              loading={submitting}
+              disabledReason={notes.trim() ? '' : 'Write the reason first — the applicant sees it.'}
+              onClick={() => {
+                if (notes.trim()) void decide(pending);
+              }}
+            >
+              {pending === 'REJECTED' ? 'Confirm rejection' : 'Send request'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPending(null);
+                setFailure(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {failure !== null && (
+        <p role="alert" className="mt-4 text-body-sm text-fail">
+          {failure} Nothing has been changed.
+        </p>
+      )}
     </div>
   );
 }

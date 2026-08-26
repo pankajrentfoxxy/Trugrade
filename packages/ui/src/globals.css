@@ -124,16 +124,41 @@
     /**
      * Density. Orthogonal to `data-t`: both live on the root, neither knows
      * about the other. One is a spacing dial, the other a surface palette.
+     *
+     * `--d-row-h` is the mandated row height: 60 / 46 / 34 for comfortable /
+     * default / compact (CLAUDE.md). It is a `height` on the cell rather than
+     * more padding because padding cannot make a row SHORTER than its content,
+     * and 34px is shorter than 13px text plus any padding worth having. So the
+     * padding-block stays small enough at every density for the height to be
+     * the number that actually wins, and a row with two lines in it still grows
+     * rather than clipping.
+     *
+     * This is the whole of the density implementation. There is no prop: a
+     * caller cannot pass a different density to one table on the page, because
+     * two tables at two densities on one screen is the bug, not the feature.
      */
     --d-row: var(--s3);
+    --d-row-h: 46px;
     --d-cell: var(--s4);
     --d-card: var(--s5);
     --d-stack: var(--s4);
     --d-section: var(--s8);
   }
 
+  /* Storefront. A buyer reads eight rows, not eighty. */
+  [data-density='comfortable'] {
+    --d-row: var(--s4);
+    --d-row-h: 60px;
+    --d-cell: var(--s5);
+    --d-card: var(--s6);
+    --d-stack: var(--s5);
+    --d-section: var(--s8);
+  }
+
+  /* Admin. An ops screen is read all day and every row costs a scroll. */
   [data-density='compact'] {
-    --d-row: var(--s2);
+    --d-row: var(--s1);
+    --d-row-h: 34px;
     --d-cell: var(--s3);
     --d-card: var(--s4);
     --d-stack: var(--s3);
@@ -381,6 +406,9 @@
   .tg-cell {
     padding-block: var(--d-row);
     padding-inline: var(--d-cell);
+    /* On a table cell `height` behaves as a minimum, so this sets the row
+       height at each density without capping a cell that wraps to two lines. */
+    height: var(--d-row-h);
   }
   .tg-card {
     padding: var(--d-card);

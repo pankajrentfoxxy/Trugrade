@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Navigate, useLocation } from 'react-router';
+import type { Permission } from '@trugrade/contracts';
 
 export interface Principal {
   userId: string;
@@ -92,7 +93,12 @@ export function RequirePermission({
   permission,
   children,
 }: {
-  permission: string;
+  // `Permission`, not `string`. Two nav entries used to be gated on
+  // 'kyc.review' and 'vendor.read', which are not in ROLE_PERMISSIONS and so
+  // matched no principal ever issued — the screens behind them were simply
+  // invisible, and nothing failed loudly enough to say so. A closed union turns
+  // that from a silent dead link into a compile error.
+  permission: Permission;
   children: React.ReactNode;
 }): React.JSX.Element {
   const { principal, loading } = useAuth();

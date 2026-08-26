@@ -9,6 +9,13 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <!--
+      The pre-paint theme read. It is a verbatim copy of `THEME_PREPAINT_SCRIPT`
+      from `@trugrade/ui`, inlined because Vite's index.html cannot import a
+      constant and a `useEffect` runs a whole paint too late — a light-theme
+      user would get a dark flash on every load. `test/prepaint.spec.ts` fails
+      if this and the exported constant ever drift apart.
+    -->
     <script>try{var t=localStorage.getItem('tg-theme');if(t)document.documentElement.setAttribute('data-t',t)}catch(e){}</script>
     <title>Console</title>
   </head>

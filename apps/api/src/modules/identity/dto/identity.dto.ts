@@ -90,3 +90,26 @@ export const contactChangeCancelSchema = z.object({
   reason: z.string().trim().min(1).max(200).default('Cancelled by the account holder.'),
 });
 export type ContactChangeCancelDto = z.infer<typeof contactChangeCancelSchema>;
+
+/**
+ * Registration-time contact verification, before any account exists.
+ *
+ * A discriminated union for the same reason `contactChangeRequestSchema` is one:
+ * the shape of a valid value depends entirely on which channel it is, and both
+ * member schemas normalise on the way through — so the string the OTP is issued
+ * against, the string `wasRecentlyVerified` is later asked about, and the string
+ * `register` stores in `user_account` are the identical string. A mobile that is
+ * verified as `9876543210` and registered as `+919876543210` is a verification
+ * that silently proves nothing.
+ */
+export const registrationOtpSchema = z.discriminatedUnion('channel', [
+  z.object({ channel: z.literal('EMAIL'), value: emailSchema }),
+  z.object({ channel: z.literal('MOBILE'), value: mobileSchema }),
+]);
+export type RegistrationOtpDto = z.infer<typeof registrationOtpSchema>;
+
+export const registrationOtpVerifySchema = z.discriminatedUnion('channel', [
+  z.object({ channel: z.literal('EMAIL'), value: emailSchema, code: otpCodeSchema }),
+  z.object({ channel: z.literal('MOBILE'), value: mobileSchema, code: otpCodeSchema }),
+]);
+export type RegistrationOtpVerifyDto = z.infer<typeof registrationOtpVerifySchema>;

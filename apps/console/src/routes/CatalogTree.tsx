@@ -96,7 +96,7 @@ export function CatalogTreeRoute(): React.JSX.Element {
         title="The catalog is empty"
         body="Start with a brand, then a series under it, then the models and their configurations. A vendor cannot list anything until a SKU exists to list it against."
         action={
-          <a className="text-acc-hi underline underline-offset-4" href="/catalog/brands/new">
+          <a className="text-acc-ink underline underline-offset-4" href="/catalog/brands/new">
             Add the first brand
           </a>
         }

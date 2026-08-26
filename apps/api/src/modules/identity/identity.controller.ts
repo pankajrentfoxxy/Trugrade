@@ -7,6 +7,7 @@ import { UnauthenticatedError, ValidationError } from '../../shared/errors/domai
 import { RequestContextService } from '../../shared/db/org-scope';
 import { TokenService, type IssuedTokens } from '../../shared/auth/token.service';
 import { AppConfig } from '../../shared/config';
+import { ClockPort } from '../../shared/clock';
 import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.service';
 import { IdentityService, type OrgType } from './identity.service';
 import { OtpService } from './internal/otp.service';
@@ -22,16 +23,60 @@ import {
   loginSchema,
   mfaVerifySchema,
   registerSchema,
+  registrationOtpSchema,
+  registrationOtpVerifySchema,
   type ContactChangeCancelDto,
   type ContactChangeRequestDto,
   type ContactChangeVerifyDto,
   type LoginDto,
   type MfaVerifyDto,
   type RegisterDto,
+  type RegistrationOtpDto,
+  type RegistrationOtpVerifyDto,
 } from './dto/identity.dto';
 
 /** Ten new organisations a day from one address is already generous. */
 const REGISTER_LIMIT: RateLimitRule = { name: 'auth-register', limit: 10, windowSeconds: 86_400 };
+
+/**
+ * The per-IP half of the registration-OTP limits.
+ *
+ * `OtpService` already limits per *target* — 60 s cooldown, 5 an hour, 20 a day
+ * — and that is the right defence against someone hammering one address. It is
+ * no defence at all against the attack these two routes actually invite: an
+ * unauthenticated caller walking a list of mobile numbers, one code each, never
+ * touching the same target twice. Every one of those costs us an SMS. So the
+ * budget that catches it has to be keyed on the caller, not on the target.
+ *
+ * Twenty an hour is roughly a shared office getting through a signup day; two
+ * hundred is a script.
+ */
+const REGISTER_OTP_IP_LIMIT: RateLimitRule = {
+  name: 'auth-register-otp-ip',
+  limit: 20,
+  windowSeconds: 3600,
+};
+
+/** Twice the send budget: a person who mistypes a code twice is normal. */
+const REGISTER_OTP_VERIFY_IP_LIMIT: RateLimitRule = {
+  name: 'auth-register-otp-verify-ip',
+  limit: 40,
+  windowSeconds: 3600,
+};
+
+/**
+ * How long a verified channel stays proof.
+ *
+ * Longer than the OTP's own five minutes because the code is verified at the
+ * TOP of registration step 1 and `POST /auth/register` is called at the bottom
+ * of it — with a company name, a full name and a password chosen in between.
+ * Five minutes there means a person who reads the password rules loses their
+ * verification. Half an hour is still far short of "an unattended tab tomorrow".
+ */
+const REGISTRATION_PROOF_SECONDS = 1_800;
+
+/** Free-form per `NotificationPort`, like `LOGIN_OTP_TEMPLATE` below. */
+const REGISTER_OTP_TEMPLATE = 'AUTH_REGISTER_OTP';
 
 /**
  * Sign in, sign out, and "who am I" — the routes every other route depends on
@@ -119,6 +164,38 @@ export interface ContactChangeResponse {
   devCodes?: { old?: string; new?: string };
 }
 
+/**
+ * The answer to "send a code to this address", and deliberately the SAME answer
+ * whether the address is already registered or not.
+ *
+ * Nothing in this shape is derived from a lookup, because no lookup happens. That
+ * is the point: an unauthenticated route that answers differently for a known
+ * address is a directory of our vendors, and vendor anonymity is the property
+ * this business is built on. A competitor who can ask "is this dealer on
+ * Trugrade" one address at a time has our supplier list.
+ */
+export interface RegistrationOtpResponse {
+  channel: 'EMAIL' | 'MOBILE';
+  /** Masked. The caller typed it, so this is a confirmation, not a disclosure. */
+  sentTo: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+  /** Non-production only, straight from `OtpService`. */
+  devCode?: string;
+}
+
+export interface RegistrationOtpVerifiedResponse {
+  channel: 'EMAIL' | 'MOBILE';
+  /**
+   * The normalised value, echoed back so the client posts the identical string
+   * to `POST /auth/register`. `+91` is added here, not in the browser.
+   */
+  value: string;
+  verified: true;
+  /** After this, the channel must be verified again. */
+  proofExpiresAt: string;
+}
+
 @Controller('auth')
 export class IdentityController {
   constructor(
@@ -130,7 +207,96 @@ export class IdentityController {
     private readonly ctx: RequestContextService,
     private readonly config: AppConfig,
     private readonly limiter: RateLimiter,
+    private readonly clock: ClockPort,
   ) {}
+
+  // -------------------------------------------------------------------------
+  // Registration-time contact verification
+  // -------------------------------------------------------------------------
+  //
+  // `mfa/otp` and `mfa/verify` below cannot serve this. They read the principal
+  // out of the request context to decide where to send the code, and an
+  // applicant has no principal, no user row and no org — there is nothing for
+  // them to be the second factor OF. So these two are the same OTP primitive
+  // pointed at a bare address instead of at an account.
+  //
+  // Being `@Public()` is what makes them dangerous, and the two hazards are
+  // different from each other:
+  //
+  //   1. **Cost.** Every call sends an SMS we pay for. `OtpService` caps a
+  //      single target; `REGISTER_OTP_IP_LIMIT` caps a caller walking a list.
+  //   2. **Enumeration.** Neither route looks the address up, so neither can
+  //      leak whether it is registered. The response is assembled from the
+  //      request and the clock, and nothing else.
+  //
+  // Whether the address is already in use is answered by `POST /auth/register`,
+  // to someone who has just proved they can read that mailbox.
+
+  /**
+   * Send a six-digit code to a work email or an Indian mobile.
+   *
+   * A resend is the same call again; `OtpService` supersedes the live code and
+   * refuses inside the 60-second cooldown with the remaining time in the
+   * message. There is no separate resend route, because a second route is a
+   * second place for the cooldown to be forgotten.
+   */
+  @Post('register/otp')
+  @Public()
+  @HttpCode(200)
+  async sendRegistrationOtp(
+    @Body(new ZodValidationPipe(registrationOtpSchema)) body: RegistrationOtpDto,
+  ): Promise<RegistrationOtpResponse> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(REGISTER_OTP_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const issued = await this.otp.issue({
+      target: body.value,
+      purpose: 'REGISTRATION',
+      channel: body.channel === 'EMAIL' ? 'EMAIL' : 'SMS',
+      templateCode: REGISTER_OTP_TEMPLATE,
+      isProduction: this.config.isProduction,
+    });
+
+    return {
+      channel: body.channel,
+      sentTo: maskValue(body.value),
+      expiresAt: issued.expiresAt.toISOString(),
+      resendAvailableAt: issued.resendAvailableAt.toISOString(),
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
+  }
+
+  /**
+   * Check the code. A wrong one burns an attempt, an expired one says so.
+   *
+   * Nothing is written here beyond the OTP row's own `consumed_at` — and that
+   * row IS the record that the channel is verified. There is no account to hang
+   * a flag on yet, and inventing a "pending registration" table to hold for
+   * thirty minutes what `otp_request` already holds durably would be a second
+   * source of truth about the same fact. `POST /auth/register` reads it back
+   * through `wasRecentlyVerified` and refuses without it, which is what makes
+   * this route mean something rather than being a screen that says "verified".
+   */
+  @Post('register/otp/verify')
+  @Public()
+  @HttpCode(200)
+  async verifyRegistrationOtp(
+    @Body(new ZodValidationPipe(registrationOtpVerifySchema)) body: RegistrationOtpVerifyDto,
+  ): Promise<RegistrationOtpVerifiedResponse> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(REGISTER_OTP_VERIFY_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    await this.otp.verify({ target: body.value, purpose: 'REGISTRATION', code: body.code });
+
+    return {
+      channel: body.channel,
+      value: body.value,
+      verified: true,
+      proofExpiresAt: new Date(
+        this.clock.nowMs() + REGISTRATION_PROOF_SECONDS * 1000,
+      ).toISOString(),
+    };
+  }
 
   // -------------------------------------------------------------------------
   // Password sign-in
@@ -168,6 +334,8 @@ export class IdentityController {
     // Same limiter as the lead form: registration is a write that creates two
     // rows and sends nothing, which makes it worth abusing.
     await this.limiter.consume(REGISTER_LIMIT, ctx?.ip ?? 'unknown');
+
+    await this.assertContactsVerified(body.email, body.mobile);
 
     await this.identity.createOrganizationWithOwner({
       orgType: body.orgType,
@@ -493,6 +661,41 @@ export class IdentityController {
       domain: this.config.get('SESSION_COOKIE_DOMAIN'),
       path: '/',
     };
+  }
+
+  /**
+   * Both channels must have been proved within the last half hour.
+   *
+   * `createOrganizationWithOwner` stamps `email_verified_at` and
+   * `mobile_verified_at` on the new owner with the comment "contact verification
+   * is what got them here, so both are verified". Until `register/otp/verify`
+   * existed, nothing made that true — the columns recorded a verification that
+   * had never happened, and a vendor could be approved on an address nobody
+   * could read. This is the check that turns that comment into a fact, and it
+   * belongs before the transaction so the message can name the channel.
+   *
+   * Checked one at a time so the message names WHICH one is missing. "Verify
+   * your contact details" in front of a form with two fields, one of them green,
+   * is the message that generates the support ticket.
+   */
+  private async assertContactsVerified(email: string, mobile: string): Promise<void> {
+    const [emailProved, mobileProved] = await Promise.all([
+      this.otp.wasRecentlyVerified(email, 'REGISTRATION', REGISTRATION_PROOF_SECONDS),
+      this.otp.wasRecentlyVerified(mobile, 'REGISTRATION', REGISTRATION_PROOF_SECONDS),
+    ]);
+
+    if (!emailProved) {
+      throw new ValidationError(
+        'Verify your work email first — enter the 6-digit code we sent to it, then create the account.',
+        { email: 'This email has not been verified yet.' },
+      );
+    }
+    if (!mobileProved) {
+      throw new ValidationError(
+        'Verify your mobile number first — enter the 6-digit code we sent to it, then create the account.',
+        { mobile: 'This mobile number has not been verified yet.' },
+      );
+    }
   }
 
   /** 401, not the 403 `requirePrincipal()` raises: the caller needs to sign in, not to be told off. */

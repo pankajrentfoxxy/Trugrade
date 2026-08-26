@@ -1,0 +1,15 @@
+{
+  "extends": "@trugrade/config/tsconfig/react-lib.json",
+  "compilerOptions": {
+    "types": ["node", "expo/types"],
+    "customConditions": ["react-native-legacy-deep-imports"],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "allowSyntheticDefaultImports": true,
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["app", "src", "test", "*.ts", "expo-env.d.ts", ".expo/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

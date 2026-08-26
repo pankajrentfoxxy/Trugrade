@@ -188,6 +188,44 @@ export const createLeadBodySchema = z.object({
   deviceFingerprint: z.string().max(200).optional(),
 });
 
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+/**
+ * The form fields that ride alongside a multipart upload.
+ *
+ * Multipart, so every value arrives as a string — hence `documentDate` being
+ * coerced from `YYYY-MM-DD` here rather than typed as a date. The column is a
+ * DATE, and parsing "2026-01-15" as an instant would shift it a day in either
+ * direction depending on the server's timezone, which for an age check measured
+ * in days is a real off-by-one.
+ *
+ * There is deliberately **no `orgId` field, on this or any other document
+ * request**. The org comes from the session. A body that can name an org is a
+ * body that can name somebody else's, and the difference between the two is one
+ * forgotten comparison in one handler.
+ *
+ * `docType` is a shape check, not an enum, for the same reason `stepCodeSchema`
+ * is: `kyc.document_type_rule` is data so ops can add a document type without a
+ * release, and an unknown code comes back from the service as a 422 that names
+ * what is wrong with it.
+ */
+export const uploadDocumentBodySchema = z.object({
+  docType: z
+    .string()
+    .regex(/^[A-Z][A-Z0-9_]{1,39}$/, 'That is not a document type.'),
+  documentDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter the date on the document as YYYY-MM-DD.')
+    .optional(),
+});
+export type UploadDocumentBodyDto = z.infer<typeof uploadDocumentBodySchema>;
+
+/** Replacing keeps the document id and therefore its type; only the date can move. */
+export const replaceDocumentBodySchema = uploadDocumentBodySchema.omit({ docType: true });
+export type ReplaceDocumentBodyDto = z.infer<typeof replaceDocumentBodySchema>;
+
 export type ReviewQueueQueryDto = z.infer<typeof reviewQueueQuerySchema>;
 export type ReviewDecisionBodyDto = z.infer<typeof reviewDecisionBodySchema>;
 export type RequestFixBodyDto = z.infer<typeof requestFixBodySchema>;

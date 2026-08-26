@@ -5,6 +5,10 @@
     "rootDir": ".",
     "baseUrl": ".",
     "isolatedModules": true,
+    // @types/multer augments the global Express namespace; the shared base pins an
+    // explicit `types` array, so it has to be named here or FileInterceptor's
+    // Express.Multer.File does not resolve.
+    "types": ["node", "jest", "multer"],
     "paths": { "src/*": ["src/*"] }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "scripts/**/*.ts"],

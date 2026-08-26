@@ -237,3 +237,40 @@ describe('spacing, radii and density', () => {
     expect(css).toMatch(/\.tg-cell\s*\{[^}]*var\(--d-row\)/s);
   });
 });
+
+/**
+ * CLAUDE.md: "One DataBoard component, three settings." The three settings are
+ * row heights, and they are asserted here because they are the one part of the
+ * density system a component could quietly stop honouring — `DataTable` reads
+ * them through `.tg-cell`, never through a prop, so nothing in TypeScript would
+ * catch a caller passing its own.
+ */
+describe('density — the three row heights', () => {
+  const block = (selector: string): string => {
+    const start = css.indexOf(selector);
+    expect(start).toBeGreaterThan(-1);
+    return css.slice(start, css.indexOf('}', start));
+  };
+
+  it.each([
+    ["comfortable — storefront — is a 60px row", "[data-density='comfortable']", '60px'],
+    ['the default — vendor — is a 46px row', ':root {', '46px'],
+    ["compact — admin — is a 34px row", "[data-density='compact']", '34px'],
+  ])('%s', (_name, selector, height) => {
+    expect(block(selector)).toMatch(new RegExp(String.raw`--d-row-h:\s*` + height));
+  });
+
+  it('drives the row height from the cell, so no component takes a density prop', () => {
+    expect(css).toMatch(/\.tg-cell\s*\{[^}]*height:\s*var\(--d-row-h\)/s);
+  });
+
+  /**
+   * `height` on a table cell is a minimum, so the padding at each density has to
+   * stay small enough for the height to be the number that actually wins. At
+   * compact that is the binding constraint: 34px less 13px of text at 1.55
+   * leaves under 7px a side.
+   */
+  it('keeps the compact padding inside the compact row height', () => {
+    expect(block("[data-density='compact']")).toMatch(/--d-row:\s*var\(--s1\)/);
+  });
+});

@@ -192,6 +192,16 @@ export function DataTable<Row>({
   );
 }
 
+/**
+ * `DataBoard` is the name the frontend backlog uses for the same component
+ * (10_FRONTEND_BACKLOG.md T2: "Tables become the shared `DataBoard`").
+ *
+ * An alias, not a wrapper. CLAUDE.md: "One DataBoard component, three settings.
+ * Writing a second table component means the system has already failed" — and a
+ * wrapper that only renames is the first half of a second table.
+ */
+export { DataTable as DataBoard };
+
 /* ==========================================================================
  * Pagination
  * ======================================================================== */

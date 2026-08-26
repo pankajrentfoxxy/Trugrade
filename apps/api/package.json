@@ -14,7 +14,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:introspect": "prisma db pull && prisma generate",
     "db:generate": "prisma generate",
-    "db:reset": "node scripts/reset-db.mjs",
+    "db:reset": "prisma migrate reset --force --skip-seed && pnpm db:seed",
     "db:seed": "ts-node -T --project tsconfig.json prisma/seed/index.ts"
   },
   "dependencies": {
@@ -32,8 +32,10 @@
     "helmet": "8.1.0",
     "ioredis": "5.8.2",
     "otplib": "12.0.1",
+    "pdf-lib": "1.17.1",
     "pino": "9.13.1",
     "pino-http": "10.5.0",
+    "qrcode-generator": "2.0.4",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "zod": "3.25.76"
@@ -45,14 +47,15 @@
     "@types/cookie-parser": "1.4.9",
     "@types/express": "5.0.3",
     "@types/jest": "30.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "22.19.1",
     "@types/supertest": "6.0.3",
+    "eslint": "9.39.1",
     "jest": "30.2.0",
     "prisma": "6.16.3",
     "supertest": "7.1.4",
     "ts-jest": "29.4.6",
     "ts-node": "10.9.2",
-    "typescript": "5.9.3",
-    "eslint": "9.39.1"
+    "typescript": "5.9.3"
   }
 }

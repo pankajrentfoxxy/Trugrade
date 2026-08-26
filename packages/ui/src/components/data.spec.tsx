@@ -10,7 +10,9 @@ import * as React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
-import { DataTable, Pagination, pageWindow, type Column } from './data';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DataBoard, DataTable, Pagination, pageWindow, type Column } from './data';
 import { EmptyState } from './primitives';
 
 interface Row {
@@ -140,6 +142,46 @@ describe('DataTable', () => {
     for (const cell of container.querySelectorAll('td, th')) {
       expect(cell.className).toContain('tg-cell');
     }
+  });
+
+  it('keeps its density in the loading and empty states too', () => {
+    const { container, rerender } = render(
+      <DataTable caption="Loading." columns={COLUMNS} rows={[]} rowKey={(r) => r.id} loading />,
+    );
+    for (const cell of container.querySelectorAll('td')) {
+      expect(cell.className).toContain('tg-cell');
+    }
+    rerender(
+      <DataTable
+        caption="No listings."
+        columns={COLUMNS}
+        rows={[]}
+        rowKey={(r) => r.id}
+        empty={<EmptyState title="Nothing yet" />}
+      />,
+    );
+    // A row that changes height when it starts loading is a layout jump on
+    // every fetch, which is why the skeleton and empty cells take the same
+    // class rather than their own padding.
+    expect(container.querySelector('td')?.className).toContain('tg-cell');
+  });
+
+  /**
+   * CLAUDE.md: "One DataBoard component, three settings. Writing a second table
+   * component means the system has already failed."
+   *
+   * The source read is the load-bearing half. `DataBoard === DataTable` proves
+   * today's alias; only reading the props stops someone adding `density="compact"`
+   * next quarter, which is how thirteen tables end up at eleven densities.
+   */
+  it('is one component under two names, and takes no density prop', () => {
+    expect(DataBoard).toBe(DataTable);
+    const source = readFileSync(join(__dirname, 'data.tsx'), 'utf8');
+    const props = source.slice(
+      source.indexOf('export interface DataTableProps'),
+      source.indexOf('const SORT_GLYPH'),
+    );
+    expect(props).not.toMatch(/density|rowHeight|compact|comfortable/i);
   });
 
   it('has no axe violations', async () => {

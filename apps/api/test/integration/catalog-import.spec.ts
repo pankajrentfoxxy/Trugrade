@@ -15,6 +15,7 @@ import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
 import { ContextModule } from '../../src/shared/db/org-scope';
+import { CatalogChangeLogService } from '../../src/modules/catalog/internal/catalog-change-log.service';
 import { SkuImportService } from '../../src/modules/catalog/internal/sku-import.service';
 import {
   closeTestDb,
@@ -87,6 +88,7 @@ beforeAll(async () => {
         },
         inject: [AppConfig],
       },
+      CatalogChangeLogService,
       SkuImportService,
     ],
   }).compile();

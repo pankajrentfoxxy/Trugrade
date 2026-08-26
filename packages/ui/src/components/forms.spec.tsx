@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
-import { Checkbox, Chip, Uploader, formatFileSize, type UploadedFile } from './forms';
+import { Checkbox, Chip, OtpInput, Uploader, formatFileSize, type UploadedFile } from './forms';
 
 const stripComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -245,5 +245,116 @@ describe('formatFileSize', () => {
     expect(formatFileSize(512)).toBe('512 B');
     expect(formatFileSize(384_512)).toBe('376 KB');
     expect(formatFileSize(10_485_760)).toBe('10.0 MB');
+  });
+});
+
+/* ==========================================================================
+ * OtpInput
+ * ======================================================================== */
+
+function OtpHarness({ onComplete }: { onComplete?: (v: string) => void }): React.JSX.Element {
+  const [value, setValue] = React.useState('');
+  return (
+    <OtpInput
+      value={value}
+      onChange={setValue}
+      onComplete={onComplete}
+      label="Enter the code sent to +91 98••• ••210"
+    />
+  );
+}
+
+describe('OtpInput', () => {
+  const boxes = () => screen.getAllByRole('textbox');
+
+  it('renders one box per digit, labelled by position', () => {
+    render(<OtpHarness />);
+    expect(boxes()).toHaveLength(6);
+    expect(boxes()[3]).toHaveAccessibleName('Digit 4 of 6');
+  });
+
+  it('offers the platform one-time code to the FIRST box only', () => {
+    render(<OtpHarness />);
+    // Six of these and iOS fills the same digit into all six.
+    expect(boxes()[0]).toHaveAttribute('autocomplete', 'one-time-code');
+    for (const box of boxes().slice(1)) expect(box).toHaveAttribute('autocomplete', 'off');
+  });
+
+  it('shows a number pad rather than a keyboard with the digits behind a modifier', () => {
+    render(<OtpHarness />);
+    for (const box of boxes()) expect(box).toHaveAttribute('inputmode', 'numeric');
+  });
+
+  it('advances a box at a time as the code is typed', async () => {
+    const onComplete = jest.fn();
+    render(<OtpHarness onComplete={onComplete} />);
+    await userEvent.click(boxes()[0]!);
+    await userEvent.keyboard('418902');
+    expect(boxes().map((b) => (b as HTMLInputElement).value)).toEqual([
+      '4',
+      '1',
+      '8',
+      '9',
+      '0',
+      '2',
+    ]);
+    expect(onComplete).toHaveBeenCalledWith('418902');
+  });
+
+  it('fills the whole group from one paste, wherever the paste lands', async () => {
+    const onComplete = jest.fn();
+    render(<OtpHarness onComplete={onComplete} />);
+    // People copy the code out of the SMS. A paste that puts one digit in box 3
+    // is the single most common way this pattern fails.
+    await userEvent.click(boxes()[2]!);
+    await userEvent.paste('418902');
+    expect(boxes().map((b) => (b as HTMLInputElement).value).join('')).toBe('418902');
+    expect(onComplete).toHaveBeenCalledWith('418902');
+  });
+
+  it('ignores the spaces and dashes a copied code arrives with', async () => {
+    render(<OtpHarness />);
+    await userEvent.click(boxes()[0]!);
+    await userEvent.paste('418-902');
+    expect(boxes().map((b) => (b as HTMLInputElement).value).join('')).toBe('418902');
+  });
+
+  it('steps back and clears when backspace lands on an empty box', async () => {
+    render(<OtpHarness />);
+    await userEvent.click(boxes()[0]!);
+    await userEvent.keyboard('41');
+    // Focus is on box 3, which is empty. Without this, people are stranded.
+    await userEvent.keyboard('{Backspace}');
+    expect((boxes()[1] as HTMLInputElement).value).toBe('');
+    expect(boxes()[1]).toHaveFocus();
+  });
+
+  it('moves with the arrow keys', async () => {
+    render(<OtpHarness />);
+    await userEvent.click(boxes()[3]!);
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(boxes()[2]).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}');
+    expect(boxes()[4]).toHaveFocus();
+  });
+
+  it('names the real reason a code failed', () => {
+    render(
+      <OtpInput
+        value="418902"
+        onChange={() => {}}
+        label="Enter the code"
+        error="That code has expired. We have sent a new one."
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'That code has expired. We have sent a new one.',
+    );
+    expect(boxes()[0]).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('has no axe violations', async () => {
+    const { container } = render(<OtpHarness />);
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

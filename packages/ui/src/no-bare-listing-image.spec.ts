@@ -35,6 +35,18 @@ function tsxFilesUnder(dir: string): string[] {
  */
 const CAPTION_OWNER = 'primitives.tsx';
 
+/**
+ * The one exemption, and it is narrow on purpose.
+ *
+ * `DocumentViewer` renders a page of a KYC document under review — a GST
+ * certificate, a cancelled cheque. It is not a photograph of a machine, it is
+ * never reachable from a buyer surface, and a representative-image caption on
+ * it would be nonsense. The rule it must still obey is asserted separately
+ * below: its `alt` comes from a REQUIRED prop, so no caller can render one of
+ * these unlabelled.
+ */
+const NOT_A_PRODUCT_PHOTOGRAPH = 'DocumentViewer.tsx';
+
 describe('no component renders a buyer-facing photograph without the caption', () => {
   const files = tsxFilesUnder(UI_SRC);
 
@@ -45,7 +57,8 @@ describe('no component renders a buyer-facing photograph without the caption', (
   it.each(files.map((f) => [f.slice(UI_SRC.length + 1), f]))(
     '%s uses RepresentativeImage rather than a bare <img>',
     (relative, full) => {
-      if (relative.endsWith(CAPTION_OWNER)) return;
+      if (relative.endsWith(CAPTION_OWNER) || relative.endsWith(NOT_A_PRODUCT_PHOTOGRAPH))
+        return;
       const source = readFileSync(full, 'utf8');
 
       // Inline SVG is fine — logos, marks, the score ring. A raster <img> in a
@@ -67,5 +80,19 @@ describe('no component renders a buyer-facing photograph without the caption', (
   it('has no prop that could switch the caption off', () => {
     const source = readFileSync(join(UI_SRC, 'components', CAPTION_OWNER), 'utf8');
     expect(source).not.toMatch(/hideCaption|showCaption|withCaption|noCaption/);
+  });
+
+  /**
+   * The exemption's own guard. If `alt` ever becomes optional, or gains a
+   * default, a reviewer could be shown a page they cannot identify — and the
+   * exemption would have become a hole rather than a carve-out.
+   */
+  it('holds the document viewer to a required alt instead', () => {
+    const source = readFileSync(join(UI_SRC, 'components', NOT_A_PRODUCT_PHOTOGRAPH), 'utf8');
+    expect(source).toContain('export interface DocumentPage {');
+    // `alt: string`, never `alt?: string`, and never a literal in the JSX.
+    expect(source).toContain('alt: string;');
+    expect(source).not.toContain('alt?:');
+    expect(source).toContain('alt={current.alt}');
   });
 });

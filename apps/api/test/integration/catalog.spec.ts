@@ -17,7 +17,9 @@ import { PrismaService } from '../../src/shared/db/prisma.service';
 import { ContextModule } from '../../src/shared/db/org-scope';
 import { CatalogService } from '../../src/modules/catalog';
 import { SkuRepository } from '../../src/modules/catalog/internal/sku.repository';
+import { CatalogChangeLogService } from '../../src/modules/catalog/internal/catalog-change-log.service';
 import { ConditionImageService } from '../../src/modules/catalog/internal/condition-image.service';
+import { SkuImportService } from '../../src/modules/catalog/internal/sku-import.service';
 import { SkuRequestService } from '../../src/modules/catalog/internal/sku-request.service';
 import { CatalogSearchService } from '../../src/modules/catalog/internal/catalog-search.service';
 import {
@@ -57,9 +59,11 @@ beforeAll(async () => {
         inject: [AppConfig],
       },
       CatalogService,
+      CatalogChangeLogService,
       SkuRepository,
       ConditionImageService,
       SkuRequestService,
+      SkuImportService,
       CatalogSearchService,
     ],
   }).compile();

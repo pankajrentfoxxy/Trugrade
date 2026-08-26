@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Button, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
+import { SKU_IMPORT_COLUMNS, type SkuImportColumn } from '@trugrade/contracts';
+import { Button, EmptyState, Input, Skeleton, StatusPill } from '@trugrade/ui';
 import { useResource } from '../lib/useResource';
 
 /** Mirrors `NearMatch` from the catalog module — one SKU we already carry. */
@@ -24,6 +25,77 @@ export interface SkuRequestRow {
   nearMatches: NearMatch[];
 }
 
+/** What `POST /api/catalog/sku-requests/:id/decision` accepts and answers. */
+type Decision =
+  | { decision: 'APPROVE'; spec: Record<string, string> }
+  | { decision: 'MAP'; skuId: string }
+  | { decision: 'REJECT'; reason: string };
+
+interface DecisionResult {
+  status: 'RESOLVED_NEW' | 'RESOLVED_MAPPED' | 'REJECTED';
+  skuId: string | null;
+}
+
+/**
+ * Post a decision, and surface the message the API wrote for the person reading
+ * it rather than a status code.
+ *
+ * Not `postJson` from the vendor helpers: that one reads `message` off the top
+ * level of the body, and the domain filter nests it under `error` — so every
+ * refusal it reports comes out as "that did not go through (422)" and the
+ * sentence explaining what to fix is thrown away. Fixing the shared helper is
+ * the better change; it is another lane's file, so this screen reads the real
+ * envelope and the helper is flagged rather than quietly forked everywhere.
+ */
+async function postDecision(requestId: string, body: Decision): Promise<DecisionResult> {
+  const res = await fetch(`/api/catalog/sku-requests/${requestId}/decision`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  const payload = (await res.json().catch(() => null)) as
+    | { error?: { message?: string } }
+    | DecisionResult
+    | null;
+  if (!res.ok) {
+    const message = (payload as { error?: { message?: string } } | null)?.error?.message;
+    throw new Error(message ?? `That decision did not go through (${res.status}).`);
+  }
+  return payload as DecisionResult;
+}
+
+/**
+ * The reviewer types the specification; nothing parses it out of the vendor's
+ * free text.
+ *
+ * These are the CSV importer's own column names, and the server hands them
+ * straight to the same `validateRow` a bulk import runs. That is what makes the
+ * two paths produce the identical normalised key — the field whose entire job is
+ * to be computed the same way everywhere — so the labels are derived from the
+ * constant rather than written out again here.
+ */
+const FIELD_LABEL: Record<SkuImportColumn, string> = {
+  brand: 'Brand',
+  series: 'Series',
+  model: 'Model',
+  cpu_brand: 'CPU brand',
+  cpu_family: 'CPU family',
+  cpu_model: 'CPU model',
+  cpu_generation: 'CPU generation',
+  ram_gb: 'RAM (GB)',
+  storage_gb: 'Storage (GB)',
+  storage_type: 'Storage type',
+  gpu_type: 'GPU type',
+  gpu_model: 'GPU model',
+  screen_size_in: 'Screen size (in)',
+  resolution: 'Resolution',
+  is_touch: 'Touch',
+  os: 'Operating system',
+  hsn_code: 'HSN code',
+  sku_code: 'SKU code (optional)',
+};
+
 function SpecTable({ spec }: { spec: Record<string, string> }): React.JSX.Element {
   return (
     <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 text-body-sm">
@@ -45,7 +117,15 @@ function SpecTable({ spec }: { spec: Record<string, string> }): React.JSX.Elemen
  * into. An exact key match is called out in words because it is not a judgement
  * call — the machine is already in the catalog under another name.
  */
-function NearMatchRow({ match }: { match: NearMatch }): React.JSX.Element {
+function NearMatchRow({
+  match,
+  onMerge,
+  busy,
+}: {
+  match: NearMatch;
+  onMerge: () => void;
+  busy: boolean;
+}): React.JSX.Element {
   return (
     <li className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-3">
       <span className="font-mono text-data tnum text-ink-2">
@@ -54,15 +134,49 @@ function NearMatchRow({ match }: { match: NearMatch }): React.JSX.Element {
       <code className="font-mono text-data text-ink-2">{match.skuCode}</code>
       <span className="text-body-sm text-ink">{match.label}</span>
       {match.exact && <StatusPill tone="info" label="Same specification" />}
-      <Button variant="secondary" size="sm" className="ml-auto">
+      <Button
+        variant="secondary"
+        size="sm"
+        className="ml-auto"
+        loading={busy}
+        onClick={onMerge}
+      >
         Merge into this
       </Button>
     </li>
   );
 }
 
-function RequestCard({ request }: { request: SkuRequestRow }): React.JSX.Element {
+function RequestCard({
+  request,
+  onDecided,
+}: {
+  request: SkuRequestRow;
+  onDecided: (id: string, message: string) => void;
+}): React.JSX.Element {
   const exact = request.nearMatches.find((m) => m.exact);
+  const [panel, setPanel] = React.useState<'none' | 'approve' | 'reject'>('none');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [reason, setReason] = React.useState('');
+  // Prefilled with what the vendor said, because they are usually right about
+  // the brand and the model and wrong only about the shape we need it in.
+  const [spec, setSpec] = React.useState<Record<string, string>>({
+    brand: request.rawBrand,
+    model: request.rawModel,
+  });
+
+  async function decide(body: Decision, done: (r: DecisionResult) => string): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      onDecided(request.id, done(await postDecision(request.id, body)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <article className="mt-5 rounded-lg border border-rule bg-sheet p-5">
@@ -95,7 +209,17 @@ function RequestCard({ request }: { request: SkuRequestRow }): React.JSX.Element
           ) : (
             <ul className="mt-1">
               {request.nearMatches.map((match) => (
-                <NearMatchRow key={match.skuId} match={match} />
+                <NearMatchRow
+                  key={match.skuId}
+                  match={match}
+                  busy={busy}
+                  onMerge={() =>
+                    void decide(
+                      { decision: 'MAP', skuId: match.skuId },
+                      () => `Mapped onto ${match.skuCode}. The vendor can list against it now.`,
+                    )
+                  }
+                />
               ))}
             </ul>
           )}
@@ -113,11 +237,89 @@ function RequestCard({ request }: { request: SkuRequestRow }): React.JSX.Element
               ? `${exact.skuCode} already has this exact specification. Merge into it instead — approving would create a duplicate SKU.`
               : ''
           }
+          onClick={() => setPanel(panel === 'approve' ? 'none' : 'approve')}
         >
           Approve and create the SKU
         </Button>
-        <Button variant="danger">Reject with a reason</Button>
+        <Button
+          variant="danger"
+          onClick={() => setPanel(panel === 'reject' ? 'none' : 'reject')}
+        >
+          Reject with a reason
+        </Button>
       </div>
+
+      {error && (
+        <p role="alert" className="mt-3 text-body-sm text-fail">
+          {error}
+        </p>
+      )}
+
+      {panel === 'approve' && (
+        <form
+          className="mt-5 border-t border-rule pt-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void decide({ decision: 'APPROVE', spec }, (r) =>
+              r.status === 'RESOLVED_MAPPED'
+                ? 'That specification already existed, so the request was mapped onto the SKU we carry rather than duplicating it.'
+                : 'SKU created. The vendor can list against it now.',
+            );
+          }}
+        >
+          <p className="max-w-prose text-body-sm text-ink-2">
+            Type the specification as the catalog will hold it. It is validated by the same rules as
+            a CSV import, so &ldquo;NVMe&rdquo; and &ldquo;1920x1080&rdquo; are understood; leave
+            the SKU code blank to have one generated.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {SKU_IMPORT_COLUMNS.map((column) => (
+              <Input
+                key={column}
+                label={FIELD_LABEL[column]}
+                value={spec[column] ?? ''}
+                onChange={(e) => setSpec((s) => ({ ...s, [column]: e.target.value }))}
+              />
+            ))}
+          </div>
+          <Button type="submit" variant="primary" className="mt-4" loading={busy}>
+            Create the SKU
+          </Button>
+        </form>
+      )}
+
+      {panel === 'reject' && (
+        <form
+          className="mt-5 border-t border-rule pt-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void decide(
+              { decision: 'REJECT', reason },
+              () => 'Rejected. The vendor has been given the reason.',
+            );
+          }}
+        >
+          <label className="block text-body-sm font-medium text-ink-2" htmlFor={`why-${request.id}`}>
+            Why this is not going into the catalog
+          </label>
+          <p className="mt-1 max-w-prose text-body-sm text-ink-3">
+            The vendor reads this and it is the only thing they can act on, so name the machine and
+            say what would change the answer.
+          </p>
+          <textarea
+            id={`why-${request.id}`}
+            className="mt-2 w-full rounded border border-rule bg-sheet p-3 text-body-sm text-ink"
+            rows={3}
+            minLength={10}
+            required
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <Button type="submit" variant="danger" className="mt-3" loading={busy}>
+            Reject this request
+          </Button>
+        </form>
+      )}
     </article>
   );
 }
@@ -127,6 +329,11 @@ export function SkuRequestsRoute(): React.JSX.Element {
     '/api/catalog/sku-requests',
     'The request queue is unavailable',
   );
+  // A decided request is removed from the list here rather than by refetching.
+  // The server has already committed it, the queue is a worklist rather than a
+  // live view, and a refetch would reorder the cards under the reviewer's cursor
+  // in the middle of working through them.
+  const [decided, setDecided] = React.useState<Record<string, string>>({});
 
   if (error) {
     return (
@@ -137,6 +344,9 @@ export function SkuRequestsRoute(): React.JSX.Element {
     );
   }
   if (!data) return <Skeleton lines={6} />;
+
+  const pending = data.filter((r) => !(r.id in decided));
+
   if (data.length === 0) {
     return (
       <EmptyState
@@ -146,19 +356,36 @@ export function SkuRequestsRoute(): React.JSX.Element {
     );
   }
 
-  const duplicates = data.filter((r) => r.nearMatches.some((m) => m.exact)).length;
+  const duplicates = pending.filter((r) => r.nearMatches.some((m) => m.exact)).length;
 
   return (
     <div>
       <h1 className="text-h1 text-ink">SKU requests</h1>
       <p className="mt-2 text-body-sm text-ink-2">
-        {data.length} waiting, oldest first
+        {pending.length} waiting, oldest first
         {duplicates > 0 && ` · ${duplicates} already exist under another name`}.
       </p>
 
-      {data.map((request) => (
-        <RequestCard key={request.id} request={request} />
+      {Object.entries(decided).map(([id, message]) => (
+        <p key={id} className="mt-4 rounded border border-pass bg-sheet-2 p-3 text-body-sm text-ink">
+          {message}
+        </p>
       ))}
+
+      {pending.length === 0 ? (
+        <EmptyState
+          title="Queue cleared"
+          body="Everything that was waiting has been decided. Reload to pick up anything that has come in since."
+        />
+      ) : (
+        pending.map((request) => (
+          <RequestCard
+            key={request.id}
+            request={request}
+            onDecided={(id, message) => setDecided((d) => ({ ...d, [id]: message }))}
+          />
+        ))
+      )}
     </div>
   );
 }

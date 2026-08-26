@@ -3,3 +3,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/**
+ * The brand lockup on the chrome band.
+ *
+ * `Wordmark` paints "tru" with `--ink`, which is near-black under the light
+ * theme — invisible on the dark header and footer that rule 3 keeps dark in
+ * both themes. Rebinding the one token for the lockup keeps a single wordmark
+ * component instead of a console-only fork of it. No hex: a token alias.
+ */
+.tg-brandlock {
+  --ink: var(--on-chrome);
+}

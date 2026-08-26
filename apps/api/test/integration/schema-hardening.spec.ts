@@ -442,11 +442,58 @@ describe('the most important index in the database — VR-077, LST-005 to LST-01
 // ---------------------------------------------------------------------------
 
 describe('append-only tables', () => {
-  it('the ledger, audit log, stock movements, custody events and consents are all append-only by grant', async () => {
-    const fn = await db.$queryRaw<Array<{ n: bigint }>>`
-      SELECT COUNT(*)::bigint AS n FROM pg_proc p
-      JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'ops' AND p.proname = 'apply_append_only_grants'`;
-    expect(Number(fn[0]!.n)).toBe(1);
+  /**
+   * This used to assert that `ops.apply_append_only_grants` EXISTED, and nothing
+   * else. It passed for as long as it was written, against a control that did
+   * nothing at all — which is worse than no test, because Phase 7's claim that a
+   * TDS record cannot be edited was resting on the green tick.
+   *
+   * Two things were wrong underneath it. Phases 3 and 6 each redefined the grants
+   * function to add a table and never re-invoked it, so `listing.price_history`
+   * and `procurement.tds_ledger` never had a REVOKE run against them on a fresh
+   * migrate. And more fundamentally, the application connects as the role that
+   * OWNS these tables: a Postgres owner holds its privileges implicitly and
+   * REVOKE cannot take them away, so every table in the list stayed mutable even
+   * where the function had been called.
+   *
+   * `20260904000000_append_only_actually_enforced` replaces the mechanism with a
+   * BEFORE UPDATE OR DELETE trigger, which binds the owner too. So the test now
+   * does the only thing that can prove it: writes a row by raw SQL and tries to
+   * change it.
+   */
+  it('refuses an UPDATE and a DELETE on a real row, for the owning role', async () => {
+    const batch = await db.$queryRaw<Array<{ id: string }>>`SELECT gen_random_uuid()::text AS id`;
+    // Both sides in one statement: payment.ledger_entry carries a deferrable
+    // constraint trigger asserting every batch sums to zero, so a single-sided
+    // probe is rejected by that invariant before this one is ever reached.
+    await db.$executeRaw`
+      INSERT INTO payment.ledger_entry
+        (entry_date, account_code, debit, credit, ref_type, narration, batch_id)
+      VALUES (CURRENT_DATE, 'BANK',     100, 0, 'TEST', 'append-only probe',
+              ${batch[0]!.id}::uuid),
+             (CURRENT_DATE, 'REVENUE',  0, 100, 'TEST', 'append-only probe',
+              ${batch[0]!.id}::uuid)`;
+
+    await expect(
+      db.$executeRaw`UPDATE payment.ledger_entry SET narration = 'edited'`,
+    ).rejects.toThrow(/append-only/);
+
+    await expect(db.$executeRaw`DELETE FROM payment.ledger_entry`).rejects.toThrow(/append-only/);
+
+    // Both rows are still there, which is the whole point of the guarantee.
+    const rows = await db.$queryRaw<Array<{ n: bigint }>>`
+      SELECT COUNT(*)::bigint AS n FROM payment.ledger_entry`;
+    expect(Number(rows[0]!.n)).toBe(2);
+  });
+
+  /**
+   * The detective half. A later migration that adds a table to the grants list
+   * and forgets to re-run the attacher is the exact mistake phases 3 and 6 made,
+   * and this is what makes the next one fail loudly instead of silently.
+   */
+  it('leaves no append-only table unprotected', async () => {
+    const gaps = await db.$queryRaw<Array<{ sch: string; tbl: string }>>`
+      SELECT sch, tbl FROM ops.v_append_only_unprotected ORDER BY sch, tbl`;
+    expect(gaps).toEqual([]);
   });
 });

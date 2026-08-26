@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Trugrade QC",
+    "slug": "trugrade-technician",
+    "scheme": "trugrade-qc",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trugrade.technician",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Photographing each machine and its tamper seal is what makes the inspection verifiable later.",
+        "NSLocationWhenInUseUsageDescription": "Check-in location is recorded against the vendor's registered warehouse address.",
+        "NSPhotoLibraryAddUsageDescription": "Inspection photographs are held on the device until they sync."
+      }
+    },
+    "android": {
+      "package": "com.trugrade.technician",
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-camera", { "cameraPermission": "Photograph each machine and its tamper seal." }],
+      ["expo-location", { "locationWhenInUsePermission": "Record where the inspection took place." }],
+      ["expo-sqlite", { "enableFTS": false }]
+    ],
+    "experiments": { "typedRoutes": true },
+    "extra": {
+      "apiBaseUrl": "http://10.0.2.2:4000"
+    }
+  }
+}

@@ -409,3 +409,159 @@ export function Uploader({
     </div>
   );
 }
+
+/* ==========================================================================
+ * OtpInput
+ * ======================================================================== */
+
+export interface OtpInputProps {
+  /** Controlled. Digits only, shorter than `length` while it is being typed. */
+  value: string;
+  onChange: (value: string) => void;
+  /** Fired once the last box is filled, so the caller does not watch `length`. */
+  onComplete?: (value: string) => void;
+  length?: number;
+  /** What the group is. "Enter the code sent to +91 98xxx xx210". */
+  label: string;
+  /** The real reason: "That code has expired. We sent a new one." */
+  error?: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+const DIGITS_ONLY = /\D/g;
+
+/**
+ * Six boxes, one digit each — email and mobile verification, everywhere.
+ *
+ * Three things make the difference between this and a row of text inputs, and
+ * all three are about how a code actually arrives:
+ *
+ *   - `autocomplete="one-time-code"` on the **first** box only. iOS and Android
+ *     offer the SMS code above the keyboard and fill that field; repeating the
+ *     attribute on all six makes the platform fill the same digit six times.
+ *   - **Paste fills the whole group.** People copy the code out of the message,
+ *     and a paste that lands one digit in box 3 is the single most common way
+ *     this pattern fails.
+ *   - `inputMode="numeric"`, so a phone shows the number pad rather than a
+ *     keyboard whose digits are behind a modifier.
+ *
+ * The value is one string, not six pieces of state: the caller submits a code,
+ * not an array, and six independent states is six chances to get the join wrong.
+ */
+export function OtpInput({
+  value,
+  onChange,
+  onComplete,
+  length = 6,
+  label,
+  error,
+  disabled,
+  className,
+}: OtpInputProps): React.JSX.Element {
+  const groupId = React.useId();
+  const refs = React.useRef<Array<HTMLInputElement | null>>([]);
+  const digits = value.replace(DIGITS_ONLY, '').slice(0, length);
+
+  const commit = (next: string, focusIndex: number) => {
+    onChange(next);
+    refs.current[Math.min(focusIndex, length - 1)]?.focus();
+    if (next.length === length) onComplete?.(next);
+  };
+
+  const replaceAt = (index: number, digit: string) =>
+    (digits.slice(0, index) + digit + digits.slice(index + 1)).slice(0, length);
+
+  const onBoxChange = (index: number) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const typed = event.target.value.replace(DIGITS_ONLY, '');
+    if (!typed) return;
+    // A platform autofill drops the entire code into the first box, which is
+    // indistinguishable from a paste and is handled the same way.
+    if (typed.length > 1) {
+      const next = (digits.slice(0, index) + typed).slice(0, length);
+      commit(next, next.length);
+      return;
+    }
+    const next = replaceAt(index, typed);
+    commit(next, index + 1);
+  };
+
+  const onKeyDown = (index: number) => (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      // Backspace on an empty box steps back and clears — the behaviour every
+      // other OTP field has, and its absence strands people on box 4.
+      const target = digits[index] ? index : Math.max(0, index - 1);
+      commit(replaceAt(target, ''), target);
+      return;
+    }
+    if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      refs.current[index - 1]?.focus();
+    }
+    if (event.key === 'ArrowRight' && index < length - 1) {
+      event.preventDefault();
+      refs.current[index + 1]?.focus();
+    }
+  };
+
+  const onPaste = (index: number) => (event: React.ClipboardEvent) => {
+    const pasted = event.clipboardData.getData('text').replace(DIGITS_ONLY, '');
+    if (!pasted) return;
+    event.preventDefault();
+    const next = (digits.slice(0, index) + pasted).slice(0, length);
+    commit(next, next.length);
+  };
+
+  return (
+    <div className={cn('flex flex-col gap-2', className)}>
+      <span id={groupId} className="text-body-sm font-medium text-ink-2">
+        {label}
+      </span>
+
+      <div
+        role="group"
+        aria-labelledby={groupId}
+        aria-describedby={error ? `${groupId}-error` : undefined}
+        className="flex flex-wrap gap-2"
+        data-testid="otp-input"
+      >
+        {Array.from({ length }, (_, index) => (
+          <input
+            key={index}
+            ref={(node) => {
+              refs.current[index] = node;
+            }}
+            type="text"
+            inputMode="numeric"
+            // Only the first box. See the note above — six of these is six
+            // copies of the same digit on iOS.
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
+            // Not maxLength=1: a paste or an autofill has to be allowed to
+            // arrive whole before it is redistributed.
+            aria-label={`Digit ${index + 1} of ${length}`}
+            aria-invalid={Boolean(error) || undefined}
+            disabled={disabled}
+            value={digits[index] ?? ''}
+            onChange={onBoxChange(index)}
+            onKeyDown={onKeyDown(index)}
+            onPaste={onPaste(index)}
+            onFocus={(event) => event.target.select()}
+            className={cn(
+              // 44px minimum target, and mono because a one-time code is data.
+              'h-12 w-11 rounded border bg-sheet text-center font-mono text-h3 tnum text-ink',
+              error ? 'border-fail' : 'border-rule',
+              disabled && 'cursor-not-allowed opacity-45',
+            )}
+          />
+        ))}
+      </div>
+
+      {error && (
+        <p id={`${groupId}-error`} role="alert" className="text-body-sm text-fail">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}

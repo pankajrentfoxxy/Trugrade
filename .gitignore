@@ -18,3 +18,5 @@ apps/api/prisma/generated/
 .pnpm-store/
 .keys/
 apps/api/.env
+.screenshots/
+expo-file-system-*.tgz

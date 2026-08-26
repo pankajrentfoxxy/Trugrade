@@ -32,7 +32,7 @@ export function LoginRoute(): React.JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-5">
+    <div className="flex min-h-screen items-center justify-center bg-ground px-5">
       <div className="w-full max-w-sm">
         <Logo />
         <h1 className="mt-6 text-h1 text-ink">Sign in</h1>
