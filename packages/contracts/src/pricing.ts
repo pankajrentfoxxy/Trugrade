@@ -23,6 +23,7 @@
  * contract is a fixed rupee amount.
  */
 
+import { resolveTaxSplit } from './gst';
 import { Money } from './money';
 import type { Grade } from './rules';
 
@@ -217,17 +218,31 @@ export interface LandedPrice {
 
 export function landedPrice(input: {
   sellingPrice: Money;
-  freight?: Money;
+  /**
+   * REQUIRED, and deliberately not optional.
+   *
+   * An optional freight defaulting to zero cannot tell "delivery is free" apart
+   * from "we could not price this lane", and the second silently ships a landed
+   * price missing its freight -- a price misrepresentation under CP e-Comm
+   * r.6(5). `logistics/dto/freight.dto.ts` already models an unquotable lane as
+   * a discriminated union with `amount: null` precisely so the caller has to
+   * look; that design only works if this parameter refuses to be omitted, which
+   * until now it did not.
+   *
+   * Genuinely free delivery passes `Money.ZERO` on purpose. Not knowing the
+   * freight is not a number, and the caller must decide what to do about it
+   * rather than have a default decide for them.
+   */
+  freight: Money;
   gstRatePct: number;
   /** Place of supply under s.10(1)(a) IGST Act: where the movement terminates. */
   deliveryStateCode: string;
   ourStateCode: string;
-  /** MARGIN units are taxed on (sale − purchase), not on the full value. */
+  /** MARGIN units are taxed on (sale - purchase), not on the full value. */
   valuationMethod?: 'REGULAR' | 'MARGIN';
   purchasePrice?: Money;
 }): LandedPrice {
-  const { sellingPrice, freight = Money.ZERO, gstRatePct } = input;
-  const isInterState = input.deliveryStateCode !== input.ourStateCode;
+  const { sellingPrice, freight, gstRatePct } = input;
 
   const gross = sellingPrice.add(freight);
 
@@ -237,20 +252,31 @@ export function landedPrice(input: {
       ? Money.max(gross.sub(input.purchasePrice), Money.ZERO)
       : gross;
 
-  const igst = isInterState ? Money.percentOf(taxableValue, gstRatePct) : Money.ZERO;
-  const half = isInterState ? Money.ZERO : Money.percentOf(taxableValue, gstRatePct / 2);
+  // Delegated to `resolveTaxSplit` rather than halved here. This function used
+  // to compute 9% once and use it for both halves, which loses a paisa whenever
+  // the total tax is odd -- 18% of Rs 1,000.05 is Rs 180.01, and 9% twice is
+  // Rs 180.00. Worse than the paisa: it made the storefront's tax and the
+  // invoice's tax two different calculations of the same number, and they would
+  // have disagreed on exactly the amounts a customer notices.
+  const split = resolveTaxSplit({
+    supplierState: input.ourStateCode,
+    placeOfSupply: input.deliveryStateCode,
+    taxableAmount: taxableValue,
+    ratePct: gstRatePct,
+    basis: 's.10(1)(a) IGST Act - place of supply is where the movement terminates',
+  });
 
   return {
     sellingPrice,
     freight,
     taxableValue,
-    igst,
-    cgst: half,
-    sgst: half,
+    igst: split.igst,
+    cgst: split.cgst,
+    sgst: split.sgst,
     // The halves are stored and the total derived from them, never the reverse:
     // an invoice that disagrees with itself between the screen and the PDF is a
     // support ticket and, eventually, a GST notice.
-    total: gross.add(igst).add(half).add(half),
-    isInterState,
+    total: gross.add(split.total),
+    isInterState: split.interState,
   };
 }

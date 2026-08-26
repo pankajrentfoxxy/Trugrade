@@ -1,4 +1,5 @@
 import { Money } from '../src/money';
+import { resolveTaxSplit } from '../src/gst';
 import {
   priceFromNetPayout,
   payoutFromCommission,
@@ -236,6 +237,7 @@ describe('landed price', () => {
       gstRatePct: 18,
       deliveryStateCode: '29',
       ourStateCode: '06',
+      freight: Money.ZERO,
       valuationMethod: 'MARGIN',
       purchasePrice: Money.rupees(28_000),
     });
@@ -249,6 +251,7 @@ describe('landed price', () => {
       gstRatePct: 18,
       deliveryStateCode: '29',
       ourStateCode: '06',
+      freight: Money.ZERO,
       valuationMethod: 'MARGIN',
       purchasePrice: Money.rupees(28_000),
     });
@@ -268,5 +271,70 @@ describe('landed price', () => {
       const rebuilt = Money.sum([l.sellingPrice, l.freight, l.igst, l.cgst, l.sgst]);
       expect(rebuilt.eq(l.total)).toBe(true);
     }
+  });
+});
+
+describe('landedPrice agrees with the invoice, to the paisa', () => {
+  it('does not lose a paisa halving an odd tax', () => {
+    // It used to compute 9% once and use it for both halves. 18% of Rs 1,000.05
+    // is Rs 180.01; 9% twice is Rs 180.00. The paisa is the small half of the
+    // problem -- the large half was that the storefront and the invoice were two
+    // different calculations of the same number.
+    const l = landedPrice({
+      sellingPrice: Money.parse('1000.05'),
+      freight: Money.ZERO,
+      gstRatePct: 18,
+      deliveryStateCode: '29',
+      ourStateCode: '29',
+    });
+    expect(l.cgst.add(l.sgst).toString()).toBe('180.01');
+    expect(l.total.toString()).toBe('1180.06');
+  });
+
+  it('matches resolveTaxSplit exactly across awkward amounts and rates', () => {
+    // The property that matters: one implementation, so the product page and the
+    // tax invoice cannot diverge.
+    for (let paise = 1; paise <= 250; paise++) {
+      for (const rate of [5, 12, 18, 28]) {
+        for (const [ours, theirs] of [
+          ['29', '29'],
+          ['29', '27'],
+        ] as ReadonlyArray<readonly [string, string]>) {
+          const amount = Money.paiseOf(BigInt(paise));
+          const l = landedPrice({
+            sellingPrice: amount,
+            freight: Money.ZERO,
+            gstRatePct: rate,
+            deliveryStateCode: theirs,
+            ourStateCode: ours,
+          });
+          const g = resolveTaxSplit({
+            supplierState: ours,
+            placeOfSupply: theirs,
+            taxableAmount: amount,
+            ratePct: rate,
+            basis: 'test',
+          });
+          expect(l.igst.toString()).toBe(g.igst.toString());
+          expect(l.cgst.toString()).toBe(g.cgst.toString());
+          expect(l.sgst.toString()).toBe(g.sgst.toString());
+        }
+      }
+    }
+  });
+
+  it('freight is required, so an unpriced lane cannot become a free one', () => {
+    // A missing rate card must not render as a landed price with no freight in
+    // it -- that is a price misrepresentation under CP e-Comm r.6(5). Omitting
+    // the argument is now a compile error; this pins the deliberate-zero case.
+    const free = landedPrice({
+      sellingPrice: Money.rupees(30_000),
+      freight: Money.ZERO,
+      gstRatePct: 18,
+      deliveryStateCode: '29',
+      ourStateCode: '29',
+    });
+    expect(free.freight.toString()).toBe('0.00');
+    expect(free.total.toString()).toBe('35400.00');
   });
 });
