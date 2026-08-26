@@ -170,3 +170,14 @@ export class Money {
 /** Handy alias so signatures read as intent. */
 export const money = (v: string | number | Money): Money =>
   v instanceof Money ? v : Money.parse(String(v));
+
+/**
+ * NUMERIC(14,2) coming back out of the driver.
+ *
+ * Prisma hands back a `Decimal` object, not a string. `Number(row.price)` is the
+ * float bug this codebase keeps nearly shipping (see the catalog repository's
+ * `Number(screen_size_inch)` — harmless for a screen size, ruinous for money),
+ * so repositories call this at the row boundary and never touch Number.
+ */
+export const moneyFromDb = (v: { toString(): string } | string | null | undefined): Money | null =>
+  v === null || v === undefined ? null : Money.parse(v.toString());

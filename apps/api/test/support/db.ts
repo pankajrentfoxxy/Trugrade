@@ -115,12 +115,20 @@ export async function closeTestDb(): Promise<void> {
  *
  * TRUNCATE ... CASCADE rather than per-table deletes: it is one statement, it
  * resets identity sequences, and it cannot be defeated by an FK ordering mistake.
+ *
+ * **The exclusion list below is not sufficient on its own, and that is the whole
+ * reason `restoreReference` exists.** CASCADE also truncates every table holding
+ * a foreign key *into* one being truncated, and both `platform.platform_config`
+ * (`changed_by`) and `procurement.margin_rule` (`approved_by`) point at
+ * `identity.user_account`. So the two tables the list most carefully protects
+ * were being emptied anyway — silently, because nothing read them until now.
  */
 let truncateStatement: string | undefined;
 
 export async function truncateAll(db: PrismaClient = testDb()): Promise<void> {
   if (truncateStatement) {
     await db.$executeRawUnsafe(truncateStatement);
+    await restoreReference(db);
     return;
   }
   const rows = await db.$queryRaw<Array<{ full_name: string }>>`
@@ -143,9 +151,41 @@ export async function truncateAll(db: PrismaClient = testDb()): Promise<void> {
                             -- catalog.sku defaults hsn_code to '84713010' and
                             -- has an FK to the master, so truncating it breaks
                             -- every SKU factory on the next insert.
-                            'hsn_code','gst_rate','grade_definition')
+                            'hsn_code','gst_rate','grade_definition',
+                            -- Phase 3. margin_rule is ops-tunable reference data,
+                            -- and listing.unit.margin_rule_id points at it. Without
+                            -- a rule the pricing resolver has no price to return,
+                            -- so every pricing test would fail on an empty table.
+                            'margin_rule')
   `;
   if (!rows.length) return;
   truncateStatement = `TRUNCATE TABLE ${rows.map((r) => r.full_name).join(', ')} RESTART IDENTITY CASCADE`;
   await db.$executeRawUnsafe(truncateStatement);
+  await restoreReference(db);
+}
+
+/**
+ * Put back the two reference tables CASCADE took with it.
+ *
+ * Guarded by a count so the common case is two cheap queries rather than a
+ * re-seed: only the run that actually emptied them pays for refilling them.
+ */
+async function restoreReference(db: PrismaClient): Promise<void> {
+  // Two statements, not one with a pair of scalar subqueries: `no-cross-schema-join`
+  // reads that as a cross-module read, and it is right to — the rule does not get
+  // an exemption because this file happens to be a fixture.
+  const [config] = await db.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*)::bigint AS n FROM platform.platform_config`;
+  const [margin] = await db.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*)::bigint AS n FROM procurement.margin_rule`;
+  if (Number(config?.n ?? 0) > 0 && Number(margin?.n ?? 0) > 0) return;
+
+  if (Number(config?.n ?? 0) === 0) {
+    const { seedConfig } = await import('../../prisma/seed/reference');
+    await seedConfig(db);
+  }
+  if (Number(margin?.n ?? 0) === 0) {
+    const { seedMarginRules } = await import('../../prisma/seed/margin-rules');
+    await seedMarginRules(db);
+  }
 }

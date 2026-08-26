@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { ONBOARDING_COUNTS, seedOnboardingDefinitions } from './onboarding-definitions';
 import { seedCatalogReference } from './catalog-reference';
+import { seedMarginRules, MARGIN_RULE_COUNT } from './margin-rules';
 import {
   GRADE_CORRECTION_AUTO_APPLY_DAYS,
   INSPECTION_WINDOW_HOURS,
@@ -311,6 +312,9 @@ export async function seedReference(
     `  onboarding: ${ONBOARDING_COUNTS.steps} steps, ${ONBOARDING_COUNTS.fieldRules} field rules, ` +
       `${ONBOARDING_COUNTS.documentTypes} document types`,
   );
+
+  const marginRules = await seedMarginRules(prisma);
+  log(`  margin rules: ${marginRules} added, ${MARGIN_RULE_COUNT} total`);
 
   const partitions = await ensurePartitions(prisma);
   log(`  partitions: ${partitions} created`);

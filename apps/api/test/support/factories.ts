@@ -244,10 +244,13 @@ export async function makeUnit(
 
   const qcReportId = randomUUID();
   await db.$executeRaw`
+    -- technician_id is a qc.qc_technician id, NOT a user_account id. Phase 4 unified
+    -- the two identities that used to sit on one inspection; this factory held the
+    -- second of them and is why the FK is now the thing that catches it.
     INSERT INTO qc.qc_report (id, unit_id, technician_id, device_cert_id, agent_version,
                               started_at, completed_at, signature, nonce,
                               grade_final, qc_score, verdict, valid_until, is_current)
-    VALUES (${qcReportId}::uuid, ${unitId}::uuid, ${tech.userId}::uuid,
+    VALUES (${qcReportId}::uuid, ${unitId}::uuid, ${tech.technicianId}::uuid,
             ${'CERT-' + qcReportId.slice(0, 8)}, '2.3.1',
             now() - interval '20 minutes', now(),
             ${'sig_' + qcReportId}, ${randomUUID()},
