@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { emailSchema, mobileSchema, otpCodeSchema } from '@trugrade/contracts';
+import {
+  emailSchema,
+  fullNameSchema,
+  mobileSchema,
+  otpCodeSchema,
+  passwordSchema,
+} from '@trugrade/contracts';
 
 /**
  * Request shapes for the auth surface.
@@ -24,6 +30,27 @@ import { emailSchema, mobileSchema, otpCodeSchema } from '@trugrade/contracts';
  * bounds that belong here are the ones that stop a megabyte of text reaching a
  * deliberately slow hash function.
  */
+/**
+ * Self-service registration.
+ *
+ * `passwordSchema` DOES apply here, unlike at sign-in: this is the moment the
+ * composition rule is being chosen against, so enforcing it is the point rather
+ * than a leak. The comment above explains why login deliberately does not.
+ *
+ * `orgType` is VENDOR or BUYER only. INTERNAL accounts are never self-served —
+ * staff are created by an administrator, and letting the enum through would let
+ * anyone mint themselves an internal org.
+ */
+export const registerSchema = z.object({
+  orgType: z.enum(['VENDOR', 'BUYER']),
+  companyName: z.string().trim().min(2).max(200),
+  fullName: fullNameSchema,
+  email: emailSchema,
+  mobile: mobileSchema,
+  password: passwordSchema,
+});
+export type RegisterDto = z.infer<typeof registerSchema>;
+
 export const loginSchema = z.object({
   email: z.string().trim().min(3).max(320),
   password: z.string().min(1).max(200),

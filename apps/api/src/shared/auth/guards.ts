@@ -112,6 +112,7 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest<Request & { principal?: Principal }>();
     const required = this.reflector.getAllAndOverride<Permission[]>(REQUIRED_PERMISSIONS, [
       context.getHandler(),
       context.getClass(),
@@ -123,7 +124,21 @@ export class PermissionsGuard implements CanActivate {
 
     if (!required?.length && !requiredRoles?.length) return true;
 
-    const principal = this.ctx.principal;
+    /**
+     * Read from the REQUEST, not from the async context.
+     *
+     * Nest runs guards before interceptors, and the AsyncLocalStorage context is
+     * established by `RequestContextInterceptor` — so at guard time
+     * `ctx.principal` is always undefined. This guard read it anyway and threw
+     * UNAUTHENTICATED on every route carrying `@RequirePermissions`, with a
+     * perfectly valid token attached. `/auth/session` looked fine only because it
+     * is `@Public()` and never reaches here.
+     *
+     * `AuthGuard` stamps `req.principal` a moment earlier, and the request object
+     * is the one thing that survives the ordering. The context is still seeded
+     * from the same place for handlers; this is the same fix at the other end.
+     */
+    const principal = req.principal ?? this.ctx.principal;
     if (!principal) throw new UnauthenticatedError();
 
     if (required?.length) {

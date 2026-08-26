@@ -7,6 +7,7 @@ import { UnauthenticatedError, ValidationError } from '../../shared/errors/domai
 import { RequestContextService } from '../../shared/db/org-scope';
 import { TokenService, type IssuedTokens } from '../../shared/auth/token.service';
 import { AppConfig } from '../../shared/config';
+import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.service';
 import { IdentityService, type OrgType } from './identity.service';
 import { OtpService } from './internal/otp.service';
 import { AuditService, maskValue } from './internal/audit.service';
@@ -20,12 +21,17 @@ import {
   contactChangeVerifySchema,
   loginSchema,
   mfaVerifySchema,
+  registerSchema,
   type ContactChangeCancelDto,
   type ContactChangeRequestDto,
   type ContactChangeVerifyDto,
   type LoginDto,
   type MfaVerifyDto,
+  type RegisterDto,
 } from './dto/identity.dto';
+
+/** Ten new organisations a day from one address is already generous. */
+const REGISTER_LIMIT: RateLimitRule = { name: 'auth-register', limit: 10, windowSeconds: 86_400 };
 
 /**
  * Sign in, sign out, and "who am I" — the routes every other route depends on
@@ -123,6 +129,7 @@ export class IdentityController {
     private readonly audit: AuditService,
     private readonly ctx: RequestContextService,
     private readonly config: AppConfig,
+    private readonly limiter: RateLimiter,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -133,6 +140,60 @@ export class IdentityController {
    * 200, not 201. Nothing was created at a URL the client could go and fetch,
    * and a 201 without a `Location` is a lie some HTTP clients act on.
    */
+  /**
+   * Create an organisation and its owner account, then sign them straight in.
+   *
+   * The service half of this has existed since Phase 1 —
+   * `createOrganizationWithOwner` builds the org, the owner, the role grant and
+   * the password in one transaction — but nothing ever exposed it over HTTP, so
+   * the platform had no way to make an account at all. Every "sign up" button
+   * pointed at a page that could not have worked.
+   *
+   * It logs the caller in on success rather than bouncing them to a sign-in
+   * form. They have just proved they know the password by choosing it, and a
+   * registration that ends at a login screen is a registration a third of people
+   * abandon.
+   *
+   * `orgType` decides the owner role: VENDOR_OWNER or CUSTOMER_OWNER. There is
+   * no third option, and an INTERNAL account is never self-served.
+   */
+  @Post('register')
+  @Public()
+  @HttpCode(201)
+  async register(
+    @Body(new ZodValidationPipe(registerSchema)) body: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<SessionResponse> {
+    const ctx = this.ctx.get();
+    // Same limiter as the lead form: registration is a write that creates two
+    // rows and sends nothing, which makes it worth abusing.
+    await this.limiter.consume(REGISTER_LIMIT, ctx?.ip ?? 'unknown');
+
+    await this.identity.createOrganizationWithOwner({
+      orgType: body.orgType,
+      legalName: body.companyName,
+      fullName: body.fullName,
+      email: body.email,
+      mobile: body.mobile,
+      password: body.password,
+    });
+
+    const { tokens, user, mfaRequired } = await this.identity.loginWithPassword({
+      identifier: body.email,
+      password: body.password,
+      ip: ctx?.ip,
+      userAgent: ctx?.userAgent,
+    });
+
+    this.setSessionCookies(res, tokens);
+    return {
+      ...principalOf(user),
+      mfaRequired,
+      accessToken: tokens.accessToken,
+      fullName: user.fullName,
+    };
+  }
+
   @Post('login')
   @Public()
   @HttpCode(200)

@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { Observable } from 'rxjs';
 import { ZodError, type ZodTypeAny } from 'zod';
 import { DomainError, ValidationError } from '../errors/domain-errors';
-import { RequestContextService } from '../db/org-scope';
+import { RequestContextService, type Principal } from '../db/org-scope';
 import { translatePrismaError } from '../db/prisma.service';
 
 /**
@@ -139,6 +139,23 @@ export class RequestContextInterceptor implements NestInterceptor {
           traceId,
           ip: req.ip,
           userAgent: req.headers['user-agent'],
+          /**
+           * Carried over from the request, and this line is load-bearing.
+           *
+           * Nest runs GUARDS before INTERCEPTORS, so `AuthGuard` resolves the
+           * principal and calls `ctx.setPrincipal` before this AsyncLocalStorage
+           * context exists — that write goes nowhere, and starting a fresh
+           * context here without the principal discarded it. The result was that
+           * `ctx.principal` was undefined inside EVERY handler, silently: 21 call
+           * sites across the listing, ordering and vendor modules read it for org
+           * scoping, and `/auth/session` only looked healthy because it falls back
+           * to the refresh cookie when the principal is missing.
+           *
+           * The guard also stamps `req.principal`, so the request object is the
+           * one place the value reliably survives the ordering. Seeding from it
+           * is what makes the context agree with the guard.
+           */
+          principal: (req as Request & { principal?: Principal }).principal,
         },
         () => {
           next.handle().subscribe({
