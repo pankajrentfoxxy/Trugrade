@@ -1,5 +1,6 @@
 import { BRAND } from '@trugrade/config/brand';
 import { Button, Evidence, Logo, ToleranceBand } from '@trugrade/ui';
+import { getStats } from '../lib/api';
 
 /**
  * The proof-first home page.
@@ -9,7 +10,10 @@ import { Button, Evidence, Logo, ToleranceBand } from '@trugrade/ui';
  * answerable for. The `Evidence` component makes that structural rather than a
  * habit somebody has to remember.
  */
-export default function HomePage(): React.JSX.Element {
+export const revalidate = 60;
+
+export default async function HomePage(): Promise<React.JSX.Element> {
+  const stats = await getStats();
   return (
     <main className="mx-auto max-w-container px-5 py-9">
       <Logo />
@@ -32,9 +36,24 @@ export default function HomePage(): React.JSX.Element {
       </div>
 
       <section className="mt-9 grid gap-7 sm:grid-cols-3">
-        <Evidence value={98} pct denominator={412} denominatorLabel="units inspected" />
-        <Evidence value={94} pct denominator={1204} denominatorLabel="delivered on promise" />
-        <Evidence value={2} pct denominator={412} denominatorLabel="returned" />
+        <Evidence
+          value={stats?.unitsSellable ?? 0}
+          denominator={stats?.unitsInspected ?? 0}
+          denominatorLabel="units inspected"
+          smallSampleLabel="New platform"
+        />
+        <Evidence
+          value={stats?.ordersDelivered ?? 0}
+          denominator={stats?.ordersDelivered ?? 0}
+          denominatorLabel="orders delivered"
+          smallSampleLabel="No delivery history yet"
+        />
+        <Evidence
+          value={stats?.unitsReturned ?? 0}
+          denominator={stats?.unitsInspected ?? 0}
+          denominatorLabel="units inspected"
+          smallSampleLabel="No return history yet"
+        />
       </section>
 
       <section className="mt-9 max-w-lg">
