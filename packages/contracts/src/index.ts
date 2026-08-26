@@ -9,3 +9,4 @@ export * from './spec-match';
 export * from './upload';
 export * from './pricing';
 export * from './vendor-onboarding';
+export * from './condition-image';

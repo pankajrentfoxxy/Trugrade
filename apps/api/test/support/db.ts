@@ -138,7 +138,12 @@ export async function truncateAll(db: PrismaClient = testDb()): Promise<void> {
                             'routing_rule','carrier','commission_rule','role','permission',
                             'role_permission','qc_tool_provider',
                             'onboarding_step_definition','onboarding_field_requirement',
-                            'document_type_rule','partitioned_table')
+                            'document_type_rule','partitioned_table',
+                            -- Phase 2. hsn_code is not optional in this list:
+                            -- catalog.sku defaults hsn_code to '84713010' and
+                            -- has an FK to the master, so truncating it breaks
+                            -- every SKU factory on the next insert.
+                            'hsn_code','gst_rate','grade_definition')
   `;
   if (!rows.length) return;
   truncateStatement = `TRUNCATE TABLE ${rows.map((r) => r.full_name).join(', ')} RESTART IDENTITY CASCADE`;

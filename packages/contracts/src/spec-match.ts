@@ -129,6 +129,35 @@ function canonStorageType(s: string): string {
   return STORAGE_TYPE_ALIASES[key] ?? key;
 }
 
+/**
+ * Chips that are integrated graphics. Anything matching is INTEGRATED; a
+ * recognised discrete vendor is DISCRETE; anything else is `null`, meaning
+ * "unrecognised" — which routes to not-reported rather than to a mismatch.
+ *
+ * Erring toward `null` is deliberate. A vendor who honestly declared integrated
+ * graphics on a chip we have not seen before should reach a human, not have
+ * their listing blocked by a string we failed to recognise.
+ */
+const INTEGRATED_GPU =
+  /\b(uhd|iris|xe\b|hd graphics|vega|radeon graphics|apple m[1-4]|adreno|integrated)\b/i;
+// No trailing \b after a digit run: "Arc A370M" would fail it, because there is
+// no word boundary between the "3" the pattern consumed and the "7" after it.
+const DISCRETE_GPU = /\b(nvidia|geforce|quadro|rtx|gtx|mx\d{3}|radeon (pro|rx)|firepro|arc a\d+)/i;
+
+export function classifyGpu(input: string | null | undefined): 'INTEGRATED' | 'DISCRETE' | null {
+  const s = (input ?? '').trim();
+  if (!s) return null;
+  const upper = s.toUpperCase();
+  // Already in the catalog's vocabulary.
+  if (upper === 'INTEGRATED' || upper === 'DISCRETE') return upper;
+  // Discrete is checked first: "NVIDIA T500" contains no integrated marker, but
+  // "AMD Radeon RX 6500M" contains "radeon" which the integrated pattern also
+  // matches via "radeon graphics" — the more specific vendor wins.
+  if (DISCRETE_GPU.test(s)) return 'DISCRETE';
+  if (INTEGRATED_GPU.test(s)) return 'INTEGRATED';
+  return null;
+}
+
 export interface SpecMatchPolicy {
   /** Screen size tolerance in inches. Panels are reported to one decimal. */
   screenToleranceIn: number;
@@ -239,32 +268,58 @@ export function compareSpec(
 
   // --- Screen --------------------------------------------------------------
   if (declared.screenSizeIn !== undefined) {
-    if (detected.screenSizeIn === undefined) {
+    // Coerced, not trusted. `catalog.sku.screen_size_inch` is NUMERIC(4,1), so
+    // Prisma returns a Decimal object, not a number. `Decimal - number` is NaN
+    // and `NaN > tolerance` is false — an uncoerced value makes this check pass
+    // for every machine ever inspected. The declared type says `number`, so
+    // nothing catches it at compile time and nothing fails loudly at runtime.
+    const declaredIn = Number(declared.screenSizeIn);
+    const detectedIn = Number(detected.screenSizeIn);
+    if (detected.screenSizeIn === undefined || !Number.isFinite(detectedIn)) {
       notReported.push('SCREEN_SIZE_IN');
-    } else if (Math.abs(detected.screenSizeIn - declared.screenSizeIn) > policy.screenToleranceIn) {
+    } else if (!Number.isFinite(declaredIn)) {
+      // A declared value we cannot read is not a pass. Say so.
+      notReported.push('SCREEN_SIZE_IN');
+    } else if (Math.abs(detectedIn - declaredIn) > policy.screenToleranceIn) {
       mismatches.push({
         field: 'SCREEN_SIZE_IN',
         severity: 'MAJOR',
-        declared: `${declared.screenSizeIn}"`,
+        declared: `${declaredIn}"`,
         detectedRaw: `${detected.screenSizeIn}"`,
-        detectedNormalised: `${detected.screenSizeIn}"`,
-        message: `You listed a ${declared.screenSizeIn}" screen. The inspection found ${detected.screenSizeIn}".`,
+        detectedNormalised: `${detectedIn}"`,
+        message: `You listed a ${declaredIn}" screen. The inspection found ${detectedIn}".`,
       });
     }
   }
 
   // --- GPU -----------------------------------------------------------------
   if (declared.gpuType !== undefined) {
+    // `declared.gpuType` comes from `catalog.sku.gpu_type`, whose CHECK permits
+    // only INTEGRATED or DISCRETE. A QC tool reports the chip — "Intel Iris Xe",
+    // "NVIDIA T500". Comparing the two strings directly made every single unit a
+    // MAJOR mismatch, and with `requireSpecMatch` in the auto-approval gate that
+    // blocked every listing on the platform.
+    //
+    // So classify the detected chip into the same two-value vocabulary first.
+    // The RAM and storage paths were written this way deliberately
+    // (installedRamFromUsable, nominalStorageFromBinary); GPU never was.
+    const declaredClass = classifyGpu(declared.gpuType);
+    const detectedClass = detected.gpuType === undefined ? null : classifyGpu(detected.gpuType);
+
     if (detected.gpuType === undefined) {
       notReported.push('GPU_TYPE');
-    } else if (detected.gpuType.toUpperCase() !== declared.gpuType.toUpperCase()) {
+    } else if (detectedClass === null || declaredClass === null) {
+      // An unrecognised chip is not evidence of a discrete card. Saying "not
+      // reported" sends it to a human instead of failing an honest vendor.
+      notReported.push('GPU_TYPE');
+    } else if (detectedClass !== declaredClass) {
       mismatches.push({
         field: 'GPU_TYPE',
         severity: 'MAJOR',
-        declared: declared.gpuType,
+        declared: declaredClass,
         detectedRaw: detected.gpuType,
-        detectedNormalised: detected.gpuType.toUpperCase(),
-        message: `You listed ${declared.gpuType} graphics. The inspection found ${detected.gpuType}.`,
+        detectedNormalised: detectedClass,
+        message: `You listed ${declaredClass.toLowerCase()} graphics. The inspection found ${detected.gpuType}, which is ${detectedClass.toLowerCase()}.`,
       });
     }
   }

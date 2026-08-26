@@ -117,11 +117,14 @@ export interface SkuKeyParts {
   cpuModel?: string | null;
   ramGb: number;
   storageGb: number;
+  /** Free text or the stored enum value — both canonicalise to the same token. */
   storageType: string;
   screenSizeIn?: number | null;
   screenResolution?: string | null;
   gpu?: string | null;
   os?: string | null;
+  /** Legacy 6.3: "a touch variant is a different SKU, not a note." */
+  isTouch?: boolean | null;
 }
 
 const canon = (s: string | null | undefined): string =>
@@ -147,6 +150,76 @@ export function normaliseCapacityGb(input: string | number | null | undefined): 
   return Math.round(n);
 }
 
+/**
+ * `canon` turns every run of punctuation into `_`, so "M.2" becomes "m_2" and
+ * "1920 x 1080" becomes "1920_x_1080". Both are the same value as "m2" and
+ * "1920x1080" and must not produce a different key, so the separators are
+ * collapsed before matching rather than enumerated in every pattern.
+ */
+function collapseSeparators(s: string): string {
+  return (
+    s
+      // "1920_x_1080" -> "1920x1080"
+      .replace(/(\d)_x_(\d)/g, '$1x$2')
+      // "m_2_nvme" -> "m2_nvme". No \b after the digit: `_` is a word character,
+      // so \bm_2\b never matches inside a canonicalised token.
+      .replace(/(^|_)m_2(?=_|$)/g, '$1m2')
+  );
+}
+
+/**
+ * Map a storage description onto the four values `catalog.sku.storage_type`
+ * permits, so a form that says `NVMe` and the row read back saying `NVME_SSD`
+ * produce one key rather than two.
+ *
+ * Without this the dedupe guarantee fails **open**. `UNIQUE (normalized_key)`
+ * accepts the duplicate happily, because the two keys genuinely differ — the
+ * constraint is doing its job on inputs that were never made comparable. At 200
+ * SKUs the catalog is quietly corrupt with every test still green.
+ *
+ * A bare `SSD` is deliberately not guessed at. Resolving it to SATA_SSD would
+ * turn a correct declaration of an NVMe drive into a mismatch, so it stays
+ * `ssd` — stable, and honest about not knowing.
+ */
+export function canonStorageType(input: string | null | undefined): string {
+  const s = collapseSeparators(canon(input));
+  if (!s) return '';
+  if (/^(nvme|nvme_ssd|m2_nvme|nvme_m2|pcie_ssd|pcie_nvme|ssd_nvme)$/.test(s)) return 'nvme_ssd';
+  if (/^(sata_ssd|sata|ssd_sata|m2_sata|sata3_ssd)$/.test(s)) return 'sata_ssd';
+  if (/^(hdd|sata_hdd|hard_disk|hard_drive|spinning)$/.test(s)) return 'hdd';
+  if (/^(emmc|e_mmc)$/.test(s)) return 'emmc';
+  return s;
+}
+
+/**
+ * Map a display description onto the five values `catalog.sku.resolution`
+ * permits. `1920x1080`, `1920 x 1080`, `FHD` and `Full HD` are one panel.
+ */
+export function canonResolution(input: string | null | undefined): string {
+  const s = collapseSeparators(canon(input));
+  if (!s) return '';
+  if (/^(hd|1366x768|1280x720)$/.test(s)) return 'hd';
+  if (/^(fhd|full_hd|fullhd|1920x1080|1920x1200)$/.test(s)) return 'fhd';
+  if (/^(qhd|2560x1440|2560x1600|wqxga)$/.test(s)) return 'qhd';
+  if (/^(4k|uhd|3840x2160|3840x2400)$/.test(s)) return '4k';
+  if (/^retina$/.test(s)) return 'retina';
+  return s;
+}
+
+/**
+ * The dedupe key.
+ *
+ * Two rules hold this together and both were broken before Phase 2:
+ *
+ *   1. **One code path.** Anything that needs a key calls this — ingest, CSV
+ *      import, the SKU-request near-match check, the test factories. A second
+ *      implementation that agrees today drifts tomorrow.
+ *   2. **One vocabulary.** Inputs are canonicalised to the values the columns
+ *      actually store before they are joined, so a key computed from a form and
+ *      a key computed from the row read back are byte-identical. They were not:
+ *      the free text `NVMe`/`1920x1080` a form supplies and the `NVME_SSD`/`FHD`
+ *      the CHECK constraints store produced two different keys for one machine.
+ */
 export function skuNormalizedKey(parts: SkuKeyParts): string {
   return [
     canon(parts.brand),
@@ -155,11 +228,15 @@ export function skuNormalizedKey(parts: SkuKeyParts): string {
     canon(parts.cpuModel),
     String(parts.ramGb),
     String(parts.storageGb),
-    canon(parts.storageType),
-    parts.screenSizeIn != null ? String(parts.screenSizeIn) : '',
-    canon(parts.screenResolution),
+    canonStorageType(parts.storageType),
+    parts.screenSizeIn != null ? String(Number(parts.screenSizeIn)) : '',
+    canonResolution(parts.screenResolution),
     canon(parts.gpu),
     canon(parts.os),
+    // Not in Task 2's list, and it has to be: a Latitude 5420 and a Latitude
+    // 5420 Touch are different products at different prices. Omitting it merges
+    // them under one key and the merge is unrecoverable once units are listed.
+    parts.isTouch ? 'touch' : 'nontouch',
   ].join('|');
 }
 

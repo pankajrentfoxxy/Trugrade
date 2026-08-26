@@ -469,13 +469,30 @@ export function Skeleton({
  * ======================================================================== */
 
 export interface RepresentativeImageProps {
-  src: string;
+  /** Omit or pass null when nothing resolved — a labelled placeholder renders. */
+  src?: string | null;
   alt: string;
   grade: Grade;
   /** Where the buyer can see the *actual* unit's photographs, before purchase. */
   passportHref?: string;
+  /**
+   * Which level of the catalog the photograph actually came from.
+   *
+   * A series-level image is a photograph of a **different machine** in the same
+   * family. Rendering it identically to a SKU-specific one is the quiet half of
+   * the misrepresentation risk, so the caption widens with the anchor.
+   */
+  match?: 'SKU' | 'MODEL' | 'SERIES' | 'PLACEHOLDER';
   className?: string;
 }
+
+/** What the caption has to admit to at each anchor level. */
+const MATCH_QUALIFIER: Record<NonNullable<RepresentativeImageProps['match']>, string | null> = {
+  SKU: null,
+  MODEL: 'This photograph is of another unit of the same model, in this grade.',
+  SERIES: 'This photograph is of another model in the same range, in this grade.',
+  PLACEHOLDER: null,
+};
 
 /**
  * A listing image is a representative image of a grade, not the machine the
@@ -486,16 +503,55 @@ export interface RepresentativeImageProps {
  * claims and r.7(2) prohibits misrepresenting quality; a representative image
  * with an honest label and a real per-unit report behind it is fine, and one
  * presented as *the* machine is not.
+ *
+ * Three renderings, and the third is the one that keeps the other two honest:
+ * a SKU-level photograph, a broader one that says whose machine it actually is,
+ * and — when nothing resolved — a placeholder that says so in words rather than
+ * a grey box the buyer reads as "no photo available yet".
  */
 export function RepresentativeImage({
   src,
   alt,
   grade,
   passportHref,
+  match = 'SKU',
   className,
 }: RepresentativeImageProps): React.JSX.Element {
+  const passport = passportHref ? (
+    <>
+      Your unit&rsquo;s actual inspection report and photographs are on its{' '}
+      <a href={passportHref} className="text-acc-hi underline underline-offset-2">
+        unit passport
+      </a>
+      .
+    </>
+  ) : (
+    <>Your unit&rsquo;s actual inspection report and photographs are on the unit passport.</>
+  );
+
+  // Nothing resolved. Say that, rather than rendering a broken image or an
+  // unlabelled grey box — Task 4 requires the placeholder to be explicit.
+  if (!src || match === 'PLACEHOLDER') {
+    return (
+      <figure className={cn('flex flex-col gap-3', className)} data-testid="representative-image">
+        <div
+          role="img"
+          aria-label={`No photograph available for Grade ${GRADE_LABEL[grade]} condition`}
+          className="flex aspect-[3/2] w-full items-center justify-center rounded-lg border border-dashed border-rule bg-sheet-2 px-5 text-center text-body-sm text-ink-2"
+        >
+          No photograph of Grade {GRADE_LABEL[grade]} condition yet
+        </div>
+        <figcaption className="text-body-sm text-ink-2">
+          We have not photographed this grade for this model yet. {passport}
+        </figcaption>
+      </figure>
+    );
+  }
+
+  const qualifier = MATCH_QUALIFIER[match];
+
   return (
-    <figure className={cn('flex flex-col gap-3', className)}>
+    <figure className={cn('flex flex-col gap-3', className)} data-testid="representative-image">
       <img
         src={src}
         alt={alt}
@@ -503,17 +559,8 @@ export function RepresentativeImage({
       />
       <figcaption className="text-body-sm text-ink-2">
         Representative image of Grade {GRADE_LABEL[grade]} condition.{' '}
-        {passportHref ? (
-          <>
-            Your unit&rsquo;s actual inspection report and photographs are on its{' '}
-            <a href={passportHref} className="text-acc-hi underline underline-offset-2">
-              unit passport
-            </a>
-            .
-          </>
-        ) : (
-          <>Your unit&rsquo;s actual inspection report and photographs are on the unit passport.</>
-        )}
+        {qualifier ? `${qualifier} ` : ''}
+        {passport}
       </figcaption>
     </figure>
   );

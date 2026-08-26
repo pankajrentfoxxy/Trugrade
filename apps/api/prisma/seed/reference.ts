@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { ONBOARDING_COUNTS, seedOnboardingDefinitions } from './onboarding-definitions';
+import { seedCatalogReference } from './catalog-reference';
 import {
   GRADE_CORRECTION_AUTO_APPLY_DAYS,
   INSPECTION_WINDOW_HOURS,
@@ -302,6 +303,8 @@ export async function seedReference(
 
   const rbac = await seedRbac(prisma);
   log(`  RBAC: ${rbac.roles} roles, ${rbac.permissions} permissions, ${rbac.grants} new grant(s)`);
+
+  await seedCatalogReference(prisma, log);
 
   await seedOnboardingDefinitions(prisma);
   log(

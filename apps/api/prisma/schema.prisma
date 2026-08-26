@@ -19,48 +19,57 @@ model brand {
   margin_rule       margin_rule[]
   vendor_capability vendor_capability[]
 
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "ix_brand_name_trgm", type: Gin)
   @@schema("catalog")
 }
 
 model catalog_change_log {
-  id           BigInt        @id @default(autoincrement())
-  sku_id       String        @db.Uuid
+  id           BigInt       @id @default(autoincrement())
+  sku_id       String?      @db.Uuid
   field        String
   old_value    String?
   new_value    String?
-  changed_by   String?       @db.Uuid
-  changed_at   DateTime      @default(now()) @db.Timestamptz(6)
-  user_account user_account? @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku          sku           @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changed_by   String       @db.Uuid
+  changed_at   DateTime     @default(now()) @db.Timestamptz(6)
+  entity_type  String
+  entity_id    String       @db.Uuid
+  reason       String?
+  action       String       @default("UPDATE")
+  user_account user_account @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku          sku?         @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([entity_type, entity_id, changed_at(sort: Desc)], map: "ix_change_log_entity")
   @@schema("catalog")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model model {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  series_id    String   @db.Uuid
-  name         String
-  model_year   Int?
-  form_factor  String?
-  msrp_new_inr Decimal? @db.Decimal(14, 2)
-  description  String?
-  is_active    Boolean  @default(true)
-  series       series   @relation(fields: [series_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku          sku[]
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  series_id       String            @db.Uuid
+  name            String
+  model_year      Int?
+  form_factor     String?
+  msrp_new_inr    Decimal?          @db.Decimal(14, 2)
+  description     String?
+  is_active       Boolean           @default(true)
+  condition_image condition_image[]
+  series          series            @relation(fields: [series_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku             sku[]
 
   @@unique([series_id, name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "ix_model_name_trgm", type: Gin)
   @@schema("catalog")
 }
 
 model series {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  brand_id  String  @db.Uuid
-  name      String
-  slug      String
-  is_active Boolean @default(true)
-  model     model[]
-  brand     brand   @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  brand_id        String            @db.Uuid
+  name            String
+  slug            String
+  is_active       Boolean           @default(true)
+  condition_image condition_image[]
+  model           model[]
+  brand           brand             @relation(fields: [brand_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([brand_id, name])
   @@schema("catalog")
@@ -69,52 +78,67 @@ model series {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model sku {
-  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  model_id           String               @db.Uuid
-  sku_code           String               @unique
-  normalized_key     String               @unique
-  cpu_brand          String
-  cpu_family         String
-  cpu_model          String
-  cpu_generation     String
-  cores              Int?
-  threads            Int?
-  ram_gb             Int
-  ram_type           String?
-  ram_upgradable_to  Int?
-  storage_type       String
-  storage_gb         Int
-  gpu_type           String
-  gpu_model          String?
-  screen_size_inch   Decimal              @db.Decimal(4, 1)
-  resolution         String
-  panel_type         String?
-  is_touch           Boolean              @default(false)
-  os_supported       String
-  ports_json         Json?
-  weight_kg          Decimal?             @db.Decimal(5, 2)
-  battery_wh         Int?
-  charger_watt       Int?
-  hsn_code           String               @default("8471")
-  gst_rate           Decimal              @default(18.00) @db.Decimal(5, 2)
-  version            Int                  @default(1)
-  is_active          Boolean              @default(true)
-  created_at         DateTime             @default(now()) @db.Timestamptz(6)
-  created_by         String?              @db.Uuid
-  catalog_change_log catalog_change_log[]
-  user_account       user_account?        @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  model              model                @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sku_image          sku_image[]
-  sku_request        sku_request[]
-  listing            listing[]
-  unit               unit[]
-  order_line         order_line[]
-  rfq                rfq[]
-  invoice_line       invoice_line[]
-  vendor_sku_quality vendor_sku_quality[]
+  id                              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  model_id                        String                   @db.Uuid
+  sku_code                        String                   @unique
+  normalized_key                  String                   @unique
+  cpu_brand                       String
+  cpu_family                      String
+  cpu_model                       String
+  cpu_generation                  String
+  cores                           Int?
+  threads                         Int?
+  ram_gb                          Int
+  ram_type                        String?
+  ram_upgradable_to               Int?
+  storage_type                    String
+  storage_gb                      Int
+  gpu_type                        String
+  gpu_model                       String?
+  screen_size_inch                Decimal                  @db.Decimal(4, 1)
+  resolution                      String
+  panel_type                      String?
+  is_touch                        Boolean                  @default(false)
+  os_supported                    String
+  ports_json                      Json?
+  weight_kg                       Decimal?                 @db.Decimal(5, 2)
+  battery_wh                      Int?
+  charger_watt                    Int?
+  hsn_code                        String                   @default("84713010")
+  gst_rate                        Decimal                  @default(18.00) @db.Decimal(5, 2)
+  version                         Int                      @default(1)
+  is_active                       Boolean                  @default(true)
+  created_at                      DateTime                 @default(now()) @db.Timestamptz(6)
+  created_by                      String?                  @db.Uuid
+  ram_slots                       Int?
+  storage_slots                   Int?
+  os_licence_type                 String?
+  wifi_standard                   String?
+  bluetooth_version               String?
+  keyboard_layout                 String?
+  backlit_keyboard                Boolean?
+  fingerprint_reader              Boolean?
+  webcam_mp                       Decimal?                 @db.Decimal(4, 1)
+  year_released                   Int?
+  updated_at                      DateTime                 @default(now()) @db.Timestamptz(6)
+  search_tsv                      Unsupported("tsvector")? @default(dbgenerated("(((((((((setweight(to_tsvector('simple'::regconfig, COALESCE(sku_code, ''::text)), 'A'::\"char\") || setweight(to_tsvector('simple'::regconfig, COALESCE(cpu_model, ''::text)), 'B'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(cpu_family, ''::text)), 'B'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(cpu_generation, ''::text)), 'B'::\"char\")) || setweight(to_tsvector('simple'::regconfig, (COALESCE((ram_gb)::text, ''::text) || 'gb'::text)), 'C'::\"char\")) || setweight(to_tsvector('simple'::regconfig, (COALESCE((storage_gb)::text, ''::text) || 'gb'::text)), 'C'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(storage_type, ''::text)), 'C'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(resolution, ''::text)), 'D'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(gpu_model, ''::text)), 'D'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(os_supported, ''::text)), 'D'::\"char\"))"))
+  catalog_change_log              catalog_change_log[]
+  condition_image                 condition_image[]
+  hsn_code_sku_hsn_codeTohsn_code hsn_code                 @relation("sku_hsn_codeTohsn_code", fields: [hsn_code], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "fk_sku_hsn")
+  user_account                    user_account?            @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model                           model                    @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku_image                       sku_image[]
+  sku_request                     sku_request[]
+  listing                         listing[]
+  unit                            unit[]
+  order_line                      order_line[]
+  rfq                             rfq[]
+  invoice_line                    invoice_line[]
+  vendor_sku_quality              vendor_sku_quality[]
 
   @@index([cpu_generation, ram_gb, storage_gb], map: "ix_sku_filter")
   @@index([ports_json], map: "ix_sku_ports", type: Gin)
+  @@index([search_tsv], map: "ix_sku_search", type: Gin)
   @@schema("catalog")
 }
 
@@ -127,6 +151,7 @@ model sku_image {
   sort_order Int    @default(0)
   sku        sku    @relation(fields: [sku_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([sku_id], map: "ix_sku_image_sku")
   @@schema("catalog")
 }
 
@@ -620,6 +645,9 @@ model user_account {
   password_expires_at                                                        DateTime?                     @db.Timestamptz(6)
   mfa_enrolled_at                                                            DateTime?                     @db.Timestamptz(6)
   catalog_change_log                                                         catalog_change_log[]
+  condition_image_condition_image_created_byTouser_account                   condition_image[]             @relation("condition_image_created_byTouser_account")
+  condition_image_condition_image_retired_byTouser_account                   condition_image[]             @relation("condition_image_retired_byTouser_account")
+  grade_definition                                                           grade_definition[]
   sku                                                                        sku[]
   sku_request                                                                sku_request[]
   buyer_approval_policy_buyer_approval_policy_approver_user_idTouser_account buyer_approval_policy[]       @relation("buyer_approval_policy_approver_user_idTouser_account")
@@ -3088,6 +3116,93 @@ model vendor_sku_quality {
 
   @@id([vendor_org_id, sku_id, grade])
   @@schema("qc")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model condition_image {
+  id                                                    String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sku_id                                                String?           @db.Uuid
+  model_id                                              String?           @db.Uuid
+  series_id                                             String?           @db.Uuid
+  grade                                                 grade_type
+  view_code                                             String
+  s3_key                                                String
+  alt_text                                              String
+  is_primary                                            Boolean           @default(false)
+  sort_order                                            Int               @default(0)
+  defect_type                                           String?
+  severity                                              String?
+  shot_angle                                            String?
+  captured_on                                           DateTime?         @db.Date
+  photographer                                          String?
+  licence                                               String?
+  blur_data_uri                                         String?
+  width_px                                              Int?
+  height_px                                             Int?
+  version                                               Int               @default(1)
+  retired_at                                            DateTime?         @db.Timestamptz(6)
+  retired_by                                            String?           @db.Uuid
+  supersedes_id                                         String?           @db.Uuid
+  created_by                                            String            @db.Uuid
+  created_at                                            DateTime          @default(now()) @db.Timestamptz(6)
+  user_account_condition_image_created_byTouser_account user_account      @relation("condition_image_created_byTouser_account", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  model                                                 model?            @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_account_condition_image_retired_byTouser_account user_account?     @relation("condition_image_retired_byTouser_account", fields: [retired_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  series                                                series?           @relation(fields: [series_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku                                                   sku?              @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  condition_image                                       condition_image?  @relation("condition_imageTocondition_image", fields: [supersedes_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_condition_image                                 condition_image[] @relation("condition_imageTocondition_image")
+
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model grade_definition {
+  grade                  grade_type
+  effective_from         DateTime      @default(dbgenerated("CURRENT_DATE")) @db.Date
+  display_name           String
+  customer_description   String
+  min_battery_health_pct Int
+  max_cycle_count        Int?
+  min_cosmetic_score     Int
+  allowed_defects_json   Json          @default("{}")
+  screen_defects_allowed Boolean       @default(false)
+  effective_to           DateTime?     @db.Date
+  created_by             String?       @db.Uuid
+  created_at             DateTime      @default(now()) @db.Timestamptz(6)
+  user_account           user_account? @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([grade, effective_from])
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+model gst_rate {
+  id                                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  hsn_code                             String
+  rate_pct                             Decimal   @db.Decimal(5, 2)
+  cess_pct                             Decimal   @default(0) @db.Decimal(5, 2)
+  effective_from                       DateTime  @db.Date
+  effective_to                         DateTime? @db.Date
+  notification                         String?
+  hsn_code_gst_rate_hsn_codeTohsn_code hsn_code  @relation("gst_rate_hsn_codeTohsn_code", fields: [hsn_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("catalog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model hsn_code {
+  code                                 String     @id
+  description                          String
+  gst_rate_gst_rate_hsn_codeTohsn_code gst_rate[] @relation("gst_rate_hsn_codeTohsn_code")
+  sku_sku_hsn_codeTohsn_code           sku[]      @relation("sku_hsn_codeTohsn_code")
+
+  @@schema("catalog")
 }
 
 enum address_type {
