@@ -21,6 +21,22 @@ services:
       - max_connections=200
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Durability off, deliberately, and only here.
+      #
+      # The integration suite truncates the whole 137-table schema before every
+      # test, and each TRUNCATE fsyncs every relation file it touches. On Docker
+      # for Windows that cost ~3.5s per test, so one spec file took five minutes
+      # and the cost grew with every test added.
+      #
+      # This container holds nothing that cannot be rebuilt: an unclean shutdown
+      # may corrupt it and the fix is `pnpm db:reset`. Never copy these flags
+      # anywhere that holds real data.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U trugrade -d trugrade']
       interval: 3s
