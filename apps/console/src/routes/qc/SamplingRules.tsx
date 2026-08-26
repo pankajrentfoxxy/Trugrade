@@ -1,12 +1,15 @@
 import * as React from 'react';
 import { money } from '@trugrade/contracts';
-import { Button, EmptyState, Input, Skeleton, StatusPill } from '@trugrade/ui';
+import { Button, DataBoard, EmptyState, Input, Skeleton, StatusPill, type Column } from '@trugrade/ui';
+import { NotMeasured, PageHeader, Section, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { send } from './api';
-import { Blank, Panel, Select, TD, TH } from './controls';
 import type { SamplingRuleRow } from './types';
 
 /**
+ * ARCHETYPE B — Board. The active rules, then the form that versions them.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ *
  * Which fraction of a vendor's stock gets inspected, and what they had to earn
  * to get there.
  *
@@ -80,6 +83,48 @@ export function checkDraft(d: Draft): string[] {
   return problems;
 }
 
+const ACTIVE_COLUMNS: ReadonlyArray<Column<SamplingRuleRow>> = [
+  { key: 'tier', header: 'Tier', cell: (r) => r.vendorTier },
+  {
+    key: 'sample',
+    header: 'Sample',
+    cell: (r) => (
+      // A sample below 100% is the measured concession this whole screen is
+      // about, so it is the value that reads at full ink.
+      <span className={Number(r.samplePct) < 100 ? 'font-mono tnum text-ink' : 'font-mono tnum text-ink-2'}>
+        {r.samplePct}%
+      </span>
+    ),
+  },
+  {
+    key: 'requires',
+    header: 'Requires',
+    cell: (r) => (
+      <span className="font-mono tnum text-ink-2">
+        {r.minUnitsInspected} units · {r.minPassRate}% pass · {r.minGradeAccuracy}% grade accuracy
+      </span>
+    ),
+  },
+  {
+    key: 'alwaysFull',
+    header: 'Always full above',
+    cell: (r) =>
+      r.alwaysFullAboveValue ? (
+        <span className="font-mono tnum">{money(r.alwaysFullAboveValue).format()}</span>
+      ) : (
+        <NotMeasured
+          why="No consignment value forces a full inspection at this tier"
+          label="No threshold"
+        />
+      ),
+  },
+  {
+    key: 'effectiveFrom',
+    header: 'Effective from',
+    cell: (r) => <span className="font-mono tnum">{r.effectiveFrom}</span>,
+  },
+];
+
 export function SamplingRulesRoute(): React.JSX.Element {
   const { data, error } = useResource<SamplingRuleRow[]>(
     '/api/qc/sampling-rules',
@@ -140,65 +185,28 @@ export function SamplingRulesRoute(): React.JSX.Element {
   if (!data) return <Skeleton lines={8} />;
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Sampling rules</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Sampling rules">
         One active rule per tier. Saving a new one retires the current one rather than editing it,
         because an inspection has to be reproducible against the rules in force on its own date.
-      </p>
+      </PageHeader>
 
-      <Panel title="Active" subtitle={`${active.length} of five tiers have an active rule.`}>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <caption className="sr-only">The active sampling rule for each vendor tier.</caption>
-            <thead>
-              <tr className="border-b border-rule">
-                <th scope="col" className={TH}>
-                  Tier
-                </th>
-                <th scope="col" className={TH}>
-                  Sample
-                </th>
-                <th scope="col" className={TH}>
-                  Requires
-                </th>
-                <th scope="col" className={TH}>
-                  Always full above
-                </th>
-                <th scope="col" className={TH}>
-                  Effective from
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {active.map((r) => (
-                <tr key={r.id} className="border-b border-rule-2">
-                  <td className={TD}>{r.vendorTier}</td>
-                  <td className={`${TD} tnum`}>
-                    <span className={Number(r.samplePct) < 100 ? 'text-ink' : 'text-ink-2'}>
-                      {r.samplePct}%
-                    </span>
-                  </td>
-                  <td className={`${TD} tnum text-ink-2`}>
-                    {r.minUnitsInspected} units · {r.minPassRate}% pass · {r.minGradeAccuracy}%
-                    grade accuracy
-                  </td>
-                  <td className={`${TD} tnum`}>
-                    {r.alwaysFullAboveValue ? (
-                      money(r.alwaysFullAboveValue).format()
-                    ) : (
-                      <Blank why="No consignment value forces a full inspection at this tier" />
-                    )}
-                  </td>
-                  <td className={`${TD} tnum`}>{r.effectiveFrom}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+      <Section title="Active" subtitle={`${active.length} of five tiers have an active rule.`}>
+        <DataBoard
+          caption="The active sampling rule for each vendor tier."
+          columns={ACTIVE_COLUMNS}
+          rows={active}
+          rowKey={(r) => r.id}
+          empty={
+            <EmptyState
+              title="No tier has an active rule"
+              body="Nothing is being sampled: every consignment falls through to a full inspection until a rule exists."
+            />
+          }
+        />
+      </Section>
 
-      <Panel
+      <Section
         title="New rule"
         subtitle={
           replacing
@@ -281,15 +289,17 @@ export function SamplingRulesRoute(): React.JSX.Element {
           {saved && <p className="mt-4 text-body-sm text-pass">{saved}</p>}
 
           <div className="mt-5">
+            {/* The one amber control on this screen: it is the only thing here
+                that writes anything. */}
             <Button type="submit" variant="primary" loading={saving}>
               Save as a new version
             </Button>
           </div>
         </form>
-      </Panel>
+      </Section>
 
       {superseded.length > 0 && (
-        <Panel title="Superseded" subtitle="Kept so an old inspection can be re-derived.">
+        <Section title="Superseded" subtitle="Kept so an old inspection can be re-derived.">
           <ul className="flex flex-col gap-2 text-body-sm text-ink-2">
             {superseded.map((r) => (
               <li key={r.id}>
@@ -300,7 +310,7 @@ export function SamplingRulesRoute(): React.JSX.Element {
               </li>
             ))}
           </ul>
-        </Panel>
+        </Section>
       )}
     </div>
   );

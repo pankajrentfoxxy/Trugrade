@@ -1,19 +1,24 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Button, EmptyState, GradeBadge, Input, Skeleton, StatusPill } from '@trugrade/ui';
-import { GRADES, type Grade } from '@trugrade/contracts';
-import { useResource } from '../../lib/useResource';
 import {
-  API,
-  gradeLabel,
-  onDate,
-  postJson,
-  rupees,
-  type Page,
-  type VendorListing,
-} from './api';
+  Button,
+  Checkbox,
+  DataBoard,
+  EmptyState,
+  GradeBadge,
+  Input,
+  StatusPill,
+  type Column,
+} from '@trugrade/ui';
+import { GRADES, type Grade } from '@trugrade/contracts';
+import { Board, NotMeasured, PageHeader, Section, Select } from '../../lib/controls';
+import { useResource } from '../../lib/useResource';
+import { API, gradeLabel, onDate, postJson, rupees, type Page, type VendorListing } from './api';
 
 /**
+ * ARCHETYPE B — Board. Filter rail + data table + row actions.
+ * DENSITY: default (vendor portal), set on the app root by the shell.
+ *
  * Listing management.
  *
  * The columns are the vendor's own facts: their declared grade, our corrected
@@ -48,7 +53,14 @@ const STATUSES = Object.keys(STATUS_TONE);
 /** Pause and resume are the only bulk actions: everything else needs a reason per listing. */
 const PAUSABLE = new Set(['ACTIVE', 'PARTIALLY_ACTIVE']);
 
-function RepriceRow({
+/**
+ * The reprice form, below the board rather than as a `<tr colSpan={8}>`.
+ *
+ * `DataBoard` is the one table component and deliberately has no expansion slot:
+ * a row that opens a two-field form spanning every column is a table pretending
+ * to be a page. Nothing about what it posts, or when, has changed.
+ */
+function RepricePanel({
   listing,
   onDone,
 }: {
@@ -63,66 +75,64 @@ function RepriceRow({
   const valid = /^\d+(\.\d{1,2})?$/.test(amount.trim()) && Number(amount) > 0;
 
   return (
-    <tr className="border-t border-rule-2 bg-sheet-2">
-      <td colSpan={8} className="p-5">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="w-52">
-            <Input
-              label="New net payout per machine"
-              mono
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div className="w-72">
-            <Input
-              label="Why"
-              hint="Goes on the price history, with your name."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-          <Button
-            variant="primary"
-            loading={busy}
-            disabledReason={
-              !valid
-                ? 'Enter the amount you want to receive per machine.'
-                : reason.trim().length < 3
-                  ? 'Say why, in a few words at least — this goes on the record.'
-                  : ''
-            }
-            onClick={() => {
-              setBusy(true);
-              setError(null);
-              void postJson(API.reprice(listing.id), {
-                vendorNetPayout: amount.trim(),
-                reason: reason.trim(),
-              })
-                .then(onDone)
-                .catch((e: Error) => setError(e.message))
-                .finally(() => setBusy(false));
-            }}
-          >
-            Reprice
-          </Button>
-          <Button variant="ghost" onClick={onDone}>
-            Cancel
-          </Button>
+    <Section title="Reprice" subtitle="What you receive per machine, and why it is changing.">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="w-52">
+          <Input
+            label="New net payout per machine"
+            mono
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
         </div>
-        {/* The one thing a vendor is always surprised by. Said before the click. */}
-        <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-          Machines already reserved against an order keep the price they were reserved at. A price
-          far below the trailing 30-day median is flagged for a look, not blocked.
+        <div className="w-72">
+          <Input
+            label="Why"
+            hint="Goes on the price history, with your name."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        <Button
+          variant="primary"
+          loading={busy}
+          disabledReason={
+            !valid
+              ? 'Enter the amount you want to receive per machine.'
+              : reason.trim().length < 3
+                ? 'Say why, in a few words at least — this goes on the record.'
+                : ''
+          }
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            void postJson(API.reprice(listing.id), {
+              vendorNetPayout: amount.trim(),
+              reason: reason.trim(),
+            })
+              .then(onDone)
+              .catch((e: Error) => setError(e.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Reprice
+        </Button>
+        <Button variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+      {/* The one thing a vendor is always surprised by. Said before the click. */}
+      <p className="mt-3 max-w-prose text-body-sm text-ink-2">
+        Machines already reserved against an order keep the price they were reserved at. A price far
+        below the trailing 30-day median is flagged for a look, not blocked.
+      </p>
+      {error && (
+        <p className="mt-3 text-body-sm text-fail" role="alert">
+          {error}
         </p>
-        {error && (
-          <p className="mt-3 text-body-sm text-fail" role="alert">
-            {error}
-          </p>
-        )}
-      </td>
-    </tr>
+      )}
+    </Section>
   );
 }
 
@@ -156,14 +166,14 @@ export function VendorListingsRoute(): React.JSX.Element {
     setSelected(new Set());
   }
 
-  function toggle(id: string): void {
+  const toggle = React.useCallback((id: string): void => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   async function bulk(action: 'PAUSE' | 'RESUME'): Promise<void> {
     setActionError(null);
@@ -175,6 +185,117 @@ export function VendorListingsRoute(): React.JSX.Element {
       setActionError((e as Error).message);
     }
   }
+
+  const columns = React.useMemo<ReadonlyArray<Column<VendorListing>>>(
+    () => [
+      {
+        key: 'select',
+        header: 'Select',
+        headerHidden: true,
+        cell: (l) => (
+          <Checkbox
+            label={<span className="sr-only">Select listing {l.id}</span>}
+            checked={selected.has(l.id)}
+            onChange={() => toggle(l.id)}
+          />
+        ),
+      },
+      {
+        key: 'grade',
+        header: 'Grade',
+        cell: (l) => (
+          <span className="flex flex-wrap items-center gap-2">
+            <GradeBadge
+              grade={l.grade as Grade}
+              variant={l.gradeCorrectedFrom ? 'corrected' : 'verified'}
+              previousGrade={(l.gradeCorrectedFrom as Grade | null) ?? undefined}
+            />
+            <StatusPill
+              tone={STATUS_TONE[l.status] ?? 'neutral'}
+              label={l.status.replaceAll('_', ' ')}
+              className="whitespace-nowrap"
+            />
+            {l.underPriceReview && <StatusPill tone="warn" label="Under review" />}
+          </span>
+        ),
+      },
+      {
+        key: 'units',
+        header: 'Units',
+        numeric: true,
+        cell: (l) => `${l.qtyAvailable}/${l.qtyTotal}`,
+      },
+      {
+        key: 'awaitingQc',
+        header: 'Awaiting QC',
+        numeric: true,
+        cell: (l) => <span className="text-ink-2">{l.qtyAwaitingQc}</span>,
+      },
+      {
+        key: 'failed',
+        header: 'Failed',
+        numeric: true,
+        cell: (l) =>
+          l.qtyQcFailed > 0 ? (
+            // Rule 1 of the whole model, said where a vendor will see it: a
+            // failed machine is absent from the storefront, not dimmed and not
+            // out of stock. It is theirs again.
+            <span className="text-ink-2" title="Never listed. These machines stay yours.">
+              {l.qtyQcFailed}
+            </span>
+          ) : (
+            <span className="font-sans text-body-sm text-ink-4">None</span>
+          ),
+      },
+      {
+        key: 'ask',
+        header: 'Your ask',
+        numeric: true,
+        cell: (l) =>
+          l.vendorAskPrice === null ? (
+            <NotMeasured why="No price has been set on this listing" label="No price set" />
+          ) : (
+            rupees(l.vendorAskPrice)
+          ),
+      },
+      {
+        key: 'inspection',
+        header: 'Inspection',
+        cell: (l) =>
+          l.expiresAt ? (
+            <span className="text-ink-2">
+              Valid to <span className="font-mono tnum">{onDate(l.expiresAt)}</span>
+            </span>
+          ) : (
+            <NotMeasured why="This listing has not been inspected yet" label="Not inspected" />
+          ),
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        headerHidden: true,
+        cell: (l) => (
+          <span className="flex justify-end gap-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-expanded={repricing === l.id}
+              onClick={() => setRepricing(repricing === l.id ? null : l.id)}
+            >
+              Reprice
+            </Button>
+            <Link
+              className="text-acc-ink underline underline-offset-4"
+              to={`/vendor/listings/${l.id}`}
+            >
+              Units
+            </Link>
+          </span>
+        ),
+      },
+    ],
+    [selected, toggle, repricing],
+  );
 
   if (error) {
     return (
@@ -189,55 +310,49 @@ export function VendorListingsRoute(): React.JSX.Element {
   const selectedRows = rows.filter((r) => selected.has(r.id));
   const canPause = selectedRows.some((r) => PAUSABLE.has(r.status));
   const canResume = selectedRows.some((r) => r.status === 'PAUSED');
+  const open = rows.find((r) => r.id === repricing);
 
   return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-h1 text-ink">Your stock</h1>
-        <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
-          List stock
-        </Link>
-      </div>
+    <div className="tg-stack">
+      <PageHeader
+        title="Your stock"
+        action={
+          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
+            List stock
+          </Link>
+        }
+      >
+        Your declared grade, our corrected grade where one exists, and the inspection clock.
+      </PageHeader>
 
-      <div className="mt-6 flex flex-wrap items-end gap-4">
-        <label className="flex flex-col gap-2">
-          <span className="text-body-sm font-medium text-ink-2">Status</span>
-          <select
-            value={status}
-            onChange={(e) => setFilter('status', e.target.value)}
-            className="h-11 rounded border border-rule bg-sheet px-4 text-body-sm text-ink"
-          >
-            <option value="">Every status</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replaceAll('_', ' ').toLowerCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-2">
-          <span className="text-body-sm font-medium text-ink-2">Grade</span>
-          <select
-            value={grade}
-            onChange={(e) => setFilter('grade', e.target.value)}
-            className="h-11 rounded border border-rule bg-sheet px-4 text-body-sm text-ink"
-          >
-            <option value="">Every grade</option>
-            {GRADES.map((g) => (
-              <option key={g} value={g}>
-                {gradeLabel(g)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="flex flex-wrap items-end gap-4">
+        <Select
+          label="Status"
+          value={status}
+          onChange={(e) => setFilter('status', e.target.value)}
+          options={[
+            { value: '', label: 'Every status' },
+            ...STATUSES.map((st) => ({ value: st, label: st.replaceAll('_', ' ').toLowerCase() })),
+          ]}
+        />
+        <Select
+          label="Grade"
+          value={grade}
+          onChange={(e) => setFilter('grade', e.target.value)}
+          options={[
+            { value: '', label: 'Every grade' },
+            ...GRADES.map((g) => ({ value: g, label: gradeLabel(g) })),
+          ]}
+        />
 
         {selected.size > 0 && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pb-2">
             <span className="text-body-sm text-ink-2">{selected.size} selected</span>
             <Button
               size="sm"
-              disabledReason={canPause ? '' : 'Nothing selected is live, so there is nothing to pause.'}
+              disabledReason={
+                canPause ? '' : 'Nothing selected is live, so there is nothing to pause.'
+              }
               onClick={() => void bulk('PAUSE')}
             >
               Pause
@@ -254,17 +369,20 @@ export function VendorListingsRoute(): React.JSX.Element {
       </div>
 
       {actionError && (
-        <p className="mt-4 text-body-sm text-fail" role="alert">
+        <p className="text-body-sm text-fail" role="alert">
           {actionError}
         </p>
       )}
 
-      {!data ? (
-        <div className="mt-6">
-          <Skeleton lines={8} />
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="mt-6">
+      <Board>
+        <DataBoard
+        caption={data ? `${rows.length} listings.` : 'Loading your listings.'}
+        columns={columns}
+        rows={rows}
+        rowKey={(l) => l.id}
+        loading={!data}
+        skeletonRows={8}
+        empty={
           <EmptyState
             title={status || grade ? 'Nothing matches this filter' : 'No stock listed yet'}
             body={
@@ -287,104 +405,18 @@ export function VendorListingsRoute(): React.JSX.Element {
               )
             }
           />
-        </div>
-      ) : (
-        <div className="mt-6 overflow-x-auto rounded-lg border border-rule">
-          <table className="w-full text-body-sm">
-            <thead className="bg-sheet-2">
-              <tr>
-                {['', 'Grade', 'Units', 'Awaiting QC', 'Failed', 'Your ask', 'Inspection', ''].map(
-                  (h, i) => (
-                    <th
-                      key={h || i}
-                      className="p-3 text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((l) => (
-                <React.Fragment key={l.id}>
-                  <tr className="border-t border-rule-2">
-                    <td className="p-3">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(l.id)}
-                        onChange={() => toggle(l.id)}
-                        aria-label={`Select listing ${l.id}`}
-                      />
-                    </td>
-                    <td className="p-3">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <GradeBadge
-                          grade={l.grade as Grade}
-                          variant={l.gradeCorrectedFrom ? 'corrected' : 'verified'}
-                          previousGrade={(l.gradeCorrectedFrom as Grade | null) ?? undefined}
-                        />
-                        <StatusPill
-                          tone={STATUS_TONE[l.status] ?? 'neutral'}
-                          label={l.status.replaceAll('_', ' ')}
-                        />
-                        {l.underPriceReview && <StatusPill tone="warn" label="Under review" />}
-                      </span>
-                    </td>
-                    <td className="p-3 font-mono text-data tnum text-ink">
-                      {l.qtyAvailable}/{l.qtyTotal}
-                    </td>
-                    <td className="p-3 font-mono text-data tnum text-ink-2">{l.qtyAwaitingQc}</td>
-                    <td className="p-3 font-mono text-data tnum text-ink-2">
-                      {l.qtyQcFailed > 0 ? (
-                        // Rule 1 of the whole model, said where a vendor will see
-                        // it: a failed machine is absent from the storefront, not
-                        // dimmed and not out of stock. It is theirs again.
-                        <span title="Never listed. These machines stay yours.">
-                          {l.qtyQcFailed}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="p-3 font-mono text-data tnum text-ink">
-                      {rupees(l.vendorAskPrice)}
-                    </td>
-                    <td className="p-3 text-ink-2">
-                      {l.expiresAt ? `Valid to ${onDate(l.expiresAt)}` : '—'}
-                    </td>
-                    <td className="p-3">
-                      <span className="flex justify-end gap-3">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setRepricing(repricing === l.id ? null : l.id)}
-                        >
-                          Reprice
-                        </Button>
-                        <Link
-                          className="text-acc-ink underline underline-offset-4"
-                          to={`/vendor/listings/${l.id}`}
-                        >
-                          Units
-                        </Link>
-                      </span>
-                    </td>
-                  </tr>
-                  {repricing === l.id && (
-                    <RepriceRow
-                      listing={l}
-                      onDone={() => {
-                        setRepricing(null);
-                        setReloadKey((k) => k + 1);
-                      }}
-                    />
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        }
+        />
+      </Board>
+
+      {open && (
+        <RepricePanel
+          listing={open}
+          onDone={() => {
+            setRepricing(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
       )}
     </div>
   );

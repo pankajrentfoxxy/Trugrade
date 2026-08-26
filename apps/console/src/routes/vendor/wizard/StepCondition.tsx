@@ -1,60 +1,22 @@
 import * as React from 'react';
-import { GradeBadge, Input, Skeleton } from '@trugrade/ui';
+import { GradeBadge, Input, Skeleton, TickRule, cn } from '@trugrade/ui';
 import { GRADES, type Grade } from '@trugrade/contracts';
+import { Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
 import { API, gradeLabel, type GradeDefinition, type VendorFacility } from '../api';
 import type { WizardDraft } from './draft';
 
+/** Step 2 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
+
 /**
- * A labelled `<select>`.
- *
- * `@trugrade/ui` has `Input` but no select, and this screen has seven of them.
- * A native `<select>` already carries the keyboard behaviour, the mobile picker
- * and the ARIA a custom listbox would have to reimplement — there is nothing
- * here worth building a component library entry for.
+ * The shared `Select` takes `{ value, label }`; these lists read better as
+ * tuples. One adapter, rather than rewriting seven constants or forking the
+ * control a third time.
  */
-function Select({
-  label,
-  hint,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  value: string;
-  options: ReadonlyArray<readonly [string, string]>;
-  onChange: (v: string) => void;
-}): React.JSX.Element {
-  const id = React.useId();
-  return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-body-sm font-medium text-ink-2">
-        {label}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-describedby={hint ? `${id}-hint` : undefined}
-        className="h-11 rounded border border-rule bg-sheet px-4 text-body-sm text-ink"
-      >
-        {options.map(([v, l]) => (
-          // `v || l`: the "choose one" placeholder has an empty value, and React
-          // reads an empty-string key as no key at all.
-          <option key={v || l} value={v}>
-            {l}
-          </option>
-        ))}
-      </select>
-      {hint && (
-        <p id={`${id}-hint`} className="text-body-sm text-ink-2">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}
+const opts = (
+  pairs: ReadonlyArray<readonly [string, string]>,
+): ReadonlyArray<{ value: string; label: string }> =>
+  pairs.map(([value, label]) => ({ value, label }));
 
 const CONDITION = [
   ['LIKE_NEW', 'Like new'],
@@ -142,10 +104,12 @@ function GradePicker({
         {GRADES.map((g) => (
           <label
             key={g}
-            className={[
-              'flex cursor-pointer items-start gap-4 rounded border p-4',
-              value === g ? 'border-acc bg-acc-wash' : 'border-rule bg-sheet',
-            ].join(' ')}
+            className={cn(
+              'flex cursor-pointer items-start gap-4 rounded border p-4 transition-colors',
+              // Amber as an active state — the third legitimate use of the
+              // accent, and the only one on this step.
+              value === g ? 'border-acc bg-acc-wash' : 'border-rule bg-sheet hover:bg-sheet-2',
+            )}
           >
             <input
               type="radio"
@@ -189,6 +153,7 @@ export function StepCondition({
   return (
     <div>
       <h2 className="text-h2 text-ink">Declare the condition</h2>
+      <TickRule />
 
       {/* The three sentences PHASE_03 Task 3 step 2 requires on this screen, in
           plain words and above the fields rather than under them. Disclosure at
@@ -215,27 +180,27 @@ export function StepCondition({
           <Select
             label="Condition"
             value={draft.conditionType}
-            options={CONDITION}
-            onChange={(conditionType) => patch({ conditionType })}
+            options={opts(CONDITION)}
+            onChange={(e) => patch({ conditionType: e.target.value })}
           />
           <Select
             label="Functional status"
             value={draft.functionalStatus}
-            options={FUNCTIONAL}
-            onChange={(functionalStatus) => patch({ functionalStatus })}
+            options={opts(FUNCTIONAL)}
+            onChange={(e) => patch({ functionalStatus: e.target.value })}
           />
           <Select
             label="Battery health"
             hint="A band, not a number — the inspection measures the number."
             value={draft.batteryHealthBand}
-            options={BATTERY}
-            onChange={(batteryHealthBand) => patch({ batteryHealthBand })}
+            options={opts(BATTERY)}
+            onChange={(e) => patch({ batteryHealthBand: e.target.value })}
           />
           <Select
             label="Parts"
             value={draft.partsStatus}
-            options={PARTS}
-            onChange={(partsStatus) => patch({ partsStatus })}
+            options={opts(PARTS)}
+            onChange={(e) => patch({ partsStatus: e.target.value })}
           />
           <Input
             label="Which parts were replaced"
@@ -254,14 +219,14 @@ export function StepCondition({
           <Select
             label="Repair history"
             value={draft.repairHistory}
-            options={REPAIR}
-            onChange={(repairHistory) => patch({ repairHistory })}
+            options={opts(REPAIR)}
+            onChange={(e) => patch({ repairHistory: e.target.value })}
           />
           <Select
             label="Data wipe"
             value={draft.dataWipeStatus}
-            options={WIPE}
-            onChange={(dataWipeStatus) => patch({ dataWipeStatus })}
+            options={opts(WIPE)}
+            onChange={(e) => patch({ dataWipeStatus: e.target.value })}
           />
         </div>
       </div>
@@ -294,26 +259,30 @@ export function StepCondition({
         <Select
           label="Manufacturer warranty remaining"
           value={draft.oemWarrantyRemaining}
-          options={OEM_WARRANTY}
-          onChange={(oemWarrantyRemaining) => patch({ oemWarrantyRemaining })}
+          options={opts(OEM_WARRANTY)}
+          onChange={(e) => patch({ oemWarrantyRemaining: e.target.value })}
         />
         <Select
           label="Returns window you offer"
           value={draft.sellerWarranty}
-          options={SELLER_WARRANTY}
-          onChange={(sellerWarranty) => patch({ sellerWarranty })}
+          options={opts(SELLER_WARRANTY)}
+          onChange={(e) => patch({ sellerWarranty: e.target.value })}
         />
         <Select
           label="Where we collect from"
           hint="Drives the inspection visit and the pickup window."
           value={draft.pickupLocationId}
           options={[
-            ['', facilities.error ? 'Could not load your locations' : 'Choose a location'],
-            ...(facilities.data ?? []).map(
-              (f) => [f.addressId, `${f.label} · ${f.city} ${f.pincode}`] as const,
-            ),
+            {
+              value: '',
+              label: facilities.error ? 'Could not load your locations' : 'Choose a location',
+            },
+            ...(facilities.data ?? []).map((f) => ({
+              value: f.addressId,
+              label: `${f.label} · ${f.city} ${f.pincode}`,
+            })),
           ]}
-          onChange={(pickupLocationId) => patch({ pickupLocationId })}
+          onChange={(e) => patch({ pickupLocationId: e.target.value })}
         />
       </div>
     </div>

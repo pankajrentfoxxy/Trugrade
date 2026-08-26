@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { REQUIRED_VIEWS, type ConditionImage, type Grade } from '@trugrade/contracts';
 import {
   ConditionImageCoverageRoute,
@@ -52,7 +53,13 @@ function renderWith(models: ModelCoverage[]): ReturnType<typeof render> {
     ok: true,
     json: async () => models,
   } as Response);
-  return render(<ConditionImageCoverageRoute />);
+  // The open model now lives in the query string, so the route reads router
+  // state. The assertions below are unchanged — this is a harness fix.
+  return render(
+    <MemoryRouter>
+      <ConditionImageCoverageRoute />
+    </MemoryRouter>,
+  );
 }
 
 beforeEach(() => {
@@ -69,8 +76,12 @@ describe('a gap is visible at a glance', () => {
     ]);
     await screen.findByText('Latitude 5420');
 
-    const gaps = container.querySelectorAll('td[data-state="gap"]');
-    const filled = container.querySelectorAll('td[data-state="filled"]');
+    // The ten view slots of a grade now live inside that grade's single cell —
+    // a thirty-two-column table is not readable at admin density, and DataBoard
+    // is the one table component. The marker, its two states and the
+    // never-colour-alone glyph are unchanged; only the element carrying them is.
+    const gaps = container.querySelectorAll('[data-state="gap"]');
+    const filled = container.querySelectorAll('[data-state="filled"]');
 
     // The whole point of the screen. If these two ever render identically the
     // grid is decoration, and the gap is found by a buyer instead.
@@ -152,7 +163,11 @@ describe('the per-grade publish gate', () => {
 describe('loading, empty and error', () => {
   it('says the grid did not load, and that nothing changed', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 503 } as Response);
-    render(<ConditionImageCoverageRoute />);
+    render(
+      <MemoryRouter>
+        <ConditionImageCoverageRoute />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText('The coverage grid did not load')).toBeInTheDocument();
     expect(screen.getByText(/Coverage unavailable \(503\)/)).toBeInTheDocument();

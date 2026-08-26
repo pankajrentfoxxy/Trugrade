@@ -1,10 +1,22 @@
 import * as React from 'react';
-import { EmptyState, GradeBadge, ScoreRing, Skeleton, StatusPill } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  GradeBadge,
+  KpiRow,
+  Skeleton,
+  StatusPill,
+  type Column,
+  type Kpi,
+} from '@trugrade/ui';
+import { NotMeasured, PageHeader, Section } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { Blank, Panel, TD, TH } from './controls';
 import type { AuditDashboard, AuditRecheckRow, TechnicianDivergenceRow } from './types';
 
 /**
+ * ARCHETYPE E — Workspace. A KPI row, then the queues it drills into.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ *
  * The 5% second look, and what it says about the people doing the first look.
  *
  * The framing matters more than the arithmetic here: **a technician whose
@@ -49,43 +61,67 @@ function DivergenceDetail({ row }: { row: AuditRecheckRow }): React.JSX.Element 
   );
 }
 
-function TechnicianRow({
-  row,
-  alertPct,
-}: {
-  row: TechnicianDivergenceRow;
-  alertPct: number;
-}): React.JSX.Element {
-  const rate = Number(row.divergenceRate);
-  // Under ten rechecks a rate is not yet a measurement of anything. Saying so is
-  // the same rule the vendor scorecard follows, and for the same reason.
-  const thin = row.rechecked < 10;
-  const over = !thin && rate > alertPct;
-
-  return (
-    <tr className="border-b border-rule-2">
-      <th scope="row" className={`${TD} font-normal`}>
-        {row.name}
-        <span className="block font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-          {row.employeeCode}
-        </span>
-      </th>
-      <td className={`${TD} tnum`}>{row.unitsInspectedTotal}</td>
-      <td className={`${TD} tnum`}>
-        {row.rechecked}
-        {row.unitsInspectedTotal > 0 && (
-          <span className="block text-body-sm text-ink-3">
-            {((row.rechecked / row.unitsInspectedTotal) * 100).toFixed(1)}% of their work
+/**
+ * The divergence cell: a rate, its denominator, and what to do about it.
+ *
+ * The denominator is not decoration. `09_FRONTEND_LOCKED.md`: every percentage
+ * carries its sample, because 13.33% over 15 rechecks and 13.33% over 900 are
+ * different facts and only one of them is worth a conversation.
+ */
+function divergenceColumns(alertPct: number): ReadonlyArray<Column<TechnicianDivergenceRow>> {
+  return [
+    {
+      key: 'name',
+      header: 'Technician',
+      cell: (row) => (
+        <>
+          {row.name}
+          <span className="block font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+            {row.employeeCode}
           </span>
-        )}
-      </td>
-      <td className={TD}>
-        {thin ? (
-          <StatusPill tone="neutral" label={`${row.diverged} of ${row.rechecked} rechecked`} />
-        ) : (
+        </>
+      ),
+    },
+    {
+      key: 'inspected',
+      header: 'Inspected',
+      numeric: true,
+      cell: (row) => row.unitsInspectedTotal,
+    },
+    {
+      key: 'rechecked',
+      header: 'Rechecked',
+      cell: (row) => (
+        <span className="font-mono tnum">
+          {row.rechecked}
+          {row.unitsInspectedTotal > 0 && (
+            <span className="block text-body-sm text-ink-3">
+              {((row.rechecked / row.unitsInspectedTotal) * 100).toFixed(1)}% of{' '}
+              {row.unitsInspectedTotal} inspections
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'divergence',
+      header: 'Divergence',
+      cell: (row) => {
+        const rate = Number(row.divergenceRate);
+        // Under ten rechecks a rate is not yet a measurement of anything. Saying
+        // so is the same rule the vendor scorecard follows, for the same reason.
+        const thin = row.rechecked < 10;
+        const over = !thin && rate > alertPct;
+        if (thin) {
+          return <StatusPill tone="neutral" label={`${row.diverged} of ${row.rechecked} rechecked`} />;
+        }
+        return (
           <>
             <span className={over ? 'font-semibold tnum text-fail' : 'tnum text-ink'}>
               {row.divergenceRate}%
+            </span>
+            <span className="block font-mono text-label uppercase tracking-[0.13em] text-ink-4">
+              {row.diverged} of {row.rechecked} rechecked
             </span>
             {over && (
               <span className="block text-body-sm text-fail">
@@ -93,18 +129,87 @@ function TechnicianRow({
               </span>
             )}
           </>
-        )}
-      </td>
-      <td className={TD}>
-        {row.isActive ? (
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (row) =>
+        row.isActive ? (
           <StatusPill tone="pass" label="Active" />
         ) : (
           <StatusPill tone="neutral" label="Inactive" />
-        )}
-      </td>
-    </tr>
-  );
+        ),
+    },
+  ];
 }
+
+const RECHECK_COLUMNS: ReadonlyArray<Column<AuditRecheckRow>> = [
+  {
+    key: 'unit',
+    header: 'Unit',
+    cell: (r) => (
+      <>
+        <code className="font-mono text-data text-ink">{r.serialNumber}</code>
+        <span className="block text-body-sm text-ink-3">{r.createdAt}</span>
+      </>
+    ),
+  },
+  {
+    key: 'original',
+    header: 'Original',
+    cell: (r) => (
+      <>
+        {r.originalGrade ? (
+          <GradeBadge grade={r.originalGrade} />
+        ) : (
+          <NotMeasured why="The original report carried no grade" label="No grade recorded" />
+        )}
+        <span className="mt-1 block text-body-sm text-ink-2">
+          {r.originalTechnicianName}
+          {r.originalScore !== null && ` · ${r.originalScore}`}
+        </span>
+      </>
+    ),
+  },
+  {
+    key: 'recheck',
+    header: 'Recheck',
+    cell: (r) => (
+      <>
+        {r.recheckGrade ? (
+          <GradeBadge grade={r.recheckGrade} />
+        ) : (
+          <NotMeasured why="The recheck carried no grade" label="No grade recorded" />
+        )}
+        <span className="mt-1 block text-body-sm text-ink-2">
+          {r.auditorName}
+          {r.recheckScore !== null && ` · ${r.recheckScore}`}
+        </span>
+      </>
+    ),
+  },
+  {
+    key: 'difference',
+    header: 'Difference',
+    cell: (r) => (
+      <>
+        {r.originalGrade && r.recheckGrade && r.originalGrade !== r.recheckGrade && (
+          // WARN, not FAIL. Two technicians disagreeing is a discrepancy to
+          // resolve; red is reserved for a machine that failed inspection.
+          <StatusPill
+            tone="warn"
+            label={`${gradeLabel(r.originalGrade)} to ${gradeLabel(r.recheckGrade)}`}
+          />
+        )}
+        <div className="mt-1">
+          <DivergenceDetail row={r} />
+        </div>
+      </>
+    ),
+  },
+];
 
 export function AuditRecheckRoute(): React.JSX.Element {
   const { data, error } = useResource<AuditDashboard>(
@@ -134,141 +239,87 @@ export function AuditRecheckRoute(): React.JSX.Element {
   const rechecked = technicians.reduce((n, t) => n + t.rechecked, 0);
   const actualPct = inspected === 0 ? 0 : (rechecked / inspected) * 100;
   const underTarget = actualPct < data.targetRecheckPct;
+  const overAlert = technicians.filter(
+    (t) => t.rechecked >= 10 && Number(t.divergenceRate) > data.divergenceAlertPct,
+  ).length;
+
+  /**
+   * `KpiPercentage` will not compile without a denominator, which is the type
+   * doing the design rule's enforcement: a rate with no sample size behind it
+   * cannot reach this screen.
+   */
+  const kpis: Kpi[] = [
+    {
+      key: 'recheck-rate',
+      label: 'Rechecked',
+      // `null` when nothing has been inspected: "no reading" and "0%" are
+      // different facts and the tile must not render them alike.
+      pct: inspected === 0 ? null : Number(actualPct.toFixed(1)),
+      denominator: inspected,
+      denominatorLabel: 'inspections',
+      hint: `Against a ${data.targetRecheckPct}% target.`,
+    },
+    {
+      key: 'rechecks',
+      label: 'Rechecks recorded',
+      value: data.rechecks.length,
+      unit: data.rechecks.length === 1 ? 'recheck' : 'rechecks',
+    },
+    {
+      key: 'over-alert',
+      label: 'Technicians over the alert line',
+      value: overAlert,
+      unit: 'of ' + technicians.length,
+      hint: `Above ${data.divergenceAlertPct}% divergence over ten or more rechecks.`,
+    },
+  ];
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Audit rechecks</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Audit rechecks">
         A second technician re-inspects a share of completed work. Divergence is a training signal
         first.
-      </p>
+      </PageHeader>
 
-      <div className="mt-5 flex flex-wrap items-center gap-5 rounded-lg border border-rule bg-sheet p-5">
-        <ScoreRing value={Math.round(actualPct)} label="% rechecked" />
-        <div>
-          <p className="text-body-sm text-ink">
-            {rechecked} of {inspected} inspections rechecked, against a {data.targetRecheckPct}%
-            target.
-          </p>
-          {underTarget && (
-            <p className="mt-1 text-body-sm text-warn">
-              Below target. The recheck is the only independent read on whether the grades we sell
-              are the grades in the boxes.
-            </p>
-          )}
-        </div>
-      </div>
+      <KpiRow label="This period" items={kpis} />
 
-      <Panel title="Technician divergence" subtitle="Worst first.">
-        {technicians.length === 0 ? (
-          <p className="text-body-sm text-ink-2">No technicians have completed an inspection yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <caption className="sr-only">Divergence rate by technician.</caption>
-              <thead>
-                <tr className="border-b border-rule">
-                  <th scope="col" className={TH}>
-                    Technician
-                  </th>
-                  <th scope="col" className={TH}>
-                    Inspected
-                  </th>
-                  <th scope="col" className={TH}>
-                    Rechecked
-                  </th>
-                  <th scope="col" className={TH}>
-                    Divergence
-                  </th>
-                  <th scope="col" className={TH}>
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {technicians.map((t) => (
-                  <TechnicianRow
-                    key={t.technicianId}
-                    row={t}
-                    alertPct={data.divergenceAlertPct}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      {underTarget && (
+        <p className="text-body-sm text-warn">
+          {rechecked} of {inspected} inspections rechecked, against a {data.targetRecheckPct}%
+          target. Below target. The recheck is the only independent read on whether the grades we
+          sell are the grades in the boxes.
+        </p>
+      )}
 
-      <Panel title="Recheck queue" subtitle={`${data.rechecks.length} rechecks recorded.`}>
-        {data.rechecks.length === 0 ? (
-          <p className="text-body-sm text-ink-2">Nothing has been rechecked yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <caption className="sr-only">Audit rechecks and where the two reports differ.</caption>
-              <thead>
-                <tr className="border-b border-rule">
-                  <th scope="col" className={TH}>
-                    Unit
-                  </th>
-                  <th scope="col" className={TH}>
-                    Original
-                  </th>
-                  <th scope="col" className={TH}>
-                    Recheck
-                  </th>
-                  <th scope="col" className={TH}>
-                    Difference
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rechecks.map((r) => (
-                  <tr key={r.id} className="border-b border-rule-2">
-                    <td className={TD}>
-                      <code className="font-mono text-data text-ink">{r.serialNumber}</code>
-                      <span className="block text-body-sm text-ink-3">{r.createdAt}</span>
-                    </td>
-                    <td className={TD}>
-                      {r.originalGrade ? (
-                        <GradeBadge grade={r.originalGrade} />
-                      ) : (
-                        <Blank why="The original report carried no grade" />
-                      )}
-                      <span className="mt-1 block text-body-sm text-ink-2">
-                        {r.originalTechnicianName}
-                        {r.originalScore !== null && ` · ${r.originalScore}`}
-                      </span>
-                    </td>
-                    <td className={TD}>
-                      {r.recheckGrade ? (
-                        <GradeBadge grade={r.recheckGrade} />
-                      ) : (
-                        <Blank why="The recheck carried no grade" />
-                      )}
-                      <span className="mt-1 block text-body-sm text-ink-2">
-                        {r.auditorName}
-                        {r.recheckScore !== null && ` · ${r.recheckScore}`}
-                      </span>
-                    </td>
-                    <td className={TD}>
-                      {r.originalGrade && r.recheckGrade && r.originalGrade !== r.recheckGrade && (
-                        <StatusPill
-                          tone="fail"
-                          label={`${gradeLabel(r.originalGrade)} to ${gradeLabel(r.recheckGrade)}`}
-                        />
-                      )}
-                      <div className="mt-1">
-                        <DivergenceDetail row={r} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <Section title="Technician divergence" subtitle="Worst first.">
+        <DataBoard
+          caption="Divergence rate by technician, highest first."
+          columns={divergenceColumns(data.divergenceAlertPct)}
+          rows={technicians}
+          rowKey={(t) => t.technicianId}
+          empty={
+            <EmptyState
+              title="No inspections yet"
+              body="No technician has completed an inspection, so there is nothing to recheck against."
+            />
+          }
+        />
+      </Section>
+
+      <Section title="Recheck queue" subtitle={`${data.rechecks.length} rechecks recorded.`}>
+        <DataBoard
+          caption="Audit rechecks and where the two reports differ."
+          columns={RECHECK_COLUMNS}
+          rows={data.rechecks}
+          rowKey={(r) => r.id}
+          empty={
+            <EmptyState
+              title="Nothing has been rechecked yet"
+              body="A recheck appears here once a second technician re-inspects a completed unit."
+            />
+          }
+        />
+      </Section>
     </div>
   );
 }

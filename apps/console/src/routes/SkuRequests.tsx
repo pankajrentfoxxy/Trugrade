@@ -1,7 +1,13 @@
 import * as React from 'react';
 import { SKU_IMPORT_COLUMNS, type SkuImportColumn } from '@trugrade/contracts';
-import { Button, EmptyState, Input, Skeleton, StatusPill } from '@trugrade/ui';
+import { Button, EmptyState, Skeleton, StatusPill, Input, TickRule } from '@trugrade/ui';
+import { PageHeader, Textarea } from '../lib/controls';
 import { useResource } from '../lib/useResource';
+
+/**
+ * ARCHETYPE B — Board. A worklist of records, each with its own row actions.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ */
 
 /** Mirrors `NearMatch` from the catalog module — one SKU we already carry. */
 export interface NearMatch {
@@ -128,19 +134,18 @@ function NearMatchRow({
 }): React.JSX.Element {
   return (
     <li className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-3">
-      <span className="font-mono text-data tnum text-ink-2">
+      {/* A similarity is a measured value, so it is amber and it carries its
+          scale. A bare "94%" reads as a proportion of something it is not. */}
+      <span className="font-mono text-data tnum text-acc-ink">
         {Math.round(match.similarity * 100)}%
+      </span>
+      <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-4">
+        match
       </span>
       <code className="font-mono text-data text-ink-2">{match.skuCode}</code>
       <span className="text-body-sm text-ink">{match.label}</span>
       {match.exact && <StatusPill tone="info" label="Same specification" />}
-      <Button
-        variant="secondary"
-        size="sm"
-        className="ml-auto"
-        loading={busy}
-        onClick={onMerge}
-      >
+      <Button variant="secondary" size="sm" className="ml-auto" loading={busy} onClick={onMerge}>
         Merge into this
       </Button>
     </li>
@@ -179,15 +184,16 @@ function RequestCard({
   }
 
   return (
-    <article className="mt-5 rounded-lg border border-rule bg-sheet p-5">
+    <article className="tg-card mt-5 rounded-lg border border-rule bg-sheet">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-h3 text-ink">
           {request.rawBrand} {request.rawModel}
         </h2>
         <span className="text-body-sm text-ink-3">
-          {request.vendorName} · {request.ageHours}h waiting
+          {request.vendorName} · <span className="font-mono tnum">{request.ageHours}h</span> waiting
         </span>
       </header>
+      <TickRule />
 
       <div className="mt-4 grid gap-6 md:grid-cols-2">
         <section>
@@ -228,7 +234,11 @@ function RequestCard({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <Button
-          variant="primary"
+          // Secondary, not primary: this button only opens the specification
+          // panel. The screen's one amber control is the button inside it that
+          // actually writes the SKU — nine cards each carrying a primary is nine
+          // primaries on one screen.
+          variant="secondary"
           // Approving creates a second SKU for a machine we already carry, and a
           // duplicate in the master catalog splits every listing, price band and
           // image set that follows from it. Merging is the action here.
@@ -241,10 +251,7 @@ function RequestCard({
         >
           Approve and create the SKU
         </Button>
-        <Button
-          variant="danger"
-          onClick={() => setPanel(panel === 'reject' ? 'none' : 'reject')}
-        >
+        <Button variant="ghost" onClick={() => setPanel(panel === 'reject' ? 'none' : 'reject')}>
           Reject with a reason
         </Button>
       </div>
@@ -299,16 +306,10 @@ function RequestCard({
             );
           }}
         >
-          <label className="block text-body-sm font-medium text-ink-2" htmlFor={`why-${request.id}`}>
-            Why this is not going into the catalog
-          </label>
-          <p className="mt-1 max-w-prose text-body-sm text-ink-3">
-            The vendor reads this and it is the only thing they can act on, so name the machine and
-            say what would change the answer.
-          </p>
-          <textarea
+          <Textarea
             id={`why-${request.id}`}
-            className="mt-2 w-full rounded border border-rule bg-sheet p-3 text-body-sm text-ink"
+            label="Why this is not going into the catalog"
+            hint="The vendor reads this and it is the only thing they can act on, so name the machine and say what would change the answer."
             rows={3}
             minLength={10}
             required
@@ -360,14 +361,17 @@ export function SkuRequestsRoute(): React.JSX.Element {
 
   return (
     <div>
-      <h1 className="text-h1 text-ink">SKU requests</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+      <PageHeader title="SKU requests">
         {pending.length} waiting, oldest first
         {duplicates > 0 && ` · ${duplicates} already exist under another name`}.
-      </p>
+      </PageHeader>
 
       {Object.entries(decided).map(([id, message]) => (
-        <p key={id} className="mt-4 rounded border border-pass bg-sheet-2 p-3 text-body-sm text-ink">
+        <p
+          key={id}
+          role="status"
+          className="mt-4 rounded border border-pass bg-sheet-2 p-3 text-body-sm text-ink"
+        >
           {message}
         </p>
       ))}

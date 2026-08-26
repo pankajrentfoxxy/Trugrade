@@ -235,27 +235,39 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
 }
 
 /**
+ * What both formatters return when there is nothing to format.
+ *
+ * **Not an em dash.** 09_FRONTEND_LOCKED.md: a missing value never renders as a
+ * passing one, and a dash in a column of amounts reads as a result — "nothing
+ * owed here" — which is the one reading it must not get. Words, and the caller
+ * renders them in `--ink-4`. Exported so a screen can test for the absence
+ * rather than string-matching a glyph.
+ */
+export const NO_AMOUNT = 'No amount';
+export const NO_DATE = 'No date';
+
+/**
  * Indian-format rupees, from the decimal string the wire carries.
  *
  * `Money.parse` throws on anything that is not a clean decimal, which is right
  * for storage and useless for display — a missing field would take the screen
- * down. An em dash is the honest rendering of "no amount".
+ * down.
  */
 export function rupees(amount: MoneyString | null | undefined): string {
-  if (amount === null || amount === undefined) return '—';
+  if (amount === null || amount === undefined) return NO_AMOUNT;
   try {
     return Money.parse(amount).format();
   } catch {
-    return '—';
+    return NO_AMOUNT;
   }
 }
 
 /** A date the vendor can act on. Absolute, never "in 3 days" — no clock here. */
 export function onDate(iso: IsoDate | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return NO_DATE;
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
-    ? '—'
+    ? NO_DATE
     : new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(d);
 }
 

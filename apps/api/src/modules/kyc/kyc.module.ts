@@ -5,6 +5,7 @@ import { KycService } from './kyc.service';
 import { OnboardingService } from './internal/onboarding.service';
 import { VerificationService } from './internal/verification.service';
 import { ConsentService } from './internal/consent.service';
+import { DocumentService } from './internal/document.service';
 import {
   KycReviewController,
   OnboardingController,
@@ -20,7 +21,17 @@ import {
   // call this": platform reviewers, the applicant acting on their own org, and
   // an anonymous visitor who does not have an org yet. See kyc.controller.ts.
   controllers: [KycReviewController, OnboardingController, OnboardingLeadController],
-  providers: [KycService, OnboardingService, VerificationService, ConsentService],
+  providers: [
+    KycService,
+    OnboardingService,
+    VerificationService,
+    ConsentService,
+    // OnboardingController injects this directly. It was written, wired into the
+    // controller and left out of this array, so the app typechecked, linted and
+    // passed every unit test while failing to BOOT — Nest resolves the graph at
+    // runtime and nothing before that point looks at it.
+    DocumentService,
+  ],
   exports: [KycService],
 })
 export class KycModule {}

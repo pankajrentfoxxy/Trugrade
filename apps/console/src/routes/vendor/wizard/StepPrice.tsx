@@ -1,7 +1,9 @@
 import * as React from 'react';
-import { Input, Skeleton } from '@trugrade/ui';
+import { Input, Skeleton, TickRule } from '@trugrade/ui';
 import { API, onDate, postJson, rupees, type PayoutPreview } from '../api';
 import type { WizardDraft } from './draft';
+
+/** Step 4 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
 
 /**
  * Step 4 — the price, stated as what the vendor receives.
@@ -76,6 +78,7 @@ export function StepPrice({
   return (
     <div>
       <h2 className="text-h2 text-ink">What you want to receive</h2>
+      <TickRule />
       <p className="mt-2 max-w-prose text-body-sm text-ink-2">
         Enter the amount you want in your account per machine, after everything. That number is
         what we hold you to — it does not move for freight, for a buyer discount, or if we correct
@@ -113,7 +116,7 @@ export function StepPrice({
           />
         </div>
 
-        <div className="rounded-lg border border-rule bg-sheet p-5" data-testid="payout-preview">
+        <div className="tg-card rounded-lg border border-rule bg-sheet" data-testid="payout-preview">
           {error && (
             <p className="text-body-sm text-fail" role="alert">
               {error}
@@ -173,7 +176,12 @@ export function StepPrice({
               </div>
 
               <div className="flex items-baseline justify-between gap-4">
-                <dt className="text-body-sm text-ink-2">Our commission</dt>
+                <dt className="text-body-sm text-ink-2">
+                  Our commission
+                  {/* The denominator in words. It cannot be a number here: the
+                      selling price is the one figure this screen must not show. */}
+                  <span className="block text-label text-ink-4">of the selling price</span>
+                </dt>
                 <dd className="font-mono text-data tnum text-acc-ink" data-testid="commission-pct">
                   {preview.commissionPct}%
                 </dd>

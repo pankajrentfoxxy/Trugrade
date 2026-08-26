@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-26T22:56:27+00:00  
-Currently: T2 - restyling the 25 console route files onto the shell and tokens
+Currently: T2 done. Next: T4 - customer registration, shell and steps 1-2
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -11,9 +11,9 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 
 | ID | Task | Status | Commit | Screens verified | Notes |
 |----|------|--------|--------|------------------|-------|
-| T1 | Console shell and chrome | DONE |  | console shell, both themes, 900/600 | Dark chrome per 09_FRONTEND_LOCKED; shell/Shell.tsx + nav.ts; screenshots in .screenshots/T1-console-shell/ |
-| T2 | Console design conformance pass | TODO |  |  |  |
-| T3 | packages/ui gap-fill | DONE |  | Storybook, both themes | All 20 components exported: StepRail WhyRail OtpInput FormSection AddressCard DocumentViewer RecordHeader SidePanel KpiRow QueueList Timeline + DataBoard density-aware |
+| T1 | Console shell and chrome | DONE | 13ab439 | console shell, both themes, 900/600 | Dark chrome per 09_FRONTEND_LOCKED; shell/Shell.tsx + nav.ts; screenshots in .screenshots/T1-console-shell/ |
+| T2 | Console design conformance pass | DONE |  | 21 routes, both themes, 1440/900/600 | All 25 route files restyled; 13 hand-rolled tables → DataBoard; archetype declared on every route; board state in the URL; screenshots in docs/review/. **Blocked on a packages/ui defect: see "Open questions".** |
+| T3 | packages/ui gap-fill | DONE | 13ab439 | Storybook, both themes | All 20 components exported: StepRail WhyRail OtpInput FormSection AddressCard DocumentViewer RecordHeader SidePanel KpiRow QueueList Timeline + DataBoard density-aware |
 | T4 | Customer registration - shell and steps 1-2 | TODO |  |  |  |
 | T5 | Customer registration - step 3 statutory | TODO |  |  |  |
 | T6 | Customer registration - steps 4-5 and submission | TODO |  |  |  |
@@ -62,8 +62,66 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 
 ## Open questions
 
-_None yet. A blocked task is recorded here with what was tried, marked BLOCKED in
-the table, and skipped — the run does not idle waiting for an answer._
+### 1. `cn()` silently strips every colour class. Six lines, `packages/ui`, blocking.
+
+`packages/ui/src/lib/cn.ts` calls bare `twMerge`. `tailwind-merge` does not know
+this project's custom `fontSize` scale, so it classifies `text-body-sm`,
+`text-label`, `text-data`, `text-h3` … as **text-colour** classes and drops
+whatever real colour sits on the other side of them. Reproduce:
+
+```
+$ cd packages/ui && node -e "const {twMerge}=require('tailwind-merge');
+  console.log(twMerge('bg-acc text-acc-on','h-11 px-5 text-body-sm'))"
+bg-acc h-11 px-5 text-body-sm      # text-acc-on is gone
+```
+
+Consequences, on every screen:
+
+- **`Button variant="primary"` loses `text-acc-on`** and inherits `--ink-2`.
+  Amber fill, `#A8B1BE` text — about 1.7:1, where §9 of `09_FRONTEND_LOCKED.md`
+  claims 11.2:1. Verified in the browser: `getComputedStyle` on the KYC Approve
+  button returns `color: rgb(168,177,190)` on `background: rgb(255,182,39)`.
+- `danger` loses `text-white`; `link` loses `text-acc-ink`.
+- **`StatusPill` and `GradeBadge` lose `text-label` / `text-data`** — the
+  *sizes* — so every pill renders at the inherited 14px instead of 10.5px, and
+  `DataTable`'s column headers with them. This is the single biggest reason the
+  console's type scale does not match `docs/reference/homepage.html`.
+
+The fix is one file:
+
+```ts
+import { extendTailwindMerge } from 'tailwind-merge';
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [
+        { text: ['display-1','display-2','h1','h2','h3','body-lg','body','body-sm','label','data'] },
+      ],
+    },
+  },
+});
+```
+
+T2 did not apply it: `packages/ui` is T3's lane and another session shares this
+tree. **T2's screenshots in `docs/review/` show the defect** — every amber
+primary action in them is unreadable for this reason and no other.
+
+### 2. The API does not boot, so T2's screenshots used a mock.
+
+`node apps/api/dist/main.js` dies at startup:
+
+```
+UnknownDependenciesException: Nest can't resolve dependencies of the
+OnboardingController (KycService, AuditService, VerificationService, ?).
+Please make sure that the argument DocumentService at index [3] is available
+in the KycModule context.
+```
+
+`apps/api/src/modules/kyc/internal/document.service.ts` exists but is not in
+`KycModule`'s `providers`. It is an untracked file — in-flight work from the
+other lane — so T2 left it alone and drove the console against a stub of the
+read endpoints instead. Every screenshot is the real console; only the JSON
+behind it is fake.
 
 ## Notes carried forward
 

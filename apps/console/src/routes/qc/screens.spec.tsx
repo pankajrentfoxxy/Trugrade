@@ -275,7 +275,11 @@ describe('the scheduling calendar', () => {
     inRouter(<ScheduleRoute />);
     await screen.findByText('Scheduling');
 
-    expect(document.querySelector('td[data-state="over"]')).not.toBeNull();
+    // The day's state moved from the <td> to the cell's own element: the
+    // scheduling grid is `DataBoard` now, and DataBoard owns its cells at three
+    // densities. The state, its two tones and the words beside them are
+    // unchanged — only the element carrying the attribute is.
+    expect(document.querySelector('[data-state="over"]')).not.toBeNull();
     expect(screen.getByText('Over capacity — this day will not fit')).toBeInTheDocument();
     expect(screen.getByText('52/40 units')).toBeInTheDocument();
   });
@@ -284,7 +288,7 @@ describe('the scheduling calendar', () => {
     mockJson(WEEK);
     inRouter(<ScheduleRoute />);
     await screen.findByText('Scheduling');
-    expect(document.querySelector('td[data-state="unavailable"]')?.textContent).toBe('leave');
+    expect(document.querySelector('[data-state="unavailable"]')?.textContent).toBe('leave');
   });
 });
 

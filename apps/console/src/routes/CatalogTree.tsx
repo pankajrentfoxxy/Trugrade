@@ -1,6 +1,13 @@
 import * as React from 'react';
-import { EmptyState, Input, Skeleton, StatusPill } from '@trugrade/ui';
+import { EmptyState, Input, Skeleton, StatusPill, TickRule } from '@trugrade/ui';
+import { PageHeader } from '../lib/controls';
 import { useResource } from '../lib/useResource';
+import { useUrlState } from '../lib/urlState';
+
+/**
+ * ARCHETYPE B — Board. The filter is the rail; the tree is the table.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ */
 
 export interface CatalogSku {
   id: string;
@@ -65,9 +72,10 @@ function SkuRow({ sku }: { sku: CatalogSku }): React.JSX.Element {
     <li className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-2 pl-5">
       <code className="font-mono text-data tnum text-ink-2">{sku.skuCode}</code>
       <span className="text-body-sm text-ink">{sku.label}</span>
+      {/* Deprecated is a state, not a verdict: neutral, never red. */}
       {!sku.isActive && <StatusPill tone="neutral" label="Deprecated" />}
       {sku.liveListingCount > 0 && (
-        <span className="text-body-sm text-ink-3">
+        <span className="ml-auto text-body-sm text-ink-3">
           {sku.liveListingCount} live {sku.liveListingCount === 1 ? 'listing' : 'listings'}
         </span>
       )}
@@ -77,7 +85,9 @@ function SkuRow({ sku }: { sku: CatalogSku }): React.JSX.Element {
 
 export function CatalogTreeRoute(): React.JSX.Element {
   const { data, error } = useResource<CatalogBrand[]>('/api/catalog/tree', 'Catalog unavailable');
-  const [query, setQuery] = React.useState('');
+  // In the URL: "the Latitude corner of the catalog" has to be a link someone
+  // can paste, and the filter is the only state this board carries.
+  const [query, setQuery] = useUrlState('q');
 
   const brands = React.useMemo(() => filterBrands(data ?? [], query), [data, query]);
 
@@ -111,14 +121,13 @@ export function CatalogTreeRoute(): React.JSX.Element {
   );
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Catalog</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Catalog">
         Brand, series, model, configuration. A vendor lists against a SKU and QC verifies against
         its declared specification, which is why the last two levels stay separate.
-      </p>
+      </PageHeader>
 
-      <div className="mt-6 max-w-md">
+      <div className="max-w-md">
         <Input
           label="Filter"
           placeholder="Brand, model or SKU code"
@@ -128,19 +137,17 @@ export function CatalogTreeRoute(): React.JSX.Element {
       </div>
 
       {brands.length === 0 ? (
-        <div className="mt-6">
-          <EmptyState
-            title={`Nothing matches “${query.trim()}”`}
-            body="The catalog is not empty — this filter is. Clear it to see everything, or ask ops whether the machine needs a SKU request."
-          />
-        </div>
+        <EmptyState
+          title={`Nothing matches “${query.trim()}”`}
+          body="The catalog is not empty — this filter is. Clear it to see everything, or ask ops whether the machine needs a SKU request."
+        />
       ) : (
         <>
-          <p className="mt-5 text-body-sm text-ink-3">
+          <p className="text-body-sm text-ink-3">
             {skuCount} {skuCount === 1 ? 'SKU' : 'SKUs'} across {brands.length}{' '}
             {brands.length === 1 ? 'brand' : 'brands'}
           </p>
-          <div className="mt-3">
+          <div>
             {brands.map((brand) => (
               // <details> rather than a controlled accordion: the browser already
               // handles the keyboard, the ARIA and the open state, and a filter
@@ -149,14 +156,15 @@ export function CatalogTreeRoute(): React.JSX.Element {
                 <summary className="cursor-pointer py-3 text-h3 text-ink">{brand.name}</summary>
                 {brand.series.map((series) => (
                   <details key={series.id} open className="pl-4">
-                    <summary className="cursor-pointer py-2 text-body text-ink-2">
+                    <summary className="cursor-pointer py-2 text-body-sm text-ink-2">
                       {series.name}
                     </summary>
                     {series.models.map((model) => (
-                      <div key={model.id} className="pl-4 pb-3">
-                        <h4 className="py-2 font-mono text-label uppercase tracking-[0.13em] text-ink-2">
+                      <div key={model.id} className="pb-3 pl-4">
+                        <h4 className="pt-2 font-mono text-label uppercase tracking-[0.13em] text-ink-2">
                           {model.name}
                         </h4>
+                        <TickRule className="mb-2" />
                         <ul>
                           {model.skus.map((sku) => (
                             <SkuRow key={sku.id} sku={sku} />

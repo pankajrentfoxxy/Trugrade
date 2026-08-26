@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Button, EmptyState } from '@trugrade/ui';
+import { Button, EmptyState, StepRail, type Step } from '@trugrade/ui';
+import { PageHeader } from '../../../lib/controls';
 import { API, postJson, rupees, type MoneyString, type VendorListing } from '../api';
 import { useDraft, type WizardDraft } from './draft';
 import { StepMachine } from './StepMachine';
@@ -9,6 +10,9 @@ import { StepSerials } from './StepSerials';
 import { StepPrice } from './StepPrice';
 
 /**
+ * ARCHETYPE D — Flow. Step rail + one step + the reasons beside the fields.
+ * DENSITY: default (vendor portal), set on the app root by the shell.
+ *
  * The four-step listing wizard.
  *
  * Everything is held client-side until the last button, and that is not laziness
@@ -46,6 +50,13 @@ interface SubmitAccepted {
   visitFee: MoneyString;
 }
 type SubmitResult = SubmitDecisionRequired | SubmitHeld | SubmitAccepted;
+
+/** Whether anything has actually been entered, which is what "saved" means here. */
+function draftStarted(draft: WizardDraft): boolean {
+  return (
+    draft.sku !== null || draft.serials.length > 0 || draft.netPayoutRupees.trim() !== ''
+  );
+}
 
 /** What stops the vendor moving on, said as the thing to do rather than the rule broken. */
 function blockerFor(draft: WizardDraft): string {
@@ -149,40 +160,59 @@ export function ListingWizardRoute(): React.JSX.Element {
 
   const blocker = blockerFor(draft);
 
+  /**
+   * The rail is the wizard's own state, told in the component's vocabulary.
+   *
+   * A step behind the current one is `complete` and clickable; the current one
+   * is `current`; anything ahead is `upcoming` and is a `<span aria-disabled>`
+   * rather than a disabled `<button>` — `Stepper` makes that choice for us,
+   * which is the reason to use it rather than the hand-rolled `<ol>` of buttons
+   * this replaced. Forwards stays refused, because step 4's payout preview is
+   * meaningless without a SKU and a unit count.
+   */
+  const steps: Step[] = STEPS.map((label, i) => {
+    const n = i + 1;
+    return {
+      key: label,
+      label,
+      status: n < draft.step ? 'complete' : n === draft.step ? 'current' : 'upcoming',
+      ...(n < draft.step ? { href: `#step-${n}` } : {}),
+    };
+  });
+
   return (
-    <div>
-      <h1 className="text-h1 text-ink">List stock</h1>
+    <div className="grid items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="order-2 lg:order-1">
+        {/* Clicking a completed step is a jump inside one page, not a route, so
+            the rail's hrefs are anchors and the handler does the move. */}
+        <div
+          onClick={(e) => {
+            const anchor = (e.target as HTMLElement).closest('a[href^="#step-"]');
+            if (!anchor) return;
+            e.preventDefault();
+            const n = Number(anchor.getAttribute('href')?.replace('#step-', ''));
+            if (n >= 1 && n <= 4) patch({ step: n as WizardDraft['step'] });
+          }}
+        >
+          {/* The draft is written to `sessionStorage` on every patch, so "saved"
+              is a fact rather than a promise — but only once there is something
+              in it. An empty draft gets the rail's own "nothing saved yet",
+              which is the truth. */}
+          <StepRail
+            label="List stock"
+            steps={steps}
+            {...(draftStarted(draft) ? { savedAt: 'in this browser' } : {})}
+          />
+        </div>
+      </div>
 
-      {/* The pivot of the whole model, said before the first field rather than
-          after the last button: submitting requests an inspection. */}
-      <p className="mt-2 max-w-prose text-body-sm text-ink-2">
-        Finishing this does not put anything on sale. It requests an inspection at your site. Your
-        machines go live only after they have been inspected and sealed.
-      </p>
-
-      <ol className="mt-6 flex flex-wrap gap-2" aria-label="Steps">
-        {STEPS.map((label, i) => {
-          const n = (i + 1) as WizardDraft['step'];
-          return (
-            <li key={label}>
-              <button
-                type="button"
-                // Backwards is always allowed; forwards is not, because step 4's
-                // preview is meaningless without a SKU and a unit count.
-                disabled={n > draft.step}
-                onClick={() => patch({ step: n })}
-                aria-current={draft.step === n ? 'step' : undefined}
-                className={[
-                  'rounded px-4 py-2 text-body-sm transition-colors disabled:opacity-45',
-                  draft.step === n ? 'bg-acc-wash text-acc-ink' : 'text-ink-2 hover:bg-sheet-2',
-                ].join(' ')}
-              >
-                <span className="font-mono text-label tnum">{n}</span> {label}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+      <div className="order-1 lg:order-2">
+        <PageHeader title="List stock">
+          {/* The pivot of the whole model, said before the first field rather
+              than after the last button: submitting requests an inspection. */}
+          Finishing this does not put anything on sale. It requests an inspection at your site. Your
+          machines go live only after they have been inspected and sealed.
+        </PageHeader>
 
       <div className="mt-7">
         {draft.step === 1 && <StepMachine draft={draft} patch={patch} />}
@@ -200,7 +230,7 @@ export function ListingWizardRoute(): React.JSX.Element {
       {result?.outcome === 'DECISION_REQUIRED' && (
         // Not a rejection. A vendor with eighteen machines who is silently
         // refused concludes the platform does not want them.
-        <div className="mt-7 rounded-lg border border-warn p-5">
+        <div className="tg-card mt-7 rounded-lg border border-warn">
           <p className="text-body text-ink">
             {result.unitCount} machines is fewer than the {result.minUnitsPerVisit} a visit is
             worth.
@@ -265,6 +295,7 @@ export function ListingWizardRoute(): React.JSX.Element {
         >
           Discard this draft
         </Button>
+      </div>
       </div>
     </div>
   );

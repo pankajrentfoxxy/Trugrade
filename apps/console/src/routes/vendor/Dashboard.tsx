@@ -1,10 +1,14 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { EmptyState, Skeleton } from '@trugrade/ui';
+import { EmptyState, KpiRow, Skeleton, Stepper, type Kpi } from '@trugrade/ui';
+import { PageHeader } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, onDate, rupees, type DashboardTiles } from './api';
+import { API, NO_DATE, onDate, rupees, type DashboardTiles } from './api';
 
 /**
+ * ARCHETYPE E — Workspace. A KPI row, then the work it drills into.
+ * DENSITY: default (vendor portal), set on the app root by the shell.
+ *
  * The vendor's landing screen: what needs them today.
  *
  * Every tile is a link to a filtered board, and there is no tile that is not.
@@ -16,36 +20,18 @@ import { API, onDate, rupees, type DashboardTiles } from './api';
  * not their business per unit.
  */
 
-interface Tile {
-  label: string;
-  value: string;
-  to: string;
-  /** Why this number matters, in the words the vendor would use. Never a tooltip. */
-  note?: string;
-  /** Draws the eye only when the number is a problem. Zero is usually good news. */
-  urgent?: boolean;
-}
-
-function TileCard({ tile }: { tile: Tile }): React.JSX.Element {
-  return (
-    <Link
-      to={tile.to}
-      className={[
-        'flex flex-col gap-2 rounded-lg border p-5 transition-colors hover:bg-sheet-2',
-        tile.urgent ? 'border-warn bg-sheet' : 'border-rule bg-sheet',
-      ].join(' ')}
-    >
-      <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-2">
-        {tile.label}
-      </span>
-      <span className="font-mono text-h1 tnum text-ink">{tile.value}</span>
-      {tile.note && <span className="text-body-sm text-ink-2">{tile.note}</span>}
-    </Link>
-  );
-}
+/** The three-step guide a vendor with no stock reads instead of a grid of zeroes. */
+const FIRST_RUN = [
+  'Pick the machine from our catalog and declare its condition. Four steps, and a paste of serial numbers does fifty at once.',
+  'We inspect at your site. Nothing goes on sale before it has been inspected and sealed.',
+  'Machines that pass go live. You are paid after delivery and after the buyer’s inspection window closes.',
+] as const;
 
 export function VendorDashboardRoute(): React.JSX.Element {
-  const { data, error } = useResource<DashboardTiles>(API.dashboard, 'Your dashboard is unavailable');
+  const { data, error } = useResource<DashboardTiles>(
+    API.dashboard,
+    'Your dashboard is unavailable',
+  );
 
   if (error) {
     return (
@@ -63,12 +49,12 @@ export function VendorDashboardRoute(): React.JSX.Element {
 
   if (!data) {
     return (
-      <div>
-        <h1 className="text-h1 text-ink">Today</h1>
+      <div className="tg-stack">
+        <PageHeader title="Today">Loading what needs you.</PageHeader>
         {/* Skeletons that keep the box, so the grid does not jump when it lands. */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
           {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="rounded-lg border border-rule bg-sheet p-5">
+            <div key={i} className="tg-card rounded-lg border border-rule bg-sheet">
               <Skeleton lines={3} />
             </div>
           ))}
@@ -84,21 +70,20 @@ export function VendorDashboardRoute(): React.JSX.Element {
     // First run is a three-step guide, not an empty grid of zeroes. A new vendor
     // reading "0 live" learns nothing about what to do next.
     return (
-      <div>
-        <h1 className="text-h1 text-ink">List your first stock</h1>
-        <ol className="mt-6 flex max-w-prose flex-col gap-4">
-          {[
-            'Pick the machine from our catalog and declare its condition. Four steps, and a paste of serial numbers does fifty at once.',
-            'We inspect at your site. Nothing goes on sale before it has been inspected and sealed.',
-            'Machines that pass go live. You are paid after delivery and after the buyer’s inspection window closes.',
-          ].map((text, i) => (
-            <li key={text} className="flex gap-4 rounded-lg border border-rule bg-sheet p-5">
-              <span className="font-mono text-h3 tnum text-acc-ink">{i + 1}</span>
-              <span className="text-body-sm text-ink-2">{text}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-6">
+      <div className="tg-stack">
+        <PageHeader title="List your first stock">
+          Three steps from a machine on your shelf to a machine a buyer can order.
+        </PageHeader>
+        <Stepper
+          label="Getting started"
+          steps={FIRST_RUN.map((summary, i) => ({
+            key: String(i),
+            label: ['Declare it', 'We inspect it', 'It goes live'][i] ?? '',
+            status: i === 0 ? 'current' : 'upcoming',
+            summary,
+          }))}
+        />
+        <p>
           <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
             Start the first listing
           </Link>
@@ -107,59 +92,80 @@ export function VendorDashboardRoute(): React.JSX.Element {
     );
   }
 
-  const tiles: Tile[] = [
+  /**
+   * `href` on every tile: a metric with no board behind it is decoration, and
+   * `KpiRow` renders the label as the link so the whole `<dl>` stays valid.
+   *
+   * A count is a count, never a percentage — `KpiPercentage` would demand a
+   * denominator, which is exactly why none of these is typed as one.
+   */
+  const kpis: Kpi[] = [
     {
+      key: 'awaiting',
       label: 'Awaiting inspection',
-      value: String(data.unitsAwaitingQc),
-      to: '/vendor/listings?status=AWAITING_QC',
-      note: 'Not visible to any buyer until inspected.',
+      value: data.unitsAwaitingQc,
+      unit: data.unitsAwaitingQc === 1 ? 'machine' : 'machines',
+      href: '/vendor/listings?status=AWAITING_QC',
+      hint: 'Not visible to any buyer until inspected.',
     },
     {
+      key: 'live',
       label: 'Live',
-      value: String(data.unitsLive),
-      to: '/vendor/listings?status=ACTIVE',
+      value: data.unitsLive,
+      unit: data.unitsLive === 1 ? 'machine' : 'machines',
+      href: '/vendor/listings?status=ACTIVE',
     },
     {
+      key: 'sold',
       label: 'Sold this month',
-      value: String(data.unitsSoldThisMonth),
-      to: '/vendor/listings?status=OUT_OF_STOCK',
+      value: data.unitsSoldThisMonth,
+      unit: data.unitsSoldThisMonth === 1 ? 'machine' : 'machines',
+      href: '/vendor/listings?status=OUT_OF_STOCK',
     },
     {
+      key: 'expiring',
       label: 'Inspection expiring',
-      value: String(data.unitsQcExpiring14d),
-      to: '/vendor/listings?expiring=14',
-      note: 'Within 14 days. At zero days they stop being sellable — automatically.',
-      urgent: data.unitsQcExpiring14d > 0,
+      value: data.unitsQcExpiring14d,
+      unit: 'within 14 days',
+      href: '/vendor/listings?expiring=14',
+      hint: 'At zero days they stop being sellable — automatically.',
     },
     {
+      key: 'payout',
       label: 'Payout due',
       value: rupees(data.payoutsDue),
-      to: '/vendor/payables',
-      note: data.payoutsDueOn ? `Expected ${onDate(data.payoutsDueOn)}.` : undefined,
+      href: '/vendor/payables',
+      hint:
+        data.payoutsDueOn && onDate(data.payoutsDueOn) !== NO_DATE
+          ? `Expected ${onDate(data.payoutsDueOn)}.`
+          : // Not a guessed date. The payout cycle decides it and this screen
+            // does not know the cycle.
+            'No date yet — your payout cycle sets it.',
     },
     {
+      key: 'corrections',
       label: 'Grade corrections open',
-      value: String(data.openGradeCorrections),
-      to: '/vendor/qc/corrections',
-      note: 'Each has a response window. No answer applies the default.',
-      urgent: data.openGradeCorrections > 0,
+      value: data.openGradeCorrections,
+      unit: data.openGradeCorrections === 1 ? 'correction' : 'corrections',
+      href: '/vendor/qc/corrections',
+      hint: 'Each has a response window. No answer applies the default.',
     },
   ];
 
   return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-h1 text-ink">Today</h1>
-        <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
-          List stock
-        </Link>
-      </div>
+    <div className="tg-stack">
+      <PageHeader
+        title="Today"
+        action={
+          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
+            List stock
+          </Link>
+        }
+      >
+        Every number here is a link to the machines behind it.
+      </PageHeader>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tiles.map((t) => (
-          <TileCard key={t.label} tile={t} />
-        ))}
-      </div>
+      <KpiRow label="Your stock right now" items={kpis} />
     </div>
   );
 }

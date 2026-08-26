@@ -89,7 +89,11 @@ describe('the form captures the twelve areas the database actually allows', () =
     renderForm();
     await screen.findByText('Manual inspection');
 
-    const rows = document.querySelectorAll('tr[data-area]');
+    // The twelve areas are a <fieldset> each rather than twelve rows of a
+    // <table>: four controls per area is a form, and DataBoard reads data rather
+    // than collecting it. `data-area` still addresses one area's controls as a
+    // group, which is what this assertion is actually about.
+    const rows = document.querySelectorAll('[data-area]');
     expect([...rows].map((r) => r.getAttribute('data-area'))).toEqual([...QC_AREA_CODES]);
 
     // The trap this whole lane keeps stepping in: PHASE_04_QC.md and
@@ -104,7 +108,7 @@ describe('the form captures the twelve areas the database actually allows', () =
     renderForm();
     await screen.findByText('Manual inspection');
 
-    const rows = document.querySelectorAll('tr[data-area]');
+    const rows = document.querySelectorAll('[data-area]');
     for (const row of rows) {
       // Without this option the area a technician could not test gets marked
       // Pass, because the form will not let them submit otherwise.
@@ -191,7 +195,7 @@ describe('the grade cap is on screen, not only in the blocker list', () => {
     renderForm();
     await screen.findByText('Manual inspection');
 
-    const ports = document.querySelector('tr[data-area="PORTS"]') as HTMLElement;
+    const ports = document.querySelector('[data-area="PORTS"]') as HTMLElement;
     await user.click(within(ports).getByLabelText('Fail'));
 
     expect(screen.getByText('Caps this machine at B')).toBeInTheDocument();

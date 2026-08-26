@@ -1,11 +1,15 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router';
-import { Button } from '@trugrade/ui';
+import { Breadcrumb, Button } from '@trugrade/ui';
 import type { SerialBatch } from '@trugrade/contracts';
+import { PageHeader } from '../../lib/controls';
 import { API, postJson } from './api';
 import { SerialCsvPanel } from './wizard/StepSerials';
 
 /**
+ * ARCHETYPE F — Focus. One task, no competing controls.
+ * DENSITY: default (vendor portal), set on the app root by the shell.
+ *
  * Bulk CSV upload against an existing listing — dry run first, always.
  *
  * The dry-run table is `SerialCsvPanel`, the same component step 3 of the wizard
@@ -43,23 +47,23 @@ export function BulkUploadRoute(): React.JSX.Element {
   }
 
   return (
-    <div>
-      <Link
-        className="text-body-sm text-acc-ink underline underline-offset-4"
-        to={`/vendor/listings/${id}`}
-      >
-        Back to the listing
-      </Link>
+    <div className="tg-stack">
+      <Breadcrumb
+        items={[
+          { label: 'Your stock', href: '/vendor/listings' },
+          { label: 'Units', href: `/vendor/listings/${id}` },
+          { label: 'Add serials' },
+        ]}
+      />
 
-      <h1 className="mt-3 text-h1 text-ink">Add serials from a file</h1>
-      <p className="mt-2 max-w-prose text-body-sm text-ink-2">
+      <PageHeader title="Add serials from a file">
         Up to 5,000 machines on one listing. Every row is checked against every live listing on the
         platform before anything is written, and rows with errors are simply left out — the good
         rows still go in.
-      </p>
+      </PageHeader>
 
       {added !== null && (
-        <p className="mt-6 rounded border border-pass bg-sheet-2 p-5 text-body-sm text-pass">
+        <p role="status" className="tg-card rounded border border-pass bg-sheet-2 text-body-sm text-pass">
           {added} {added === 1 ? 'machine' : 'machines'} added.{' '}
           <Link className="underline underline-offset-4" to={`/vendor/listings/${id}`}>
             See them
@@ -67,17 +71,15 @@ export function BulkUploadRoute(): React.JSX.Element {
         </p>
       )}
 
-      <div className="mt-6">
-        <SerialCsvPanel onAccepted={(serials) => setPending(serials)} />
-      </div>
+      <SerialCsvPanel onAccepted={(serials) => setPending(serials)} />
 
       {error && (
-        <p className="mt-4 text-body-sm text-fail" role="alert">
+        <p className="text-body-sm text-fail" role="alert">
           {error}
         </p>
       )}
 
-      <div className="mt-7 border-t border-rule pt-6">
+      <div className="border-t border-rule pt-6">
         <Button
           variant="primary"
           loading={busy}

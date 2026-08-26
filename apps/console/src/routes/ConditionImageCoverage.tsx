@@ -8,8 +8,25 @@ import {
   type Grade,
   type PublishCheck,
 } from '@trugrade/contracts';
-import { Button, EmptyState, GradeBadge, Input, Skeleton, StatusPill } from '@trugrade/ui';
+import {
+  Button,
+  DataBoard,
+  EmptyState,
+  GradeBadge,
+  Input,
+  Skeleton,
+  StatusPill,
+  cn,
+  type Column,
+} from '@trugrade/ui';
+import { Board, PageHeader, Section } from '../lib/controls';
 import { useResource } from '../lib/useResource';
+import { useUrlState } from '../lib/urlState';
+
+/**
+ * ARCHETYPE B — Board. One row per model, a column per grade, row actions.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ */
 
 export interface ModelCoverage {
   modelId: string;
@@ -36,8 +53,6 @@ const VIEW_LABEL: Record<ConditionViewCode, string> = {
 const gradeLabel = (g: Grade): string => g.replace('_PLUS', '+');
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-
-const COLUMN_COUNT = 2 + GRADES.length * REQUIRED_VIEWS.length;
 
 interface Row {
   model: ModelCoverage;
@@ -79,11 +94,11 @@ function gapSentence(model: ModelCoverage, grade: Grade, view: ConditionViewCode
 /**
  * One (grade, view) slot.
  *
- * A filled cell is deliberately the quiet one. Most slots are filled, and a wall
+ * A filled slot is deliberately the quiet one. Most slots are filled, and a wall
  * of green makes the handful of empty ones no easier to find than a wall of
  * grey — the gap is the only thing on this screen worth looking at.
  */
-function Cell({
+function Slot({
   row,
   grade,
   view,
@@ -95,48 +110,59 @@ function Cell({
   const filled = row.present.has(`${grade}|${view}`);
   const sentence = gapSentence(row.model, grade, view);
   return (
-    <td
+    <span
       data-state={filled ? 'filled' : 'gap'}
-      title={filled ? undefined : sentence}
+      title={filled ? VIEW_LABEL[view] : sentence}
       className={
         filled
-          ? 'border-b border-l border-rule-2 px-2 py-3 text-center text-ink-3'
-          : 'border-b border-l border-fail bg-sheet-2 px-2 py-3 text-center font-semibold text-fail'
+          ? 'flex h-5 w-5 items-center justify-center rounded-xs border border-rule-2 text-ink-3'
+          : 'flex h-5 w-5 items-center justify-center rounded-xs border border-fail bg-sheet-2 font-semibold text-fail'
       }
     >
       {/* Never colour alone: the glyph carries the same distinction as the fill. */}
-      <span aria-hidden="true">{filled ? '•' : '✕'}</span>
+      <span aria-hidden="true">{filled ? '·' : '✕'}</span>
       <span className="sr-only">
         {filled ? `Grade ${gradeLabel(grade)} ${VIEW_LABEL[view]} present` : sentence}
       </span>
-    </td>
+    </span>
   );
 }
 
-/** The per-grade publish gate, shown only where something is blocking it. */
-function PublishReasons({ row }: { row: Row }): React.JSX.Element {
+/**
+ * One grade's whole set: ten slots, then whether the grade can be published.
+ *
+ * The publish gate rides *inside* the grade column rather than in a second row
+ * below the model, because that is the question the column is answering. Zero
+ * gaps is not the same as publishable — a Grade B set also needs its worst-wear
+ * frame — so the verdict is stated in words, never inferred from the slots.
+ */
+function GradeCell({ row, grade }: { row: Row; grade: Grade }): React.JSX.Element {
+  const check = row.checks.find((c) => c.grade === grade)?.check;
   return (
-    <tr className="border-b border-rule">
-      <td colSpan={COLUMN_COUNT} className="bg-sheet-2 px-3 py-4">
-        <ul className="flex flex-col gap-3">
-          {row.checks.map(({ grade, check }) => (
-            <li key={grade} className="flex flex-wrap items-center gap-3">
-              <GradeBadge grade={grade} />
-              {check.publishable ? (
-                <StatusPill tone="pass" label="Publishable" />
-              ) : (
-                <StatusPill tone="fail" label="Cannot publish" />
-              )}
-              {check.reasons.map((reason) => (
-                <span key={reason} className="text-body-sm text-ink-2">
-                  {reason}
-                </span>
-              ))}
-            </li>
-          ))}
-        </ul>
-      </td>
-    </tr>
+    <div className="flex flex-col items-start gap-2">
+      {/* One row, one column per required view, in `REQUIRED_VIEWS` order — so
+          the eye lands on the same slot in every row of the board. A wrapping
+          flex reflows with the column width and the grid stops being
+          comparable. The count comes from the constant, never from a literal. */}
+      <div className="inline-grid w-max auto-cols-max grid-flow-col gap-1">
+        {REQUIRED_VIEWS.map((view) => (
+          <Slot key={view} row={row} grade={grade} view={view} />
+        ))}
+      </div>
+      {check &&
+        (check.publishable ? (
+          <StatusPill tone="pass" label="Publishable" />
+        ) : (
+          <>
+            <StatusPill tone="fail" label="Cannot publish" />
+            {check.reasons.map((reason) => (
+              <span key={reason} className="max-w-xs text-body-sm text-ink-2">
+                {reason}
+              </span>
+            ))}
+          </>
+        ))}
+    </div>
   );
 }
 
@@ -577,7 +603,7 @@ function BulkUpload({
   }
 
   return (
-    <div className="bg-sheet-2 px-3 py-4">
+    <div>
       <FrameList model={model} onChanged={onCommitted} />
       <div
         onDragOver={(e) => {
@@ -591,9 +617,12 @@ function BulkUpload({
           setOver(false);
           void read(e.dataTransfer.files);
         }}
-        className={`rounded border-2 border-dashed p-6 text-center ${
-          over ? 'border-acc bg-ground' : 'border-rule'
-        }`}
+        className={cn(
+          'rounded border-2 border-dashed p-6 text-center transition-colors',
+          // Amber only while a file is actually over the zone: an active state,
+          // the third legitimate use of the accent.
+          over ? 'border-acc bg-acc-wash' : 'border-rule bg-sheet-2',
+        )}
       >
         <p className="text-body-sm text-ink">
           Drop the shoot for <span className="font-semibold">{model.modelName}</span> here.
@@ -606,7 +635,7 @@ function BulkUpload({
         </p>
         {/* A drop zone is unreachable by keyboard, so the file input is the
             control and the drop is the shortcut. */}
-        <label className="mt-4 inline-flex cursor-pointer items-center rounded border border-rule bg-sheet px-5 py-2 text-body-sm text-ink hover:bg-ground">
+        <label className="mt-4 inline-flex min-h-11 cursor-pointer items-center rounded border border-rule bg-sheet px-5 text-body-sm text-ink hover:bg-sheet-2">
           Choose photographs
           <input
             type="file"
@@ -675,7 +704,9 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
   // parameter; `useResource` keys its effect on the URL, and this is a smaller
   // change than teaching it to refetch.
   const [reload, setReload] = React.useState(0);
-  const [openModel, setOpenModel] = React.useState<string | null>(null);
+  // In the URL: "the model whose shoot I am uploading" survives a reload and is
+  // a link an ops person can send to whoever is holding the camera.
+  const [openModel, setOpenModel] = useUrlState('model');
 
   const { data, error } = useResource<ModelCoverage[]>(
     `/api/catalog/condition-images/coverage?v=${reload}`,
@@ -690,6 +721,39 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
         .map(toRow)
         .sort((a, b) => b.gapCount - a.gapCount || b.blockedGrades - a.blockedGrades),
     [data],
+  );
+
+  const columns = React.useMemo<ReadonlyArray<Column<Row>>>(
+    () => [
+      {
+        key: 'model',
+        header: 'Model',
+        cell: (row) => (
+          <div className="flex flex-col gap-1">
+            <span className="text-ink">{row.model.modelName}</span>
+            <span className="text-body-sm text-ink-3">
+              {row.model.brandName} · {row.model.seriesName}
+            </span>
+            <Button
+              variant="link"
+              size="sm"
+              className="justify-start px-0"
+              aria-expanded={openModel === row.model.modelId}
+              onClick={() => setOpenModel(openModel === row.model.modelId ? '' : row.model.modelId)}
+            >
+              {openModel === row.model.modelId ? 'Close' : 'Add photographs'}
+            </Button>
+          </div>
+        ),
+      },
+      ...GRADES.map((grade) => ({
+        key: `grade-${grade}`,
+        header: `Grade ${gradeLabel(grade)}`,
+        cell: (row: Row) => <GradeCell row={row} grade={grade} />,
+      })),
+      { key: 'coverage', header: 'Coverage', cell: (row: Row) => <CoverageCell row={row} /> },
+    ],
+    [openModel, setOpenModel],
   );
 
   if (error) {
@@ -713,11 +777,11 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
   const totalGaps = rows.reduce((n, r) => n + r.gapCount, 0);
   const modelsWithGaps = rows.filter((r) => r.gapCount > 0).length;
   const blocked = rows.reduce((n, r) => n + r.blockedGrades, 0);
+  const open = rows.find((r) => r.model.modelId === openModel);
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Condition image coverage</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Condition image coverage">
         {modelsWithGaps > 0 ? (
           <>
             <span className="font-semibold text-fail">
@@ -737,104 +801,43 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
         ) : (
           <>Every model has a complete set in every grade.</>
         )}
-      </p>
-      <p className="mt-1 text-body-sm text-ink-3">
+      </PageHeader>
+
+      <p className="text-body-sm text-ink-3">
         <span aria-hidden="true">✕</span> marks an empty slot, and an empty slot is what puts a
-        placeholder on a live listing. <span aria-hidden="true">•</span> is a live image.
+        placeholder on a live listing. <span aria-hidden="true">·</span> is a live image. Each grade
+        column holds the {REQUIRED_VIEWS.length} required views, in order:{' '}
+        {REQUIRED_VIEWS.map((v) => VIEW_LABEL[v].toLowerCase()).join(', ')}.
       </p>
 
-      <div className="mt-6 overflow-x-auto">
-        <table className="w-full border-collapse text-body-sm">
-          <caption className="sr-only">
-            Condition image coverage by model, grade and view. Empty slots are marked as gaps.
-          </caption>
-          <thead>
-            <tr className="border-b border-rule text-left">
-              <th
-                rowSpan={2}
-                scope="col"
-                className="px-3 py-2 font-mono text-label uppercase tracking-[0.13em] text-ink-2"
-              >
-                Model
-              </th>
-              {GRADES.map((grade) => (
-                <th
-                  key={grade}
-                  colSpan={REQUIRED_VIEWS.length}
-                  scope="colgroup"
-                  className="border-l border-rule px-2 py-2 text-center font-mono text-label uppercase tracking-[0.13em] text-ink-2"
-                >
-                  Grade {gradeLabel(grade)}
-                </th>
-              ))}
-              <th
-                rowSpan={2}
-                scope="col"
-                className="border-l border-rule px-3 py-2 font-mono text-label uppercase tracking-[0.13em] text-ink-2"
-              >
-                Coverage
-              </th>
-            </tr>
-            <tr className="border-b border-rule">
-              {GRADES.flatMap((grade) =>
-                REQUIRED_VIEWS.map((view) => (
-                  <th
-                    key={`${grade}|${view}`}
-                    scope="col"
-                    className="border-l border-rule-2 px-2 py-2 text-center text-body-sm font-normal text-ink-3"
-                  >
-                    {VIEW_LABEL[view]}
-                  </th>
-                )),
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <React.Fragment key={row.model.modelId}>
-                <tr className="border-b border-rule-2 hover:bg-sheet-2">
-                  <td className="px-3 py-3">
-                    <span className="text-ink">{row.model.modelName}</span>
-                    <span className="block text-body-sm text-ink-3">
-                      {row.model.brandName} · {row.model.seriesName}
-                    </span>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="mt-1 px-0"
-                      aria-expanded={openModel === row.model.modelId}
-                      onClick={() =>
-                        setOpenModel(openModel === row.model.modelId ? null : row.model.modelId)
-                      }
-                    >
-                      {openModel === row.model.modelId ? 'Close' : 'Add photographs'}
-                    </Button>
-                  </td>
-                  {GRADES.flatMap((grade) =>
-                    REQUIRED_VIEWS.map((view) => (
-                      <Cell key={`${grade}|${view}`} row={row} grade={grade} view={view} />
-                    )),
-                  )}
-                  <td className="border-l border-rule-2 px-3 py-3">
-                    <CoverageCell row={row} />
-                  </td>
-                </tr>
-                {row.blockedGrades > 0 && <PublishReasons row={row} />}
-                {openModel === row.model.modelId && (
-                  <tr className="border-b border-rule">
-                    <td colSpan={COLUMN_COUNT} className="p-0">
-                      <BulkUpload
-                        model={row.model}
-                        onCommitted={() => setReload((n) => n + 1)}
-                      />
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Board>
+        <DataBoard
+          caption="Condition image coverage by model and grade, models with the most gaps first."
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.model.modelId}
+        />
+      </Board>
+
+      {/*
+        The upload panel sits below the board rather than inside it as a second
+        <tr>. A table row that opens a drop zone spanning thirty-two columns is a
+        table pretending to be a page, and `DataBoard` — one table component,
+        three densities — deliberately has no expansion slot for it to grow into.
+      */}
+      {open && (
+        <Section
+          title={`Add photographs · ${open.model.modelName}`}
+          subtitle={`${open.model.brandName} · ${open.model.seriesName}`}
+          aside={
+            <Button variant="ghost" size="sm" onClick={() => setOpenModel('')}>
+              Close
+            </Button>
+          }
+        >
+          <BulkUpload model={open.model} onCommitted={() => setReload((n) => n + 1)} />
+        </Section>
+      )}
     </div>
   );
 }

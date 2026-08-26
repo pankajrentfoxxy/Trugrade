@@ -1,9 +1,13 @@
 import * as React from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Button, EmptyState, Input, StatusPill } from '@trugrade/ui';
+import { PageHeader } from '../../lib/controls';
 import { API, postJson } from './api';
 
 /**
+ * ARCHETYPE F — Focus. One task, centred, three fields.
+ * DENSITY: default (vendor portal), set on the app root by the shell.
+ *
  * The vendor half of the Phase 2 SKU-request flow.
  *
  * This exists because step 1 of the wizard needs somewhere to send a vendor
@@ -76,8 +80,14 @@ export function SkuRequestRoute(): React.JSX.Element {
                 key={m.skuId}
                 className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-3"
               >
-                <span className="font-mono text-data tnum text-ink-2">
+                {/* A similarity is a measured value, so it is amber and it
+                    carries its scale. A bare "94%" reads as a proportion of
+                    something it is not. */}
+                <span className="font-mono text-data tnum text-acc-ink">
                   {Math.round(m.similarity * 100)}%
+                </span>
+                <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-4">
+                  match
                 </span>
                 <code className="font-mono text-data text-ink-2">{m.skuCode}</code>
                 <span className="text-body-sm text-ink">{m.label}</span>
@@ -91,14 +101,13 @@ export function SkuRequestRoute(): React.JSX.Element {
   }
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Ask us to add this machine</h1>
-      <p className="mt-2 max-w-prose text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Ask us to add this machine">
         Your draft listing is saved. Send this and come straight back to it — nothing you have
         entered is lost.
-      </p>
+      </PageHeader>
 
-      <div className="mt-6 flex max-w-lg flex-col gap-5">
+      <div className="flex max-w-lg flex-col gap-5">
         <Input label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} required />
         <Input
           label="Model"
@@ -118,12 +127,12 @@ export function SkuRequestRoute(): React.JSX.Element {
       </div>
 
       {error && (
-        <p className="mt-4 text-body-sm text-fail" role="alert">
+        <p className="text-body-sm text-fail" role="alert">
           {error}
         </p>
       )}
 
-      <div className="mt-7 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         <Button
           variant="primary"
           loading={busy}

@@ -1,12 +1,16 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
+import { DataBoard, EmptyState, Skeleton, StatusPill, cn, type Column } from '@trugrade/ui';
+import { Board, DateField, PageHeader } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
+import { useUrlState } from '../../lib/urlState';
 import { qs } from './api';
-import { TD, TH } from './controls';
 import type { ScheduleTechnician, ScheduleTechnicianDay, ScheduleWeek } from './types';
 
 /**
+ * ARCHETYPE B — Board. One row per technician, one column per day.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ *
  * A week of technicians against a week of days.
  *
  * Two capacities constrain a QC week, they fail in completely different ways,
@@ -47,13 +51,16 @@ function DayCell({
   const unavailable = UNAVAILABLE.has(day.availability);
 
   return (
-    <td
+    <div
       data-state={unavailable ? 'unavailable' : tone}
-      className={[
-        'border-l border-rule-2 px-2 py-3 align-top text-body-sm',
-        unavailable ? 'bg-sheet-2 text-ink-3' : '',
-        tone === 'over' ? 'bg-sheet-2 text-fail' : '',
-      ].join(' ')}
+      className={cn(
+        'flex flex-col text-body-sm',
+        unavailable && 'text-ink-3',
+        // Over capacity is a FAIL: the day will not fit. WARN would read as
+        // "keep an eye on it", which is the wrong instruction for a day that is
+        // already impossible.
+        tone === 'over' && 'text-fail',
+      )}
     >
       {unavailable ? (
         <span className="font-mono text-label uppercase tracking-[0.13em]">
@@ -61,10 +68,10 @@ function DayCell({
         </span>
       ) : (
         <>
-          <span className="tnum block">
+          <span className="block font-mono tnum">
             {day.bookedUnits}/{tech.dailyCapacityUnits} units
           </span>
-          <span className="tnum block text-ink-3">
+          <span className="block font-mono tnum text-ink-3">
             {day.sites}/{tech.maxSitesPerDay} sites
           </span>
           {day.visits.map((v) => (
@@ -82,15 +89,49 @@ function DayCell({
           )}
         </>
       )}
-    </td>
+    </div>
   );
 }
 
 export function ScheduleRoute(): React.JSX.Element {
-  const [from, setFrom] = React.useState('');
+  // In the URL, so "the week of the 14th" is a link and not a click path.
+  const [from, setFrom] = useUrlState('from');
   const { data, error } = useResource<ScheduleWeek>(
     `/api/qc/schedule${qs({ from })}`,
     'The schedule is unavailable',
+  );
+
+  const columns = React.useMemo<ReadonlyArray<Column<ScheduleTechnician>>>(
+    () => [
+      {
+        key: 'technician',
+        header: 'Technician',
+        cell: (t) => (
+          <>
+            {t.name}
+            <span className="block font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+              {t.employeeCode} · {t.zones.join(', ') || 'no zone'} ·{' '}
+              {t.certifiedTools.join(', ') || 'no certified tool'}
+            </span>
+          </>
+        ),
+      },
+      ...(data?.dates ?? []).map((d) => ({
+        key: d,
+        header: d,
+        cell: (t: ScheduleTechnician) => {
+          const day = t.days.find((x) => x.date === d) ?? {
+            date: d,
+            availability: 'UNSET' as const,
+            bookedUnits: 0,
+            sites: 0,
+            visits: [],
+          };
+          return <DayCell tech={t} day={day} />;
+        },
+      })),
+    ],
+    [data],
   );
 
   if (error) {
@@ -106,30 +147,28 @@ export function ScheduleRoute(): React.JSX.Element {
   const seatBreaches = data.licence.flatMap((l) =>
     data.dates
       .filter((d) => (l.seatsUsedPerDate[d] ?? 0) > l.seats)
-      .map((d) => ({ provider: l.providerCode, date: d, used: l.seatsUsedPerDate[d] ?? 0, seats: l.seats })),
+      .map((d) => ({
+        provider: l.providerCode,
+        date: d,
+        used: l.seatsUsedPerDate[d] ?? 0,
+        seats: l.seats,
+      })),
   );
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Scheduling</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Scheduling">
         {data.from} to {data.to} · {data.technicians.length} technicians
-      </p>
+      </PageHeader>
 
-      <div className="mt-5 flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="week-from" className="text-body-sm font-medium text-ink-2">
-            Week beginning
-          </label>
-          <input
-            id="week-from"
-            type="date"
-            value={from || data.from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="h-11 rounded border border-rule bg-sheet px-4 text-body-sm text-ink"
-          />
-        </div>
-        <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-end gap-4">
+        <DateField
+          id="week-from"
+          label="Week beginning"
+          value={from || data.from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <div className="flex flex-wrap gap-3 pb-2">
           {data.licence.map((l) => (
             <StatusPill
               key={l.providerCode}
@@ -143,7 +182,7 @@ export function ScheduleRoute(): React.JSX.Element {
       {seatBreaches.length > 0 && (
         <div
           role="alert"
-          className="mt-5 rounded-lg border border-fail bg-sheet-2 p-5 text-body-sm text-fail"
+          className="tg-card rounded-lg border border-fail bg-sheet-2 text-body-sm text-fail"
           data-testid="seat-breach"
         >
           <strong className="block text-h3">More technicians than licence seats</strong>
@@ -161,56 +200,20 @@ export function ScheduleRoute(): React.JSX.Element {
         </div>
       )}
 
-      {data.technicians.length === 0 ? (
-        <EmptyState
-          className="mt-6"
-          title="No technicians available this week"
-          body="Every technician is on leave, travelling, or none has been set up yet."
+      <Board>
+        <DataBoard
+          caption={`Technician availability and booked capacity for ${data.from} to ${data.to}.`}
+          columns={columns}
+          rows={data.technicians}
+          rowKey={(t) => t.id}
+          empty={
+            <EmptyState
+              title="No technicians available this week"
+              body="Every technician is on leave, travelling, or none has been set up yet."
+            />
+          }
         />
-      ) : (
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full border-collapse">
-            <caption className="sr-only">
-              Technician availability and booked capacity, by day.
-            </caption>
-            <thead>
-              <tr className="border-b border-rule">
-                <th scope="col" className={TH}>
-                  Technician
-                </th>
-                {data.dates.map((d) => (
-                  <th key={d} scope="col" className={`${TH} border-l border-rule`}>
-                    {d}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.technicians.map((t) => (
-                <tr key={t.id} className="border-b border-rule-2">
-                  <th scope="row" className={`${TD} font-normal`}>
-                    {t.name}
-                    <span className="block font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                      {t.employeeCode} · {t.zones.join(', ') || 'no zone'} ·{' '}
-                      {t.certifiedTools.join(', ') || 'no certified tool'}
-                    </span>
-                  </th>
-                  {data.dates.map((d) => {
-                    const day = t.days.find((x) => x.date === d) ?? {
-                      date: d,
-                      availability: 'UNSET' as const,
-                      bookedUnits: 0,
-                      sites: 0,
-                      visits: [],
-                    };
-                    return <DayCell key={d} tech={t} day={day} />;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </Board>
     </div>
   );
 }

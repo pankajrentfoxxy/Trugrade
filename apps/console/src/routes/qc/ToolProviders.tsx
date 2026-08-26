@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { Button, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
+import { Button, DataBoard, EmptyState, Skeleton, StatusPill, type Column } from '@trugrade/ui';
+import { Datum, PageHeader, Section, Textarea } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { send } from './api';
-import { Datum, Panel, Textarea } from './controls';
 import { KNOWN_FIELDS, validateFieldMap } from './fieldMap';
 import type { ToolProviderRow } from './types';
 
 /**
+ * ARCHETYPE B — Board. One card per provider, each with its own row actions.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ *
  * Tool providers, and the field map that decides what every future certificate
  * parses into.
  *
@@ -21,6 +24,26 @@ import type { ToolProviderRow } from './types';
  * seventeen-line JSON object for the one path that changed is exactly how a typo
  * gets approved.
  */
+
+/** Our field name, an arrow, their JSON path. Both sides are identifiers, so both are mono. */
+const FIELD_MAP_COLUMNS: ReadonlyArray<Column<{ field: string; path: string }>> = [
+  { key: 'field', header: 'Our field', cell: (r) => <span className="font-mono text-data text-ink">{r.field}</span> },
+  {
+    key: 'arrow',
+    header: 'maps to',
+    headerHidden: true,
+    cell: () => (
+      <span className="text-ink-3" aria-hidden="true">
+        &rarr;
+      </span>
+    ),
+  },
+  {
+    key: 'path',
+    header: 'Their path',
+    cell: (r) => <span className="font-mono text-data text-ink-2">{r.path}</span>,
+  },
+];
 
 function ProviderCard({
   provider,
@@ -57,10 +80,10 @@ function ProviderCard({
     }
   }
 
-  const mapped = Object.entries(provider.fieldMapJson);
+  const mapped = Object.entries(provider.fieldMapJson).map(([field, path]) => ({ field, path }));
 
   return (
-    <Panel
+    <Section
       title={`${provider.name} (${provider.code})`}
       aside={
         provider.isActive ? (
@@ -85,23 +108,13 @@ function ProviderCard({
       <h3 className="mt-5 font-mono text-label uppercase tracking-[0.13em] text-ink-2">
         Field map · our field to their path
       </h3>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full border-collapse text-body-sm">
-          <caption className="sr-only">
-            The mapping from Gorefurbo field names to paths in this provider&rsquo;s payload.
-          </caption>
-          <tbody>
-            {mapped.map(([field, path]) => (
-              <tr key={field} className="border-b border-rule-2">
-                <td className="py-2 pr-5 font-mono text-data text-ink">{field}</td>
-                <td className="py-2 text-ink-3" aria-hidden="true">
-                  &rarr;
-                </td>
-                <td className="py-2 font-mono text-data text-ink-2">{path}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mt-3">
+        <DataBoard
+          caption={`The mapping from Trugrade field names to paths in the ${provider.code} payload.`}
+          columns={FIELD_MAP_COLUMNS}
+          rows={mapped}
+          rowKey={(r) => r.field}
+        />
       </div>
 
       {!editing ? (
@@ -176,7 +189,7 @@ function ProviderCard({
           </div>
         </div>
       )}
-    </Panel>
+    </Section>
   );
 }
 
@@ -206,12 +219,11 @@ export function ToolProvidersRoute(): React.JSX.Element {
   }
 
   return (
-    <div>
-      <h1 className="text-h1 text-ink">Tool providers</h1>
-      <p className="mt-2 text-body-sm text-ink-2">
+    <div className="tg-stack">
+      <PageHeader title="Tool providers">
         A second diagnostic tool is configuration, not a release. That only holds while the field
         map is right, so it is validated before it can be saved.
-      </p>
+      </PageHeader>
 
       {data.map((p) => {
         const current = saved[p.id] ?? p;

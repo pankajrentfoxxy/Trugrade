@@ -1,10 +1,20 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router';
 import { GRADES, QC_AREA_SCORE, type Grade } from '@trugrade/contracts';
-import { Button, EmptyState, GradeBadge, Input, Skeleton, StatusPill } from '@trugrade/ui';
+import {
+  Button,
+  EmptyState,
+  GradeBadge,
+  Input,
+  Skeleton,
+  StatusPill,
+  Stepper,
+  TickRule,
+  type Step,
+} from '@trugrade/ui';
+import { Datum, Field, Section, Select, Textarea } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { send, uploadPhoto } from './api';
-import { Datum, Panel, Select, Textarea, TD, TH } from './controls';
 import {
   checkInspection,
   emptyInspection,
@@ -27,7 +37,15 @@ import {
 } from './types';
 
 /**
+ * ARCHETYPE D — Flow. Step rail + the step + the reason each field is asked.
+ * DENSITY: compact (admin), set on the app root by the shell.
+ *
  * The whole inspection, on a keyboard.
+ *
+ * It is one long form rather than four routes on purpose — a technician holding
+ * a machine does not want to be routed — so the rail is a map of the form and
+ * every entry says whether that part is finished. That is the flow's whole
+ * promise kept without splitting the submission into four that can half-fail.
  *
  * PHASE_04_QC.md is blunt about why this exists: the mobile app runs offline in a
  * warehouse and is the highest-risk piece of the project, so *"build the web
@@ -120,7 +138,7 @@ function PhotoSlot({
           className="aspect-[3/2] w-full rounded object-cover"
         />
       ) : (
-        <div className="flex aspect-[3/2] w-full items-center justify-center rounded border border-dashed border-rule text-body-sm text-ink-3">
+        <div className="flex aspect-[3/2] w-full items-center justify-center rounded border border-dashed border-rule text-body-sm text-ink-4">
           {busy ? 'Uploading…' : 'Not photographed'}
         </div>
       )}
@@ -149,6 +167,18 @@ function PhotoSlot({
  * The twelve areas
  * ======================================================================== */
 
+/**
+ * One inspection area.
+ *
+ * A `<fieldset>` per area rather than a row of a `<table>`. Twelve rows of radio
+ * groups, a number box and a free-text note is a **form**, and `DataBoard` — the
+ * one table component, three densities — reads data rather than collecting it.
+ * Squeezing four controls into a 34px admin row also produced a control column
+ * that could not be operated.
+ *
+ * `data-area` stays on the container: it is how a caller, and the test suite,
+ * addresses one area's controls as a group.
+ */
 function AreaRow({
   area,
   entry,
@@ -159,41 +189,46 @@ function AreaRow({
   onChange: (next: InspectionState['areas'][QcAreaCode]) => void;
 }): React.JSX.Element {
   const measured = entry.status !== '' && entry.status !== 'NOT_MEASURED';
+  const scoreId = `score-${area}`;
+  const noteId = `note-${area}`;
+
   return (
-    <tr className="border-b border-rule-2" data-area={area}>
-      <th scope="row" className={`${TD} font-normal`}>
-        {AREA_LABEL[area]}
-        <code className="ml-2 font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-          {area}
-        </code>
-      </th>
-      <td className={TD}>
-        <fieldset className="flex flex-wrap gap-4">
-          <legend className="sr-only">{AREA_LABEL[area]} result</legend>
-          {AREA_CHOICES.map((c) => (
-            <label key={c.value} className="flex items-center gap-2 text-body-sm text-ink">
-              <input
-                type="radio"
-                name={`area-${area}`}
-                value={c.value}
-                checked={entry.status === c.value}
-                onChange={() =>
-                  onChange({
-                    ...entry,
-                    status: c.value,
-                    // A score on a row that will never be written is a number
-                    // that later reads as evidence of a measurement.
-                    score: c.value === 'NOT_MEASURED' ? '' : entry.score,
-                  })
-                }
-              />
-              {c.label}
-            </label>
-          ))}
-        </fieldset>
-      </td>
-      <td className={TD}>
+    <li
+      data-area={area}
+      className="flex flex-col gap-3 border-b border-rule-2 py-3 last:border-b-0 lg:flex-row lg:items-start lg:gap-5"
+    >
+      <span className="flex min-w-[13rem] flex-col gap-1">
+        <span className="text-body-sm text-ink">{AREA_LABEL[area]}</span>
+        <code className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{area}</code>
+      </span>
+
+      <fieldset className="flex flex-wrap gap-4">
+        <legend className="sr-only">{AREA_LABEL[area]} result</legend>
+        {AREA_CHOICES.map((c) => (
+          <label key={c.value} className="flex items-center gap-2 text-body-sm text-ink">
+            <input
+              type="radio"
+              name={`area-${area}`}
+              value={c.value}
+              checked={entry.status === c.value}
+              onChange={() =>
+                onChange({
+                  ...entry,
+                  status: c.value,
+                  // A score on a row that will never be written is a number
+                  // that later reads as evidence of a measurement.
+                  score: c.value === 'NOT_MEASURED' ? '' : entry.score,
+                })
+              }
+            />
+            {c.label}
+          </label>
+        ))}
+      </fieldset>
+
+      <span className="flex flex-1 flex-wrap items-center gap-3">
         <input
+          id={scoreId}
           type="number"
           min={QC_AREA_SCORE.min}
           max={QC_AREA_SCORE.max}
@@ -202,20 +237,19 @@ function AreaRow({
           disabled={!measured}
           aria-label={`${AREA_LABEL[area]} score out of ${QC_AREA_SCORE.max}`}
           onChange={(e) => onChange({ ...entry, score: e.target.value })}
-          className="h-9 w-20 rounded border border-rule bg-sheet px-3 text-body-sm tnum text-ink disabled:opacity-45"
+          className="h-9 w-20 rounded border border-rule bg-sheet px-3 font-mono text-body-sm tnum text-ink disabled:opacity-45"
         />
-      </td>
-      <td className={TD}>
         <input
+          id={noteId}
           type="text"
           value={entry.note}
           aria-label={`${AREA_LABEL[area]} note`}
           placeholder={entry.status === 'NOT_MEASURED' ? 'Why could it not be measured?' : 'Note'}
           onChange={(e) => onChange({ ...entry, note: e.target.value })}
-          className="h-9 w-full min-w-[12rem] rounded border border-rule bg-sheet px-3 text-body-sm text-ink placeholder:text-ink-3"
+          className="h-9 min-w-[12rem] flex-1 rounded border border-rule bg-sheet px-3 text-body-sm text-ink placeholder:text-ink-4"
         />
-      </td>
-    </tr>
+      </span>
+    </li>
   );
 }
 
@@ -345,6 +379,67 @@ function HardwareFields({
 }
 
 /* ==========================================================================
+ * The rail
+ * ======================================================================== */
+
+/**
+ * The six parts of the form, and whether each one is finished.
+ *
+ * The status comes from the same `checkInspection` blockers the submit button
+ * reads, so the rail cannot say "done" about a section the API will refuse.
+ * A blocker's `field` is prefixed with the part it belongs to, which is what
+ * lets one list drive both.
+ */
+const RAIL: ReadonlyArray<{ key: string; label: string; href: string; fields: readonly string[] }> = [
+  { key: 'machine', label: 'The machine', href: '#s-machine', fields: ['visitUnitId', 'technicianId', 'serialScanned', 'startedAt', 'completedAt'] },
+  { key: 'areas', label: 'Twelve areas', href: '#s-areas', fields: ['areas'] },
+  { key: 'hardware', label: 'Detected hardware', href: '#s-hardware', fields: ['hardware'] },
+  { key: 'photos', label: 'Photographs', href: '#s-photos', fields: ['photos'] },
+  { key: 'seal', label: 'Seal', href: '#s-seal', fields: ['sealCode', 'sealPhoto'] },
+  { key: 'verdict', label: 'Verdict', href: '#s-verdict', fields: ['verdict', 'qcScore', 'grade'] },
+];
+
+/** How many of the six parts still have something outstanding. */
+function outstandingParts(blockers: ReadonlyArray<{ field: string }>): number {
+  return RAIL.filter((p) => blockers.some((b) => p.fields.some((f) => b.field.startsWith(f))))
+    .length;
+}
+
+function railSteps(
+  state: InspectionState,
+  blockers: ReadonlyArray<{ field: string; message: string }>,
+  hasUnit: boolean,
+): Step[] {
+  const touched = hasUnit || state.serialScanned !== '';
+  return RAIL.map((part, i) => {
+    const mine = blockers.filter((b) => part.fields.some((f) => b.field.startsWith(f)));
+    if (mine.length > 0) {
+      const first = RAIL.findIndex((p) =>
+        blockers.some((b) => p.fields.some((f) => b.field.startsWith(f))),
+      );
+      return {
+        key: part.key,
+        label: part.label,
+        // "Current" is the first unfinished part; the rest are simply not done.
+        // Nothing here is *blocked* — a technician may fill the form in any
+        // order, and marking a later part blocked would be a lie about that.
+        status: i === first ? 'current' : 'upcoming',
+        // A count, not the messages. Six sections each printing three sentences
+        // in --fail turns the rail into a wall of red before the technician has
+        // touched anything, and the submit-time list already names every one.
+        summary: `${mine.length} outstanding`,
+      };
+    }
+    return {
+      key: part.key,
+      label: part.label,
+      status: touched ? 'complete' : 'upcoming',
+      href: part.href,
+    };
+  });
+}
+
+/* ==========================================================================
  * The screen
  * ======================================================================== */
 
@@ -455,7 +550,34 @@ export function ManualInspectionRoute(): React.JSX.Element {
   }
 
   return (
-    <form onSubmit={(e) => void onSubmit(e)} noValidate>
+    <div className="grid items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+      {/*
+        `Stepper` in an aside, not `StepRail`.
+
+        `StepRail` closes with its save-and-resume state, and this form has none:
+        nothing is written until Submit, deliberately, because a half-recorded
+        inspection is worse than none. A rail that said "nothing saved yet" would
+        be promising a draft that does not exist.
+      */}
+      <aside
+        aria-label="This inspection"
+        className="tg-card sticky top-5 order-2 flex flex-col gap-5 rounded-lg border border-rule bg-sheet lg:order-1"
+      >
+        <div className="flex flex-col gap-1">
+          <h2 className="text-h3 text-ink">This inspection</h2>
+          <p className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+            <span className="tnum">{6 - outstandingParts(check.blockers)}</span> of{' '}
+            <span className="tnum">6</span> ready
+          </p>
+          <TickRule />
+        </div>
+        <Stepper
+          label="This inspection"
+          steps={railSteps(state, check.blockers, Boolean(unit))}
+        />
+      </aside>
+
+      <form onSubmit={(e) => void onSubmit(e)} noValidate className="order-1 lg:order-2">
       <h1 className="text-h1 text-ink">Manual inspection</h1>
       <p className="mt-2 text-body-sm text-ink-2">
         <Link
@@ -466,7 +588,7 @@ export function ManualInspectionRoute(): React.JSX.Element {
         </Link>{' '}
         · {visit.data.vendorName} · {visit.data.facilityLabel}
       </p>
-      <p className="mt-1 text-body-sm text-ink-3">
+      <p className="mt-1 max-w-prose text-body-sm text-ink-3">
         Everything the technician app captures, captured here instead. Nothing on this form is
         optional because the machine is in a hurry.
       </p>
@@ -485,7 +607,7 @@ export function ManualInspectionRoute(): React.JSX.Element {
       )}
 
       {/* ---- the machine ---- */}
-      <Panel title="The machine" subtitle="Which unit, and does the label belong to it.">
+      <Section id="s-machine" title="The machine" subtitle="Which unit, and does the label belong to it.">
         <div className="grid gap-5 md:grid-cols-2">
           <Select
             label="Unit on the manifest"
@@ -559,10 +681,11 @@ export function ManualInspectionRoute(): React.JSX.Element {
             onChange={(e) => set('completedAt', e.target.value)}
           />
         </div>
-      </Panel>
+      </Section>
 
       {/* ---- the twelve areas ---- */}
-      <Panel
+      <Section
+        id="s-areas"
         title="The twelve inspection areas"
         subtitle={
           <>
@@ -576,40 +699,16 @@ export function ManualInspectionRoute(): React.JSX.Element {
           ) : undefined
         }
       >
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <caption className="sr-only">
-              The twelve functional inspection areas, each with a result, a score out of ten and a
-              note.
-            </caption>
-            <thead>
-              <tr className="border-b border-rule">
-                <th scope="col" className={TH}>
-                  Area
-                </th>
-                <th scope="col" className={TH}>
-                  Result
-                </th>
-                <th scope="col" className={TH}>
-                  Score / {QC_AREA_SCORE.max}
-                </th>
-                <th scope="col" className={TH}>
-                  Note
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {QC_AREA_CODES.map((area) => (
-                <AreaRow
-                  key={area}
-                  area={area}
-                  entry={state.areas[area]}
-                  onChange={(next) => set('areas', { ...state.areas, [area]: next })}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul>
+          {QC_AREA_CODES.map((area) => (
+            <AreaRow
+              key={area}
+              area={area}
+              entry={state.areas[area]}
+              onChange={(next) => set('areas', { ...state.areas, [area]: next })}
+            />
+          ))}
+        </ul>
         {cap && (
           <p className="mt-4 text-body-sm text-warn">
             {cap.reason} A weighted mean would swallow that — eleven areas at ten and one at three
@@ -617,16 +716,18 @@ export function ManualInspectionRoute(): React.JSX.Element {
             above {gradeLabel(cap.cap)}.
           </p>
         )}
-      </Panel>
+      </Section>
 
-      <Panel
+      <Section
+        id="s-hardware"
         title="Detected hardware"
         subtitle="What the machine actually is, as measured. Not what the vendor declared."
       >
         <HardwareFields value={state.hardware} onChange={(h) => set('hardware', h)} />
-      </Panel>
+      </Section>
 
-      <Panel
+      <Section
+        id="s-photos"
         title="Photographs"
         subtitle="Six, minimum. These are the real machine, and they are what makes the representative images on the listing honest."
       >
@@ -641,9 +742,10 @@ export function ManualInspectionRoute(): React.JSX.Element {
             />
           ))}
         </div>
-      </Panel>
+      </Section>
 
-      <Panel
+      <Section
+        id="s-seal"
         title="Seal"
         subtitle="A passed unit is sealed and the seal is photographed on the machine. The seal is what makes a twelve-minute inspection still mean something three weeks later, when the machine has sat at the vendor's premises the whole time."
       >
@@ -663,9 +765,13 @@ export function ManualInspectionRoute(): React.JSX.Element {
             onUploaded={(f) => set('sealPhoto', f ?? null)}
           />
         </div>
-      </Panel>
+      </Section>
 
-      <Panel title="Verdict" subtitle="The grade is our claim under CP e-Comm r.7(5), not the tool's.">
+      <Section
+        id="s-verdict"
+        title="Verdict"
+        subtitle="The grade is our claim under CP e-Comm r.7(5), not the tool's."
+      >
         <div className="grid gap-5 md:grid-cols-2">
           <Select
             label="Verdict"
@@ -719,7 +825,7 @@ export function ManualInspectionRoute(): React.JSX.Element {
           value={state.notes}
           onChange={(e) => set('notes', e.target.value)}
         />
-      </Panel>
+      </Section>
 
       {check.notices.map((n) => (
         <p key={n} className="mt-4 text-body-sm text-warn">
@@ -758,14 +864,16 @@ export function ManualInspectionRoute(): React.JSX.Element {
         </Button>
         {check.hardStop && (
           <>
-            <input
-              type="text"
-              value={untestableReason}
-              aria-label="Reason the unit is untestable"
-              placeholder="What you found, in one line"
-              onChange={(e) => setUntestableReason(e.target.value)}
-              className="h-11 min-w-[18rem] flex-1 rounded border border-rule bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3"
-            />
+            <Field label="Reason the unit is untestable" htmlFor="untestable-reason" className="flex-1">
+              <input
+                id="untestable-reason"
+                type="text"
+                value={untestableReason}
+                placeholder="What you found, in one line"
+                onChange={(e) => setUntestableReason(e.target.value)}
+                className="h-11 min-w-[18rem] rounded border border-rule bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-4"
+              />
+            </Field>
             <Button type="button" variant="danger" onClick={() => void onUntestable()}>
               Record as untestable
             </Button>
@@ -777,6 +885,7 @@ export function ManualInspectionRoute(): React.JSX.Element {
             : `${check.blockers.length} outstanding.`}
         </span>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }

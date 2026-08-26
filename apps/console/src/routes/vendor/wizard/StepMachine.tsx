@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { Button, EmptyState, Input, Skeleton } from '@trugrade/ui';
+import { Button, EmptyState, Input, Skeleton, TickRule } from '@trugrade/ui';
 import { API, type SkuDetail, type SkuHit } from '../api';
 import type { WizardDraft } from './draft';
+
+/** Step 1 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
 
 interface SearchResponse {
   hits: SkuHit[];
@@ -22,7 +24,7 @@ function DeclaredSpec({ sku }: { sku: SkuDetail }): React.JSX.Element {
   ];
 
   return (
-    <div className="mt-5 rounded-lg border border-rule bg-sheet p-5">
+    <div className="tg-card mt-5 rounded-lg border border-rule bg-sheet">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h3 className="text-h3 text-ink">
           {sku.brandName} {sku.modelName}
@@ -106,6 +108,7 @@ export function StepMachine({
   return (
     <div>
       <h2 className="text-h2 text-ink">Pick the machine</h2>
+      <TickRule />
       <p className="mt-2 max-w-prose text-body-sm text-ink-2">
         Search the master catalog by model or configuration. Every listing is against a SKU we
         already carry — that is what lets a buyer compare your machine with anyone else&rsquo;s.

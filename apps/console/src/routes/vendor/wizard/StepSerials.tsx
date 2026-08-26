@@ -1,7 +1,18 @@
 import * as React from 'react';
-import { EmptyState, StatusPill } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  ScanBox,
+  StatusPill,
+  Tabs,
+  TickRule,
+  type Column,
+} from '@trugrade/ui';
+import { Field } from '../../../lib/controls';
 import { normalisePastedSerial, splitSerialBlock, type SerialBatch } from '@trugrade/contracts';
-import { API, postJson, type SerialCsvReport } from '../api';
+import { API, postJson, type SerialCsvReport, type SerialCsvRow } from '../api';
+
+/** Step 3 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
 
 /**
  * Step 3 — serials, by paste, by CSV or by camera.
@@ -25,12 +36,16 @@ import { API, postJson, type SerialCsvReport } from '../api';
 
 const EMPTY_BATCH: SerialBatch = { accepted: [], errors: [], warnings: [] };
 
+const NEWLINE = String.fromCharCode(10);
+/** One per line, because that is what a spreadsheet column pastes as. */
+const SERIAL_PLACEHOLDER = ['7XKQ1P3', '8LMR2Q4', '…'].join(NEWLINE);
+
 function Verdicts({ batch }: { batch: SerialBatch }): React.JSX.Element | null {
   if (batch.errors.length === 0 && batch.warnings.length === 0) return null;
   return (
     <div className="mt-5 flex flex-col gap-4">
       {batch.errors.length > 0 && (
-        <div className="rounded border border-fail bg-sheet-2 p-4">
+        <div className="tg-card rounded border border-fail bg-sheet-2">
           <p className="text-body-sm font-medium text-fail">
             {batch.errors.length} {batch.errors.length === 1 ? 'line has' : 'lines have'} to be
             fixed
@@ -46,7 +61,7 @@ function Verdicts({ batch }: { batch: SerialBatch }): React.JSX.Element | null {
         </div>
       )}
       {batch.warnings.length > 0 && (
-        <div className="rounded border border-warn p-4">
+        <div className="tg-card rounded border border-warn">
           <p className="text-body-sm font-medium text-warn">
             {batch.warnings.length} to look at — none of them stops you
           </p>
@@ -71,6 +86,34 @@ function Verdicts({ batch }: { batch: SerialBatch }): React.JSX.Element | null {
 /* ==========================================================================
  * CSV — dry run, per-row report, downloadable corrections file
  * ======================================================================== */
+
+/** Line, serial, verdict. The first two are numbers or identifiers, so both are mono. */
+const CSV_COLUMNS: ReadonlyArray<Column<SerialCsvRow>> = [
+  {
+    key: 'lineNumber',
+    header: 'Line',
+    numeric: true,
+    cell: (row) => row.lineNumber,
+  },
+  {
+    key: 'serial',
+    header: 'Serial',
+    cell: (row) => <span className="font-mono text-data text-ink">{row.serial}</span>,
+  },
+  {
+    key: 'outcome',
+    header: 'Outcome',
+    cell: (row) => (
+      <>
+        <StatusPill
+          tone={row.outcome === 'ERROR' ? 'fail' : row.outcome === 'WARN' ? 'warn' : 'pass'}
+          label={row.outcome === 'WILL_ADD' ? 'Will add' : row.outcome}
+        />
+        {row.reason && <span className="ml-3 text-ink-2">{row.reason}</span>}
+      </>
+    ),
+  },
+];
 
 /**
  * Exported because `/vendor/listings/:id/bulk-upload` is the same operation
@@ -137,7 +180,7 @@ export function SerialCsvPanel({
       {report && (
         <div className="mt-5">
           {report.fileErrors.length > 0 && (
-            <div className="rounded border border-fail bg-sheet-2 p-4">
+            <div className="tg-card rounded border border-fail bg-sheet-2">
               {report.fileErrors.map((f) => (
                 <p key={f} className="text-body-sm text-fail">
                   {f}
@@ -172,44 +215,13 @@ export function SerialCsvPanel({
               )}
 
               <div className="mt-4 max-h-96 overflow-y-auto rounded border border-rule">
-                <table className="w-full text-body-sm">
-                  <thead className="sticky top-0 bg-sheet-2">
-                    <tr>
-                      <th className="p-3 text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2">
-                        Line
-                      </th>
-                      <th className="p-3 text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2">
-                        Serial
-                      </th>
-                      <th className="p-3 text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2">
-                        Outcome
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.rows.map((row) => (
-                      <tr key={row.lineNumber} className="border-t border-rule-2">
-                        <td className="p-3 font-mono text-data tnum text-ink-2">
-                          {row.lineNumber}
-                        </td>
-                        <td className="p-3 font-mono text-data text-ink">{row.serial}</td>
-                        <td className="p-3">
-                          <StatusPill
-                            tone={
-                              row.outcome === 'ERROR'
-                                ? 'fail'
-                                : row.outcome === 'WARN'
-                                  ? 'warn'
-                                  : 'pass'
-                            }
-                            label={row.outcome === 'WILL_ADD' ? 'Will add' : row.outcome}
-                          />
-                          {row.reason && <span className="ml-3 text-ink-2">{row.reason}</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataBoard
+                  caption={`${report.willAdd} of ${report.rows.length} rows will be added.`}
+                  columns={CSV_COLUMNS}
+                  rows={report.rows}
+                  rowKey={(row) => String(row.lineNumber)}
+                  stickyHeader
+                />
               </div>
             </>
           )}
@@ -289,12 +301,11 @@ function CameraScan({ onScan }: { onScan: (serial: string) => void }): React.JSX
 
   return (
     <div>
-      <video
-        ref={videoRef}
-        className="w-full max-w-lg rounded-lg border border-rule bg-sheet-2"
-        muted
-        playsInline
-      />
+      {/* The scan line says "this feed is live", which is the one thing it is
+          allowed to say. It stops under `prefers-reduced-motion`. */}
+      <ScanBox className="w-full max-w-lg overflow-hidden rounded-lg border border-rule bg-sheet-2">
+        <video ref={videoRef} className="w-full" muted playsInline />
+      </ScanBox>
       <p className="mt-3 text-body-sm text-ink-2" role="status">
         {last ? (
           <>
@@ -314,12 +325,6 @@ function CameraScan({ onScan }: { onScan: (serial: string) => void }): React.JSX
  * ======================================================================== */
 
 type Method = 'PASTE' | 'CSV' | 'SCAN';
-
-const METHODS: ReadonlyArray<readonly [Method, string]> = [
-  ['PASTE', 'Paste or type'],
-  ['CSV', 'Upload a CSV'],
-  ['SCAN', 'Scan with the camera'],
-];
 
 export function StepSerials({
   serialText,
@@ -391,55 +396,51 @@ export function StepSerials({
   return (
     <div>
       <h2 className="text-h2 text-ink">Serial numbers</h2>
+      <TickRule />
       <p className="mt-2 max-w-prose text-body-sm text-ink-2">
         One serial per machine. We check each one against every live listing on the platform, so
         &ldquo;already listed&rdquo; appears here rather than after you submit.
       </p>
 
-      <div className="mt-6 flex gap-1" role="tablist" aria-label="How to enter serials">
-        {METHODS.map(([m, label]) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={method === m}
-            onClick={() => setMethod(m)}
-            className={[
-              'rounded px-4 py-2 text-body-sm transition-colors',
-              method === m ? 'bg-acc-wash text-acc-ink' : 'text-ink-2 hover:bg-sheet-2',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-5">
-        {method === 'PASTE' && (
-          <label className="flex flex-col gap-2">
-            <span className="text-body-sm font-medium text-ink-2">
-              Paste a column from your spreadsheet, or type them one per line
-            </span>
-            <textarea
-              value={serialText}
-              onChange={(e) => onChange(e.target.value, [])}
-              rows={12}
-              spellCheck={false}
-              placeholder={'7XKQ1P3\n8LMR2Q4\n…'}
-              className="rounded border border-rule bg-sheet p-4 font-mono text-data uppercase tracking-wide text-ink"
-            />
-          </label>
-        )}
-
-        {method === 'CSV' && (
-          <SerialCsvPanel
-            brandName={brandName}
-            onAccepted={(serials) => onChange(serials.join('\n'), [])}
-          />
-        )}
-
-        {method === 'SCAN' && <CameraScan onScan={append} />}
-      </div>
+      <Tabs
+        className="mt-6"
+        label="How to enter serials"
+        value={method}
+        onChange={(k) => setMethod(k as Method)}
+        items={[
+          {
+            key: 'PASTE',
+            label: 'Paste or type',
+            panel: (
+              <Field
+                label="Paste a column from your spreadsheet, or type them one per line"
+                htmlFor="serial-paste"
+              >
+                <textarea
+                  id="serial-paste"
+                  value={serialText}
+                  onChange={(e) => onChange(e.target.value, [])}
+                  rows={12}
+                  spellCheck={false}
+                  placeholder={SERIAL_PLACEHOLDER}
+                  className="rounded border border-rule bg-sheet p-4 font-mono text-data uppercase tracking-wide text-ink placeholder:text-ink-4"
+                />
+              </Field>
+            ),
+          },
+          {
+            key: 'CSV',
+            label: 'Upload a CSV',
+            panel: (
+              <SerialCsvPanel
+                brandName={brandName}
+                onAccepted={(serials) => onChange(serials.join(NEWLINE), [])}
+              />
+            ),
+          },
+          { key: 'SCAN', label: 'Scan with the camera', panel: <CameraScan onScan={append} /> },
+        ]}
+      />
 
       {error && (
         <p className="mt-4 text-body-sm text-fail" role="alert">

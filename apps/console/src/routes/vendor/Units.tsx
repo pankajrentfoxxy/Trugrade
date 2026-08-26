@@ -1,11 +1,27 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router';
-import { EmptyState, GradeBadge, SealChip, Skeleton, StatusPill } from '@trugrade/ui';
+import {
+  Breadcrumb,
+  DataBoard,
+  EmptyState,
+  GradeBadge,
+  RecordHeader,
+  SealChip,
+  Skeleton,
+  StatusPill,
+  Stepper,
+  type Column,
+  type Step,
+} from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
+import { Board, Datum, NotMeasured, PageHeader, Section } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, gradeLabel, onDate, rupees, type VendorUnit } from './api';
+import { API, NO_DATE, gradeLabel, onDate, rupees, type VendorUnit } from './api';
 
 /**
+ * ARCHETYPE B (the list) and C (one serial). Board, then record.
+ * DENSITY: default (vendor portal), set on the app root by the shell.
+ *
  * Every serial under one listing, and the full life of one of them.
  *
  * Both screens read the same endpoint — `GET /vendor/listings/:id/units` — and
@@ -59,70 +75,53 @@ const HALTED: Record<string, string> = {
     'This machine is back with you. Its serial is free to be listed again whenever you want.',
 };
 
-function Timeline({ unit }: { unit: VendorUnit }): React.JSX.Element {
+/**
+ * The lifecycle as `Stepper`, not as `Timeline`.
+ *
+ * `Timeline` in `@trugrade/ui` requires an actor and a timestamp on every event,
+ * and rightly so — an audit line whose actor is a guess is worse than none. Five
+ * of these eight stages have not happened yet, so there is no actor and no time
+ * to give them, and inventing either is precisely the fabrication the component
+ * refuses. A stage that is still ahead is an `upcoming` step, which is what
+ * `Stepper` is for.
+ */
+function lifecycleSteps(unit: VendorUnit): Step[] {
   const halted = HALTED[unit.status];
   const reached = STAGE_OF[unit.status] ?? 0;
 
-  return (
-    <div>
-      <ol className="mt-5 flex flex-col gap-0">
-        {STAGES.map((stage, i) => {
-          const done = !halted && i <= reached;
-          const current = !halted && i === reached;
-          return (
-            <li key={stage} className="flex items-start gap-4">
-              <span className="flex flex-col items-center self-stretch">
-                <span
-                  aria-hidden="true"
-                  className={[
-                    'mt-1 h-3 w-3 shrink-0 rounded-full border',
-                    done ? 'border-acc bg-acc' : 'border-rule bg-sheet',
-                  ].join(' ')}
-                />
-                {i < STAGES.length - 1 && (
-                  <span
-                    aria-hidden="true"
-                    className={['w-px flex-1', done ? 'bg-acc' : 'bg-rule'].join(' ')}
-                  />
-                )}
-              </span>
-              <span className="pb-5">
-                <span
-                  className={['block text-body-sm', done ? 'text-ink' : 'text-ink-3'].join(' ')}
-                >
-                  {stage}
-                  {/* Colour is never the only signal — the reached stage says so. */}
-                  {current && <span className="sr-only"> — where this machine is now</span>}
-                </span>
-                {stage === 'Inspected' && unit.qcPassedAt && (
-                  <span className="block text-body-sm text-ink-2">
-                    {onDate(unit.qcPassedAt)}
-                    {unit.qcValidUntil && ` · valid to ${onDate(unit.qcValidUntil)}`}
-                  </span>
-                )}
-                {stage === 'Graded' && unit.gradeActual && (
-                  <span className="block text-body-sm text-ink-2">
-                    Declared {gradeLabel(unit.gradeDeclared)}, inspected as{' '}
-                    {gradeLabel(unit.gradeActual)}
-                    {unit.gradeActual !== unit.gradeDeclared && ' — a grade correction'}
-                  </span>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-
-      {halted && (
-        <div className="rounded border border-warn p-5">
-          <p className="text-body-sm font-medium text-warn">
-            {unit.status.replaceAll('_', ' ')}
-          </p>
-          <p className="mt-3 max-w-prose text-body-sm text-ink-2">{halted}</p>
-        </div>
-      )}
-    </div>
-  );
+  return STAGES.map((stage, i) => {
+    const inspected = stage === 'Inspected' && unit.qcPassedAt;
+    const graded = stage === 'Graded' && unit.gradeActual;
+    return {
+      key: stage,
+      label: stage,
+      status: halted
+        ? // Nothing on a halted machine is "current": it has left the line.
+          i <= reached
+          ? 'complete'
+          : 'blocked'
+        : i < reached
+          ? 'complete'
+          : i === reached
+            ? 'current'
+            : 'upcoming',
+      ...(inspected
+        ? {
+            summary: `${onDate(unit.qcPassedAt)}${
+              unit.qcValidUntil ? ` · valid to ${onDate(unit.qcValidUntil)}` : ''
+            }`,
+          }
+        : {}),
+      ...(graded
+        ? {
+            summary: `Declared ${gradeLabel(unit.gradeDeclared)}, inspected as ${gradeLabel(
+              unit.gradeActual ?? '',
+            )}${unit.gradeActual !== unit.gradeDeclared ? ' — a grade correction' : ''}`,
+          }
+        : {}),
+      ...(halted && i === reached + 1 ? { blockers: [halted] } : {}),
+    };
+  });
 }
 
 function useUnits(listingId: string | undefined): {
@@ -137,9 +136,76 @@ function useUnits(listingId: string | undefined): {
   );
 }
 
+function unitColumns(listingId: string | undefined): ReadonlyArray<Column<VendorUnit>> {
+  return [
+    {
+      key: 'serial',
+      header: 'Serial',
+      cell: (u) => (
+        <Link
+          className="font-mono text-data text-acc-ink underline underline-offset-4"
+          to={`/vendor/listings/${listingId}/units/${u.id}`}
+        >
+          {u.serialNumber}
+        </Link>
+      ),
+    },
+    {
+      key: 'grade',
+      header: 'Grade',
+      cell: (u) => (
+        <GradeBadge
+          grade={(u.gradeActual ?? u.gradeDeclared) as Grade}
+          variant={
+            u.gradeActual
+              ? u.gradeActual === u.gradeDeclared
+                ? 'verified'
+                : 'corrected'
+              : 'declared'
+          }
+          previousGrade={
+            u.gradeActual && u.gradeActual !== u.gradeDeclared
+              ? (u.gradeDeclared as Grade)
+              : undefined
+          }
+        />
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (u) => (
+        <StatusPill
+          tone={HALTED[u.status] ? 'warn' : u.isSellable ? 'pass' : 'processing'}
+          label={u.status.replaceAll('_', ' ')}
+          className="whitespace-nowrap"
+        />
+      ),
+    },
+    {
+      key: 'sellable',
+      header: 'Sellable',
+      cell: (u) => <span className="text-ink-2">{u.isSellable ? 'Yes' : 'No'}</span>,
+    },
+    { key: 'location', header: 'Where', cell: (u) => <span className="text-ink-2">{u.location}</span> },
+    {
+      key: 'ask',
+      header: 'Your ask',
+      numeric: true,
+      cell: (u) =>
+        u.vendorAskPrice === null ? (
+          <NotMeasured why="No price has been set on this machine" label="No price set" />
+        ) : (
+          rupees(u.vendorAskPrice)
+        ),
+    },
+  ];
+}
+
 export function ListingUnitsRoute(): React.JSX.Element {
   const { id } = useParams();
   const { data, error } = useUnits(id);
+  const columns = React.useMemo(() => unitColumns(id), [id]);
 
   if (error) {
     return (
@@ -165,77 +231,31 @@ export function ListingUnitsRoute(): React.JSX.Element {
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-h1 text-ink">
-          {data.length} {data.length === 1 ? 'machine' : 'machines'}
-        </h1>
-        <Link
-          className="text-acc-ink underline underline-offset-4"
-          to={`/vendor/listings/${id}/bulk-upload`}
-        >
-          Add more from a CSV
-        </Link>
-      </div>
+    <div className="tg-stack">
+      <Breadcrumb items={[{ label: 'Your stock', href: '/vendor/listings' }, { label: 'Units' }]} />
 
-      <div className="mt-6 overflow-x-auto rounded-lg border border-rule">
-        <table className="w-full text-body-sm">
-          <thead className="bg-sheet-2">
-            <tr>
-              {['Serial', 'Grade', 'Status', 'Sellable', 'Where', 'Your ask'].map((h) => (
-                <th
-                  key={h}
-                  className="p-3 text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((u) => (
-              <tr key={u.id} className="border-t border-rule-2">
-                <td className="p-3">
-                  <Link
-                    className="font-mono text-data text-acc-ink underline underline-offset-4"
-                    to={`/vendor/listings/${id}/units/${u.id}`}
-                  >
-                    {u.serialNumber}
-                  </Link>
-                </td>
-                <td className="p-3">
-                  <GradeBadge
-                    grade={(u.gradeActual ?? u.gradeDeclared) as Grade}
-                    variant={
-                      u.gradeActual
-                        ? u.gradeActual === u.gradeDeclared
-                          ? 'verified'
-                          : 'corrected'
-                        : 'declared'
-                    }
-                    previousGrade={
-                      u.gradeActual && u.gradeActual !== u.gradeDeclared
-                        ? (u.gradeDeclared as Grade)
-                        : undefined
-                    }
-                  />
-                </td>
-                <td className="p-3">
-                  <StatusPill
-                    tone={HALTED[u.status] ? 'warn' : u.isSellable ? 'pass' : 'processing'}
-                    label={u.status.replaceAll('_', ' ')}
-                  />
-                </td>
-                <td className="p-3 text-ink-2">{u.isSellable ? 'Yes' : 'No'}</td>
-                <td className="p-3 text-ink-2">{u.location}</td>
-                <td className="p-3 font-mono text-data tnum text-ink">
-                  {rupees(u.vendorAskPrice)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <PageHeader
+        title={`${data.length} ${data.length === 1 ? 'machine' : 'machines'}`}
+        action={
+          <Link
+            className="text-acc-ink underline underline-offset-4"
+            to={`/vendor/listings/${id}/bulk-upload`}
+          >
+            Add more from a CSV
+          </Link>
+        }
+      >
+        Every serial on this listing, and where each one is.
+      </PageHeader>
+
+      <Board>
+        <DataBoard
+          caption={`${data.length} machines on this listing.`}
+          columns={columns}
+          rows={data}
+          rowKey={(u) => u.id}
+        />
+      </Board>
     </div>
   );
 }
@@ -265,57 +285,90 @@ export function UnitDetailRoute(): React.JSX.Element {
     );
   }
 
+  const halted = HALTED[unit.status];
+  const validUntil = onDate(unit.qcValidUntil);
+
   return (
-    <div>
-      <Link
-        className="text-body-sm text-acc-ink underline underline-offset-4"
-        to={`/vendor/listings/${id}`}
-      >
-        Back to the listing
-      </Link>
+    <div className="tg-stack">
+      <Breadcrumb
+        items={[
+          { label: 'Your stock', href: '/vendor/listings' },
+          { label: 'Units', href: `/vendor/listings/${id}` },
+          { label: 'Machine' },
+        ]}
+      />
 
-      <h1 className="mt-3 font-mono text-h1 text-ink">{unit.serialNumber}</h1>
+      <RecordHeader
+        title={unit.serialNumber}
+        subtitle={`Declared Grade ${gradeLabel(unit.gradeDeclared)} on ${onDate(unit.createdAt)}`}
+        status={
+          <StatusPill
+            tone={halted ? 'warn' : unit.isSellable ? 'pass' : 'processing'}
+            label={unit.status.replaceAll('_', ' ')}
+          />
+        }
+        identifiers={[
+          { label: 'Serial', value: unit.serialNumber },
+          { label: 'Where', value: unit.location },
+        ]}
+        secondaryActions={
+          <>
+            <GradeBadge
+              grade={(unit.gradeActual ?? unit.gradeDeclared) as Grade}
+              variant={unit.gradeActual ? 'verified' : 'declared'}
+            />
+            {/* The seal code is not on `VendorUnitView`, so the chip states the
+                fact the status carries and no more. Inventing a code here would
+                be worse than not showing one. */}
+            <SealChip
+              status={
+                unit.status === 'SEAL_BROKEN'
+                  ? 'BROKEN'
+                  : (STAGE_OF[unit.status] ?? 0) >= 3
+                    ? 'INTACT'
+                    : 'NOT_APPLIED'
+              }
+            />
+          </>
+        }
+      />
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <GradeBadge
-          grade={(unit.gradeActual ?? unit.gradeDeclared) as Grade}
-          variant={unit.gradeActual ? 'verified' : 'declared'}
-        />
-        <StatusPill
-          tone={HALTED[unit.status] ? 'warn' : unit.isSellable ? 'pass' : 'processing'}
-          label={unit.status.replaceAll('_', ' ')}
-        />
-        {/* The seal code is not on `VendorUnitView`, so the chip states the fact
-            the status carries and no more. Inventing a code here would be worse
-            than not showing one. */}
-        <SealChip
-          status={
-            unit.status === 'SEAL_BROKEN'
-              ? 'BROKEN'
-              : (STAGE_OF[unit.status] ?? 0) >= 3
-                ? 'INTACT'
-                : 'NOT_APPLIED'
-          }
-        />
-      </div>
+      <Section title="What we know about this machine">
+        <div className="grid gap-x-6 md:grid-cols-2">
+          <Datum label="Declared">
+            Grade {gradeLabel(unit.gradeDeclared)} on{' '}
+            <span className="font-mono tnum">{onDate(unit.createdAt)}</span>
+          </Datum>
+          <Datum label="Inspected">
+            {unit.gradeActual ? (
+              `Grade ${gradeLabel(unit.gradeActual)}`
+            ) : (
+              <NotMeasured why="This machine has not been inspected yet" label="Not inspected" />
+            )}
+          </Datum>
+          <Datum label="Inspection valid to">
+            {validUntil === NO_DATE ? (
+              <NotMeasured
+                why="There is no passed inspection on this machine"
+                label="No inspection on record"
+              />
+            ) : (
+              <span className="font-mono tnum">{validUntil}</span>
+            )}
+          </Datum>
+          <Datum label="Your ask">
+            {unit.vendorAskPrice === null ? (
+              <NotMeasured why="No price has been set on this machine" label="No price set" />
+            ) : (
+              <span className="font-mono tnum">{rupees(unit.vendorAskPrice)}</span>
+            )}
+          </Datum>
+        </div>
+      </Section>
 
-      <dl className="mt-6 grid max-w-lg grid-cols-[auto_1fr] gap-x-5 gap-y-2 text-body-sm">
-        {[
-          ['Declared', `Grade ${gradeLabel(unit.gradeDeclared)} on ${onDate(unit.createdAt)}`],
-          ['Inspected', unit.gradeActual ? `Grade ${gradeLabel(unit.gradeActual)}` : 'Not yet'],
-          ['Inspection valid to', onDate(unit.qcValidUntil)],
-          ['Where', unit.location],
-          ['Your ask', rupees(unit.vendorAskPrice)],
-        ].map(([label, value]) => (
-          <React.Fragment key={label}>
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{label}</dt>
-            <dd className="text-ink">{value}</dd>
-          </React.Fragment>
-        ))}
-      </dl>
-
-      <h2 className="mt-9 text-h3 text-ink">Where this machine is</h2>
-      <Timeline unit={unit} />
+      <Section title="Where this machine is">
+        <Stepper label="Machine lifecycle" steps={lifecycleSteps(unit)} />
+      </Section>
     </div>
   );
 }

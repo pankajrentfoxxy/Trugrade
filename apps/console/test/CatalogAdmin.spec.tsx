@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { CatalogTreeRoute, type CatalogBrand } from '../src/routes/CatalogTree';
 import { SkuRequestsRoute, type SkuRequestRow } from '../src/routes/SkuRequests';
@@ -76,7 +77,11 @@ beforeEach(() => {
 describe('the catalog tree keeps all four levels', () => {
   it('shows brand, series, model and the SKU code under it', async () => {
     mockJson(CATALOG);
-    render(<CatalogTreeRoute />);
+    render(
+      <MemoryRouter>
+        <CatalogTreeRoute />
+      </MemoryRouter>,
+    );
     await screen.findByText('Dell');
 
     expect(screen.getByText('Latitude')).toBeInTheDocument();
@@ -90,7 +95,11 @@ describe('the catalog tree keeps all four levels', () => {
 
   it('filters on the whole path, so a brand name keeps the SKUs under it', async () => {
     mockJson(CATALOG);
-    render(<CatalogTreeRoute />);
+    render(
+      <MemoryRouter>
+        <CatalogTreeRoute />
+      </MemoryRouter>,
+    );
     await screen.findByText('Dell');
 
     await userEvent.type(screen.getByLabelText('Filter'), 'lenovo');
@@ -101,7 +110,11 @@ describe('the catalog tree keeps all four levels', () => {
 
   it('distinguishes a filtered-empty result from an empty catalog', async () => {
     mockJson(CATALOG);
-    render(<CatalogTreeRoute />);
+    render(
+      <MemoryRouter>
+        <CatalogTreeRoute />
+      </MemoryRouter>,
+    );
     await screen.findByText('Dell');
 
     await userEvent.type(screen.getByLabelText('Filter'), 'macbook');
@@ -114,14 +127,22 @@ describe('the catalog tree keeps all four levels', () => {
 
   it('guides the first brand when there is genuinely nothing', async () => {
     mockJson([]);
-    render(<CatalogTreeRoute />);
+    render(
+      <MemoryRouter>
+        <CatalogTreeRoute />
+      </MemoryRouter>,
+    );
     expect(await screen.findByText('The catalog is empty')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /add the first brand/i })).toBeInTheDocument();
   });
 
   it('says the catalog did not load, and that nothing changed', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 500 } as Response);
-    render(<CatalogTreeRoute />);
+    render(
+      <MemoryRouter>
+        <CatalogTreeRoute />
+      </MemoryRouter>,
+    );
     expect(await screen.findByText('The catalog did not load')).toBeInTheDocument();
     expect(screen.getByText(/Catalog unavailable \(500\)/)).toBeInTheDocument();
   });
@@ -156,7 +177,11 @@ const REQUEST: SkuRequestRow = {
 describe('the SKU request queue is built for duplicates', () => {
   it('puts the proposed spec beside the closest SKUs and states each score', async () => {
     mockJson([REQUEST]);
-    render(<SkuRequestsRoute />);
+    render(
+      <MemoryRouter>
+        <SkuRequestsRoute />
+      </MemoryRouter>,
+    );
     await screen.findByText('Dell Latitide 5420');
 
     expect(screen.getByText('i5 11th gen, 16GB, 512 NVMe, 14 inch FHD')).toBeInTheDocument();
@@ -170,7 +195,11 @@ describe('the SKU request queue is built for duplicates', () => {
 
   it('blocks Approve when a SKU with the same specification already exists', async () => {
     mockJson([REQUEST]);
-    render(<SkuRequestsRoute />);
+    render(
+      <MemoryRouter>
+        <SkuRequestsRoute />
+      </MemoryRouter>,
+    );
     await screen.findByText('Dell Latitide 5420');
 
     const approve = screen.getByRole('button', { name: /approve and create the sku/i });
@@ -184,7 +213,11 @@ describe('the SKU request queue is built for duplicates', () => {
 
   it('allows Approve when nothing close exists', async () => {
     mockJson([{ ...REQUEST, nearMatches: [] }]);
-    render(<SkuRequestsRoute />);
+    render(
+      <MemoryRouter>
+        <SkuRequestsRoute />
+      </MemoryRouter>,
+    );
     await screen.findByText('Dell Latitide 5420');
 
     expect(screen.getByRole('button', { name: /approve and create the sku/i })).not.toHaveAttribute(
@@ -195,7 +228,11 @@ describe('the SKU request queue is built for duplicates', () => {
 
   it('reads as success, not failure, when the queue is empty', async () => {
     mockJson([]);
-    render(<SkuRequestsRoute />);
+    render(
+      <MemoryRouter>
+        <SkuRequestsRoute />
+      </MemoryRouter>,
+    );
     expect(await screen.findByText('No pending requests')).toBeInTheDocument();
   });
 });
