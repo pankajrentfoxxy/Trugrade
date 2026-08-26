@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TrueTech · Onboarding Journey Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0E2530; --ink2:#16323F; --ink3:#1D3D4A;
+  --paper:#EFF3F3; --surface:#fff; --rule:#D9E2E3; --rule2:#E9EFEF;
+  --muted:#5C6B72; --teal:#00A896; --teal-dk:#00655B; --teal-wash:#E4F5F2;
+  --amber:#E08B3C; --amber-dk:#8A5312; --amber-wash:#FBF0E2;
+  --red:#C1503E; --red-dk:#93331F; --red-wash:#FAEAE7;
+  --display:"Archivo",Arial,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--display);font-weight:700;letter-spacing:-.022em;margin:0;line-height:1.14}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px}
+:focus-visible{outline:2.5px solid var(--teal);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- masthead ---------- */
+.mast{background:var(--ink);color:#CFE0E2;padding:34px 0 0;position:relative;overflow:hidden}
+.mast::after{content:"";position:absolute;right:-90px;top:-90px;width:340px;height:340px;border-radius:50%;background:var(--teal);opacity:.09}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.17em;text-transform:uppercase;color:var(--teal);font-weight:600;margin:0 0 10px}
+.mast h1{font-size:clamp(27px,3.6vw,42px);color:#fff;max-width:20ch}
+.mast p.sub{color:#9FC3C9;max-width:74ch;margin:14px 0 0;font-size:15.5px}
+.metrics{display:flex;gap:34px;flex-wrap:wrap;margin:26px 0 0;position:relative;z-index:1}
+.metric .v{font-family:var(--display);font-size:27px;font-weight:800;color:#fff;letter-spacing:-.03em;line-height:1}
+.metric .l{font-size:11.5px;color:#7FA6AE;margin-top:5px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+
+/* ---------- controls ---------- */
+.controls{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);margin-top:30px}
+.controls .wrap{display:flex;align-items:center;gap:16px;height:62px;flex-wrap:wrap}
+.seg{display:flex;background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:3px;gap:3px}
+.seg button{border:0;background:none;font:inherit;font-size:13.5px;font-weight:600;padding:7px 15px;border-radius:6px;cursor:pointer;color:var(--muted);transition:.15s}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.spacer{flex:1}
+.toggle{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+.toggle input{appearance:none;width:36px;height:20px;border-radius:100px;background:var(--rule);position:relative;cursor:pointer;transition:.18s;flex-shrink:0}
+.toggle input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.toggle input:checked{background:var(--teal)}
+.toggle input:checked::after{transform:translateX(16px)}
+
+/* ---------- legend ---------- */
+.legend{display:flex;gap:22px;flex-wrap:wrap;padding:18px 0;font-size:12.5px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:7px}
+.dot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.d-ok{background:var(--teal)} .d-warn{background:var(--amber)} .d-stop{background:var(--red)}
+.d-sys{background:var(--ink)} .d-user{background:#fff;border:2px solid var(--ink)}
+
+/* ---------- spine ---------- */
+.journey{padding:8px 0 70px}
+.spine{position:relative;padding-left:64px}
+.spine::before{content:"";position:absolute;left:23px;top:12px;bottom:60px;width:2px;background:linear-gradient(var(--rule) 0 70%,transparent)}
+
+.step{position:relative;margin-bottom:20px}
+.node{position:absolute;left:-64px;top:0;width:48px;height:48px;border-radius:12px;background:#fff;border:2px solid var(--rule);
+  display:grid;place-items:center;font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);z-index:2}
+.step[data-kind="user"] .node{border-color:var(--ink)}
+.step[data-kind="system"] .node{background:var(--ink);border-color:var(--ink);color:var(--teal)}
+.step[data-kind="decision"] .node{background:var(--teal);border-color:var(--teal);color:#fff}
+.step[data-kind="end"] .node{background:var(--teal);border-color:var(--teal);color:#fff;border-radius:50%}
+.step[data-kind="end-bad"] .node{background:var(--red);border-color:var(--red);color:#fff;border-radius:50%}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;box-shadow:0 1px 3px rgba(14,37,48,.05),0 6px 18px rgba(14,37,48,.05);overflow:hidden}
+.card-head{padding:16px 20px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.card-head h3{font-size:18px}
+.card-head .sc{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--teal-dk);font-weight:600;display:block;margin-bottom:4px}
+.card-head p{margin:5px 0 0;font-size:13.5px;color:var(--muted);max-width:72ch}
+.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:4px 9px;border-radius:100px;background:var(--paper);border:1px solid var(--rule);color:var(--muted);white-space:nowrap}
+.pill-t{background:var(--teal-wash);border-color:#BFE7E0;color:var(--teal-dk)}
+
+.cols{display:grid;grid-template-columns:1.15fr 1fr;gap:1px;background:var(--rule2);border-top:1px solid var(--rule2)}
+.col{background:#fff;padding:16px 20px}
+.col h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+.fields{list-style:none;margin:0;padding:0;font-size:13.5px}
+.fields li{padding:4px 0 4px 16px;position:relative}
+.fields li::before{content:"";position:absolute;left:0;top:11px;width:6px;height:6px;border-radius:50%;background:var(--rule)}
+.fields li b{font-weight:600}
+.fields li em{font-style:normal;color:var(--muted);font-size:12.5px}
+.req{color:var(--red);font-weight:700;margin-left:2px}
+
+/* branches */
+.branches{border-top:1px solid var(--rule2);background:#FAFCFC}
+.br{display:flex;gap:12px;padding:12px 20px;border-bottom:1px solid var(--rule2);font-size:13.5px;align-items:flex-start}
+.br:last-child{border-bottom:0}
+.br-tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:4px;flex-shrink:0;margin-top:1px;text-transform:uppercase}
+.t-ok{background:var(--teal-wash);color:var(--teal-dk)}
+.t-warn{background:var(--amber-wash);color:var(--amber-dk)}
+.t-stop{background:var(--red-wash);color:var(--red-dk)}
+.br-body b{font-weight:600}
+.br-body .then{color:var(--muted)}
+.br-body .then::before{content:"→ ";color:var(--rule)}
+
+/* tables strip */
+.tables{padding:11px 20px;background:var(--ink);display:none;gap:7px;flex-wrap:wrap;align-items:center}
+body.show-tables .tables{display:flex}
+.tables .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#6E959B;margin-right:4px}
+.tchip{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:4px;background:var(--ink3);color:#B9D2D5;border:1px solid #29505C}
+.tchip b{color:var(--teal);font-weight:600}
+
+/* phase divider */
+.phase{display:flex;align-items:center;gap:14px;margin:34px 0 20px;position:relative}
+.phase::before{content:"";position:absolute;left:-41px;width:12px;height:12px;border-radius:50%;background:var(--paper);border:2px solid var(--rule)}
+.phase h2{font-size:15px;font-family:var(--mono);font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.phase .line{flex:1;height:1px;background:var(--rule)}
+
+/* end cards */
+.endcard{background:var(--ink);color:#DCE9EA;border-radius:12px;padding:24px}
+.endcard h3{color:#fff;font-size:21px;margin-bottom:8px}
+.endcard p{margin:0;color:#9FC3C9;font-size:14px;max-width:70ch}
+.endcard.bad{background:#5E2418}
+.endcard.bad p{color:#E8BFB6}
+.grants{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.grant{font-size:12px;padding:5px 11px;border-radius:100px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#DCE9EA}
+
+/* summary */
+.summary{background:#fff;border-top:1px solid var(--rule);padding:46px 0}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+.sbox{border:1px solid var(--rule);border-radius:11px;padding:19px}
+.sbox h4{font-size:15px;margin-bottom:8px}
+.sbox p{margin:0;font-size:13.5px;color:var(--muted)}
+.sbox .n{font-family:var(--display);font-size:30px;font-weight:800;color:var(--teal);letter-spacing:-.03em;line-height:1;margin-bottom:8px}
+
+.foot{background:var(--ink);color:#7FA6AE;padding:26px 0;font-size:12.5px}
+.foot .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+.hidden{display:none!important}
+
+@media (max-width:900px){
+  .cols{grid-template-columns:1fr}
+  .spine{padding-left:52px}
+  .spine::before{left:17px}
+  .node{left:-52px;width:36px;height:36px;font-size:13px}
+  .phase::before{left:-35px}
+  .sgrid{grid-template-columns:1fr}
+}
+@media print{
+  .controls{position:static} body{background:#fff}
+  .card{break-inside:avoid;box-shadow:none}
+  body.show-tables .tables{display:flex}
+}
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <div class="wrap">
+    <p class="eyebrow">TrueTech Services Pvt. Ltd. · Onboarding blueprint v1.0</p>
+    <h1>How a stranger becomes a verified trading partner</h1>
+    <p class="sub">Every question we ask, every check we run, and — this is the part most blueprints skip — exactly what happens when a check fails. Read the amber and red rows as carefully as the green ones: they are where onboarding actually lives.</p>
+    <div class="metrics">
+      <div class="metric"><div class="v" id="mSteps">11</div><div class="l">Steps</div></div>
+      <div class="metric"><div class="v" id="mFields">58</div><div class="l">Fields captured</div></div>
+      <div class="metric"><div class="v" id="mChecks">9</div><div class="l">Automated checks</div></div>
+      <div class="metric"><div class="v" id="mBranch">31</div><div class="l">Failure paths handled</div></div>
+      <div class="metric"><div class="v" id="mTime">48 h</div><div class="l">Decision SLA</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="wrap">
+    <div class="seg" role="group" aria-label="Choose journey">
+      <button id="btnVendor" aria-pressed="true">Vendor journey</button>
+      <button id="btnBuyer" aria-pressed="false">Buyer journey</button>
+    </div>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="tblToggle"> <span>Show database tables</span></label>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="legend">
+    <span><i class="dot d-user"></i> The person does something</span>
+    <span><i class="dot d-sys"></i> The system checks something</span>
+    <span><i class="dot d-ok"></i> Passes — moves on</span>
+    <span><i class="dot d-warn"></i> Flagged — a human looks</span>
+    <span><i class="dot d-stop"></i> Stops — cannot continue</span>
+  </div>
+</div>
+
+<!-- ============================================================ VENDOR -->
+<div class="wrap journey" id="jVendor">
+  <div class="spine">
+
+    <div class="phase"><h2>Part 1 · Getting in the door</h2><div class="line"></div></div>
+
+    <!-- V1 -->
+    <div class="step" data-kind="user">
+      <div class="node">01</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Public page · "Sell on TrueTech"</span>
+            <h3>They tell us who they are</h3>
+            <p>Seven fields. Nothing verified yet — the only goal is to capture a real human with a real phone number before they lose interest.</p>
+          </div>
+          <span class="pill">2 minutes</span>
+          <span class="pill pill-t">No account yet</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Company name</b> <span class="req">*</span> <em>— as they say it, not as it is registered</em></li>
+              <li><b>Contact person</b> <span class="req">*</span></li>
+              <li><b>Mobile number</b> <span class="req">*</span> <em>— normalised to +91XXXXXXXXXX</em></li>
+              <li><b>Work email</b> <span class="req">*</span></li>
+              <li><b>City</b> <span class="req">*</span></li>
+              <li><b>Laptops sold per month</b> <em>— sets our follow-up priority</em></li>
+              <li><b>Brands they deal in</b> <em>— multi-select</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What we check silently</h4>
+            <ul class="fields">
+              <li><b>Duplicate company</b> <em>— fuzzy match against every existing org</em></li>
+              <li><b>Blocked list</b> <em>— mobile and email against hashed entries</em></li>
+              <li><b>Device velocity</b> <em>— how many signups from this device today</em></li>
+              <li><b>Where they came from</b> <em>— campaign attribution, referral code</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Clean</span><div class="br-body">Nothing matches. <span class="then">Send the OTP and move to step 2.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Duplicate</span><div class="br-body">A company with a very similar name already exists. <span class="then">We show them: "This company may already be registered — ask your colleague to invite you, or continue if this is a different entity." Sales is notified either way.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Blocked</span><div class="br-body">The mobile or email is on our blocked list. <span class="then">The form appears to submit normally, then the application quietly never progresses. We do not tell a bad actor which of their details we recognised.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Abandoned</span><div class="br-body">They stop here and never come back. <span class="then">The lead is kept with the exact step they dropped at. Sales calls within 24 hours; the product team sees which step loses the most people.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>registration_lead</b></span>
+          <span class="tchip">kyc.<b>blacklist_entry</b> (read)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- V2 -->
+    <div class="step" data-kind="system">
+      <div class="node">02</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">OTP screen</span>
+            <h3>We prove the phone and the inbox are theirs</h3>
+            <p>Six digits to the mobile, a link to the email. Both must succeed. This is the cheapest fraud filter we have and it costs a rupee.</p>
+          </div>
+          <span class="pill">1 minute</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Mobile OTP</b> <span class="req">*</span> <em>— 6 digits, valid 5 minutes</em></li>
+              <li><b>Email verification</b> <span class="req">*</span> <em>— single-use link</em></li>
+              <li><b>Password</b> <span class="req">*</span> <em>— checked against known-breached passwords</em></li>
+              <li><b>Two-step login</b> <em>— offered here, compulsory for the owner</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>How it is protected</h4>
+            <ul class="fields">
+              <li><b>Codes are hashed</b> <em>— a database leak cannot complete a login</em></li>
+              <li><b>Three wrong tries</b> <em>— the code is burned, not just rejected</em></li>
+              <li><b>Rate limited</b> <em>— per number and per IP address</em></li>
+              <li><b>Purpose-bound</b> <em>— a login OTP cannot sign for a delivery</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Both verified</span><div class="br-body">Account and organisation are created. <span class="then">Status becomes REGISTERED. The 7-step tracker appears.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">OTP not received</span><div class="br-body">Resend is available after 30 seconds, three times. <span class="then">After three, we offer a voice call. After that, the onboarding desk calls them.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Three wrong codes</span><div class="br-body">The code dies and a fresh one is required. <span class="then">Ten failures in an hour locks the number for 30 minutes with a clear countdown, not a silent failure.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Email bounces</span><div class="br-body">Free-webmail addresses are allowed but flagged for later review. <span class="then">A hard bounce prompts a correction; mobile alone can carry them to step 6.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">SMS provider down</span><div class="br-body">Our SMS partner is unreachable. <span class="then">We fail over to the second provider automatically. If both are down, email-only verification is allowed and the mobile is verified later — onboarding is never blocked by our vendor's outage.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">identity.<b>otp_request</b></span>
+          <span class="tchip">identity.<b>user_account</b></span>
+          <span class="tchip">identity.<b>organization</b></span>
+          <span class="tchip">kyc.<b>consent_record</b></span>
+          <span class="tchip">kyc.<b>onboarding_progress</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 2 · Who they legally are</h2><div class="line"></div></div>
+
+    <!-- V3 -->
+    <div class="step" data-kind="user">
+      <div class="node">03</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 2 of 7 · Business profile</span>
+            <h3>The registered entity behind the trading name</h3>
+            <p>The type of company decides which documents become compulsory three steps later. Get this wrong and they upload the wrong papers.</p>
+          </div>
+          <span class="pill">3 minutes</span>
+          <span class="pill pill-t">Draft saved as they type</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Registered legal name</b> <span class="req">*</span></li>
+              <li><b>Trading name</b> <em>— what people actually call them</em></li>
+              <li><b>Type of company</b> <span class="req">*</span> <em>— Proprietorship, Partnership, LLP, Pvt Ltd, Ltd</em></li>
+              <li><b>Date of incorporation</b></li>
+              <li><b>Registered address</b> <span class="req">*</span> <em>— PIN code auto-fills city and state</em></li>
+              <li><b>Operating address</b> <span class="req">*</span> <em>— often different from registered</em></li>
+              <li><b>Business type</b> <span class="req">*</span> <em>— Refurbisher, Dealer, ITAD, Liquidator, OEM partner</em></li>
+              <li><b>Website, staff count, year established</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What this decides</h4>
+            <ul class="fields">
+              <li><b>Document checklist</b> <em>— an LLP needs a deed; a proprietorship does not</em></li>
+              <li><b>Board resolution requirement</b> <em>— Pvt Ltd and Ltd only</em></li>
+              <li><b>PIN code validity</b> <em>— checked against the 19,000-code master</em></li>
+              <li><b>Risk signal</b> <em>— a firm registered last month claiming 500 units a month</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Saved</span><div class="br-body">The document checklist for step 6 is generated now. <span class="then">They see exactly which papers to keep ready.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Unknown PIN code</span><div class="br-body">The PIN is not in our master list. <span class="then">City and state must be typed manually and the address is flagged for the reviewer.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Very new company</span><div class="br-body">Incorporated within 6 months and claiming high volume. <span class="then">Risk score rises. Approval will need a second reviewer, and possibly a site visit.</span></div></div>
+          <div class="br"><span class="br-tag t-ok">They leave mid-form</span><div class="br-body">Half a step is filled. <span class="then">Everything is saved. When they log back in, the form returns exactly as they left it — the header reads "Draft saved 30 seconds ago".</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">identity.<b>organization</b></span>
+          <span class="tchip">vendor.<b>vendor_profile</b></span>
+          <span class="tchip">identity.<b>org_address</b></span>
+          <span class="tchip">kyc.<b>onboarding_progress</b> (draft_json)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- V4 -->
+    <div class="step" data-kind="decision">
+      <div class="node">04</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 3 of 7 · Statutory identity</span>
+            <h3>The government tells us whether they are real</h3>
+            <p>Four live API calls in about eight seconds. This is the step that converts a claim into a fact, and it is where most fraudulent applications die.</p>
+          </div>
+          <span class="pill">2 minutes</span>
+          <span class="pill pill-t">4 live checks</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>GSTIN</b> <span class="req">*</span> <em>— 15 characters, format checked as they type</em></li>
+              <li><b>PAN of the firm</b> <span class="req">*</span></li>
+              <li><b>CIN or LLPIN</b> <em>— compulsory for LLP, Pvt Ltd, Ltd</em></li>
+              <li><b>Udyam (MSME) number</b> <em>— optional, but it changes how fast we must pay them</em></li>
+              <li><b>TAN</b> <em>— only if they deduct tax</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What the checks return</h4>
+            <ul class="fields">
+              <li><b>Registered legal name</b> <em>— this overwrites what they typed. It is the name that will appear on every invoice.</em></li>
+              <li><b>Registration status</b> <em>— must read Active</em></li>
+              <li><b>State code</b> <em>— decides IGST versus CGST and SGST forever after</em></li>
+              <li><b>Taxpayer type</b> <em>— Regular, Composition or SEZ; each is invoiced differently</em></li>
+              <li><b>PAN inside the GSTIN</b> <em>— characters 3 to 12 must equal the PAN they entered</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Active and matching</span><div class="br-body">Name, state and type are locked in from the government record. <span class="then">Green tick, legal name replaced, straight to step 4.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">GSTIN cancelled or suspended</span><div class="br-body">The registration is not active. <span class="then">Hard stop. "This GSTIN is shown as cancelled on the GST portal. Please provide an active registration." They cannot proceed, and no amount of retrying changes it.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">PAN does not match the GSTIN</span><div class="br-body">The two documents belong to different entities. <span class="then">Hard stop. In practice this almost always means a borrowed or copied certificate.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Name differs from what they typed</span><div class="br-body">Fuzzy match scores below 85%. <span class="then">We accept the government's version and flag it. The reviewer sees both names side by side.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">GST state differs from their address</span><div class="br-body">Registered in Delhi, operating from Noida. <span class="then">Allowed — it is common and legitimate — but recorded, because it affects place of supply.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Third attempt on a different GSTIN</span><div class="br-body">They have now tried three different numbers. <span class="then">Every attempt is logged. Three or more raises the risk score sharply and forces manual review.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Verification service is down</span><div class="br-body">The provider times out or errors. <span class="then">We say so plainly — "We could not reach the GST portal, this is our side, not yours" — save the entry, queue a retry every 15 minutes, and let them continue to step 4. Approval waits for the check; the application does not.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>gst_profile</b></span>
+          <span class="tchip">kyc.<b>pan_record</b></span>
+          <span class="tchip">kyc.<b>verification_check</b></span>
+          <span class="tchip">kyc.<b>tax_declaration</b></span>
+          <span class="tchip">platform.<b>integration_log</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 3 · What they can actually supply</h2><div class="line"></div></div>
+
+    <!-- V5 -->
+    <div class="step" data-kind="user">
+      <div class="node">05</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 4 of 7 · Capability</span>
+            <h3>Volume, brands, and where their stock comes from</h3>
+            <p>This is the step no competitor asks for, and it is the one that lets us route a 500-unit request to the three vendors who can actually fill it.</p>
+          </div>
+          <span class="pill">4 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Categories</b> <span class="req">*</span> <em>— business laptops, workstations, MacBooks, Chromebooks</em></li>
+              <li><b>Brands handled</b> <span class="req">*</span></li>
+              <li><b>Units per month they can supply</b> <span class="req">*</span></li>
+              <li><b>Typical grade mix</b> <em>— e.g. 20% A+, 50% A, 30% B</em></li>
+              <li><b>Usual price range</b></li>
+              <li><b>Where stock comes from</b> <span class="req">*</span> <em>— corporate buyback, lease return, auction, import, retail exchange</em></li>
+              <li><b>Can they give serial numbers before an order?</b> <span class="req">*</span></li>
+              <li><b>Do they test in-house? Repair in-house?</b></li>
+              <li><b>Lead time in days</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Why each answer matters</h4>
+            <ul class="fields">
+              <li><b>Capacity</b> <em>— decides which bulk requests reach them</em></li>
+              <li><b>Grade mix</b> <em>— a vendor later declaring 100% A+ contradicts their own baseline</em></li>
+              <li><b>Sourcing</b> <em>— our first defence against stolen stock, and it decides GST treatment for second-hand goods</em></li>
+              <li><b>Serials upfront</b> <em>— decides whether they get serial-first listing or the restricted quantity-only mode</em></li>
+              <li><b>In-house testing</b> <em>— these vendors measurably pass our inspection more often</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Complete</span><div class="br-body">They are now routable for bulk requests. <span class="then">Continue to facilities.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Capacity looks inflated</span><div class="br-body">Claimed volume is far above what their staff count and warehouse size support. <span class="then">Flagged. The reviewer asks about it, and a site visit may be required before the first payout.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Import or auction sourcing</span><div class="br-body">Higher-risk provenance. <span class="then">Purchase documents become compulsory for every batch above a set value, not optional.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Cannot supply serials upfront</span><div class="br-body">A small dealer without a barcode process. <span class="then">Allowed, but they get quantity-only listing with a 12-hour serial deadline after an order, and a penalty if they miss it. Explained clearly here, not discovered later.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">vendor.<b>vendor_capability</b></span>
+          <span class="tchip">vendor.<b>vendor_sourcing_declaration</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- V6 -->
+    <div class="step" data-kind="user">
+      <div class="node">06</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 5 of 7 · Facilities and people</span>
+            <h3>Where our rider goes, and who opens the door</h3>
+            <p>Almost every failed pickup traces back to a missing detail on this screen. A closed warehouse or a lane a tempo cannot enter costs us a slot and costs them a penalty.</p>
+          </div>
+          <span class="pill">5 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Per warehouse</h4>
+            <ul class="fields">
+              <li><b>Address with landmark</b> <span class="req">*</span></li>
+              <li><b>Type</b> <span class="req">*</span> <em>— warehouse, refurb unit, office, retail</em></li>
+              <li><b>Storage capacity in units</b></li>
+              <li><b>Loading dock?</b> <span class="req">*</span></li>
+              <li><b>Largest vehicle that can reach</b> <span class="req">*</span> <em>— truck, tempo, or bike only</em></li>
+              <li><b>Lift available?</b> <span class="req">*</span> <em>— a third-floor pickup without one needs two riders</em></li>
+              <li><b>Opening hours for each day</b> <span class="req">*</span></li>
+              <li><b>Holidays</b> <em>— regional festivals vary and matter</em></li>
+              <li><b>Entry instructions</b> <em>— printed on the rider's task</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Contact people</h4>
+            <ul class="fields">
+              <li><b>Owner</b> <span class="req">*</span> <em>— security alerts go here</em></li>
+              <li><b>Authorised signatory</b> <span class="req">*</span> <em>— signs the agreement</em></li>
+              <li><b>Finance</b> <span class="req">*</span> <em>— payout and GST queries</em></li>
+              <li><b>Warehouse</b> <span class="req">*</span> <em>— the rider calls this number</em></li>
+              <li><b>Escalation</b> <em>— when the primary does not answer</em></li>
+              <li>For each: <b>mobile, alternate mobile, WhatsApp, language, hours they can be called</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Complete</span><div class="br-body">Pickup scheduling now knows when to arrive and what vehicle to send.</div></div>
+          <div class="br"><span class="br-tag t-warn">Bike-only access</span><div class="br-body">The warehouse is in a narrow-lane market. <span class="then">Recorded permanently. Bulk pickups from this site are split across trips and the freight estimate reflects it, so nobody is surprised on the day.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">PIN code not serviceable</span><div class="br-body">Outside our current pickup network. <span class="then">They can still onboard and list, but we tell them plainly that collection may take longer and cost more. We do not hide it until their first order.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Warehouse contact is the owner</span><div class="br-body">A one-person operation, which is legitimate. <span class="then">Accepted, but we set the expectation that this number will be called during pickup windows.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">No warehouse contact mobile</span><div class="br-body">The field is empty. <span class="then">Cannot continue. A pickup address without a live human is not an address.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">vendor.<b>vendor_facility</b></span>
+          <span class="tchip">vendor.<b>facility_hours</b></span>
+          <span class="tchip">vendor.<b>facility_holiday</b></span>
+          <span class="tchip">identity.<b>org_contact</b></span>
+          <span class="tchip">identity.<b>org_address</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 4 · Proof and money</h2><div class="line"></div></div>
+
+    <!-- V7 -->
+    <div class="step" data-kind="user">
+      <div class="node">07</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 6a of 7 · Documents</span>
+            <h3>The paperwork, checked properly</h3>
+            <p>Six compulsory files, two optional ones that earn a badge on their listings. Every file is encrypted, watermarked when opened, and every single view is logged against a named reviewer.</p>
+          </div>
+          <span class="pill">6 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Required</h4>
+            <ul class="fields">
+              <li><b>GST registration certificate</b> <span class="req">*</span></li>
+              <li><b>PAN card of the firm</b> <span class="req">*</span></li>
+              <li><b>Cancelled cheque</b> <span class="req">*</span></li>
+              <li><b>Address proof</b> <span class="req">*</span> <em>— dated within 3 months</em></li>
+              <li><b>Incorporation document</b> <em>— by company type</em></li>
+              <li><b>Authorised signatory ID</b> <span class="req">*</span> <em>— masked Aadhaar only; an unmasked one is rejected</em></li>
+              <li><b>Board resolution</b> <em>— Pvt Ltd and Ltd</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Optional, earns a trust badge</h4>
+            <ul class="fields">
+              <li><b>CPCB e-waste authorisation</b> <em>— recycler badge</em></li>
+              <li><b>ISO 9001 or R2 certificate</b> <em>— certified-process badge</em></li>
+            </ul>
+            <h4 style="margin-top:16px">Checked on every upload</h4>
+            <ul class="fields">
+              <li><b>Real file type</b> <em>— magic bytes, not the extension. A renamed .exe is caught.</em></li>
+              <li><b>Under 5 MB</b></li>
+              <li><b>Location data stripped</b> <em>— before it touches our storage</em></li>
+              <li><b>File fingerprint</b> <em>— the same document uploaded by two applicants is a document mill</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">All accepted</span><div class="br-body">Continue to bank details.</div></div>
+          <div class="br"><span class="br-tag t-warn">Document unreadable or stale</span><div class="br-body">Blurred scan, or an electricity bill from last year. <span class="then">Rejected with the exact sentence they need: "This bill is dated January 2025. Please send one from the last three months." Vague rejections generate support tickets; specific ones get a correct re-upload.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Certificate expires soon</span><div class="br-body">A CPCB authorisation with two months left. <span class="then">Accepted, with an automatic reminder before expiry. When it lapses the badge disappears from their listings on its own — we never display a claim we cannot stand behind.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Unmasked Aadhaar uploaded</span><div class="br-body">Full Aadhaar number visible. <span class="then">Rejected and deleted. We explain why and ask for a masked copy or a different ID. Holding it would be a liability we have no reason to carry.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Same file already used by another applicant</span><div class="br-body">Identical fingerprint on a different organisation. <span class="then">Both applications freeze and go to a fraud reviewer. Neither party is told what triggered it.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>kyc_document</b></span>
+          <span class="tchip">vendor.<b>vendor_certification</b></span>
+          <span class="tchip">identity.<b>audit_log</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- V8 -->
+    <div class="step" data-kind="decision">
+      <div class="node">08</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 6b of 7 · Bank account</span>
+            <h3>One rupee, sent to prove the account is theirs</h3>
+            <p>We deposit ₹1 and read back the name the bank holds for that account. It is the most reliable identity check available in India, and it takes about a minute.</p>
+          </div>
+          <span class="pill">2 minutes</span>
+          <span class="pill pill-t">Live bank check</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Account holder name</b> <span class="req">*</span></li>
+              <li><b>Account number</b> <span class="req">*</span> <em>— entered twice, encrypted at rest</em></li>
+              <li><b>IFSC</b> <span class="req">*</span> <em>— bank and branch auto-fill</em></li>
+              <li><b>Account type</b> <span class="req">*</span> <em>— current, savings, CC or OD</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What happens</h4>
+            <ul class="fields">
+              <li><b>₹1 credited</b> <em>— the bank returns the registered name</em></li>
+              <li><b>Names compared</b> <em>— fuzzy match against the legal name</em></li>
+              <li><b>85% or above</b> <em>— passes automatically</em></li>
+              <li><b>60 to 85%</b> <em>— a person decides</em></li>
+              <li><b>Below 60%</b> <em>— fails</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Name matches</span><div class="br-body">The account is verified and can receive payouts. <span class="then">Continue to the agreement.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Partial match</span><div class="br-body">"Nexus IT Recyclers LLP" against "NEXUS IT RECYCLER". <span class="then">Almost always an abbreviation, so a reviewer confirms it in seconds rather than rejecting a real vendor over punctuation.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Different name entirely</span><div class="br-body">A personal account, or a third party's. <span class="then">Rejected. Payouts must go to the registered firm. They can supply a different account or a bank letter.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Bank service unavailable</span><div class="br-body">The penny-drop provider is down. <span class="then">Onboarding continues; the account sits unverified. They can list and sell — they simply cannot be paid until it clears, which we tell them upfront.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Savings account for a company</span><div class="br-body">A registered firm paying into a personal savings account. <span class="then">Allowed for proprietorships, flagged for everyone else.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Changed later, after approval</span><div class="br-body">A verified vendor edits their bank account. <span class="then">Re-verification runs again, payouts freeze for 24 hours, and the owner gets an email and an SMS. Account takeover almost always ends with a changed payout account, so this is the one field we deliberately make slow.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>bank_account</b></span>
+          <span class="tchip">kyc.<b>verification_check</b></span>
+          <span class="tchip">identity.<b>audit_log</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- V9 -->
+    <div class="step" data-kind="user">
+      <div class="node">09</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 7 of 7 · Agreement</span>
+            <h3>Four documents, signed once</h3>
+            <p>The grading policy is the one that matters. It is what we hold them to when a machine reaches our inspection bench and does not match what they declared.</p>
+          </div>
+          <span class="pill">3 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they sign</h4>
+            <ul class="fields">
+              <li><b>Vendor agreement</b> <em>— commission, settlement cycle, penalties</em></li>
+              <li><b>Grading and inspection policy</b> <em>— what A+, A and B mean, and who pays when they do not match</em></li>
+              <li><b>Data wipe undertaking</b> <em>— no customer data leaves with a machine</em></li>
+              <li><b>Ownership declaration</b> <em>— every serial they list is legitimately theirs to sell</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>How the signature is captured</h4>
+            <ul class="fields">
+              <li><b>Aadhaar e-Sign</b> <em>— preferred, legally strongest</em></li>
+              <li><b>Document fingerprint stored</b> <em>— proves the file has not changed since</em></li>
+              <li><b>Version recorded</b> <em>— when the policy changes, we know who is on which version</em></li>
+              <li><b>IP, time and device recorded</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Signed</span><div class="br-body">The application is complete and enters the review queue.</div></div>
+          <div class="br"><span class="br-tag t-warn">e-Sign fails</span><div class="br-body">Aadhaar OTP does not arrive, or the service is down. <span class="then">We fall back to click-wrap acceptance with the document fingerprint, IP and timestamp. Weaker, but valid, and it does not strand a real vendor.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">They want changes to the terms</span><div class="br-body">A large vendor negotiating commission. <span class="then">Routed to the commercial team. Their file waits at this step rather than being rejected.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Terms change later</span><div class="br-body">We revise the grading policy. <span class="then">Every existing vendor must re-accept. We can see exactly who has and who has not, because the version is stored per acceptance.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>agreement_acceptance</b></span>
+          <span class="tchip">vendor.<b>vendor_payout_preference</b></span>
+          <span class="tchip">customer.<b>org_preference</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 5 · The decision</h2><div class="line"></div></div>
+
+    <!-- V10 -->
+    <div class="step" data-kind="decision">
+      <div class="node">10</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Internal · Onboarding desk</span>
+            <h3>A named person decides, within 48 working hours</h3>
+            <p>The reviewer sees the submitted data and the government's answer side by side, with a risk score built from everything above. Machines flag; people decide.</p>
+          </div>
+          <span class="pill">48 h SLA</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What the reviewer sees</h4>
+            <ul class="fields">
+              <li><b>Declared versus verified</b> <em>— what they typed next to what the GST portal returned</em></li>
+              <li><b>Risk score</b> <em>— age of firm, sourcing channels, verification retries, device velocity</em></li>
+              <li><b>Every document</b> <em>— watermarked with the reviewer's own name</em></li>
+              <li><b>Duplicate and blocked-list results</b></li>
+              <li><b>Trade references</b> <em>— if the volume warrants calling them</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>The three decisions</h4>
+            <ul class="fields">
+              <li><b>Approve</b> <em>— status becomes VERIFIED</em></li>
+              <li><b>Ask for more</b> <em>— names the specific item, sends them back to that step only</em></li>
+              <li><b>Reject</b> <em>— with a reason code, not a shrug</em></li>
+            </ul>
+            <h4 style="margin-top:16px">Extra control</h4>
+            <ul class="fields">
+              <li><b>Two approvers</b> <em>— required above ₹25 lakh expected monthly volume</em></li>
+              <li><b>Site visit</b> <em>— for the largest applicants, before the first payout</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Approved</span><div class="br-body">Verified, tier set to Bronze, listing rights granted. <span class="then">Welcome pack and a training call are scheduled.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">More information needed</span><div class="br-body">One item is wrong. <span class="then">They return to that step alone, not to the beginning. The blocking reason appears at the top of the screen in their own words.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Rejected</span><div class="br-body">A reason code is recorded and shown. <span class="then">They may re-apply after 30 days. The PAN and GSTIN are remembered, so a fresh company name does not reset their history.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">SLA about to breach</span><div class="br-body">Nothing decided in 40 hours. <span class="then">Escalates to the onboarding manager. Breaches are reported, not quietly absorbed.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">GSTIN cancelled after approval</span><div class="br-body">Our quarterly re-check finds it inactive. <span class="then">Listings pause automatically. Orders already placed are honoured. They are told immediately, with what to do about it.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>kyc_review</b></span>
+          <span class="tchip">identity.<b>organization</b> (status)</span>
+          <span class="tchip">identity.<b>audit_log</b></span>
+          <span class="tchip">platform.<b>notification_log</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- V11 -->
+    <div class="step" data-kind="end">
+      <div class="node">✓</div>
+      <div class="endcard">
+        <h3>Verified. They can now list stock.</h3>
+        <p>From the first form to listing rights: seven steps, fifty-eight fields, nine automated checks and one named human decision. Everything they submitted is reusable — they will never be asked for it twice.</p>
+        <div class="grants">
+          <span class="grant">Listing rights</span>
+          <span class="grant">Bronze tier · 7% commission</span>
+          <span class="grant">Weekly settlement</span>
+          <span class="grant">Exposure limit set</span>
+          <span class="grant">Pickup location live</span>
+          <span class="grant">Team invitations enabled</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ BUYER -->
+<div class="wrap journey hidden" id="jBuyer">
+  <div class="spine">
+
+    <div class="phase"><h2>Part 1 · Getting in the door</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">01</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Public page · Create a buyer account</span>
+            <h3>Name, work email, phone</h3>
+            <p>Deliberately short. A procurement manager evaluating us should reach a real product in under two minutes, not fill a form first.</p>
+          </div>
+          <span class="pill">2 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Full name</b> <span class="req">*</span></li>
+              <li><b>Work email</b> <span class="req">*</span></li>
+              <li><b>Mobile number</b> <span class="req">*</span></li>
+              <li><b>Password</b> <span class="req">*</span></li>
+              <li><b>How they heard about us</b> <em>— attribution</em></li>
+              <li><b>Referral code</b> <em>— if any</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Checks and consent</h4>
+            <ul class="fields">
+              <li><b>Mobile OTP and email link</b> <em>— both required</em></li>
+              <li><b>Public webmail address</b> <em>— allowed, flagged for review if credit is later requested</em></li>
+              <li><b>Duplicate company</b> <em>— fuzzy match</em></li>
+              <li><b>Consent captured per purpose</b> <em>— in the language they chose, with the notice version recorded</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Verified</span><div class="br-body">Account created. <span class="then">They can already browse the catalog with indicative price bands while completing the rest.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Company already registered</span><div class="br-body">A colleague signed up last month. <span class="then">We offer to request an invitation from the existing account owner rather than creating a second, fragmented organisation.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Personal email address</span><div class="br-body">A gmail or yahoo address. <span class="then">Accepted — many genuine small businesses use one — but noted, and it matters if they later ask for credit terms.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Blocked list match</span><div class="br-body">Mobile or email is known to us. <span class="then">The application quietly stops progressing. No explanation is given.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>registration_lead</b></span>
+          <span class="tchip">identity.<b>user_account</b></span>
+          <span class="tchip">identity.<b>organization</b></span>
+          <span class="tchip">kyc.<b>consent_record</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 2 · The company and its tax identity</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">02</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 2 of 5 · Company</span>
+            <h3>Who is buying, and roughly how much</h3>
+            <p>Volume sets their default price tier. It is not a commitment and we say so, because an inflated answer here helps nobody.</p>
+          </div>
+          <span class="pill">2 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>Registered legal name</b> <span class="req">*</span></li>
+              <li><b>Trading name</b></li>
+              <li><b>Type of company</b> <span class="req">*</span></li>
+              <li><b>Industry</b></li>
+              <li><b>Number of employees</b></li>
+              <li><b>Laptops expected per year</b> <em>— sets the price tier</em></li>
+              <li><b>Website, year established</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What it drives</h4>
+            <ul class="fields">
+              <li><b>Default price tier</b> <em>— which volume band they see first</em></li>
+              <li><b>Sales ownership</b> <em>— whether an account manager is assigned</em></li>
+              <li><b>Document checklist</b> <em>— by company type</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Saved</span><div class="br-body">Continue to GST.</div></div>
+          <div class="br"><span class="br-tag t-ok">They leave mid-form</span><div class="br-body">Draft is saved automatically. <span class="then">They resume exactly where they stopped, from any device.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Volume far above employee count</span><div class="br-body">Twelve staff, twenty thousand laptops a year. <span class="then">Noted. It matters only if they ask for credit, where it becomes a question rather than an assumption.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">identity.<b>organization</b></span>
+          <span class="tchip">customer.<b>buyer_profile</b></span>
+          <span class="tchip">kyc.<b>onboarding_progress</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="decision">
+      <div class="node">03</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 3 of 5 · GST and PAN</span>
+            <h3>The single field that decides how they are invoiced</h3>
+            <p>A buyer cannot check out without a verified GSTIN, because their input tax credit depends on the invoice carrying exactly the name and state the government has on record.</p>
+          </div>
+          <span class="pill">2 minutes</span>
+          <span class="pill pill-t">2 live checks</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What we ask</h4>
+            <ul class="fields">
+              <li><b>GSTIN</b> <span class="req">*</span></li>
+              <li><b>Additional GSTINs</b> <em>— one per state they operate in</em></li>
+              <li><b>Which one is the default</b> <span class="req">*</span></li>
+              <li><b>Company PAN</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What each GSTIN gives us</h4>
+            <ul class="fields">
+              <li><b>The invoice name</b> <em>— taken from the portal, not typed</em></li>
+              <li><b>Place of supply</b> <em>— compared with the delivery state at every checkout to decide IGST versus CGST and SGST</em></li>
+              <li><b>Taxpayer type</b> <em>— a composition dealer cannot claim credit; an SEZ buyer is zero-rated</em></li>
+              <li><b>Live status</b> <em>— re-checked quarterly, and daily if they hold credit</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Active and matching</span><div class="br-body">Auto-approved from here. <span class="then">No human review needed for a clean buyer.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Multiple states</span><div class="br-body">Three GSTINs across Haryana, Karnataka and Maharashtra. <span class="then">All stored. They choose which to bill at checkout, and the tax split follows automatically.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">GSTIN cancelled</span><div class="br-body">Not active on the portal. <span class="then">Cannot proceed to checkout. They may browse, but not buy, until an active registration is supplied.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">PAN does not match the GSTIN</span><div class="br-body">Hard stop, same as the vendor path.</div></div>
+          <div class="br"><span class="br-tag t-warn">Composition dealer</span><div class="br-body">They cannot claim input credit. <span class="then">We say so on screen before they order, rather than letting them discover it at their next filing.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Goes inactive later</span><div class="br-body">Caught by the quarterly re-check. <span class="then">Checkout is blocked until it is re-verified. Orders already placed complete normally.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>gst_profile</b></span>
+          <span class="tchip">kyc.<b>pan_record</b></span>
+          <span class="tchip">kyc.<b>verification_check</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 3 · Where it goes and who can order</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">04</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 4 of 5 · Addresses, people and limits</span>
+            <h3>Delivery sites, contacts, and who is allowed to spend what</h3>
+            <p>The spend limits are the part corporate buyers care about most, and the part no consumer marketplace has. It is often what wins the account.</p>
+          </div>
+          <span class="pill">5 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Addresses and contacts</h4>
+            <ul class="fields">
+              <li><b>Billing address per GSTIN</b> <span class="req">*</span></li>
+              <li><b>Delivery sites</b> <span class="req">*</span> <em>— as many as they need</em></li>
+              <li>Per site: <b>contact name, mobile, landmark, gate instructions, receiving hours</b> <span class="req">*</span></li>
+              <li><b>Procurement contact</b> <span class="req">*</span></li>
+              <li><b>Finance contact</b> <span class="req">*</span> <em>— invoices go here</em></li>
+              <li><b>IT contact</b> <em>— receives the wipe certificates</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Team and spending rules</h4>
+            <ul class="fields">
+              <li><b>Invite colleagues</b> <em>— with a role each</em></li>
+              <li><b>Maximum order value per person</b></li>
+              <li><b>Monthly cap per person</b></li>
+              <li><b>Approval needed above</b> <em>— an amount, and who approves</em></li>
+              <li><b>Which payment methods each role may use</b></li>
+              <li><b>Cost centres they may charge to</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Complete</span><div class="br-body">Delivery estimates and approval routing now work for every order they place.</div></div>
+          <div class="br"><span class="br-tag t-warn">Delivery PIN not serviceable</span><div class="br-body">Outside our current network. <span class="then">Saved anyway, with an honest note about longer transit and higher freight. Shown at checkout, never hidden until dispatch.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">No approval rules set</span><div class="br-body">They skip this section. <span class="then">Everyone in the organisation can order without a limit. We warn once, clearly, and let them decide — it is their money and their governance.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Order later exceeds a limit</span><div class="br-body">A ₹40 lakh cart from someone capped at ₹5 lakh. <span class="then">Stock is held, the order pauses, and the named approver is notified. If they do not respond before the hold expires, the stock is released and the buyer is told why.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Delivery contact missing</span><div class="br-body">A site with no mobile number. <span class="then">Cannot be saved as a delivery address.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">identity.<b>org_address</b></span>
+          <span class="tchip">identity.<b>org_contact</b></span>
+          <span class="tchip">identity.<b>user_invitation</b></span>
+          <span class="tchip">customer.<b>buyer_approval_policy</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="user">
+      <div class="node">05</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 5 of 5 · Documents and preferences</span>
+            <h3>Three files, then how they want to be treated</h3>
+            <p>Preferences are not decoration. What they set here filters every search they run afterwards, which is the difference between a useful catalog and a wall of irrelevant stock.</p>
+          </div>
+          <span class="pill">4 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Documents</h4>
+            <ul class="fields">
+              <li><b>GST certificate</b> <span class="req">*</span></li>
+              <li><b>Company PAN</b> <span class="req">*</span></li>
+              <li><b>ID of the authorised purchaser</b> <span class="req">*</span></li>
+              <li><b>Purchase order template</b> <em>— optional, so our invoice matches their format</em></li>
+              <li><b>TDS certificate</b> <em>— if they deduct at a lower rate</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Preferences</h4>
+            <ul class="fields">
+              <li><b>Brands they standardise on</b></li>
+              <li><b>Grades they will accept</b> <em>— many refuse grade B outright</em></li>
+              <li><b>Minimum inspection score and battery health</b></li>
+              <li><b>Typical configuration and budget per unit</b></li>
+              <li><b>Do they require a data wipe certificate?</b> <em>— regulated industries always do</em></li>
+              <li><b>Is a PO number mandatory on their invoices?</b></li>
+              <li><b>If a unit fails inspection: re-source or refund?</b> <em>— answered once, applied every time</em></li>
+              <li><b>Notification channels and language</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Submitted</span><div class="br-body">Automatic approval if GST and PAN are clean. <span class="then">Usually verified within minutes.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Manual review needed</span><div class="br-body">A name mismatch, a webmail address with a large credit request, or a blocked-list near-match. <span class="then">A reviewer looks. The 24-hour SLA applies, and they are told it is happening.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">They want credit terms</span><div class="br-body">A separate application: turnover, financials, bank statement, references, possibly a deposit. <span class="then">Three to five working days. Meanwhile they can buy prepaid immediately — the credit review never blocks trading.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Credit approved at a lower figure</span><div class="br-body">₹5 lakh against a ₹20 lakh request. <span class="then">Recorded as its own outcome, not dressed up as a full approval. They are told the figure and the reason plainly.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>kyc_document</b></span>
+          <span class="tchip">customer.<b>buyer_preference</b></span>
+          <span class="tchip">customer.<b>org_preference</b></span>
+          <span class="tchip">customer.<b>credit_application</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 4 · The decision</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="decision">
+      <div class="node">06</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Internal · Mostly automatic</span>
+            <h3>Clean buyers are approved by the system</h3>
+            <p>Buyer risk is much lower than vendor risk — a buyer prepays and we hold the goods. So the default is automatic approval, with humans reserved for the genuine exceptions.</p>
+          </div>
+          <span class="pill">Minutes, or 24 h if flagged</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Approved automatically when</h4>
+            <ul class="fields">
+              <li><b>GSTIN is active</b> and the name matches</li>
+              <li><b>PAN matches the GSTIN</b></li>
+              <li><b>No blocked-list hit</b></li>
+              <li><b>All three documents are present and readable</b></li>
+              <li><b>Prepaid only</b> <em>— no credit requested</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>A human looks when</h4>
+            <ul class="fields">
+              <li><b>Names differ</b> beyond the match threshold</li>
+              <li><b>Credit is requested</b></li>
+              <li><b>A near-match</b> on the blocked list</li>
+              <li><b>Several accounts</b> from one device or IP</li>
+              <li><b>Documents are unclear</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Approved</span><div class="br-body">Full pricing, vendor identities and checkout unlock. <span class="then">Welcome email with a short buying guide.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">More information needed</span><div class="br-body">Back to the specific step, with the reason in plain language.</div></div>
+          <div class="br"><span class="br-tag t-stop">Rejected</span><div class="br-body">Rare on the buyer side. <span class="then">Reason recorded; re-application allowed after 30 days.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">kyc.<b>kyc_review</b></span>
+          <span class="tchip">identity.<b>organization</b> (status)</span>
+          <span class="tchip">identity.<b>audit_log</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="end">
+      <div class="node">✓</div>
+      <div class="endcard">
+        <h3>Verified. They can now buy.</h3>
+        <p>Five steps, thirty-four fields, four automated checks. Exact per-vendor prices, stock depth and vendor identities become visible, and every price they see from here is the landed figure including GST and freight to their own PIN code.</p>
+        <div class="grants">
+          <span class="grant">Full pricing visible</span>
+          <span class="grant">Checkout unlocked</span>
+          <span class="grant">Bulk requests enabled</span>
+          <span class="grant">GST invoice with their serials</span>
+          <span class="grant">48-hour inspection window</span>
+          <span class="grant">Team spend limits active</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ SUMMARY -->
+<div class="summary">
+  <div class="wrap">
+    <p class="eyebrow" style="color:var(--teal-dk)">The three ideas underneath all of this</p>
+    <h2 style="font-size:26px;max-width:24ch">Why onboarding is built this way</h2>
+    <div class="sgrid">
+      <div class="sbox">
+        <div class="n">1</div>
+        <h4>Never ask twice</h4>
+        <p>Every answer is stored against the organisation, not the form. A vendor adding a second warehouse two years later does not re-enter their GSTIN, and an order never asks for an address they have already given us.</p>
+      </div>
+      <div class="sbox">
+        <div class="n">2</div>
+        <h4>Fail loudly and specifically</h4>
+        <p>"Something went wrong" creates a support ticket. "This bill is dated January 2025, please send one from the last three months" creates a correct re-upload. Every red and amber path above names the actual problem.</p>
+      </div>
+      <div class="sbox">
+        <div class="n">3</div>
+        <h4>Our outages are never their problem</h4>
+        <p>When the GST portal or the bank service is down, we say so, save the work, queue a retry, and let the application continue. Approval waits for the check. The person does not.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <div class="wrap">
+    <span>TrueTech Services Pvt. Ltd. · Gurugram · Onboarding blueprint v1.0</span>
+    <span class="mono">Vendor: 7 steps · Buyer: 5 steps · 107 database tables behind it</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  var bV=document.getElementById('btnVendor'), bB=document.getElementById('btnBuyer');
+  var jV=document.getElementById('jVendor'), jB=document.getElementById('jBuyer');
+  var m={steps:document.getElementById('mSteps'),fields:document.getElementById('mFields'),
+         checks:document.getElementById('mChecks'),branch:document.getElementById('mBranch'),
+         time:document.getElementById('mTime')};
+
+  function show(which){
+    var vendor = which==='vendor';
+    bV.setAttribute('aria-pressed', vendor);
+    bB.setAttribute('aria-pressed', !vendor);
+    jV.classList.toggle('hidden', !vendor);
+    jB.classList.toggle('hidden', vendor);
+    m.steps.textContent  = vendor ? '11' : '7';
+    m.fields.textContent = vendor ? '58' : '34';
+    m.checks.textContent = vendor ? '9'  : '4';
+    m.branch.textContent = vendor ? '31' : '20';
+    m.time.textContent   = vendor ? '48 h' : '24 h';
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+  bV.addEventListener('click', function(){ show('vendor'); });
+  bB.addEventListener('click', function(){ show('buyer'); });
+
+  document.getElementById('tblToggle').addEventListener('change', function(e){
+    document.body.classList.toggle('show-tables', e.target.checked);
+  });
+})();
+</script>
+</body>
+</html>

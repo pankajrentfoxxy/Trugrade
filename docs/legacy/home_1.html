@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gorefurbo · Refurbished laptops, opened and tested before you see them</title>
+<meta name="description" content="India's B2B marketplace for inspected refurbished laptops. Every machine is opened, diagnostically tested, graded and sealed at the seller's warehouse before it is ever listed.">
+<meta name="theme-color" content="#070B14">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   gorefurbo — "Midnight Lab"
+   Brand colours sampled from the logo file:
+     navy #191F2E · cyan #17AFC5 · orange #FE9D00 · grey #5B5B5B
+   Theme extends navy downward into a true midnight, so the
+   inspection data reads like instrumentation rather than marketing.
+   ============================================================ */
+
+:root{
+  /* brand */
+  --cyan:#17AFC5;  --cyan-lt:#4FD3E6;  --cyan-dk:#0D7D8F;
+  --orange:#FE9D00; --orange-lt:#FFB43D; --orange-dk:#D07C00;
+  --grey:#5B5B5B;
+
+  /* midnight scale */
+  --void:#070B14;
+  --ink:#0C1220;
+  --ink-2:#131B2C;
+  --ink-3:#1C2740;
+  --ink-4:#2A3854;
+  --line-d:rgba(255,255,255,.09);
+  --line-d2:rgba(255,255,255,.16);
+
+  /* light scale */
+  --paper:#F6F7F9;
+  --paper-2:#EDEFF3;
+  --white:#fff;
+  --line:#E3E7ED;
+  --line-2:#EFF2F6;
+
+  /* text */
+  --t-hi:#F3F6FA;
+  --t-mid:#9BA9C0;
+  --t-low:#65748F;
+  --t-dark:#0E1524;
+  --t-dark-mid:#5A6880;
+
+  --good:#22C08A; --warn:#FFB43D; --bad:#F0603D;
+
+  --r-xs:8px; --r-sm:12px; --r:18px; --r-lg:26px; --r-xl:34px;
+
+  --disp:"Space Grotesk",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+
+  /* Fluid container. Grows with the viewport instead of stopping dead at a
+     fixed width, so a 1900px screen does not read as a page floating in space. */
+  --maxw:1560px;
+  --pad:clamp(20px,3.4vw,64px);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  margin:0;background:var(--void);color:var(--t-dark);
+  font-family:var(--body);font-size:15.5px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:4px}
+
+h1,h2,h3,h4{font-family:var(--disp);font-weight:600;letter-spacing:-.035em;margin:0;line-height:1.06}
+h1{font-size:clamp(38px,6.2vw,78px);font-weight:700;letter-spacing:-.045em}
+h2{font-size:clamp(28px,3.9vw,50px)}
+h3{font-size:clamp(19px,1.5vw,23px);letter-spacing:-.028em}
+h4{font-size:16.5px;letter-spacing:-.02em;font-weight:600}
+p{margin:0 0 14px}
+.mono{font-family:var(--mono);font-variant-ligatures:none}
+.num{font-family:var(--mono);font-weight:600;letter-spacing:-.03em}
+
+.wrap{width:min(var(--maxw),100%);margin:0 auto;padding:0 var(--pad)}
+.row{display:flex;gap:14px;align-items:center}
+.row--wrap{flex-wrap:wrap}
+.between{justify-content:space-between}
+.spacer{flex:1}
+.grid{display:grid;gap:22px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+section{position:relative}
+
+/* --- eyebrow --- */
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.19em;text-transform:uppercase;
+  font-weight:600;margin:0 0 20px;color:var(--cyan);
+}
+.eyebrow::before{content:"";width:22px;height:1.5px;background:currentColor;opacity:.55}
+.eyebrow-dark{color:var(--cyan-dk)}
+
+/* ============================ LOGO ============================ */
+.logo{display:inline-flex;align-items:center;gap:11px}
+.logo svg{width:32px;height:32px;flex-shrink:0}
+.logo .word{font-family:var(--disp);font-weight:600;font-size:21px;letter-spacing:-.045em;line-height:1}
+.logo .go{color:var(--cyan)} .logo .rf{color:var(--orange)}
+.logo-lg svg{width:46px;height:46px} .logo-lg .word{font-size:30px}
+
+/* ============================ BUTTONS ============================ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:14px 24px;border-radius:100px;border:1.5px solid transparent;
+  font-weight:600;font-size:14.5px;cursor:pointer;white-space:nowrap;
+  transition:transform .16s cubic-bezier(.2,.8,.3,1),background .18s,box-shadow .18s,border-color .18s;
+  font-family:var(--body);
+}
+.btn:hover{transform:translateY(-1.5px)}
+.btn:active{transform:translateY(0)}
+.btn-primary{background:var(--orange);color:#150C00;box-shadow:0 6px 22px rgba(254,157,0,.32)}
+.btn-primary:hover{background:var(--orange-lt);box-shadow:0 10px 30px rgba(254,157,0,.4)}
+.btn-glass{background:rgba(255,255,255,.07);color:var(--t-hi);border-color:var(--line-d2);backdrop-filter:blur(10px)}
+.btn-glass:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.3)}
+.btn-dark{background:var(--ink);color:var(--t-hi)}
+.btn-dark:hover{background:var(--ink-2)}
+.btn-line{background:transparent;border-color:var(--line);color:var(--t-dark)}
+.btn-line:hover{border-color:var(--t-dark);background:#fff}
+.btn-lg{padding:17px 32px;font-size:16px}
+.btn-sm{padding:10px 18px;font-size:13.5px}
+.btn-block{width:100%}
+
+/* ============================ HERO ============================ */
+.hero{
+  background:var(--void);color:var(--t-hi);position:relative;overflow:hidden;
+  padding:0 0 90px;
+}
+/* aurora mesh */
+.aurora{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.aurora i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;display:block}
+.aurora .a1{width:min(48vw,820px);aspect-ratio:1;top:-14vw;left:-9vw;background:radial-gradient(circle,#17AFC5 0%,transparent 68%);opacity:.34}
+.aurora .a2{width:min(42vw,720px);aspect-ratio:1;top:-9vw;right:-8vw;background:radial-gradient(circle,#FE9D00 0%,transparent 66%);opacity:.22}
+.aurora .a3{width:min(60vw,1000px);height:min(34vw,560px);bottom:-18vw;left:30%;background:radial-gradient(circle,#2A3854 0%,transparent 70%);opacity:.7}
+/* grain */
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.16;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* grid lines */
+.gridlines{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--line-d) 1px,transparent 1px),linear-gradient(90deg,var(--line-d) 1px,transparent 1px);
+  background-size:clamp(78px,5.4vw,104px) clamp(78px,5.4vw,104px);
+  -webkit-mask-image:radial-gradient(ellipse 108% 68% at 50% 18%,#000 22%,transparent 82%);
+  mask-image:radial-gradient(ellipse 108% 68% at 50% 18%,#000 22%,transparent 82%)}
+
+/* announcement */
+.announce{border-bottom:1px solid var(--line-d);position:relative;z-index:5}
+.announce .wrap{display:flex;align-items:center;gap:16px;min-height:42px;font-size:12.5px;color:var(--t-mid);flex-wrap:wrap}
+.announce b{color:var(--t-hi);font-weight:600}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 rgba(34,192,138,.6);animation:pulse 2.4s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(34,192,138,0)}100%{box-shadow:0 0 0 0 rgba(34,192,138,0)}}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:80;background:rgba(7,11,20,.72);backdrop-filter:blur(18px);border-bottom:1px solid var(--line-d)}
+.nav .wrap{display:flex;align-items:center;gap:30px;min-height:74px}
+.navlinks{display:flex;gap:28px;font-size:14.5px;font-weight:500;color:var(--t-mid)}
+.navlinks a{position:relative;padding:4px 0;transition:color .16s}
+.navlinks a:hover{color:var(--t-hi)}
+.navlinks a::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:1.5px;background:var(--cyan);transform:scaleX(0);transition:transform .2s;transform-origin:left}
+.navlinks a:hover::after{transform:scaleX(1)}
+
+/* hero content */
+.hero-in{position:relative;z-index:4;padding-top:74px}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(40px,5vw,90px);align-items:center}
+.hero h1{margin-bottom:22px}
+.hero h1 .hi{
+  background:linear-gradient(102deg,var(--cyan-lt) 0%,var(--cyan) 42%,var(--orange) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hero .sub{font-size:clamp(17px,1.15vw,19px);color:var(--t-mid);max-width:56ch;margin-bottom:34px;line-height:1.62}
+
+.tagpill{
+  display:inline-flex;align-items:center;gap:10px;padding:7px 16px 7px 8px;border-radius:100px;
+  background:rgba(255,255,255,.05);border:1px solid var(--line-d2);backdrop-filter:blur(10px);
+  font-size:12.5px;color:var(--t-mid);margin-bottom:26px;
+}
+.tagpill .n{background:var(--cyan);color:#00252B;font-family:var(--mono);font-weight:700;font-size:11px;padding:3px 9px;border-radius:100px}
+
+/* ---------- SEARCH ---------- */
+.searchwrap{position:relative;max-width:720px}
+.search{
+  display:flex;align-items:center;background:rgba(255,255,255,.055);
+  border:1.5px solid var(--line-d2);border-radius:100px;padding:6px 6px 6px 8px;
+  backdrop-filter:blur(20px);box-shadow:0 20px 50px rgba(0,0,0,.45);
+  transition:border-color .2s,box-shadow .2s;
+}
+.search:focus-within{border-color:rgba(23,175,197,.65);box-shadow:0 0 0 4px rgba(23,175,197,.13),0 20px 50px rgba(0,0,0,.5)}
+.search .cat{
+  display:flex;align-items:center;gap:8px;padding:11px 16px;border:0;background:transparent;
+  color:var(--t-hi);font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;
+  border-right:1px solid var(--line-d2);
+}
+.search .cat svg{width:11px;height:11px;opacity:.6}
+.search input{flex:1;border:0;background:transparent;padding:13px 16px;font-size:15.5px;color:var(--t-hi);min-width:0}
+.search input::placeholder{color:var(--t-low)}
+.search input:focus{outline:none}
+.search .camera{width:40px;height:40px;border-radius:50%;border:0;background:transparent;color:var(--t-low);display:grid;place-items:center;cursor:pointer;flex-shrink:0}
+.search .camera:hover{background:rgba(255,255,255,.08);color:var(--t-hi)}
+.search .go{
+  background:var(--orange);color:#150C00;border:0;border-radius:100px;padding:13px 26px;
+  font-weight:600;font-size:14.5px;cursor:pointer;display:flex;align-items:center;gap:8px;flex-shrink:0;
+  box-shadow:0 4px 16px rgba(254,157,0,.35);transition:background .18s;
+}
+.search .go:hover{background:var(--orange-lt)}
+
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;align-items:center}
+.quick .lb{font-size:12.5px;color:var(--t-low);margin-right:2px}
+.qchip{padding:7px 14px;border-radius:100px;border:1px solid var(--line-d);background:rgba(255,255,255,.03);
+  font-size:12.5px;color:var(--t-mid);transition:.16s;cursor:pointer}
+.qchip:hover{border-color:var(--cyan);color:var(--cyan-lt);background:rgba(23,175,197,.09)}
+
+/* hero stats */
+.hstats{display:flex;gap:0;margin-top:44px;border-top:1px solid var(--line-d);padding-top:26px;flex-wrap:wrap}
+.hstats div{padding-right:38px;margin-right:38px;border-right:1px solid var(--line-d)}
+.hstats div:last-child{border:0;padding-right:0;margin-right:0}
+.hstats .v{font-family:var(--disp);font-size:27px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--t-hi)}
+.hstats .l{font-size:12px;color:var(--t-low);margin-top:7px}
+
+/* ---------- THE INSPECTION HUD (hero visual) ---------- */
+.hud{position:relative;aspect-ratio:1/.92;display:grid;place-items:center;max-width:660px;justify-self:end;width:100%}
+.hud-glow{position:absolute;width:72%;height:60%;background:radial-gradient(circle,rgba(23,175,197,.32) 0%,transparent 70%);filter:blur(48px)}
+.laptop{width:88%;position:relative;z-index:2;filter:drop-shadow(0 34px 60px rgba(0,0,0,.6))}
+.scanline{
+  position:absolute;left:12%;right:12%;height:2px;z-index:3;
+  background:linear-gradient(90deg,transparent,var(--cyan-lt),transparent);
+  box-shadow:0 0 22px 4px rgba(79,211,230,.6);
+  animation:scan 4.5s cubic-bezier(.5,0,.5,1) infinite;
+}
+@keyframes scan{0%,100%{top:24%;opacity:0}12%{opacity:1}50%{top:62%;opacity:1}62%{opacity:0}}
+
+.dcard{
+  position:absolute;z-index:5;background:rgba(12,18,32,.86);border:1px solid var(--line-d2);
+  border-radius:14px;padding:11px 14px;backdrop-filter:blur(14px);
+  box-shadow:0 12px 34px rgba(0,0,0,.5);min-width:132px;
+  animation:float 6s ease-in-out infinite;
+}
+.dcard .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--t-low);margin-bottom:5px}
+.dcard .v{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--t-hi);letter-spacing:-.02em;line-height:1}
+.dcard .v .u{font-size:11px;color:var(--t-mid);font-weight:500}
+.dcard .tick{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--good);margin-top:5px;font-weight:600}
+.dcard.d1{top:6%;left:-4%;animation-delay:0s}
+.dcard.d2{top:28%;right:-6%;animation-delay:-1.5s}
+.dcard.d3{bottom:26%;left:-7%;animation-delay:-3s}
+.dcard.d4{bottom:5%;right:-2%;animation-delay:-4.5s}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+
+.seal-badge{
+  position:absolute;z-index:6;bottom:38%;right:12%;
+  display:flex;align-items:center;gap:9px;padding:8px 14px 8px 9px;border-radius:100px;
+  background:linear-gradient(135deg,rgba(254,157,0,.22),rgba(254,157,0,.08));
+  border:1px solid rgba(254,157,0,.42);backdrop-filter:blur(12px);
+}
+.seal-badge .ico{width:24px;height:24px;border-radius:50%;background:var(--orange);display:grid;place-items:center;flex-shrink:0}
+.seal-badge .tx{font-family:var(--mono);font-size:11px;color:var(--orange-lt);font-weight:600;letter-spacing:.02em}
+
+/* score ring (the logo's tri-arc, reused) */
+.ring{position:relative;display:inline-grid;place-items:center;flex-shrink:0}
+.ring svg{transform:rotate(-90deg)}
+.ring .val{position:absolute;font-family:var(--mono);font-weight:700;letter-spacing:-.05em;line-height:1;text-align:center}
+.ring-xl{width:104px;height:104px} .ring-xl .val{font-size:30px}
+.ring-md{width:56px;height:56px} .ring-md .val{font-size:17px}
+.ring-sm{width:40px;height:40px} .ring-sm .val{font-size:12.5px}
+
+/* ============================ TICKER ============================ */
+.ticker{background:var(--ink);border-top:1px solid var(--line-d);border-bottom:1px solid var(--line-d);overflow:hidden;position:relative}
+.ticker::before,.ticker::after{content:"";position:absolute;top:0;bottom:0;width:130px;z-index:2;pointer-events:none}
+.ticker::before{left:0;background:linear-gradient(90deg,var(--ink),transparent)}
+.ticker::after{right:0;background:linear-gradient(270deg,var(--ink),transparent)}
+.tick-lbl{position:absolute;left:0;top:0;bottom:0;z-index:3;display:flex;align-items:center;gap:9px;padding:0 22px;
+  background:var(--ink);border-right:1px solid var(--line-d);font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--cyan);font-weight:600;white-space:nowrap}
+.tick-track{display:flex;gap:0;animation:slide 46s linear infinite;padding-left:210px}
+@keyframes slide{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.tick-item{display:flex;align-items:center;gap:11px;padding:15px 26px;border-right:1px solid var(--line-d);white-space:nowrap;font-size:13px;color:var(--t-mid)}
+.tick-item b{color:var(--t-hi);font-weight:600}
+.tick-item .sc{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cyan);background:rgba(23,175,197,.12);padding:2px 8px;border-radius:5px}
+.tick-item .gr{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px}
+.gr-ap{color:var(--cyan-lt);background:rgba(79,211,230,.13)}
+.gr-a{color:#8FD4E0;background:rgba(143,212,224,.1)}
+.gr-b{color:var(--orange-lt);background:rgba(255,180,61,.13)}
+
+/* ============================ LIGHT SECTIONS ============================ */
+.light{background:var(--paper);color:var(--t-dark);padding:104px 0}
+.light-2{background:var(--white)}
+.light h2{color:var(--t-dark)}
+.sec-head{max-width:64ch;margin-bottom:52px}
+.sec-head p{font-size:18px;color:var(--t-dark-mid);margin:18px 0 0;line-height:1.62}
+
+/* ---------- PROCESS TRACK ---------- */
+.track{display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);gap:clamp(28px,3.2vw,52px);align-items:start}
+.steps{display:flex;flex-direction:column;gap:6px}
+.step{
+  display:grid;grid-template-columns:auto 1fr;gap:16px;padding:18px 20px;border-radius:var(--r);
+  border:1.5px solid transparent;cursor:pointer;text-align:left;background:transparent;
+  transition:background .2s,border-color .2s;position:relative;font-family:var(--body);
+}
+.step:hover{background:rgba(255,255,255,.7)}
+.step.on{background:var(--white);border-color:var(--line);box-shadow:0 4px 24px rgba(14,21,36,.07)}
+.step .no{
+  width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;
+  font-family:var(--mono);font-size:13px;font-weight:700;
+  background:var(--paper-2);color:var(--t-dark-mid);transition:.2s;
+}
+.step.on .no{background:var(--ink);color:var(--cyan)}
+.step.done .no{background:rgba(23,175,197,.14);color:var(--cyan-dk)}
+.step .tt{font-family:var(--disp);font-size:17px;font-weight:600;letter-spacing:-.025em;display:block;margin-bottom:3px}
+.step .dd{font-size:13.5px;color:var(--t-dark-mid);line-height:1.5;display:block}
+.step .who{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--t-dark-mid);opacity:.7;margin-top:7px;display:block}
+.step .bar{position:absolute;left:0;right:0;bottom:0;height:2.5px;border-radius:100px;background:var(--line-2);overflow:hidden;opacity:0}
+.step.on .bar{opacity:1}
+.step .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--orange));border-radius:100px}
+.step.on .bar i{animation:fill 7s linear forwards}
+@keyframes fill{to{width:100%}}
+
+/* preview panel */
+.stage{
+  background:var(--ink);border-radius:var(--r-lg);padding:30px;color:var(--t-hi);
+  min-height:452px;position:relative;overflow:hidden;box-shadow:0 30px 70px rgba(14,21,36,.22);
+}
+.stage::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(var(--line-d) 1px,transparent 1px),linear-gradient(90deg,var(--line-d) 1px,transparent 1px);
+  background-size:44px 44px;opacity:.5;pointer-events:none}
+.stage::after{content:"";position:absolute;width:420px;height:420px;border-radius:50%;top:-190px;right:-150px;
+  background:radial-gradient(circle,rgba(23,175,197,.24),transparent 68%);filter:blur(50px);pointer-events:none}
+.pane{display:none;position:relative;z-index:2;animation:fade .45s cubic-bezier(.2,.8,.3,1)}
+.pane.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.pane-h{display:flex;align-items:center;gap:12px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--line-d)}
+.pane-h .chip{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  padding:5px 11px;border-radius:100px;background:rgba(23,175,197,.14);color:var(--cyan-lt);font-weight:600}
+.pane-h .tm{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--t-low)}
+.pane h4{color:var(--t-hi);margin-bottom:4px}
+.pane .pd{font-size:13.5px;color:var(--t-mid);margin:0}
+
+/* mock UI inside the stage */
+.mock{background:rgba(255,255,255,.045);border:1px solid var(--line-d);border-radius:14px;padding:16px;margin-bottom:12px}
+.mock-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-d)}
+.mock-row:last-child{border-bottom:0}
+.mock-row .k{font-size:13px;color:var(--t-mid);min-width:106px}
+.mock-row .v{font-family:var(--mono);font-size:13.5px;color:var(--t-hi);font-weight:500}
+.mock-row .st{margin-left:auto;font-size:10.5px;font-family:var(--mono);font-weight:600;padding:3px 9px;border-radius:5px;letter-spacing:.05em}
+.st-ok{color:var(--good);background:rgba(34,192,138,.13)}
+.st-no{color:var(--bad);background:rgba(240,96,61,.14)}
+.st-wa{color:var(--warn);background:rgba(255,180,61,.14)}
+.mini-lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--t-low);margin-bottom:9px}
+.photostrip{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.photostrip i{aspect-ratio:1;border-radius:7px;background:linear-gradient(150deg,var(--ink-3),var(--ink-2));border:1px solid var(--line-d);display:block}
+.photostrip i.hl{border-color:rgba(254,157,0,.5)}
+
+.offer-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:12px 14px;
+  border-radius:11px;border:1px solid var(--line-d);margin-bottom:8px;background:rgba(255,255,255,.03)}
+.offer-row.best{border-color:rgba(23,175,197,.45);background:rgba(23,175,197,.08)}
+.offer-row .nm{font-size:13.5px;font-weight:600;color:var(--t-hi)}
+.offer-row .mt{font-size:11.5px;color:var(--t-low)}
+.offer-row .pr{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--t-hi)}
+
+/* ---------- grade cards ---------- */
+.gcard{background:var(--white);border:1px solid var(--line);border-radius:var(--r);padding:26px;transition:.2s;position:relative;overflow:hidden}
+.gcard:hover{box-shadow:0 18px 44px rgba(14,21,36,.09);transform:translateY(-3px)}
+.gcard .gtag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-weight:700;font-size:15px;
+  padding:8px 16px 8px 10px;border-radius:100px;margin-bottom:18px;letter-spacing:-.02em}
+.gcard .gtag i{width:17px;height:17px;border-radius:50%;flex-shrink:0;
+  background:conic-gradient(var(--cyan) 0 33%,var(--orange) 33% 66%,var(--grey) 66% 100%);
+  -webkit-mask:radial-gradient(circle,transparent 38%,#000 40%);mask:radial-gradient(circle,transparent 38%,#000 40%)}
+.gtag-ap{background:rgba(23,175,197,.11);color:var(--cyan-dk)}
+.gtag-a{background:rgba(45,110,138,.1);color:#2C6E8A}
+.gtag-b{background:rgba(254,157,0,.12);color:var(--orange-dk)}
+.gcard p{font-size:14px;color:var(--t-dark-mid);margin:0}
+.gcard .swatch{position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;opacity:.05}
+
+/* ---------- listing cards ---------- */
+.pcard{background:var(--white);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;transition:.2s;display:block}
+.pcard:hover{box-shadow:0 20px 46px rgba(14,21,36,.11);transform:translateY(-3px);border-color:#D4DBE4}
+.pthumb{aspect-ratio:16/11;background:linear-gradient(155deg,#E9EDF2,#F8FAFB);display:grid;place-items:center;position:relative;border-bottom:1px solid var(--line-2)}
+.pthumb svg{width:66%}
+.pthumb .tl{position:absolute;top:12px;left:12px;font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 11px;border-radius:100px}
+.pthumb .tr{position:absolute;top:12px;right:12px}
+
+/* ---------- comparison (dark) ---------- */
+.dark-sec{background:var(--ink);color:var(--t-hi);padding:104px 0;position:relative;overflow:hidden}
+.dark-sec h2{color:#fff}
+.dark-sec .lede{color:var(--t-mid);font-size:18px}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:0;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line-d)}
+.vs-col{padding:30px}
+.vs-col.them{background:rgba(255,255,255,.02)}
+.vs-col.us{background:linear-gradient(160deg,rgba(23,175,197,.11),rgba(23,175,197,.03));border-left:1px solid var(--line-d)}
+.vs-col h4{margin-bottom:22px;display:flex;align-items:center;gap:10px}
+.vs-item{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line-d);font-size:14.5px;align-items:flex-start}
+.vs-item:last-child{border-bottom:0}
+.vs-item .ic{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;margin-top:1px}
+.vs-item .ic.x{background:rgba(240,96,61,.15);color:var(--bad)}
+.vs-item .ic.c{background:rgba(34,192,138,.15);color:var(--good)}
+.vs-col.them .vs-item{color:var(--t-mid)}
+.vs-col.us .vs-item{color:var(--t-hi)}
+
+/* ---------- CTA split ---------- */
+.cta2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.ctacard{border-radius:var(--r-lg);padding:38px;position:relative;overflow:hidden}
+.ctacard.buy{background:var(--white);border:1px solid var(--line)}
+.ctacard.sell{background:linear-gradient(155deg,var(--ink) 0%,var(--ink-3) 100%);color:var(--t-hi)}
+.ctacard.sell h3{color:#fff}
+.ctacard ul{list-style:none;padding:0;margin:20px 0 26px;font-size:14.5px}
+.ctacard li{padding:10px 0;display:flex;gap:11px;align-items:flex-start}
+.ctacard.buy li{border-bottom:1px solid var(--line-2);color:var(--t-dark-mid)}
+.ctacard.sell li{border-bottom:1px solid var(--line-d);color:var(--t-mid)}
+.ctacard li:last-child{border-bottom:0}
+.ctacard li .tk{color:var(--cyan-dk);flex-shrink:0;font-weight:700}
+.ctacard.sell li .tk{color:var(--cyan)}
+.ctacard .blob{position:absolute;width:280px;height:280px;border-radius:50%;right:-110px;bottom:-130px;
+  background:radial-gradient(circle,rgba(254,157,0,.16),transparent 70%);filter:blur(30px);pointer-events:none}
+
+/* ---------- footer ---------- */
+.foot{background:var(--void);color:var(--t-low);padding:76px 0 32px;border-top:1px solid var(--line-d)}
+.foot h4{color:#fff;font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;font-weight:600}
+.foot a{display:block;color:var(--t-mid);padding:5px 0;font-size:14px;transition:color .15s}
+.foot a:hover{color:#fff}
+.foot .fnote{border-top:1px solid var(--line-d);margin-top:48px;padding-top:26px;display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;font-size:12.5px}
+
+/* ============================ RESPONSIVE ============================ */
+
+/* Ultrawide: use the space rather than letting it read as margin. */
+@media (min-width:1500px){
+  .hero-in{padding-top:92px}
+  .hero{padding-bottom:110px}
+  .light,.dark-sec{padding:124px 0}
+  .stage{min-height:508px;padding:36px}
+  .step{padding:21px 24px}
+  .hstats .v{font-size:31px}
+  .g4{gap:26px}
+}
+@media (min-width:1900px){
+  :root{--maxw:1680px}
+}
+
+@media (max-width:1080px){
+  .hero-grid{grid-template-columns:1fr;gap:56px}
+  .hud{max-width:520px;margin:0 auto}
+  .track{grid-template-columns:1fr}
+  .g4{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:860px){
+  .navlinks{display:none}
+  .g3,.g2,.cta2,.vs{grid-template-columns:1fr}
+  .vs-col.us{border-left:0;border-top:1px solid var(--line-d)}
+  .light,.dark-sec{padding:70px 0}
+  .search{flex-wrap:wrap;border-radius:var(--r);padding:8px}
+  .search .cat{border-right:0;border-bottom:1px solid var(--line-d2);width:100%;justify-content:space-between}
+  .search input{width:100%;flex:1 1 100%}
+  .search .go{width:100%;justify-content:center;border-radius:var(--r-sm)}
+  .hstats div{padding-right:22px;margin-right:22px}
+  .dcard.d1{left:0} .dcard.d2{right:0} .dcard.d3{left:0} .dcard.d4{right:0}
+  .hero h1{font-size:clamp(34px,9vw,48px)}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .tick-track{animation:none!important}
+  .step.on .bar i{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<div class="hero">
+  <div class="aurora"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+  <div class="gridlines"></div>
+  <div class="grain"></div>
+
+  <div class="announce">
+    <div class="wrap">
+      <span class="pulse"></span>
+      <span><b>1,284 laptops</b> inspected and sealed in the last 7 days</span>
+      <span class="spacer"></span>
+      <a href="seller-register.html" style="color:var(--cyan)">Sell on gorefurbo →</a>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="wrap">
+      <a class="logo" href="#">
+        <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><g stroke-width="13" fill="none" stroke-linecap="round"><path d="M32 8.5 A23.5 23.5 0 0 1 52.4 20.3" stroke="#17AFC5"/><path d="M52.4 20.3 A23.5 23.5 0 0 1 32 55.5" stroke="#FE9D00"/><path d="M32 55.5 A23.5 23.5 0 0 1 32 8.5" stroke="#5B5B5B"/></g></svg>
+        <span class="word"><span class="go">go</span><span class="rf">refurbo</span></span>
+      </a>
+      <div class="navlinks">
+        <a href="#process">How it works</a>
+        <a href="#grades">Grades</a>
+        <a href="#stock">Browse stock</a>
+        <a href="#bulk">Bulk buying</a>
+        <a href="#sell">Sell with us</a>
+      </div>
+      <span class="spacer"></span>
+      <a class="btn btn-glass btn-sm" href="customer-login.html">Sign in</a>
+      <a class="btn btn-primary btn-sm" href="customer-register.html">Create account</a>
+    </div>
+  </nav>
+
+  <div class="hero-in">
+    <div class="wrap">
+      <div class="hero-grid">
+
+        <!-- copy + search -->
+        <div>
+          <span class="tagpill"><span class="n">B2B</span> Minimum order 1 unit · GST invoice on everything</span>
+          <h1>We open every laptop <span class="hi">before you ever see it.</span></h1>
+          <p class="sub">India's refurbished market runs on adjectives. Ours runs on readings. A technician visits the seller's warehouse, boots a diagnostic on each machine, records what is actually inside, grades it and seals it — and only then does it appear here.</p>
+
+          <div class="searchwrap">
+            <form class="search" onsubmit="return false">
+              <button type="button" class="cat">All laptops
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4.5l4 4 4-4"/></svg>
+              </button>
+              <input type="search" placeholder="Model, brand, processor or service tag…" aria-label="Search laptops">
+              <button type="button" class="camera" title="Search by photo" aria-label="Search by photo">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" style="width:18px;height:18px"><rect x="2.5" y="5.5" width="15" height="11" rx="2.5"/><circle cx="10" cy="11" r="3"/><path d="M7 5.5l1.2-2h3.6l1.2 2"/></svg>
+              </button>
+              <button type="submit" class="go">
+                <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2" style="width:16px;height:16px"><circle cx="8" cy="8" r="5.5"/><path d="M12.2 12.2L16 16"/></svg>
+                Search
+              </button>
+            </form>
+          </div>
+
+          <div class="quick">
+            <span class="lb">Popular:</span>
+            <span class="qchip">Latitude 5420</span>
+            <span class="qchip">ThinkPad T14</span>
+            <span class="qchip">i5 · 16GB · 512GB</span>
+            <span class="qchip">Under ₹20,000</span>
+            <span class="qchip">MacBook Air M1</span>
+          </div>
+
+          <div class="hstats">
+            <div><div class="v">12,400+</div><div class="l">Sealed &amp; ready to ship</div></div>
+            <div><div class="v">213</div><div class="l">Verified sellers</div></div>
+            <div><div class="v">96.2%</div><div class="l">Pass inspection first time</div></div>
+          </div>
+        </div>
+
+        <!-- inspection HUD -->
+        <div class="hud">
+          <div class="hud-glow"></div>
+          <div class="scanline"></div>
+
+          <svg class="laptop" viewBox="0 0 400 300" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="lid" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#2A3854"/><stop offset="1" stop-color="#131B2C"/>
+              </linearGradient>
+              <linearGradient id="scr" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#1A2740"/><stop offset="1" stop-color="#0C1220"/>
+              </linearGradient>
+              <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#3A4A6B"/><stop offset="1" stop-color="#1C2740"/>
+              </linearGradient>
+            </defs>
+            <rect x="62" y="26" width="276" height="184" rx="11" fill="url(#lid)" stroke="rgba(255,255,255,.14)" stroke-width="1.5"/>
+            <rect x="75" y="39" width="250" height="158" rx="5" fill="url(#scr)"/>
+            <!-- on-screen diagnostic -->
+            <rect x="90" y="56" width="72" height="7" rx="3.5" fill="#17AFC5" opacity=".85"/>
+            <rect x="90" y="72" width="146" height="5" rx="2.5" fill="#4FD3E6" opacity=".3"/>
+            <rect x="90" y="84" width="118" height="5" rx="2.5" fill="#4FD3E6" opacity=".22"/>
+            <rect x="90" y="104" width="210" height="1" fill="rgba(255,255,255,.1)"/>
+            <rect x="90" y="116" width="54" height="5" rx="2.5" fill="#FE9D00" opacity=".7"/>
+            <rect x="160" y="116" width="82" height="5" rx="2.5" fill="rgba(255,255,255,.16)"/>
+            <rect x="90" y="130" width="54" height="5" rx="2.5" fill="rgba(255,255,255,.13)"/>
+            <rect x="160" y="130" width="104" height="5" rx="2.5" fill="rgba(255,255,255,.16)"/>
+            <rect x="90" y="144" width="54" height="5" rx="2.5" fill="rgba(255,255,255,.13)"/>
+            <rect x="160" y="144" width="66" height="5" rx="2.5" fill="rgba(255,255,255,.16)"/>
+            <rect x="90" y="164" width="46" height="16" rx="5" fill="#17AFC5" opacity=".22" stroke="#17AFC5" stroke-width="1"/>
+            <!-- base -->
+            <path d="M34 214h332l22 32H12z" fill="url(#base)" stroke="rgba(255,255,255,.11)" stroke-width="1.5"/>
+            <rect x="170" y="224" width="60" height="4.5" rx="2.2" fill="rgba(255,255,255,.2)"/>
+          </svg>
+
+          <div class="dcard d1">
+            <div class="k">Memory found</div>
+            <div class="v">16<span class="u"> GB</span></div>
+            <div class="tick">✓ matches listing</div>
+          </div>
+          <div class="dcard d2">
+            <div class="k">Battery health</div>
+            <div class="v">91<span class="u">%</span></div>
+            <div class="tick">148 cycles</div>
+          </div>
+          <div class="dcard d3">
+            <div class="k">Storage SMART</div>
+            <div class="v">OK</div>
+            <div class="tick">✓ 512 GB NVMe</div>
+          </div>
+          <div class="dcard d4" style="display:flex;align-items:center;gap:13px;min-width:auto">
+            <div class="ring ring-md">
+              <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="22" stroke="rgba(255,255,255,.1)" stroke-width="6" fill="none"/><circle cx="28" cy="28" r="22" stroke="#17AFC5" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="138.2" stroke-dashoffset="8.3"/></svg>
+              <span class="val" style="color:var(--t-hi)">94</span>
+            </div>
+            <div><div class="k">gorefurbo score</div><div class="v" style="font-size:13px">Grade A+</div></div>
+          </div>
+
+          <div class="seal-badge">
+            <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="#150C00" stroke-width="2.4" style="width:11px;height:11px"><path d="M3 8.4l3.2 3.2L13 4.8"/></svg></span>
+            <span class="tx">SEAL GF-8841-QK</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== LIVE TICKER ==================== -->
+<div class="ticker">
+  <div class="tick-lbl"><span class="pulse"></span> Just inspected</div>
+  <div class="tick-track">
+    <div class="tick-item"><b>Dell Latitude 5420</b><span class="gr gr-ap">A+</span><span class="sc">94</span><span>Noida · 2 min ago</span></div>
+    <div class="tick-item"><b>ThinkPad T14 Gen 2</b><span class="gr gr-a">A</span><span class="sc">88</span><span>Gurugram · 9 min ago</span></div>
+    <div class="tick-item"><b>HP EliteBook 840 G8</b><span class="gr gr-a">A</span><span class="sc">86</span><span>Faridabad · 14 min ago</span></div>
+    <div class="tick-item"><b>Latitude 3420</b><span class="gr gr-b">B</span><span class="sc">78</span><span>Delhi · 22 min ago</span></div>
+    <div class="tick-item"><b>MacBook Air M1</b><span class="gr gr-ap">A+</span><span class="sc">96</span><span>Noida · 31 min ago</span></div>
+    <div class="tick-item"><b>Precision 3560</b><span class="gr gr-a">A</span><span class="sc">89</span><span>Ghaziabad · 38 min ago</span></div>
+    <!-- duplicated for seamless loop -->
+    <div class="tick-item"><b>Dell Latitude 5420</b><span class="gr gr-ap">A+</span><span class="sc">94</span><span>Noida · 2 min ago</span></div>
+    <div class="tick-item"><b>ThinkPad T14 Gen 2</b><span class="gr gr-a">A</span><span class="sc">88</span><span>Gurugram · 9 min ago</span></div>
+    <div class="tick-item"><b>HP EliteBook 840 G8</b><span class="gr gr-a">A</span><span class="sc">86</span><span>Faridabad · 14 min ago</span></div>
+    <div class="tick-item"><b>Latitude 3420</b><span class="gr gr-b">B</span><span class="sc">78</span><span>Delhi · 22 min ago</span></div>
+    <div class="tick-item"><b>MacBook Air M1</b><span class="gr gr-ap">A+</span><span class="sc">96</span><span>Noida · 31 min ago</span></div>
+    <div class="tick-item"><b>Precision 3560</b><span class="gr gr-a">A</span><span class="sc">89</span><span>Ghaziabad · 38 min ago</span></div>
+  </div>
+</div>
+
+<!-- ==================== PROCESS ==================== -->
+<section class="light" id="process">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow eyebrow-dark">The process</span>
+      <h2>Five stages. You can watch every one of them.</h2>
+      <p>Most refurbished sellers ask you to trust a photograph. We replace trust with a record — and the record follows the machine from the seller's shelf to your desk.</p>
+    </div>
+
+    <div class="track">
+      <div class="steps" id="steps">
+        <button class="step on" data-p="0">
+          <span class="no">01</span>
+          <span>
+            <span class="tt">Seller lists the stock</span>
+            <span class="dd">They pick the exact model from our catalog, declare a grade, and enter every serial number. No descriptions, no photographs of their own.</span>
+            <span class="who">Seller · 4 minutes</span>
+          </span>
+          <span class="bar"><i></i></span>
+        </button>
+        <button class="step" data-p="1">
+          <span class="no">02</span>
+          <span>
+            <span class="tt">Our technician visits them</span>
+            <span class="dd">Not a hub. Their warehouse. Each machine is booted with a licensed diagnostic tool that reads what is actually inside.</span>
+            <span class="who">gorefurbo · 12–18 min per unit</span>
+          </span>
+          <span class="bar"><i></i></span>
+        </button>
+        <button class="step" data-p="2">
+          <span class="no">03</span>
+          <span>
+            <span class="tt">Graded, wiped and sealed</span>
+            <span class="dd">Six photographs under fixed lighting, a data wipe to NIST standard, and a numbered tamper seal across the lid.</span>
+            <span class="who">gorefurbo · same visit</span>
+          </span>
+          <span class="bar"><i></i></span>
+        </button>
+        <button class="step" data-p="3">
+          <span class="no">04</span>
+          <span>
+            <span class="tt">You compare and order</span>
+            <span class="dd">Every seller holding that machine, side by side, at the landed price for your PIN code. The report is downloadable before you pay.</span>
+            <span class="who">You · minutes</span>
+          </span>
+          <span class="bar"><i></i></span>
+        </button>
+        <button class="step" data-p="4">
+          <span class="no">05</span>
+          <span>
+            <span class="tt">Delivered with the seal intact</span>
+            <span class="dd">Your IT person scans the seal against the invoice before signing. Then 48 hours to reject anything that doesn't match.</span>
+            <span class="who">You · 2–4 days</span>
+          </span>
+          <span class="bar"><i></i></span>
+        </button>
+      </div>
+
+      <div class="stage" id="stage">
+
+        <!-- PANE 1 -->
+        <div class="pane on">
+          <div class="pane-h">
+            <span class="chip">Seller portal</span>
+            <div><h4>Listing a batch</h4><p class="pd">Specs come from our catalog, so two sellers are always comparable.</p></div>
+            <span class="tm">04:12</span>
+          </div>
+          <div class="mock">
+            <div class="mini-lbl">Selected from catalog</div>
+            <div style="font-family:var(--disp);font-size:19px;font-weight:600;letter-spacing:-.03em;margin-bottom:4px">Dell Latitude 5420</div>
+            <div style="font-size:13px;color:var(--t-mid)">i5-1145G7 · 16 GB DDR4 · 512 GB NVMe · 14" FHD IPS</div>
+          </div>
+          <div class="mock">
+            <div class="mini-lbl">Declared by the seller</div>
+            <div class="mock-row"><span class="k">Cosmetic grade</span><span class="v">A+ — near new</span><span class="st st-wa">To be verified</span></div>
+            <div class="mock-row"><span class="k">Battery</span><span class="v">90% and above</span><span class="st st-wa">To be verified</span></div>
+            <div class="mock-row"><span class="k">Parts</span><span class="v">All original</span><span class="st st-wa">To be verified</span></div>
+          </div>
+          <div class="mock" style="margin-bottom:0">
+            <div class="mini-lbl">Serial numbers entered · 40 of 40</div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap">
+              <span style="font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid var(--line-d);color:var(--t-mid)">DL5420-7HX9Q2</span>
+              <span style="font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid var(--line-d);color:var(--t-mid)">DL5420-7HX9R8</span>
+              <span style="font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid var(--line-d);color:var(--t-mid)">DL5420-7HXA14</span>
+              <span style="font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;background:rgba(23,175,197,.1);border:1px solid rgba(23,175,197,.3);color:var(--cyan-lt)">+37 more</span>
+            </div>
+          </div>
+          <div style="margin-top:16px;padding:13px 16px;border-radius:11px;background:rgba(254,157,0,.09);border:1px solid rgba(254,157,0,.26);font-size:13px;color:var(--orange-lt)">
+            <b>This listing is not live yet.</b> It has requested an inspection.
+          </div>
+        </div>
+
+        <!-- PANE 2 -->
+        <div class="pane">
+          <div class="pane-h">
+            <span class="chip">On site · Sector 63, Noida</span>
+            <div><h4>Declared against found</h4><p class="pd">The tool reads firmware, not stickers.</p></div>
+            <span class="tm">14:38</span>
+          </div>
+          <div class="mock">
+            <div class="mock-row"><span class="k">Serial (firmware)</span><span class="v">DL5420-7HX9Q2</span><span class="st st-ok">MATCH</span></div>
+            <div class="mock-row"><span class="k">Processor</span><span class="v">i5-1145G7</span><span class="st st-ok">MATCH</span></div>
+            <div class="mock-row"><span class="k">Memory</span><span class="v">16 GB · 1 module</span><span class="st st-ok">MATCH</span></div>
+            <div class="mock-row"><span class="k">Storage</span><span class="v">512 GB NVMe · SMART OK</span><span class="st st-ok">MATCH</span></div>
+            <div class="mock-row"><span class="k">Battery</span><span class="v">91% · 148 cycles</span><span class="st st-ok">MATCH</span></div>
+            <div class="mock-row"><span class="k">Power-on hours</span><span class="v">4,210 h</span><span class="st st-ok">NORMAL</span></div>
+            <div class="mock-row"><span class="k">BIOS / MDM lock</span><span class="v">None detected</span><span class="st st-ok">CLEAR</span></div>
+            <div class="mock-row"><span class="k">Thermals under load</span><span class="v">84°C peak · fan audible</span><span class="st st-wa">NOTED</span></div>
+          </div>
+          <div style="padding:14px 16px;border-radius:11px;background:rgba(240,96,61,.09);border:1px solid rgba(240,96,61,.24);font-size:13px;color:#FF9078">
+            <b>If a reading disagrees</b>, the grade is corrected here — before any buyer has seen it. Under a hub model this would have become a paused order and an unhappy customer.
+          </div>
+        </div>
+
+        <!-- PANE 3 -->
+        <div class="pane">
+          <div class="pane-h">
+            <span class="chip">Sealed &amp; certified</span>
+            <div><h4>The unit passport</h4><p class="pd">Generated per machine, downloadable forever.</p></div>
+            <span class="tm">17:02</span>
+          </div>
+          <div style="display:flex;gap:22px;align-items:center;margin-bottom:18px">
+            <div class="ring ring-xl">
+              <svg viewBox="0 0 104 104"><circle cx="52" cy="52" r="42" stroke="rgba(255,255,255,.09)" stroke-width="10" fill="none"/><circle cx="52" cy="52" r="42" stroke="#17AFC5" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="16"/></svg>
+              <span class="val" style="color:var(--t-hi)">94</span>
+            </div>
+            <div>
+              <div style="font-family:var(--disp);font-size:22px;font-weight:600;letter-spacing:-.03em;margin-bottom:5px">Grade A+ confirmed</div>
+              <div style="font-size:13px;color:var(--t-mid);margin-bottom:9px">12 areas scored · 1 note recorded</div>
+              <span style="display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;padding:6px 12px;border-radius:100px;background:rgba(254,157,0,.14);border:1px solid rgba(254,157,0,.35);color:var(--orange-lt)">SEAL GF-8841-QK</span>
+            </div>
+          </div>
+          <div class="mock">
+            <div class="mini-lbl">Six photographs · fixed lighting rig</div>
+            <div class="photostrip"><i></i><i></i><i></i><i class="hl"></i><i></i><i></i></div>
+            <div style="font-size:11.5px;color:var(--t-low);margin-top:9px">Frame 4 is the worst defect found. Serial and timestamp are burned into each image.</div>
+          </div>
+          <div class="mock" style="margin-bottom:0">
+            <div class="mock-row"><span class="k">Data wipe</span><span class="v">NIST 800-88 Purge</span><span class="st st-ok">VERIFIED</span></div>
+            <div class="mock-row"><span class="k">Report valid until</span><span class="v">09 Nov 2026</span><span class="st st-ok">90 DAYS</span></div>
+          </div>
+        </div>
+
+        <!-- PANE 4 -->
+        <div class="pane">
+          <div class="pane-h">
+            <span class="chip">Buyer view</span>
+            <div><h4>Every seller, one screen</h4><p class="pd">Landed price includes GST and freight to your PIN.</p></div>
+            <span class="tm">Live</span>
+          </div>
+          <div class="offer-row best">
+            <span class="gr gr-ap" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px">A+</span>
+            <div><div class="nm">Nexus IT Recyclers</div><div class="mt">4.6★ Gold · 40 units · score 94</div></div>
+            <div style="text-align:right"><div class="pr">₹30,400</div><div class="mt">landed</div></div>
+            <span style="font-size:11.5px;color:var(--cyan-lt);font-family:var(--mono)">48 h</span>
+          </div>
+          <div class="offer-row">
+            <span class="gr gr-ap" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px">A+</span>
+            <div><div class="nm">gorefurbo own stock</div><div class="mt">Verified · 120 units · score 94</div></div>
+            <div style="text-align:right"><div class="pr">₹32,100</div><div class="mt">landed</div></div>
+            <span style="font-size:11.5px;color:var(--t-low);font-family:var(--mono)">24 h</span>
+          </div>
+          <div class="offer-row">
+            <span class="gr gr-a" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px">A</span>
+            <div><div class="nm">Orbit Systems</div><div class="mt">4.1★ Silver · 210 units · score 86</div></div>
+            <div style="text-align:right"><div class="pr">₹28,600</div><div class="mt">landed</div></div>
+            <span style="font-size:11.5px;color:var(--t-low);font-family:var(--mono)">48 h</span>
+          </div>
+          <div class="offer-row" style="margin-bottom:0">
+            <span class="gr gr-b" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px">B</span>
+            <div><div class="nm">Southline Traders</div><div class="mt">3.8★ Bronze · 65 units · score 78</div></div>
+            <div style="text-align:right"><div class="pr">₹25,300</div><div class="mt">landed</div></div>
+            <span style="font-size:11.5px;color:var(--t-low);font-family:var(--mono)">72 h</span>
+          </div>
+          <div style="margin-top:16px;padding:13px 16px;border-radius:11px;background:rgba(23,175,197,.08);border:1px solid rgba(23,175,197,.24);font-size:13px;color:var(--cyan-lt)">
+            The inspection report for each serial is downloadable <b>before</b> you pay.
+          </div>
+        </div>
+
+        <!-- PANE 5 -->
+        <div class="pane">
+          <div class="pane-h">
+            <span class="chip">At your door</span>
+            <div><h4>Checked before you sign</h4><p class="pd">The seal number is printed on your invoice.</p></div>
+            <span class="tm">Day 3</span>
+          </div>
+          <div class="mock">
+            <div class="mock-row"><span class="k">Seal scanned</span><span class="v">GF-8841-QK</span><span class="st st-ok">INTACT</span></div>
+            <div class="mock-row"><span class="k">Serial on invoice</span><span class="v">DL5420-7HX9Q2</span><span class="st st-ok">MATCH</span></div>
+            <div class="mock-row"><span class="k">Delivery OTP</span><span class="v">•••••• verified</span><span class="st st-ok">SIGNED</span></div>
+            <div class="mock-row"><span class="k">Warranty starts</span><span class="v">Today · 6 months</span><span class="st st-ok">ACTIVE</span></div>
+          </div>
+          <div class="mock" style="margin-bottom:0">
+            <div class="mini-lbl">In the box</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;gap:11px;align-items:center;font-size:13.5px;color:var(--t-mid)"><span style="color:var(--good)">✓</span> Inspection report, per serial number</div>
+              <div style="display:flex;gap:11px;align-items:center;font-size:13.5px;color:var(--t-mid)"><span style="color:var(--good)">✓</span> Data wipe certificate for your IT audit</div>
+              <div style="display:flex;gap:11px;align-items:center;font-size:13.5px;color:var(--t-mid)"><span style="color:var(--good)">✓</span> GST invoice listing every serial</div>
+              <div style="display:flex;gap:11px;align-items:center;font-size:13.5px;color:var(--t-mid)"><span style="color:var(--good)">✓</span> 65 W charger, tested</div>
+            </div>
+          </div>
+          <div style="margin-top:16px;padding:13px 16px;border-radius:11px;background:rgba(34,192,138,.08);border:1px solid rgba(34,192,138,.24);font-size:13px;color:#5EE0AE">
+            <b>48 hours from now</b> to open every carton and reject anything that doesn't match. We collect it back at our cost.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== GRADES ==================== -->
+<section class="light light-2" id="grades">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow eyebrow-dark">The vocabulary</span>
+      <h2>Three grades. That is the entire language.</h2>
+      <p>Sellers cannot write their own condition description. They choose a grade, and our technician confirms or corrects it before the listing goes live. Cosmetic grade is never mixed with battery, warranty or working condition — those are always shown separately.</p>
+    </div>
+    <div class="grid g3">
+      <div class="gcard">
+        <span class="swatch" style="background:#17AFC5"></span>
+        <span class="gtag gtag-ap"><i></i>A+</span>
+        <h3 style="margin-bottom:9px">Near-new</h3>
+        <p>No meaningful marks at arm's length. No dents, hinges tight, display clean. There is genuinely nothing to disclose, which is why catalog photographs are enough.</p>
+      </div>
+      <div class="gcard">
+        <span class="swatch" style="background:#2C6E8A"></span>
+        <span class="gtag gtag-a"><i></i>A</span>
+        <h3 style="margin-bottom:9px">Excellent</h3>
+        <p>Minor hairline scratches or very light signs of use. No major dents, no display spots. What a well-kept two-year-old company laptop looks like.</p>
+      </div>
+      <div class="gcard">
+        <span class="swatch" style="background:#FE9D00"></span>
+        <span class="gtag gtag-b"><i></i>B</span>
+        <h3 style="margin-bottom:9px">Good, with visible use</h3>
+        <p>Scratches and scuffs you will see; minor dents allowed. Nothing cracked, nothing missing. <b style="color:var(--t-dark)">Four real photographs are mandatory</b>, including a close-up of the worst defect.</p>
+      </div>
+    </div>
+    <div style="margin-top:26px;padding:20px 26px;border-radius:var(--r);background:var(--paper);border:1px solid var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <span style="width:38px;height:38px;border-radius:11px;background:rgba(240,96,61,.1);display:grid;place-items:center;flex-shrink:0">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#D8452B" stroke-width="2" style="width:17px;height:17px"><circle cx="10" cy="10" r="7.5"/><path d="M7 7l6 6M13 7l-6 6"/></svg>
+      </span>
+      <div><b>Anything worse than B is not sold here.</b> <span style="color:var(--t-dark-mid)">If a machine inspects below grade B it goes back to the seller. It never enters your order, and there is no override for it anywhere in our system.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== STOCK ==================== -->
+<section class="light" id="stock">
+  <div class="wrap">
+    <div class="row between row--wrap" style="margin-bottom:38px;align-items:flex-end;gap:18px">
+      <div class="sec-head" style="margin-bottom:0">
+        <span class="eyebrow eyebrow-dark">Sealed this week</span>
+        <h2>Ready to ship today</h2>
+      </div>
+      <a class="btn btn-line" href="#">Browse all 12,400 →</a>
+    </div>
+
+    <div class="grid g4">
+      <a class="pcard" href="#">
+        <div class="pthumb">
+          <svg viewBox="0 0 200 130" fill="none"><rect x="34" y="14" width="132" height="88" rx="7" fill="#2A3854"/><rect x="42" y="22" width="116" height="72" rx="3" fill="#131B2C"/><path d="M16 106h168l14 18H2z" fill="#1C2740"/><rect x="86" y="111" width="28" height="3.5" rx="1.7" fill="#4A5A7C"/></svg>
+          <span class="tl" style="background:rgba(23,175,197,.13);color:#0D7D8F">A+</span>
+          <span class="tr" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 10px;border-radius:100px;background:#0C1220;color:#4FD3E6">94</span>
+        </div>
+        <div style="padding:18px">
+          <h4 style="margin-bottom:5px">Dell Latitude 5420</h4>
+          <div style="font-size:12.5px;color:var(--t-dark-mid);margin-bottom:16px">i5-1145G7 · 16 GB · 512 GB SSD · 14"</div>
+          <div class="row between" style="padding-top:14px;border-top:1px solid var(--line-2)">
+            <div><div style="font-size:11.5px;color:var(--t-dark-mid)">Landed, Delhi</div><div class="num" style="font-size:19px">₹32,100</div></div>
+            <div style="font-size:11.5px;color:var(--t-dark-mid);text-align:right">Battery 91%<br>120 units</div>
+          </div>
+        </div>
+      </a>
+
+      <a class="pcard" href="#">
+        <div class="pthumb">
+          <svg viewBox="0 0 200 130" fill="none"><rect x="34" y="14" width="132" height="88" rx="7" fill="#243050"/><rect x="42" y="22" width="116" height="72" rx="3" fill="#101728"/><path d="M16 106h168l14 18H2z" fill="#1C2740"/><rect x="86" y="111" width="28" height="3.5" rx="1.7" fill="#4A5A7C"/></svg>
+          <span class="tl" style="background:rgba(44,110,138,.13);color:#2C6E8A">A</span>
+          <span class="tr" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 10px;border-radius:100px;background:#0C1220;color:#4FD3E6">88</span>
+        </div>
+        <div style="padding:18px">
+          <h4 style="margin-bottom:5px">Lenovo ThinkPad T14</h4>
+          <div style="font-size:12.5px;color:var(--t-dark-mid);margin-bottom:16px">i7-1165G7 · 16 GB · 512 GB SSD · 14"</div>
+          <div class="row between" style="padding-top:14px;border-top:1px solid var(--line-2)">
+            <div><div style="font-size:11.5px;color:var(--t-dark-mid)">Landed, Delhi</div><div class="num" style="font-size:19px">₹38,400</div></div>
+            <div style="font-size:11.5px;color:var(--t-dark-mid);text-align:right">Battery 86%<br>88 units</div>
+          </div>
+        </div>
+      </a>
+
+      <a class="pcard" href="#">
+        <div class="pthumb">
+          <svg viewBox="0 0 200 130" fill="none"><rect x="34" y="14" width="132" height="88" rx="7" fill="#31405F"/><rect x="42" y="22" width="116" height="72" rx="3" fill="#151E32"/><path d="M16 106h168l14 18H2z" fill="#1C2740"/><rect x="86" y="111" width="28" height="3.5" rx="1.7" fill="#4A5A7C"/></svg>
+          <span class="tl" style="background:rgba(44,110,138,.13);color:#2C6E8A">A</span>
+          <span class="tr" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 10px;border-radius:100px;background:#0C1220;color:#4FD3E6">86</span>
+        </div>
+        <div style="padding:18px">
+          <h4 style="margin-bottom:5px">HP EliteBook 840 G8</h4>
+          <div style="font-size:12.5px;color:var(--t-dark-mid);margin-bottom:16px">i5-1135G7 · 8 GB · 256 GB SSD · 14"</div>
+          <div class="row between" style="padding-top:14px;border-top:1px solid var(--line-2)">
+            <div><div style="font-size:11.5px;color:var(--t-dark-mid)">Landed, Delhi</div><div class="num" style="font-size:19px">₹28,600</div></div>
+            <div style="font-size:11.5px;color:var(--t-dark-mid);text-align:right">Battery 84%<br>210 units</div>
+          </div>
+        </div>
+      </a>
+
+      <a class="pcard" href="#">
+        <div class="pthumb">
+          <svg viewBox="0 0 200 130" fill="none"><rect x="34" y="14" width="132" height="88" rx="7" fill="#3A4A6B"/><rect x="42" y="22" width="116" height="72" rx="3" fill="#1A2338"/><path d="M16 106h168l14 18H2z" fill="#1C2740"/><rect x="86" y="111" width="28" height="3.5" rx="1.7" fill="#4A5A7C"/></svg>
+          <span class="tl" style="background:rgba(254,157,0,.14);color:#D07C00">B</span>
+          <span class="tr" style="font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 10px;border-radius:100px;background:#0C1220;color:#FFB43D">78</span>
+        </div>
+        <div style="padding:18px">
+          <h4 style="margin-bottom:5px">Dell Latitude 3420</h4>
+          <div style="font-size:12.5px;color:var(--t-dark-mid);margin-bottom:16px">i3-1115G4 · 8 GB · 256 GB SSD · 14"</div>
+          <div class="row between" style="padding-top:14px;border-top:1px solid var(--line-2)">
+            <div><div style="font-size:11.5px;color:var(--t-dark-mid)">Landed, Delhi</div><div class="num" style="font-size:19px">₹18,900</div></div>
+            <div style="font-size:11.5px;color:var(--t-dark-mid);text-align:right">Battery 76%<br>65 units</div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== VS ==================== -->
+<section class="dark-sec">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Why this exists</span>
+      <h2>Buying refurbished should not feel like a gamble.</h2>
+      <p class="lede">Here is the honest difference between how the market works today and how we made it work.</p>
+    </div>
+    <div class="vs">
+      <div class="vs-col them">
+        <h4 style="color:var(--t-mid)">
+          <span style="width:26px;height:26px;border-radius:8px;background:rgba(240,96,61,.14);display:grid;place-items:center;font-size:13px;color:var(--bad)">✕</span>
+          Buying anywhere else
+        </h4>
+        <div class="vs-item"><span class="ic x">✕</span><span>"Excellent condition" — a word chosen by the person selling it to you</span></div>
+        <div class="vs-item"><span class="ic x">✕</span><span>Battery health discovered on the day it arrives</span></div>
+        <div class="vs-item"><span class="ic x">✕</span><span>Stock photographs that may not be the machine you get</span></div>
+        <div class="vs-item"><span class="ic x">✕</span><span>No way to know if the previous owner still controls it</span></div>
+        <div class="vs-item"><span class="ic x">✕</span><span>Serial numbers absent from the invoice, so your asset register never matches</span></div>
+        <div class="vs-item"><span class="ic x">✕</span><span>A dispute becomes your word against theirs</span></div>
+      </div>
+      <div class="vs-col us">
+        <h4>
+          <span style="width:26px;height:26px;border-radius:8px;background:rgba(23,175,197,.18);display:grid;place-items:center;font-size:13px;color:var(--cyan)">✓</span>
+          Buying on gorefurbo
+        </h4>
+        <div class="vs-item"><span class="ic c">✓</span><span>A grade confirmed by our technician, with the photographs that justified it</span></div>
+        <div class="vs-item"><span class="ic c">✓</span><span>Battery measured to the percent, with the cycle count, before you order</span></div>
+        <div class="vs-item"><span class="ic c">✓</span><span>Six photographs of the actual machine, taken under fixed lighting</span></div>
+        <div class="vs-item"><span class="ic c">✓</span><span>BIOS, MDM and tracking locks checked — a locked machine is an automatic rejection</span></div>
+        <div class="vs-item"><span class="ic c">✓</span><span>Every serial number printed on your GST invoice</span></div>
+        <div class="vs-item"><span class="ic c">✓</span><span>A numbered seal, verified at pickup and again at your door</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== BULK + SELL ==================== -->
+<section class="light" id="bulk">
+  <div class="wrap">
+    <div class="cta2">
+      <div class="ctacard buy">
+        <span class="eyebrow eyebrow-dark">For procurement teams</span>
+        <h3>Buy 200 laptops without buying 200 surprises</h3>
+        <ul>
+          <li><span class="tk">✓</span> Landed price with GST and freight, before you commit</li>
+          <li><span class="tk">✓</span> Spend limits and approval routing for your team</li>
+          <li><span class="tk">✓</span> Data wipe certificate for every machine, for your IT audit</li>
+          <li><span class="tk">✓</span> Post one bulk requirement — every seller holding it quotes you</li>
+          <li><span class="tk">✓</span> Credit terms available after underwriting</li>
+        </ul>
+        <div class="row row--wrap" style="gap:11px">
+          <a class="btn btn-primary" href="customer-register.html">Create a buyer account</a>
+          <a class="btn btn-line" href="#">Post a bulk requirement</a>
+        </div>
+      </div>
+
+      <div class="ctacard sell" id="sell">
+        <span class="blob"></span>
+        <span class="eyebrow">For refurbishers and dealers</span>
+        <h3>List your stock. We inspect, invoice and deliver.</h3>
+        <ul>
+          <li><span class="tk">✓</span> Our technician comes to your warehouse — free above 25 units</li>
+          <li><span class="tk">✓</span> Net payout shown before you publish a price</li>
+          <li><span class="tk">✓</span> We collect, invoice and deliver. You never pack a courier box</li>
+          <li><span class="tk">✓</span> Weekly settlement, faster as your tier rises</li>
+          <li><span class="tk">✓</span> Approval decision within 48 working hours</li>
+        </ul>
+        <div class="row row--wrap" style="gap:11px">
+          <a class="btn btn-primary" href="seller-register.html">Start selling</a>
+          <a class="btn btn-glass" href="seller-login.html">Seller sign in</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="grid g4">
+      <div>
+        <a class="logo logo-lg" href="#" style="margin-bottom:18px">
+          <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><g stroke-width="13" fill="none" stroke-linecap="round"><path d="M32 8.5 A23.5 23.5 0 0 1 52.4 20.3" stroke="#17AFC5"/><path d="M52.4 20.3 A23.5 23.5 0 0 1 32 55.5" stroke="#FE9D00"/><path d="M32 55.5 A23.5 23.5 0 0 1 32 8.5" stroke="#5B5B5B"/></g></svg>
+          <span class="word"><span class="go">go</span><span class="rf">refurbo</span></span>
+        </a>
+        <p style="max-width:32ch;font-size:14px;color:var(--t-mid)">India's B2B marketplace for inspected refurbished laptops. Opened, tested, graded and sealed — before you ever see it.</p>
+        <p class="mono" style="font-size:12px;margin-top:16px;color:var(--t-low)">Gurugram, Haryana<br>GSTIN 06AABCG1234A1Z5</p>
+      </div>
+      <div><h4>Buy</h4>
+        <a href="#stock">Browse laptops</a><a href="#grades">Understand grades</a>
+        <a href="customer-register.html">Create buyer account</a><a href="#bulk">Bulk requirement</a><a href="#">Track an order</a></div>
+      <div><h4>Sell</h4>
+        <a href="seller-register.html">Become a seller</a><a href="seller-login.html">Seller sign in</a>
+        <a href="#">Grading policy</a><a href="#">Seller fees</a><a href="#">Payout schedule</a></div>
+      <div><h4>Trust</h4>
+        <a href="#process">How inspection works</a><a href="#">Sample inspection report</a><a href="#">Data wipe standard</a>
+        <a href="#">Warranty &amp; returns</a><a href="#">Privacy &amp; DPDP</a><a href="#">Grievance officer</a></div>
+    </div>
+    <div class="fnote">
+      <span>© 2026 gorefurbo · All rights reserved</span>
+      <span class="mono">Homepage concept · Midnight Lab · v2.0</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
+  var panes = Array.prototype.slice.call(document.querySelectorAll('.pane'));
+  var stage = document.getElementById('stage');
+  var i = 0, timer = null;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function go(n){
+    i = n;
+    steps.forEach(function(s, k){
+      s.classList.toggle('on', k === n);
+      s.classList.toggle('done', k < n);
+      // restart the progress animation
+      var bar = s.querySelector('.bar i');
+      if(bar){ bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = ''; }
+    });
+    panes.forEach(function(p, k){ p.classList.toggle('on', k === n); });
+  }
+  function next(){ go((i + 1) % steps.length); }
+  function start(){ if(reduce) return; stop(); timer = setInterval(next, 7000); }
+  function stop(){ if(timer){ clearInterval(timer); timer = null; } }
+
+  steps.forEach(function(s, k){
+    s.addEventListener('click', function(){ go(k); start(); });
+  });
+  if(stage){
+    stage.addEventListener('mouseenter', stop);
+    stage.addEventListener('mouseleave', start);
+  }
+
+  // only run the carousel while the section is on screen
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ e.isIntersecting ? start() : stop(); });
+    }, { threshold: 0.25 });
+    var sec = document.getElementById('process');
+    if(sec) io.observe(sec);
+  } else { start(); }
+})();
+</script>
+</body>
+</html>

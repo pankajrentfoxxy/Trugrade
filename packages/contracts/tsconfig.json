@@ -1,0 +1,4 @@
+{
+  "extends": "@trugrade/config/tsconfig/node.json",
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

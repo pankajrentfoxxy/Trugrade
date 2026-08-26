@@ -1,0 +1,42 @@
+{
+  "name": "@trugrade/config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./brand": { "types": "./dist/brand.d.ts", "default": "./dist/brand.js" },
+    "./eslint": "./eslint/index.js",
+    "./eslint/plugin": "./eslint/plugin.js",
+    "./tailwind": "./tailwind-preset.js",
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./tsconfig/next.json": "./tsconfig/next.json",
+    "./tsconfig/react-lib.json": "./tsconfig/react-lib.json"
+  },
+  "files": ["dist", "eslint", "tsconfig", "tailwind-preset.js"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "test:unit": "jest",
+    "test": "jest",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/jest": "30.0.0",
+    "@types/node": "22.19.1",
+    "@typescript-eslint/parser": "8.46.4",
+    "@typescript-eslint/rule-tester": "8.46.4",
+    "jest": "30.2.0",
+    "ts-jest": "29.4.6",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "typescript-eslint": "8.46.4",
+    "eslint": "9.39.1",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-import": "2.32.0"
+  }
+}

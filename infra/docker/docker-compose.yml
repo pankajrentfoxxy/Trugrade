@@ -1,0 +1,91 @@
+name: trugrade
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trugrade-postgres
+    environment:
+      POSTGRES_USER: trugrade
+      POSTGRES_PASSWORD: trugrade_dev
+      POSTGRES_DB: trugrade
+      # Deterministic sort order for tests; India-facing data is UTF-8 throughout.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '5442:5432'
+    volumes:
+      - trugrade-pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U trugrade -d trugrade']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: trugrade-redis
+    ports:
+      - '6389:6379'
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - trugrade-redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    container_name: trugrade-minio
+    environment:
+      MINIO_ROOT_USER: trugrade
+      MINIO_ROOT_PASSWORD: trugrade_dev
+    ports:
+      - '9010:9000'
+      - '9011:9001'
+    command: ['server', '/data', '--console-address', ':9001']
+    volumes:
+      - trugrade-miniodata:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: trugrade-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 trugrade trugrade_dev &&
+      mc mb --ignore-existing local/trugrade-dev &&
+      mc anonymous set none local/trugrade-dev &&
+      echo 'bucket trugrade-dev ready'
+      "
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: trugrade-mailpit
+    ports:
+      - '1026:1025'
+      - '8026:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  trugrade-pgdata:
+  trugrade-redisdata:
+  trugrade-miniodata:

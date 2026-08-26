@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+docs/
+*.sql
+.next
+dist
+coverage
+storybook-static

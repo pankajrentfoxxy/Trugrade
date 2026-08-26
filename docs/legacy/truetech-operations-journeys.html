@@ -1,0 +1,1447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TrueTech · Operations Journey Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0E2530; --ink2:#16323F; --ink3:#1D3D4A;
+  --paper:#EFF3F3; --surface:#fff; --rule:#D9E2E3; --rule2:#E9EFEF;
+  --muted:#5C6B72; --teal:#00A896; --teal-dk:#00655B; --teal-wash:#E4F5F2;
+  --amber:#E08B3C; --amber-dk:#8A5312; --amber-wash:#FBF0E2;
+  --red:#C1503E; --red-dk:#93331F; --red-wash:#FAEAE7;
+  --violet:#6B5B95; --violet-wash:#EDEAF3;
+  --display:"Archivo",Arial,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--display);font-weight:700;letter-spacing:-.022em;margin:0;line-height:1.14}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px}
+:focus-visible{outline:2.5px solid var(--teal);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.mast{background:var(--ink);color:#CFE0E2;padding:34px 0 0;position:relative;overflow:hidden}
+.mast::after{content:"";position:absolute;right:-100px;top:-110px;width:360px;height:360px;border-radius:50%;background:var(--teal);opacity:.09}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.17em;text-transform:uppercase;color:var(--teal);font-weight:600;margin:0 0 10px}
+.mast h1{font-size:clamp(27px,3.6vw,42px);color:#fff;max-width:21ch}
+.mast p.sub{color:#9FC3C9;max-width:76ch;margin:14px 0 0;font-size:15.5px}
+.chain{display:flex;gap:0;flex-wrap:wrap;margin:26px 0 0;position:relative;z-index:1;align-items:center}
+.chain .n{padding:9px 15px;background:var(--ink3);border:1px solid #29505C;border-radius:7px;font-size:13px;color:#D4E6E9;font-weight:600}
+.chain .n.hi{background:var(--teal);border-color:var(--teal);color:#fff}
+.chain .a{color:#4F7C86;padding:0 9px;font-size:15px}
+
+.controls{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);margin-top:30px}
+.controls .wrap{display:flex;align-items:center;gap:14px;min-height:62px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+.seg{display:flex;background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:3px;gap:3px;flex-wrap:wrap}
+.seg button{border:0;background:none;font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;color:var(--muted);transition:.15s;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.spacer{flex:1}
+.toggle{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+.toggle input{appearance:none;width:36px;height:20px;border-radius:100px;background:var(--rule);position:relative;cursor:pointer;transition:.18s;flex-shrink:0}
+.toggle input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.toggle input:checked{background:var(--teal)}
+.toggle input:checked::after{transform:translateX(16px)}
+
+.legend{display:flex;gap:22px;flex-wrap:wrap;padding:18px 0;font-size:12.5px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:7px}
+.dot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.d-ok{background:var(--teal)} .d-warn{background:var(--amber)} .d-stop{background:var(--red)}
+.d-sys{background:var(--ink)} .d-user{background:#fff;border:2px solid var(--ink)}
+
+.jhead{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:22px 24px;margin-bottom:26px}
+.jhead h2{font-size:23px;margin-bottom:8px}
+.jhead p{margin:0;color:var(--muted);max-width:80ch;font-size:14.5px}
+.jstats{display:flex;gap:30px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid var(--rule2)}
+.jstat .v{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1;color:var(--ink)}
+.jstat .l{font-size:11px;font-family:var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+.journey{padding:8px 0 70px}
+.spine{position:relative;padding-left:64px}
+.spine::before{content:"";position:absolute;left:23px;top:12px;bottom:60px;width:2px;background:linear-gradient(var(--rule) 0 72%,transparent)}
+.step{position:relative;margin-bottom:20px}
+.node{position:absolute;left:-64px;top:0;width:48px;height:48px;border-radius:12px;background:#fff;border:2px solid var(--rule);
+  display:grid;place-items:center;font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);z-index:2}
+.step[data-kind="user"] .node{border-color:var(--ink)}
+.step[data-kind="system"] .node{background:var(--ink);border-color:var(--ink);color:var(--teal)}
+.step[data-kind="decision"] .node{background:var(--teal);border-color:var(--teal);color:#fff}
+.step[data-kind="field"] .node{background:var(--violet);border-color:var(--violet);color:#fff}
+.step[data-kind="end"] .node{background:var(--teal);border-color:var(--teal);color:#fff;border-radius:50%}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;box-shadow:0 1px 3px rgba(14,37,48,.05),0 6px 18px rgba(14,37,48,.05);overflow:hidden}
+.card-head{padding:16px 20px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.card-head h3{font-size:18px}
+.card-head .sc{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--teal-dk);font-weight:600;display:block;margin-bottom:4px}
+.card-head p{margin:5px 0 0;font-size:13.5px;color:var(--muted);max-width:74ch}
+.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:4px 9px;border-radius:100px;background:var(--paper);border:1px solid var(--rule);color:var(--muted);white-space:nowrap}
+.pill-t{background:var(--teal-wash);border-color:#BFE7E0;color:var(--teal-dk)}
+.pill-v{background:var(--violet-wash);border-color:#D6CFE5;color:#4B3F70}
+
+.cols{display:grid;grid-template-columns:1.1fr 1fr;gap:1px;background:var(--rule2);border-top:1px solid var(--rule2)}
+.col{background:#fff;padding:16px 20px}
+.col h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+.fields{list-style:none;margin:0;padding:0;font-size:13.5px}
+.fields li{padding:4px 0 4px 16px;position:relative}
+.fields li::before{content:"";position:absolute;left:0;top:11px;width:6px;height:6px;border-radius:50%;background:var(--rule)}
+.fields li b{font-weight:600}
+.fields li em{font-style:normal;color:var(--muted);font-size:12.5px}
+.req{color:var(--red);font-weight:700;margin-left:2px}
+
+.branches{border-top:1px solid var(--rule2);background:#FAFCFC}
+.br{display:flex;gap:12px;padding:12px 20px;border-bottom:1px solid var(--rule2);font-size:13.5px;align-items:flex-start}
+.br:last-child{border-bottom:0}
+.br-tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:4px;flex-shrink:0;margin-top:1px;text-transform:uppercase}
+.t-ok{background:var(--teal-wash);color:var(--teal-dk)}
+.t-warn{background:var(--amber-wash);color:var(--amber-dk)}
+.t-stop{background:var(--red-wash);color:var(--red-dk)}
+.br-body b{font-weight:600}
+.br-body .then{color:var(--muted)}
+.br-body .then::before{content:"→ ";color:var(--rule)}
+
+.tables{padding:11px 20px;background:var(--ink);display:none;gap:7px;flex-wrap:wrap;align-items:center}
+body.show-tables .tables{display:flex}
+.tables .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:#6E959B;margin-right:4px}
+.tchip{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:4px;background:var(--ink3);color:#B9D2D5;border:1px solid #29505C}
+.tchip b{color:var(--teal);font-weight:600}
+.tchip.new{border-color:var(--teal)}
+.tchip.new::after{content:" NEW";font-size:8px;color:var(--teal);letter-spacing:.1em}
+
+.phase{display:flex;align-items:center;gap:14px;margin:34px 0 20px;position:relative}
+.phase::before{content:"";position:absolute;left:-41px;width:12px;height:12px;border-radius:50%;background:var(--paper);border:2px solid var(--rule)}
+.phase h2{font-size:15px;font-family:var(--mono);font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.phase .line{flex:1;height:1px;background:var(--rule)}
+
+.endcard{background:var(--ink);color:#DCE9EA;border-radius:12px;padding:24px}
+.endcard h3{color:#fff;font-size:21px;margin-bottom:8px}
+.endcard p{margin:0;color:#9FC3C9;font-size:14px;max-width:72ch}
+.grants{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.grant{font-size:12px;padding:5px 11px;border-radius:100px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#DCE9EA}
+
+.tradeoff{background:#fff;border:1px solid var(--amber);border-left-width:4px;border-radius:0 12px 12px 0;padding:22px 24px;margin:26px 0}
+.tradeoff h3{font-size:19px;margin-bottom:10px}
+.tradeoff p{margin:0 0 12px;font-size:14px;color:var(--muted);max-width:80ch}
+.tradeoff table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:14px}
+.tradeoff th{text-align:left;padding:9px 12px;background:var(--ink);color:#B9D2D5;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.tradeoff th:first-child{border-radius:7px 0 0 0} .tradeoff th:last-child{border-radius:0 7px 0 0}
+.tradeoff td{padding:11px 12px;border-bottom:1px solid var(--rule2);vertical-align:top}
+
+.summary{background:#fff;border-top:1px solid var(--rule);padding:46px 0}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:22px}
+.sbox{border:1px solid var(--rule);border-radius:11px;padding:19px}
+.sbox h4{font-size:15px;margin-bottom:8px}
+.sbox p{margin:0;font-size:13.5px;color:var(--muted)}
+.sbox .n{font-family:var(--display);font-size:30px;font-weight:800;color:var(--teal);letter-spacing:-.03em;line-height:1;margin-bottom:8px}
+
+.foot{background:var(--ink);color:#7FA6AE;padding:26px 0;font-size:12.5px}
+.foot .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.hidden{display:none!important}
+
+@media (max-width:900px){
+  .cols{grid-template-columns:1fr}
+  .spine{padding-left:52px} .spine::before{left:17px}
+  .node{left:-52px;width:36px;height:36px;font-size:13px}
+  .phase::before{left:-35px}
+  .sgrid{grid-template-columns:1fr}
+  .chain{font-size:12px}
+}
+@media print{.controls{position:static} body{background:#fff} .card,.tradeoff{break-inside:avoid;box-shadow:none}}
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <div class="wrap">
+    <p class="eyebrow">TrueTech Services Pvt. Ltd. · Operations blueprint v2.0 · QC at source</p>
+    <h1>From a listed laptop to a delivered one</h1>
+    <p class="sub">Four journeys, one continuous chain. The big change in this version: <b style="color:#fff">inspection now happens at the vendor's premises when stock is listed</b>, not at our hub after an order. That single move removes the mid-order mismatch problem entirely — and creates three new ones, which are named honestly further down.</p>
+    <div class="chain">
+      <span class="n hi">Listing</span><span class="a">→</span>
+      <span class="n hi">Field QC</span><span class="a">→</span>
+      <span class="n">Live on marketplace</span><span class="a">→</span>
+      <span class="n hi">Order</span><span class="a">→</span>
+      <span class="n hi">Dispatch</span><span class="a">→</span>
+      <span class="n">Delivered</span>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="wrap">
+    <div class="seg" role="group" aria-label="Choose journey">
+      <button data-j="listing" aria-pressed="true">1 · Listing</button>
+      <button data-j="qc" aria-pressed="false">2 · Field QC visit</button>
+      <button data-j="order" aria-pressed="false">3 · Order</button>
+      <button data-j="dispatch" aria-pressed="false">4 · Dispatch &amp; delivery</button>
+    </div>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="tblToggle"> <span>Show database tables</span></label>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="legend">
+    <span><i class="dot d-user"></i> Vendor or buyer acts</span>
+    <span><i class="dot d-sys"></i> System acts</span>
+    <span><i class="dot" style="background:#6B5B95"></i> Our person in the field</span>
+    <span><i class="dot d-ok"></i> Passes</span>
+    <span><i class="dot d-warn"></i> Flagged, a human decides</span>
+    <span><i class="dot d-stop"></i> Stops</span>
+  </div>
+</div>
+
+<!-- ==================================================== 1. LISTING -->
+<div class="wrap journey" id="jListing">
+  <div class="jhead">
+    <h2>Journey 1 · Listing stock</h2>
+    <p>A verified vendor puts laptops up for sale. The critical difference from every other marketplace: <b>submitting a listing does not make it live.</b> It creates an inspection request. Nothing reaches a buyer until our technician has physically opened each machine.</p>
+    <div class="jstats">
+      <div class="jstat"><div class="v">7</div><div class="l">Steps</div></div>
+      <div class="jstat"><div class="v">4 min</div><div class="l">Vendor effort for 40 units</div></div>
+      <div class="jstat"><div class="v">25</div><div class="l">Minimum units per visit</div></div>
+      <div class="jstat"><div class="v">0</div><div class="l">Units live before inspection</div></div>
+    </div>
+  </div>
+
+  <div class="spine">
+    <div class="phase"><h2>Part 1 · What they are selling</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">01</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Vendor portal · List a model</span>
+            <h3>They pick a machine from our catalog</h3>
+            <p>They never type a product name or a specification. They search our catalog and select an exact configuration. This is what makes two vendors comparable on one screen.</p>
+          </div>
+          <span class="pill">30 seconds</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they do</h4>
+            <ul class="fields">
+              <li><b>Search the catalog</b> <span class="req">*</span> <em>— by model, or by scanning a service tag</em></li>
+              <li><b>Pick the exact configuration</b> <span class="req">*</span> <em>— CPU, RAM, storage, screen</em></li>
+            </ul>
+            <h4 style="margin-top:16px">What we show them immediately</h4>
+            <ul class="fields">
+              <li><b>Live offers on this model</b> <em>— how many, and the lowest price by grade</em></li>
+              <li><b>30-day average sold price</b></li>
+              <li><b>Units sold last month</b> <em>— real demand, not a guess</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Why we show competitors' prices</h4>
+            <ul class="fields">
+              <li><b>Vendors price sensibly when they can see the market</b> <em>— hiding it produces a listing nobody buys and a vendor who blames us</em></li>
+              <li><b>It sets expectations before effort</b> <em>— they learn the price is wrong before entering 40 serial numbers</em></li>
+              <li><b>It is the fastest way to build trust</b> <em>— a marketplace that hides the market is not a marketplace</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Found</span><div class="br-body">The configuration exists. <span class="then">Straight to the grade declaration.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Model not in the catalog</span><div class="br-body">A machine we have never listed. <span class="then">They raise a request with brand, model, configuration and a photo. Catalog Ops creates or maps it within 24 hours and notifies them. Their draft is held, not lost.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Nearly-matching configuration</span><div class="br-body">Same model but 8 GB instead of 16 GB. <span class="then">We surface the close matches first, because the most common mistake is a vendor listing against the wrong configuration and being corrected at inspection.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Vendor not verified, or suspended</span><div class="br-body">KYC incomplete, bank unverified, or under suspension. <span class="then">Blocked at the door, naming the exact missing item with a link to fix it.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Reads / writes</span>
+          <span class="tchip">catalog.<b>sku</b></span>
+          <span class="tchip">catalog.<b>sku_request</b></span>
+          <span class="tchip">listing.<b>listing</b> (draft)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="user">
+      <div class="node">02</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 2 · Condition</span>
+            <h3>They declare the grade — and we tell them it will be checked</h3>
+            <p>The declaration is now a prediction, not a claim. Our technician will confirm or correct it within days, before any buyer sees it. That changes the vendor's incentive completely.</p>
+          </div>
+          <span class="pill">1 minute</span>
+          <span class="pill pill-t">Verified later at their site</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they declare</h4>
+            <ul class="fields">
+              <li><b>Cosmetic grade</b> <span class="req">*</span> <em>— A+, A or B. Nothing else exists.</em></li>
+              <li><b>Condition type</b> <span class="req">*</span> <em>— refurbished, like new, unboxed, used-tested</em></li>
+              <li><b>Working condition</b> <span class="req">*</span></li>
+              <li><b>Battery band</b> <span class="req">*</span> <em>— an estimate; the tool will give the exact percentage</em></li>
+              <li><b>Parts status and anything replaced</b> <span class="req">*</span></li>
+              <li><b>Repair history</b> <span class="req">*</span></li>
+              <li><b>Data wipe claim</b> <span class="req">*</span> <em>— re-performed and certified by us regardless</em></li>
+              <li><b>Where the stock came from</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What the screen tells them</h4>
+            <ul class="fields">
+              <li><b>"A technician will visit and confirm this"</b> <em>— stated plainly, at the moment they choose the grade</em></li>
+              <li><b>Their current grade accuracy</b> <em>— e.g. 98.1% across 1,204 units</em></li>
+              <li><b>What a correction costs them</b> <em>— it lowers their score and their tier, which raises their commission</em></li>
+              <li><b>Grade B needs four photographs</b> <em>— including the worst defect</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Declared</span><div class="br-body">Continue to serial numbers.</div></div>
+          <div class="br"><span class="br-tag t-warn">Declared grade is out of character</span><div class="br-body">A vendor whose baseline is 20% A+ suddenly declares 100% A+. <span class="then">Flagged before the visit, so the technician arrives knowing to look carefully. Their own capability declaration is what contradicts them.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Battery below 70% declared</span><div class="br-body">Allowed, but the listing carries a "battery replacement recommended" tag permanently. <span class="then">It cannot be hidden, and it caps the price band.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Grade C or D attempted</span><div class="br-body">Not possible. <span class="then">The database type contains exactly three values. There is no code path, no admin override, and no direct SQL statement that can create a C-grade listing.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">listing.<b>listing</b></span>
+          <span class="tchip">listing.<b>listing_image</b></span>
+          <span class="tchip">vendor.<b>vendor_sourcing_declaration</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="user">
+      <div class="node">03</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 3 · Serial numbers</span>
+            <h3>Every machine, individually identified</h3>
+            <p>Under the old hub model this was optional for small vendors. It cannot be now — a technician needs a manifest to inspect against, and a seal has to be applied to a specific machine.</p>
+          </div>
+          <span class="pill">2 minutes for 40</span>
+          <span class="pill pill-t">Now mandatory</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Three ways to enter them</h4>
+            <ul class="fields">
+              <li><b>Scan with the phone</b> <em>— the fastest route, roughly 3 seconds a machine</em></li>
+              <li><b>Upload a CSV</b> <em>— for vendors with their own inventory system</em></li>
+              <li><b>Paste a list</b> <em>— one per line</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Checked the moment they are entered</h4>
+            <ul class="fields">
+              <li><b>Format plausible for the brand</b></li>
+              <li><b>Not already live anywhere on the platform</b> <em>— nationwide, across every vendor</em></li>
+              <li><b>Not on the stolen or blocked register</b></li>
+              <li><b>Manufacturer warranty looked up</b> <em>— Dell, HP and Lenovo service-tag APIs auto-fill the remaining cover</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">All unique and clean</span><div class="br-body">40 units created, each waiting for inspection. <span class="then">The listing can now request a QC visit.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Serial already live elsewhere</span><div class="br-body">Another vendor has this exact machine listed. <span class="then">Rejected at the database level, not by application logic. Both vendors are flagged, because one of them is wrong and we need to know which.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">On the stolen register</span><div class="br-body">The serial matches a reported-stolen device. <span class="then">The unit is refused, the vendor account is frozen pending review, and the match is escalated. We do not tell them which serial triggered it.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Duplicate within their own upload</span><div class="br-body">The same serial appears twice in one CSV. <span class="then">Deduplicated with a clear count: "You entered 42 rows; 40 are unique."</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Manufacturer warranty lookup fails</span><div class="br-body">The brand has no API, or it is down. <span class="then">The field stays empty rather than guessing. The technician can read it from the machine during the visit.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">listing.<b>unit</b></span>
+          <span class="tchip">kyc.<b>blacklist_entry</b> (read)</span>
+          <span class="tchip">kyc.<b>verification_check</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 2 · Price, and the handover to inspection</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">04</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Step 4 · Price</span>
+            <h3>What they want, and what they will actually receive</h3>
+            <p>The net payout is shown before they publish. No marketplace deduction is ever discovered after the fact.</p>
+          </div>
+          <span class="pill">1 minute</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they set</h4>
+            <ul class="fields">
+              <li><b>Price per unit, excluding GST</b> <span class="req">*</span></li>
+              <li><b>Volume bands</b> <em>— e.g. 1–24, 25–49, 50+</em></li>
+              <li><b>Minimum order quantity</b></li>
+              <li><b>Warranty they offer</b> <span class="req">*</span></li>
+              <li><b>How fast they can hand over</b> <span class="req">*</span></li>
+              <li><b>Which warehouse it ships from</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What we show back, live</h4>
+            <ul class="fields">
+              <li><b>Commission at their tier</b></li>
+              <li><b>GST on the commission</b></li>
+              <li><b>Tax deducted at source</b></li>
+              <li><b>Inspection visit fee</b> <em>— or zero, if the batch is above the waiver threshold</em></li>
+              <li><b>Net per unit, and net for the whole batch</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Within the sane range</span><div class="br-body">Continue.</div></div>
+          <div class="br"><span class="br-tag t-warn">Price far above or below the market</span><div class="br-body">Beyond three times or below a third of the 30-day median. <span class="then">Held for review. It is almost always a missing or extra digit, and catching it saves a vendor from selling a ₹25,000 laptop for ₹2,500.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Overlapping volume bands</span><div class="br-body">1–50 and 25–100 both defined. <span class="then">Refused by a database constraint. Two valid prices for one quantity means one of them is wrong, and whichever the code picks will be the wrong one.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Batch is under 25 units</span><div class="br-body">Too small to justify sending a technician. <span class="then">They are offered three options: add more units, pay the ₹1,500 visit fee, or wait to be batched with another vendor nearby. Explained here, not sprung on them later.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">listing.<b>listing</b></span>
+          <span class="tchip">listing.<b>listing_tier_price</b></span>
+          <span class="tchip">listing.<b>price_history</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="system">
+      <div class="node">05</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">On submit</span>
+            <h3>The listing does not go live. It requests an inspection.</h3>
+            <p>This is the sentence that defines the whole model. A vendor pressing "Publish" is asking us to come and look, not asking us to sell.</p>
+          </div>
+          <span class="pill">Instant</span>
+          <span class="pill pill-v">Status: AWAITING_QC</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What the system does</h4>
+            <ul class="fields">
+              <li><b>Listing status becomes AWAITING_QC</b> <em>— invisible to every buyer</em></li>
+              <li><b>Every unit becomes AWAITING_QC</b> <em>— and is not sellable</em></li>
+              <li><b>A visit request is created</b> <em>— against that specific warehouse</em></li>
+              <li><b>Batching runs</b> <em>— can this join an existing visit to the same vendor, or a nearby one on the same day?</em></li>
+              <li><b>Sampling rule is applied</b> <em>— a Platinum vendor may only need 25% of the batch opened</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What the vendor sees</h4>
+            <ul class="fields">
+              <li><b>"Inspection requested"</b> <em>— with an expected date range</em></li>
+              <li><b>What to have ready</b> <em>— machines charged above 30%, chargers available, a table and a plug point</em></li>
+              <li><b>Who will come and when</b> <em>— once assigned</em></li>
+              <li><b>They can still edit the price</b> <em>— price is not what we are inspecting</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Batch is 25 units or more</span><div class="br-body">A visit is requested automatically at no charge. <span class="then">Scheduling begins.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Under the minimum</span><div class="br-body">The request waits up to 7 days for more stock, or for another vendor within 15 km to request a visit. <span class="then">If neither happens, the vendor chooses: pay the fee, or withdraw. They are told on day 5, not on day 7.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Sampling applies</span><div class="br-body">A Platinum vendor with 5,000 clean inspections behind them. <span class="then">A random 25% is opened. If a single unit fails, sampling is revoked for that vendor and the full batch is inspected — and the next batch too.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">No technician covers that area</span><div class="br-body">A vendor outside our current field network. <span class="then">Honest answer on screen: we tell them the earliest realistic date, or that we cannot serve them yet. We do not accept a listing we cannot inspect.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Vendor suspended between listing and visit</span><div class="br-body">Something surfaced in the interim. <span class="then">The visit is cancelled and the listing stays dormant. No inspection effort is spent on a vendor we may not trade with.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">qc.<b>qc_visit</b></span>
+          <span class="tchip new">qc.<b>qc_visit_unit</b></span>
+          <span class="tchip new">qc.<b>qc_sampling_rule</b> (read)</span>
+          <span class="tchip">listing.<b>listing</b> (AWAITING_QC)</span>
+          <span class="tchip">listing.<b>unit</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="decision">
+      <div class="node">06</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">After the visit</span>
+            <h3>The listing goes live — with only the units that passed</h3>
+            <p>A batch of 40 rarely becomes a listing of 40. What buyers see is the surviving set, at the grade our technician confirmed, not the grade that was claimed.</p>
+          </div>
+          <span class="pill">Same day as the visit</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>A typical outcome for 40 units</h4>
+            <ul class="fields">
+              <li><b>34 pass at the declared grade</b> <em>— go live immediately</em></li>
+              <li><b>4 pass at a corrected grade</b> <em>— A+ declared, A confirmed</em></li>
+              <li><b>1 fails outright</b> <em>— BIOS password set</em></li>
+              <li><b>1 was not physically present</b> <em>— vendor could not produce it</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What happens to each group</h4>
+            <ul class="fields">
+              <li><b>Passed</b> <em>— sealed, sellable, live</em></li>
+              <li><b>Corrected</b> <em>— moved to a second listing at the confirmed grade, with a suggested price. The vendor has 48 hours to accept or withdraw; silence accepts.</em></li>
+              <li><b>Failed</b> <em>— cannot be listed. Reason given in plain terms.</em></li>
+              <li><b>Absent</b> <em>— removed from the batch and counted against the vendor's reliability</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Most units pass</span><div class="br-body">Listing becomes ACTIVE with the passing units. <span class="then">Buyers can see it within minutes of the technician finishing.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Some units downgraded</span><div class="br-body">A second listing is created automatically at the confirmed grade. <span class="then">The vendor is not asked to re-enter anything — serials, photos and specifications carry across. They only decide the price.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Vendor disputes a correction</span><div class="br-body">They believe the machine is A+, not A. <span class="then">The bench photographs and the tool report are attached to the dispute. A second technician re-checks if the vendor is willing to pay for the re-visit, refunded if they turn out to be right.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Most of the batch fails</span><div class="br-body">More than 30% of a batch rejected. <span class="then">The whole listing is held, not partially published. The vendor's account goes to review, because a systematic problem is not a listing problem.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Nothing sells for 90 days</span><div class="br-body">The inspection expires. <span class="then">Units become unsellable automatically and a re-visit is requested. We warn 14 days ahead so the vendor can reprice rather than lose the stock.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">listing.<b>grade_correction</b></span>
+          <span class="tchip">listing.<b>listing</b> (ACTIVE)</span>
+          <span class="tchip">listing.<b>unit</b> (is_sellable)</span>
+          <span class="tchip new">qc.<b>qc_seal</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="end">
+      <div class="node">✓</div>
+      <div class="endcard">
+        <h3>Live — and every unit behind it has been opened by our technician</h3>
+        <p>A buyer browsing this listing is not reading a vendor's opinion. They are reading a diagnostic report, a confirmed grade, a measured battery percentage and a sealed machine with a number on it.</p>
+        <div class="grants">
+          <span class="grant">Grade confirmed, not claimed</span>
+          <span class="grant">Battery measured to the percent</span>
+          <span class="grant">Data wiped and certified</span>
+          <span class="grant">Sealed with a numbered tag</span>
+          <span class="grant">Valid for 90 days</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================== 2. QC VISIT -->
+<div class="wrap journey hidden" id="jQc">
+  <div class="jhead">
+    <h2>Journey 2 · The field inspection visit</h2>
+    <p>Our technician travels to the vendor's warehouse with a laptop, a licensed diagnostic tool and a roll of numbered seals. Each machine is booted, scanned, photographed, wiped and sealed. This is the most operationally expensive thing we do, and it is the entire product.</p>
+    <div class="jstats">
+      <div class="jstat"><div class="v">11</div><div class="l">Steps</div></div>
+      <div class="jstat"><div class="v">12–18 min</div><div class="l">Per machine</div></div>
+      <div class="jstat"><div class="v">40</div><div class="l">Units per technician-day</div></div>
+      <div class="jstat"><div class="v">3</div><div class="l">Sites per day maximum</div></div>
+      <div class="jstat"><div class="v">5%</div><div class="l">Audited by a second technician</div></div>
+    </div>
+  </div>
+
+  <div class="spine">
+    <div class="phase"><h2>Part 1 · Getting a technician there</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="system">
+      <div class="node">01</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Scheduling engine</span>
+            <h3>Matching a technician, a tool seat and a warehouse that is open</h3>
+            <p>Four constraints have to line up, and the third one is the one people forget: our diagnostic tool licence has a fixed number of concurrent seats.</p>
+          </div>
+          <span class="pill">Runs hourly</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What has to align</h4>
+            <ul class="fields">
+              <li><b>A technician covering that zone</b> <em>— and certified on the required tool</em></li>
+              <li><b>Enough hours in their day</b> <em>— 40 units at 15 minutes is 10 hours; that is two days, not one</em></li>
+              <li><b>A free tool licence seat</b> <em>— we pay for a fixed number of concurrent scans</em></li>
+              <li><b>The warehouse is actually open</b> <em>— from the hours and holidays they gave us at onboarding</em></li>
+              <li><b>Travel time between stops</b> <em>— maximum three sites a day</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>How we keep it economic</h4>
+            <ul class="fields">
+              <li><b>Batch by vendor</b> <em>— several listings from one vendor become one visit</em></li>
+              <li><b>Batch by geography</b> <em>— two vendors within 15 km share a route</em></li>
+              <li><b>Weight by value</b> <em>— a 200-unit request outranks a 25-unit one</em></li>
+              <li><b>Prefer expiring stock</b> <em>— re-inspections that would otherwise kill live listings</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Slot found</span><div class="br-body">Technician assigned, vendor notified with a date and a two-hour window. <span class="then">A reminder goes out the evening before.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">No technician for 5 days</span><div class="br-body">Demand exceeds field capacity. <span class="then">The vendor is given the real date, not an optimistic one. Ops sees a capacity alert, which is how we know when to hire.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">All tool seats in use</span><div class="br-body">Every licence is occupied that day. <span class="then">The visit slips by a day. If this recurs, the licence count is the bottleneck and finance is told, with the number.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Warehouse closed on the proposed day</span><div class="br-body">A regional festival we hold in their holiday calendar. <span class="then">Skipped automatically. This is exactly why we collected holidays at onboarding.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Vendor asks to reschedule</span><div class="br-body">Allowed twice, free. <span class="then">A third reschedule carries the visit fee, because a technician-day held and released is a day we cannot sell.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Reads / writes</span>
+          <span class="tchip new">qc.<b>qc_visit</b></span>
+          <span class="tchip new">qc.<b>qc_technician</b></span>
+          <span class="tchip new">qc.<b>technician_availability</b></span>
+          <span class="tchip new">qc.<b>qc_tool_provider</b></span>
+          <span class="tchip">vendor.<b>facility_hours</b></span>
+          <span class="tchip">vendor.<b>facility_holiday</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="field">
+      <div class="node">02</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Technician app · Morning</span>
+            <h3>Route, kit check, and arrival</h3>
+            <p>The technician's day is a route with up to three stops. Before leaving, the app checks they have what the day requires — including enough seals.</p>
+          </div>
+          <span class="pill">Travel time varies</span>
+          <span class="pill pill-v">Field</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Before leaving</h4>
+            <ul class="fields">
+              <li><b>Route with stop order and ETAs</b></li>
+              <li><b>Manifest per stop</b> <em>— every serial they should see</em></li>
+              <li><b>Seal roll numbers issued to them</b> <em>— reconciled at end of day</em></li>
+              <li><b>Tool licence checked out</b> <em>— seat reserved for the day</em></li>
+              <li><b>Vendor contact and entry instructions</b> <em>— "rear gate only", "no lift"</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>On arrival</h4>
+            <ul class="fields">
+              <li><b>Check in with location</b> <span class="req">*</span> <em>— compared against the registered address</em></li>
+              <li><b>Photograph of the premises</b> <span class="req">*</span></li>
+              <li><b>Vendor OTP</b> <span class="req">*</span> <em>— the warehouse contact shares a code</em></li>
+              <li><b>Manifest reconciliation</b> <span class="req">*</span> <em>— how many machines are actually on the table</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Arrived, OTP verified</span><div class="br-body">Inspection begins. The clock starts.</div></div>
+          <div class="br"><span class="br-tag t-warn">Location is far from the registered address</span><div class="br-body">More than 500 metres away. <span class="then">Recorded with the variance in metres. Sometimes it is a large compound; sometimes the stock is not where they said it is. Either way Ops sees it.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Nobody there</span><div class="br-body">The warehouse contact does not answer. <span class="then">Three call attempts fifteen minutes apart, then the escalation contact. After an hour it is a no-show: the visit fee applies and the technician moves to the next stop.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Fewer machines than the manifest</span><div class="br-body">40 expected, 31 present. <span class="then">The technician inspects the 31. The missing 9 are marked absent and never become sellable. No argument later about what was there.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">More machines than the manifest</span><div class="br-body">The vendor produces extra units, hoping to get them done. <span class="then">Only manifest units are inspected. Extras need a listing first — otherwise we are inspecting stock with no declared grade to check against.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">No power, no table, machines flat</span><div class="br-body">The site is not workable. <span class="then">Visit abandoned and recorded as a vendor no-show. The requirements were sent twice before the visit.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">qc.<b>qc_visit</b> (arrival, geo)</span>
+          <span class="tchip">identity.<b>otp_request</b></span>
+          <span class="tchip new">logistics.<b>route_plan</b></span>
+          <span class="tchip new">logistics.<b>route_stop</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 2 · One machine at a time</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="field">
+      <div class="node">03</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Per unit · 12 to 18 minutes</span>
+            <h3>The diagnostic tool does the reading</h3>
+            <p>We use a licensed third-party diagnostic product rather than building our own. It boots on the machine, reads the real hardware, and produces a report we ingest. Our job is to interpret it, not to reinvent it.</p>
+          </div>
+          <span class="pill">Automated</span>
+          <span class="pill pill-v">Third-party tool</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What the tool reads off the machine</h4>
+            <ul class="fields">
+              <li><b>Serial and model from firmware</b> <em>— not from the sticker</em></li>
+              <li><b>Processor, cores, memory size and module count</b></li>
+              <li><b>Storage type, size, health and hours powered on</b></li>
+              <li><b>Battery design capacity, current capacity, cycles</b></li>
+              <li><b>Display, keyboard, touchpad, ports, camera, audio</b></li>
+              <li><b>Wi-Fi, Bluetooth, thermals under load</b></li>
+              <li><b>BIOS password, Secure Boot, TPM, remote-management locks</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>How we handle it</h4>
+            <ul class="fields">
+              <li><b>Raw report stored exactly as produced</b> <em>— a disputed reading is re-examined against what the tool actually said</em></li>
+              <li><b>Mapped onto our own fields</b> <em>— through a stored field map, so changing tool vendors is configuration</em></li>
+              <li><b>Compared against the catalog specification</b></li>
+              <li><b>Compared against the vendor's declaration</b></li>
+              <li><b>Data wipe run and certified</b> <em>— to a recognised standard</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Everything matches</span><div class="br-body">Continue to the cosmetic check.</div></div>
+          <div class="br"><span class="br-tag t-stop">Serial from firmware differs from the label</span><div class="br-body">The sticker does not belong to this machine. <span class="then">Immediate stop and a fraud flag. This is the single most serious thing a technician can find, and there is no override.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">BIOS password, remote lock or tracking software active</span><div class="br-body">The previous owner still controls the machine. <span class="then">Automatic failure. No override exists at any level, because a locked laptop is worthless to a buyer and dangerous to sell.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Specification differs from the catalog</span><div class="br-body">Listed as 16 GB, tool reads 8 GB. <span class="then">The unit is moved to the correct configuration if we have one catalogued, or rejected if we do not. Because no buyer exists yet, this is an edit rather than a dispute.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Tool cannot boot the machine</span><div class="br-body">Locked boot order, dead battery, damaged port. <span class="then">Marked untestable, with a photograph. Untestable is not the same as failed, and the vendor is told which it was.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Report will not parse</span><div class="br-body">The tool changed its output format after an update. <span class="then">The raw file is kept and queued for reprocessing. The technician can enter the key values manually so the visit is not wasted, and the parse failure alerts engineering.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">No internet at the warehouse</span><div class="br-body">Common in industrial areas. <span class="then">The app works fully offline. Everything queues locally and syncs when the technician regains signal. Nothing is lost and nothing waits.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">qc.<b>qc_tool_run</b></span>
+          <span class="tchip">qc.<b>qc_report</b></span>
+          <span class="tchip">qc.<b>qc_hardware_detected</b></span>
+          <span class="tchip">qc.<b>qc_area_result</b></span>
+          <span class="tchip">qc.<b>wipe_certificate</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="field">
+      <div class="node">04</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Per unit · Cosmetic grading</span>
+            <h3>The part a machine cannot judge</h3>
+            <p>The tool measures function. A scratch on a lid is a human call, and it is the call vendors most often get wrong — usually optimistically rather than dishonestly.</p>
+          </div>
+          <span class="pill">3 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Structured checklist</h4>
+            <ul class="fields">
+              <li><b>Lid</b> <em>— scratches, dents, paint loss</em></li>
+              <li><b>Palm rest and keyboard</b> <em>— wear, shine, missing keycaps</em></li>
+              <li><b>Screen surface and bezel</b> <em>— separate from the tool's pixel test</em></li>
+              <li><b>Hinges</b> <em>— tight, loose, cracked</em></li>
+              <li><b>Base and ports</b></li>
+              <li><b>Labels and screws</b> <em>— evidence of opening</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Six photographs, fixed angles</h4>
+            <ul class="fields">
+              <li><b>Lid, palm rest, screen on, base, ports, worst defect</b> <span class="req">*</span></li>
+              <li><b>Serial and timestamp burned into each image</b> <em>— not overlaid at display time, so a downloaded photo stays attributable</em></li>
+              <li><b>System proposes a grade from the checklist</b></li>
+              <li><b>Technician confirms or overrides with a reason</b> <em>— a high override rate means either the checklist or the technician needs work, and we can tell which</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Confirms the declared grade</span><div class="br-body">Unit passes as declared. <span class="then">Straight to sealing.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">One grade lower than declared</span><div class="br-body">A+ claimed, A confirmed. <span class="then"><b>This is the ordinary case and it is now harmless.</b> The unit is corrected and the vendor is told the same day. No buyer was ever shown the wrong grade.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Two grades lower</span><div class="br-body">A+ claimed, B confirmed. <span class="then">Corrected, and it counts double against grade accuracy. Repeated two-grade errors put a vendor on watchlist.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Worse than grade B</span><div class="br-body">Cracked casing, missing parts, heavy damage. <span class="then">Cannot be listed at all. Grades C and D do not exist on this marketplace, and the technician cannot create them.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Better than declared</span><div class="br-body">A claimed, A+ confirmed — an honest vendor undervaluing stock. <span class="then">Upgraded, with a suggested higher price. It does not count against their accuracy. Rewarding conservative grading is deliberate.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">qc.<b>qc_photo</b></span>
+          <span class="tchip">qc.<b>qc_report</b> (grade_proposed, grade_final)</span>
+          <span class="tchip new">listing.<b>grade_correction</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="field">
+      <div class="node">05</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Per unit · Sealing</span>
+            <h3>A numbered seal, photographed on the machine</h3>
+            <p>Here is the problem this solves. The laptop passed inspection today, but it sits in the vendor's warehouse until someone buys it — possibly weeks. What stops them swapping it for a worse one?</p>
+          </div>
+          <span class="pill">1 minute</span>
+          <span class="pill pill-t">The anti-swap control</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What happens</h4>
+            <ul class="fields">
+              <li><b>A tamper-evident seal is applied</b> <em>— across the lid seam</em></li>
+              <li><b>Seal code scanned and bound to the serial</b> <em>— permanently paired in our records</em></li>
+              <li><b>Photographed in place</b> <span class="req">*</span> <em>— the seal number legible in the frame</em></li>
+              <li><b>Unit becomes sellable</b> <em>— the first moment a buyer can see it</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What the seal is checked against later</h4>
+            <ul class="fields">
+              <li><b>At pickup</b> <em>— courier or field executive scans it and photographs it</em></li>
+              <li><b>At hub intake</b> <em>— if the shipment routes through a hub</em></li>
+              <li><b>At delivery</b> <em>— the buyer sees an intact seal with a number matching their invoice</em></li>
+              <li><b>Broken at any point</b> <em>— the unit stops and goes back to inspection</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Sealed</span><div class="br-body">The unit is live and sellable. <span class="then">Its seal number appears on the buyer's invoice.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Seal damaged during application</span><div class="br-body">They tear. <span class="then">A replacement is applied and the original number is voided, linked to its replacement. The roll is reconciled at end of day, so a "damaged" seal cannot quietly walk out of the building.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Seal found broken before dispatch</span><div class="br-body">Discovered at pickup, weeks later. <span class="then">The unit cannot ship. It returns to inspection at the vendor's cost. If a buyer had ordered it, they are offered a replacement or a refund immediately, and the vendor bears it.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Vendor needs to open a sealed machine</span><div class="br-body">A legitimate reason — a repair, or a customer demonstration. <span class="then">They request it in the portal. The seal is voided, the unit leaves the marketplace, and it re-enters at the next visit. We would rather lose a sale than ship an unverified machine.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">qc.<b>qc_seal</b></span>
+          <span class="tchip">listing.<b>unit</b> (is_sellable, sealed_at)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 3 · Closing the visit</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="field">
+      <div class="node">06</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">End of visit</span>
+            <h3>The vendor signs for what we found</h3>
+            <p>Before the technician leaves, the vendor sees the outcome on screen and signs it off. Disagreements are cheapest at the moment both parties are standing in front of the machines.</p>
+          </div>
+          <span class="pill">10 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What is shown and signed</h4>
+            <ul class="fields">
+              <li><b>Units inspected, passed, corrected, failed, absent</b></li>
+              <li><b>Every correction, with its photograph</b></li>
+              <li><b>Every failure, with the reason</b></li>
+              <li><b>Seal numbers issued</b></li>
+              <li><b>Vendor OTP sign-off</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What happens the moment it syncs</h4>
+            <ul class="fields">
+              <li><b>Passed units go live</b> <em>— buyers can see them within minutes</em></li>
+              <li><b>Corrected units await the vendor's price decision</b> <em>— 48 hours, then applied automatically</em></li>
+              <li><b>Certificates generated per unit</b> <em>— with a QR code anyone can verify</em></li>
+              <li><b>Vendor's grade accuracy recalculated</b></li>
+              <li><b>Visit cost recorded</b> <em>— travel, tolls, tool licence, against units inspected</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Signed</span><div class="br-body">Visit closed. Stock live.</div></div>
+          <div class="br"><span class="br-tag t-warn">Vendor refuses to sign</span><div class="br-body">They disagree with the findings. <span class="then">The visit is closed as disputed and the results still stand — they are backed by tool output and photographs. A dispute is opened and reviewed within 48 hours.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Day ends mid-batch</span><div class="br-body">40 units, 26 done. <span class="then">Partially completed. The 26 go live tonight; the remaining 14 are scheduled without a new request or a second fee.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Selected for audit</span><div class="br-body">One unit in twenty. <span class="then">A different technician re-inspects on a later visit. Disagreement between them is tracked against both names, which is how we keep the inspection honest over time.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">qc.<b>qc_visit</b> (completed, signoff)</span>
+          <span class="tchip new">qc.<b>qc_visit_expense</b></span>
+          <span class="tchip">qc.<b>qc_audit_recheck</b></span>
+          <span class="tchip">platform.<b>vendor_scorecard</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="end">
+      <div class="node">✓</div>
+      <div class="endcard">
+        <h3>Inspected, sealed, certified, live</h3>
+        <p>Every unit now carries a diagnostic report, six photographs, a wipe certificate, a confirmed grade, a measured battery percentage and a numbered seal — all produced before a buyer had any involvement.</p>
+        <div class="grants">
+          <span class="grant">Certificate per unit with QR verification</span>
+          <span class="grant">Valid 90 days</span>
+          <span class="grant">Seal bound to serial</span>
+          <span class="grant">Vendor accuracy updated</span>
+          <span class="grant">Cost per unit recorded</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tradeoff">
+    <h3>The three problems this model creates — and how each is handled</h3>
+    <p>Inspecting before sale is the right call, but it is not free. These are the costs, stated plainly, so nobody is surprised in month three.</p>
+    <table>
+      <thead><tr><th style="width:22%">Problem</th><th style="width:39%">Why it is real</th><th>What we do about it</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>We inspect stock that never sells</b></td>
+          <td>Under the old hub model we only inspected what was already bought. Now we inspect everything listed. If 40% of listed stock sells, 60% of our inspection cost produces no revenue.</td>
+          <td>A 25-unit minimum per visit, batching by geography, a visit fee below the threshold, and earned sampling for proven vendors. The cost per inspected unit is tracked on every visit, so this is a number we manage rather than a surprise we absorb.</td>
+        </tr>
+        <tr>
+          <td><b>Inspection goes stale</b></td>
+          <td>Battery health drops and storage wears. A report from six months ago is a claim we can no longer stand behind, and a buyer who finds an 82% battery against a 90% listing is right to be annoyed.</td>
+          <td>Reports expire after 90 days. Units become unsellable automatically. The vendor is warned 14 days ahead so they can reprice and clear the stock rather than lose it.</td>
+        </tr>
+        <tr>
+          <td><b>The machine sits with the vendor</b></td>
+          <td>Between inspection and sale, the laptop is in their warehouse, not ours. A dishonest vendor could swap the inspected machine for a worse one carrying the same label.</td>
+          <td>A numbered tamper-evident seal, photographed on the machine, verified at every handover, and printed on the buyer's invoice. A broken seal stops the unit. For new and watchlist vendors, shipments route through our hub anyway until they have earned direct dispatch.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================================================== 3. ORDER -->
+<div class="wrap journey hidden" id="jOrder">
+  <div class="jhead">
+    <h2>Journey 3 · The order</h2>
+    <p>A verified buyer finds inspected stock and buys it. Because every unit was already opened, graded and sealed, the order is simpler than in the old model: there is no inspection to wait for and no mid-order surprise to manage.</p>
+    <div class="jstats">
+      <div class="jstat"><div class="v">6</div><div class="l">Steps</div></div>
+      <div class="jstat"><div class="v">20 min</div><div class="l">Stock hold at checkout</div></div>
+      <div class="jstat"><div class="v">0</div><div class="l">Post-order QC waits</div></div>
+      <div class="jstat"><div class="v">48 h</div><div class="l">Inspection window after delivery</div></div>
+    </div>
+  </div>
+
+  <div class="spine">
+    <div class="phase"><h2>Part 1 · Finding and choosing</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">01</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Buyer web · Search and compare</span>
+            <h3>Six sellers, one machine, one honest number</h3>
+            <p>Every offer on the comparison grid is backed by a real inspection of real units. The QC score is not a marketing figure — it is the average of what our technician actually measured on the machines in that listing.</p>
+          </div>
+          <span class="pill">Varies</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they filter on</h4>
+            <ul class="fields">
+              <li><b>Grade</b> <em>— A+, A, B</em></li>
+              <li><b>Inspection score band</b></li>
+              <li><b>Measured battery health</b> <em>— the real percentage, not a claim</em></li>
+              <li><b>Warranty remaining and who provides it</b></li>
+              <li><b>Configuration, brand, generation</b></li>
+              <li><b>Quantity available and delivery PIN</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What the grid shows per offer</h4>
+            <ul class="fields">
+              <li><b>Landed price</b> <em>— unit + GST + freight to their PIN. The only number they can act on.</em></li>
+              <li><b>Stock depth</b> <em>— sellable units only, never awaiting-inspection ones</em></li>
+              <li><b>Inspection date</b> <em>— and when it expires</em></li>
+              <li><b>Vendor rating and grade accuracy</b></li>
+              <li><b>Dispatch commitment</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">They find what they need</span><div class="br-body">Add to cart.</div></div>
+          <div class="br"><span class="br-tag t-warn">Not enough stock at one vendor</span><div class="br-body">They need 90, the best offer has 40. <span class="then">We show how to combine two or three vendors to reach the quantity, with the blended landed price. The cart handles the split automatically.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Nothing matches</span><div class="br-body">Their configuration is not in stock anywhere. <span class="then">They save the search with a target price. When a matching listing passes inspection, they are alerted. This is how we convert a buyer who would otherwise leave.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Inspection expiring within 14 days</span><div class="br-body">Stock inspected 76 days ago. <span class="then">Still sellable and clearly labelled. Some buyers will prefer freshly-inspected stock, and they should be able to see the difference.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Reads</span>
+          <span class="tchip">listing.<b>listing</b></span>
+          <span class="tchip">listing.<b>unit</b> (is_sellable)</span>
+          <span class="tchip">qc.<b>qc_report</b></span>
+          <span class="tchip">customer.<b>saved_search</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="user">
+      <div class="node">02</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Cart and approval</span>
+            <h3>The cart splits by vendor, and may need a manager</h3>
+            <p>One cart, one payment, but a separate sub-order per vendor — because each issues its own invoice, has its own dispatch commitment, and is paid separately.</p>
+          </div>
+          <span class="pill">3 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What happens in the cart</h4>
+            <ul class="fields">
+              <li><b>Splits into one sub-order per vendor</b></li>
+              <li><b>Freight recalculated per vendor and per PIN</b></li>
+              <li><b>Volume price re-applied</b> <em>— crossing 50 units changes the rate</em></li>
+              <li><b>Price change flagged</b> <em>— if a vendor repriced since it was added</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Spend controls</h4>
+            <ul class="fields">
+              <li><b>Order value checked against the buyer's limit</b></li>
+              <li><b>Monthly cap checked</b></li>
+              <li><b>Payment method checked against their role</b></li>
+              <li><b>Above the threshold, an approver is notified</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Within their limit</span><div class="br-body">Straight to checkout.</div></div>
+          <div class="br"><span class="br-tag t-warn">Needs approval</span><div class="br-body">₹40 lakh from someone capped at ₹5 lakh. <span class="then">Stock is held for the approval window and the named approver gets an email, an SMS and a WhatsApp message. The buyer sees exactly who they are waiting on.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Approver does not respond</span><div class="br-body">The hold expires. <span class="then">Stock is released back to the market and both people are told why. We do not hold a vendor's inventory indefinitely for someone else's internal process.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Price changed since adding</span><div class="br-body">The vendor repriced. <span class="then">Shown clearly with old and new. We never silently charge the higher price — that is the fastest way to lose a corporate buyer permanently.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Units sold to someone else</span><div class="br-body">Another buyer got there first. <span class="then">The line reduces to what is still available, with the shortfall named. Alternatives from other vendors are offered on the same screen.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">ordering.<b>cart</b></span>
+          <span class="tchip">ordering.<b>cart_item</b></span>
+          <span class="tchip">ordering.<b>order_approval</b></span>
+          <span class="tchip">customer.<b>buyer_approval_policy</b> (read)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 2 · Committing</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="user">
+      <div class="node">03</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Checkout</span>
+            <h3>Which GSTIN, which address, whose purchase order</h3>
+            <p>One dropdown here decides the entire tax treatment of the invoice. A buyer operating in three states picks the billing GSTIN, and the delivery state decides whether it is IGST or CGST plus SGST.</p>
+          </div>
+          <span class="pill">3 minutes</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they choose</h4>
+            <ul class="fields">
+              <li><b>Billing GSTIN</b> <span class="req">*</span> <em>— from their verified profiles</em></li>
+              <li><b>Delivery address</b> <span class="req">*</span> <em>— freight and ETA recomputed</em></li>
+              <li><b>Their own purchase order number</b> <em>— mandatory if they set it so</em></li>
+              <li><b>Cost centre</b></li>
+              <li><b>Payment method</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What is computed and frozen</h4>
+            <ul class="fields">
+              <li><b>IGST, or CGST plus SGST</b> <em>— from the two state codes</em></li>
+              <li><b>Freight per sub-order</b> <em>— honoured even if actual carrier cost differs</em></li>
+              <li><b>Commission per vendor</b> <em>— frozen at today's tier, not tomorrow's</em></li>
+              <li><b>Landed total</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Complete</span><div class="br-body">Proceed to payment.</div></div>
+          <div class="br"><span class="br-tag t-stop">Their GSTIN went inactive</span><div class="br-body">Caught by our periodic re-check. <span class="then">Checkout blocked with a clear explanation. They can browse; they cannot buy until it is active again.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Delivery PIN not serviceable</span><div class="br-body">Outside the carrier network. <span class="then">We show the realistic date and the surcharge before they commit, not on the invoice afterwards.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Hold expires while they fill the form</span><div class="br-body">Twenty minutes gone. <span class="then">A warning at five minutes and again at one. If it lapses, availability is rechecked and anything lost is named specifically.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Reads / writes</span>
+          <span class="tchip">kyc.<b>gst_profile</b></span>
+          <span class="tchip">identity.<b>org_address</b></span>
+          <span class="tchip">ordering.<b>order</b> (draft)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="system">
+      <div class="node">04</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">On payment · One transaction</span>
+            <h3>Specific machines are assigned to this buyer</h3>
+            <p>Nine steps that either all succeed or all fail. This is the single most important transaction in the platform, and it is why the whole system runs on one database.</p>
+          </div>
+          <span class="pill">Under 2 seconds</span>
+          <span class="pill pill-t">All or nothing</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What happens inside the transaction</h4>
+            <ul class="fields">
+              <li><b>Lock the affected listings</b></li>
+              <li><b>Re-check availability</b> <em>— under the lock, not before it</em></li>
+              <li><b>Decrement stock</b></li>
+              <li><b>Create order, sub-orders, lines</b></li>
+              <li><b>Pick specific serials</b> <em>— oldest inspection first, so nothing expires unsold</em></li>
+              <li><b>Reserve those exact units</b></li>
+              <li><b>Verify each seal is still recorded intact</b></li>
+              <li><b>Write the money entries</b></li>
+              <li><b>Record the event</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Why serials are assigned now</h4>
+            <ul class="fields">
+              <li><b>The buyer's invoice can carry them</b> <em>— which is what makes their asset register match reality</em></li>
+              <li><b>The vendor knows exactly which machines to hand over</b></li>
+              <li><b>The certificate is available immediately</b> <em>— not after some future inspection</em></li>
+              <li><b>Warranty is traceable to a machine</b> <em>— years later</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Committed</span><div class="br-body">Order confirmed. <span class="then">Vendor notified with the exact serial list. Dispatch routing runs.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Stock gone between quote and payment</span><div class="br-body">A race with another buyer. <span class="then">The whole transaction rolls back. Nothing is half-created — no orphan order, no phantom reservation. The buyer is told which line failed and offered alternatives.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Payment fails</span><div class="br-body">Gateway declines. <span class="then">Order stays pending, stock stays held for the remaining window, and they can retry. If the window closes, stock is released and they are told.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Inspection expired between listing and order</span><div class="br-body">Day 91. <span class="then">Caught inside the transaction. Those units are excluded before the order is created, not discovered at dispatch.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Seal recorded broken</span><div class="br-body">Reported since the last check. <span class="then">The unit is excluded and a different one is chosen from the same listing. If none remain, the line reduces and the buyer is told immediately.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">ordering.<b>order</b></span>
+          <span class="tchip">ordering.<b>sub_order</b></span>
+          <span class="tchip">ordering.<b>order_line</b></span>
+          <span class="tchip">ordering.<b>order_line_unit</b></span>
+          <span class="tchip">listing.<b>unit</b> (RESERVED)</span>
+          <span class="tchip">payment.<b>ledger_entry</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="end">
+      <div class="node">✓</div>
+      <div class="endcard">
+        <h3>Confirmed, with specific machines already named</h3>
+        <p>The buyer can download the inspection certificate for every serial in their order right now — before anything ships. Under the old hub model they would have waited days for the inspection to happen. That difference is the commercial argument for the whole change.</p>
+        <div class="grants">
+          <span class="grant">Serials assigned</span>
+          <span class="grant">Certificates available immediately</span>
+          <span class="grant">Proforma invoice issued</span>
+          <span class="grant">Dispatch routing decided</span>
+          <span class="grant">Vendor notified</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================== 4. DISPATCH -->
+<div class="wrap journey hidden" id="jDispatch">
+  <div class="jhead">
+    <h2>Journey 4 · Dispatch and delivery</h2>
+    <p>Because inspection already happened at the vendor's premises, most shipments can now go <b>straight from vendor to buyer</b> without touching a hub. That removes two to three days and one handling cost from every order — but only where the seal is intact and the vendor has earned it.</p>
+    <div class="jstats">
+      <div class="jstat"><div class="v">3</div><div class="l">Carrier types</div></div>
+      <div class="jstat"><div class="v">8</div><div class="l">Routing rules</div></div>
+      <div class="jstat"><div class="v">2 min</div><div class="l">Seal check at pickup</div></div>
+      <div class="jstat"><div class="v">3</div><div class="l">Delivery attempts before return</div></div>
+    </div>
+  </div>
+
+  <div class="spine">
+    <div class="phase"><h2>Part 1 · Deciding how it travels</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="system">
+      <div class="node">01</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Routing engine · On order confirmation</span>
+            <h3>Direct, or through the hub?</h3>
+            <p>Eight rules evaluated in order; the first match wins. Ops tunes them without an engineering release, because routing economics change faster than software ships.</p>
+          </div>
+          <span class="pill">Instant</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>These always go through the hub</h4>
+            <ul class="fields">
+              <li><b>Any broken seal</b> <em>— it must be re-inspected before it ships</em></li>
+              <li><b>Multi-vendor orders</b> <em>— consolidated so the buyer receives one delivery</em></li>
+              <li><b>New, Bronze or watchlist vendors</b> <em>— direct dispatch is earned, not given</em></li>
+              <li><b>Consignments above ₹20 lakh</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Everything else goes direct</h4>
+            <ul class="fields">
+              <li><b>Both ends in Delhi NCR</b> <em>— our own field executives</em></li>
+              <li><b>Same city, 20 or more units</b> <em>— Porter</em></li>
+              <li><b>Everything else</b> <em>— courier</em></li>
+              <li><b>Silver tier and above, seal intact</b> <em>— the qualifying condition for all three</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Direct route chosen</span><div class="br-body">Vendor to buyer, one leg. <span class="then">Two to three days faster and one handling cost cheaper than the hub route.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Hub route chosen</span><div class="br-body">One of the rules above applied. <span class="then">Two legs. The buyer sees the honest ETA, and the reason is recorded against the shipment so we can tell a vendor exactly what to fix to earn direct dispatch.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Carrier not serviceable at that PIN</span><div class="br-body">The preferred carrier does not go there. <span class="then">Falls to the next rule, then to the fallback carrier. If nothing serves it, Ops is alerted before the buyer is.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Carrier API down at booking</span><div class="br-body">Cannot get a tracking number. <span class="then">Retried with backoff, then the fallback carrier is used automatically. Freight is reconciled later; the shipment does not wait.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Reads / writes</span>
+          <span class="tchip new">logistics.<b>routing_rule</b></span>
+          <span class="tchip new">logistics.<b>carrier_rate_card</b></span>
+          <span class="tchip">logistics.<b>pincode_serviceability</b></span>
+          <span class="tchip">logistics.<b>shipment</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="user">
+      <div class="node">02</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Vendor portal · Preparing the handover</span>
+            <h3>The vendor is told exactly which sealed machines to produce</h3>
+            <p>Not a quantity. A list of serial numbers and their seal codes. There is nothing to interpret and nothing to substitute.</p>
+          </div>
+          <span class="pill">Within their SLA</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>What they receive</h4>
+            <ul class="fields">
+              <li><b>The exact serials and seal codes</b></li>
+              <li><b>Pickup window</b> <em>— within their stated opening hours</em></li>
+              <li><b>Printable unit labels and a manifest</b></li>
+              <li><b>Packing requirements</b> <em>— anti-static, corner protection, box in box</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What they confirm</h4>
+            <ul class="fields">
+              <li><b>Accept the sub-order</b> <span class="req">*</span></li>
+              <li><b>All seals present and intact</b> <span class="req">*</span></li>
+              <li><b>Number of boxes and total weight</b> <span class="req">*</span></li>
+              <li><b>Pickup slot chosen</b> <span class="req">*</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Accepted</span><div class="br-body">Pickup scheduled. <span class="then">Added to a field executive's route, or booked with the carrier.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Vendor declines the sub-order</span><div class="br-body">They no longer want to sell at that price. <span class="then">The buyer is refunded for that portion immediately and the platform re-sources from the next-best offer if the buyer set that preference. The vendor's acceptance rate takes the hit.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">A seal is broken</span><div class="br-body">Found while preparing the boxes. <span class="then">That unit cannot ship. It returns to inspection at the vendor's cost. The buyer is offered a swap from the same listing, or a refund, within the hour.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">A unit cannot be found</span><div class="br-body">Sold offline, or misplaced. <span class="then">Recorded as a shortage with a penalty. The buyer is told the same day, not at delivery.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Handover SLA missed</span><div class="br-body">Not ready within the committed hours. <span class="then">Late-dispatch penalty applies automatically and their on-time score drops, which is the metric most likely to hold a vendor back from the next tier.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">ordering.<b>sub_order</b></span>
+          <span class="tchip">logistics.<b>pickup_task</b></span>
+          <span class="tchip">payment.<b>penalty</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 2 · Collection</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="field">
+      <div class="node">03</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">Pickup · Field executive, Porter or courier</span>
+            <h3>Two minutes at the door decides whether it ships</h3>
+            <p>Whoever collects performs the same short check: scan each seal, confirm it is intact, photograph it. This is what protects the weeks between inspection and dispatch.</p>
+          </div>
+          <span class="pill">2 min per unit</span>
+          <span class="pill pill-v">Seal verification</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>At the vendor's door</h4>
+            <ul class="fields">
+              <li><b>Vendor shares a pickup OTP</b> <span class="req">*</span></li>
+              <li><b>Each seal code scanned</b> <span class="req">*</span> <em>— against the expected list</em></li>
+              <li><b>Each seal photographed intact</b> <span class="req">*</span></li>
+              <li><b>Serial scanned and matched</b> <span class="req">*</span></li>
+              <li><b>Boxes photographed sealed</b> <span class="req">*</span></li>
+              <li><b>Signed manifest</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>Who does it</h4>
+            <ul class="fields">
+              <li><b>Field executive</b> <em>— Delhi NCR, full check, our own people</em></li>
+              <li><b>Porter driver</b> <em>— bulk and same-city; the vendor performs the scan in our app under the driver's eye</em></li>
+              <li><b>Courier</b> <em>— the vendor scans and photographs in the portal before handover, and the AWB records the seal codes</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">All seals intact and matching</span><div class="br-body">Collected. <span class="then">Custody transfers from the vendor. The units move to in-transit.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">A seal is broken</span><div class="br-body">Found at the door. <span class="then">That unit is left behind. Everything else ships. The unit goes back into the inspection queue and the buyer is offered a swap or a refund within the hour.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Seal code does not match the serial</span><div class="br-body">The seal on the machine belongs to a different unit. <span class="then">Both units are held and it is escalated as suspected substitution. This is precisely the fraud the seal exists to catch.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Fewer boxes than declared</span><div class="br-body">Shortage recorded on the spot, with the vendor present. <span class="then">Never discovered later at a hub or, worse, by the buyer.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Pickup fails</span><div class="br-body">Warehouse shut, or nobody available. <span class="then">Rescheduled once at no charge. A second failure carries the penalty and the buyer is offered the option to cancel.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">No network at the warehouse</span><div class="br-body">Common. <span class="then">The app captures everything offline and syncs later. Custody is recorded with the timestamp of the scan, not of the sync.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip new">qc.<b>qc_reverification</b></span>
+          <span class="tchip new">qc.<b>qc_seal</b> (verified)</span>
+          <span class="tchip">logistics.<b>pickup_task</b></span>
+          <span class="tchip">logistics.<b>custody_event</b></span>
+          <span class="tchip">listing.<b>stock_movement</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="system">
+      <div class="node">04</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">At dispatch</span>
+            <h3>Invoice, e-way bill, and the serials printed on both</h3>
+            <p>The tax invoice is raised now, not at order time, because only now is it certain which machines are in the box.</p>
+          </div>
+          <span class="pill">Automated</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>Documents generated</h4>
+            <ul class="fields">
+              <li><b>Tax invoice</b> <em>— with the IRN and signed QR from the government portal</em></li>
+              <li><b>E-way bill</b> <em>— above ₹50,000, with the vehicle or AWB in Part B</em></li>
+              <li><b>Inspection certificate per unit</b> <em>— enclosed in the box</em></li>
+              <li><b>Data wipe certificate per unit</b></li>
+              <li><b>Packing list with serials and seal codes</b></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What is bound to the shipment</h4>
+            <ul class="fields">
+              <li><b>Exact serials inside</b> <em>— this ends every "you sent the wrong unit" dispute</em></li>
+              <li><b>Seal codes</b> <em>— printed on the invoice the buyer receives</em></li>
+              <li><b>Declared value for insurance</b></li>
+              <li><b>Tracking number</b></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Documents issued</span><div class="br-body">Dispatched. <span class="then">Buyer receives tracking and can download everything.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Government portal will not issue the IRN</span><div class="br-body">The e-invoicing service is down or rejects the payload. <span class="then">Dispatch is blocked. Shipping goods without a valid tax invoice creates a problem far worse than a day's delay. Retries run automatically and Ops is alerted immediately.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">E-way bill about to expire in transit</span><div class="br-body">A long haul running late. <span class="then">Monitored, and extended before it lapses. An expired e-way bill in transit is a seizure risk.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Partial shipment</span><div class="br-body">38 of 40 units, after one broken seal and one shortage. <span class="then">The invoice covers 38. A credit note handles the rest. The buyer is not made to wait for two machines.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">payment.<b>invoice</b></span>
+          <span class="tchip">payment.<b>invoice_line</b></span>
+          <span class="tchip">payment.<b>eway_bill</b></span>
+          <span class="tchip">logistics.<b>shipment</b></span>
+          <span class="tchip">logistics.<b>shipment_unit</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase"><h2>Part 3 · Delivery</h2><div class="line"></div></div>
+
+    <div class="step" data-kind="field">
+      <div class="node">05</div>
+      <div class="card">
+        <div class="card-head">
+          <div style="flex:1;min-width:240px">
+            <span class="sc">At the buyer's site</span>
+            <h3>OTP, proof, and an intact seal the buyer can check themselves</h3>
+            <p>The buyer's own IT person can scan the seal code against the invoice before signing. That is the whole promise made physical.</p>
+          </div>
+          <span class="pill">Varies</span>
+          <span class="pill pill-v">Field executive or courier</span>
+        </div>
+        <div class="cols">
+          <div class="col">
+            <h4>At handover</h4>
+            <ul class="fields">
+              <li><b>Delivery OTP from the site contact</b> <span class="req">*</span></li>
+              <li><b>Box condition photographed</b> <span class="req">*</span></li>
+              <li><b>Buyer may scan any seal against the invoice</b></li>
+              <li><b>Proof of delivery captured</b> <span class="req">*</span></li>
+              <li><b>Optional unboxing video</b> <em>— for our own NCR deliveries</em></li>
+            </ul>
+          </div>
+          <div class="col">
+            <h4>What delivery starts</h4>
+            <ul class="fields">
+              <li><b>The 48-hour inspection window</b></li>
+              <li><b>The warranty clock</b> <em>— from this timestamp, not from the invoice date</em></li>
+              <li><b>The vendor's payment eligibility</b> <em>— which only begins once the window closes cleanly</em></li>
+              <li><b>Certificates unlocked</b> <em>— against the delivered serials</em></li>
+            </ul>
+          </div>
+        </div>
+        <div class="branches">
+          <div class="br"><span class="br-tag t-ok">Delivered and accepted</span><div class="br-body">Inspection window opens. <span class="then">Vendor payment becomes eligible in 48 hours.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Nobody available</span><div class="br-body">Office closed, or no gate pass. <span class="then">Recorded with the specific reason and rescheduled. "Office closed" is our scheduling problem; "refused" is a commercial one, and separating them tells us which to fix.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Three failed attempts</span><div class="br-body">The consignment returns. <span class="then">Return freight is charged to the buyer, and the goods go to the hub, not back to the vendor — they are the buyer's property from dispatch.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">Box arrives damaged</span><div class="br-body">Visible damage before opening. <span class="then">The buyer may refuse it. Photographed at the door, an insurance claim is filed, and a replacement is sourced. The vendor is unaffected because this is a transit failure, not their fault.</span></div></div>
+          <div class="br"><span class="br-tag t-stop">A seal is broken on arrival</span><div class="br-body">The buyer notices before signing. <span class="then">That unit is refused at the door and returned. We do not ask a buyer to accept a machine whose chain of custody we cannot vouch for.</span></div></div>
+          <div class="br"><span class="br-tag t-warn">Partial acceptance</span><div class="br-body">They take 38 and refuse 2. <span class="then">Recorded per serial. The 38 start their warranty; the 2 return and are refunded.</span></div></div>
+        </div>
+        <div class="tables"><span class="lbl">Writes</span>
+          <span class="tchip">logistics.<b>delivery_task</b></span>
+          <span class="tchip new">logistics.<b>delivery_attempt</b></span>
+          <span class="tchip">logistics.<b>custody_event</b></span>
+          <span class="tchip">platform.<b>warranty</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" data-kind="end">
+      <div class="node">✓</div>
+      <div class="endcard">
+        <h3>Delivered — and the buyer can prove every claim we made</h3>
+        <p>Each machine arrived with an unbroken seal whose number is on the invoice, a diagnostic report from a licensed tool, six photographs taken at the vendor's premises weeks earlier, and a wipe certificate. Forty-eight hours to check it, then the vendor is paid.</p>
+        <div class="grants">
+          <span class="grant">Seal verified at three points</span>
+          <span class="grant">Serials on the invoice</span>
+          <span class="grant">Warranty running</span>
+          <span class="grant">48-hour window open</span>
+          <span class="grant">Vendor payment queued</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================================================== SUMMARY -->
+<div class="summary">
+  <div class="wrap">
+    <p class="eyebrow" style="color:var(--teal-dk)">What moving inspection to the vendor's premises actually bought us</p>
+    <h2 style="font-size:26px;max-width:26ch">Three things got better, one thing got harder</h2>
+    <div class="sgrid">
+      <div class="sbox">
+        <div class="n">1</div>
+        <h4>The mid-order dispute disappears</h4>
+        <p>Under the hub model, a wrong grade was discovered after a buyer had paid, which meant a paused order, a 24-hour decision window and an unhappy customer. Now it is found before any buyer exists. A correction is an edit, not an incident.</p>
+      </div>
+      <div class="sbox">
+        <div class="n">2</div>
+        <h4>Delivery is two to three days faster</h4>
+        <p>Most shipments now go straight from vendor to buyer. No inbound leg, no hub dwell time, no second handling cost. The hub is reserved for broken seals, multi-vendor consolidation, high value and vendors who have not yet earned direct dispatch.</p>
+      </div>
+      <div class="sbox">
+        <div class="n">3</div>
+        <h4>Buyers see truth, not claims</h4>
+        <p>Every number on a live listing — grade, battery percentage, storage health, inspection score — was measured on a specific machine by our technician. The certificate is downloadable before they order, not after.</p>
+      </div>
+    </div>
+    <div class="tradeoff" style="margin-top:26px">
+      <h3>And the harder part: we now pay to inspect stock that may never sell</h3>
+      <p>This is the real cost of the change and it should be on the table in every review. Under the hub model, inspection cost was incurred only on sold units. Now it is incurred on listed units. If a vendor lists 100 and sells 40, we have funded 60 inspections that produced no revenue.</p>
+      <p style="margin-bottom:0"><b>Four controls manage it, and all four are visible in the schema:</b> a 25-unit minimum per visit; geographic batching so one trip serves several vendors; a visit fee below the threshold, waived above it; and earned sampling, where a vendor with thousands of clean inspections behind them has only a proportion of each batch opened. The cost per inspected unit is recorded on every single visit, so this is a number the business steers by rather than one it discovers at year end.</p>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <div class="wrap">
+    <span>TrueTech Services Pvt. Ltd. · Gurugram · Operations blueprint v2.0</span>
+    <span class="mono">4 journeys · 17 new tables · 5 altered tables · 8 routing rules</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  var map={listing:'jListing', qc:'jQc', order:'jOrder', dispatch:'jDispatch'};
+  var btns=document.querySelectorAll('.seg button[data-j]');
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){
+      var key=b.getAttribute('data-j');
+      btns.forEach(function(x){ x.setAttribute('aria-pressed', x===b); });
+      Object.keys(map).forEach(function(k){
+        document.getElementById(map[k]).classList.toggle('hidden', k!==key);
+      });
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+  });
+  document.getElementById('tblToggle').addEventListener('change', function(e){
+    document.body.classList.toggle('show-tables', e.target.checked);
+  });
+})();
+</script>
+</body>
+</html>
