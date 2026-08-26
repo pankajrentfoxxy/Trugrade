@@ -4,6 +4,7 @@
     "outDir": "dist",
     "rootDir": ".",
     "baseUrl": ".",
+    "isolatedModules": true,
     "paths": { "src/*": ["src/*"] }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "scripts/**/*.ts"],

@@ -2,14 +2,15 @@ import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { createHash, randomUUID, randomBytes, generateKeyPairSync } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { SignJWT, jwtVerify, importPKCS8, importSPKI, type JWTPayload } from 'jose';
+import type { KeyObject } from 'node:crypto';
+import { importPrivateKey, importPublicKey, signJwt, verifyJwt, type JwtClaims } from './jwt';
 import { SESSION_POLICY, type Permission, type Role } from '@trugrade/contracts';
 import { AppConfig } from '../config';
 import { ClockPort } from '../clock';
 import { RedisService } from '../redis/redis.service';
 import { UnauthenticatedError } from '../errors/domain-errors';
 
-export interface AccessTokenClaims extends JWTPayload {
+export interface AccessTokenClaims extends JwtClaims {
   sub: string;
   org_id: string | null;
   org_type: 'VENDOR' | 'BUYER' | 'PLATFORM';
@@ -50,17 +51,13 @@ interface SessionRecord {
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
-/**
- * jose v6 dropped the `KeyLike` alias, so derive the key type from the importer
- * rather than naming a type the library no longer exports.
- */
-type ImportedKey = Awaited<ReturnType<typeof importPKCS8>>;
+
 
 @Injectable()
 export class TokenService implements OnModuleInit {
   private readonly logger = new Logger(TokenService.name);
-  private privateKey!: ImportedKey;
-  private publicKey!: ImportedKey;
+  private privateKey!: KeyObject;
+  private publicKey!: KeyObject;
 
   constructor(
     private readonly config: AppConfig,
@@ -68,10 +65,10 @@ export class TokenService implements OnModuleInit {
     private readonly redis: RedisService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     const { privatePem, publicPem } = this.resolveKeys();
-    this.privateKey = await importPKCS8(privatePem, 'RS256');
-    this.publicKey = await importSPKI(publicPem, 'RS256');
+    this.privateKey = importPrivateKey(privatePem);
+    this.publicKey = importPublicKey(publicPem);
   }
 
   /**
@@ -128,21 +125,23 @@ export class TokenService implements OnModuleInit {
     const accessTtl = this.config.get('JWT_ACCESS_TTL_SECONDS');
     const refreshTtl = this.config.get('JWT_REFRESH_TTL_SECONDS');
 
-    const accessToken = await new SignJWT({
-      org_id: input.orgId,
-      org_type: input.orgType,
-      roles: input.roles,
-      scope: input.permissions,
-      sid: sessionId,
-      mfa: input.mfa,
-    })
-      .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
-      .setSubject(input.userId)
-      .setJti(randomUUID())
-      .setIssuedAt(Math.floor(now.getTime() / 1000))
-      .setExpirationTime(Math.floor(now.getTime() / 1000) + accessTtl)
-      .setIssuer(this.config.get('API_PUBLIC_URL'))
-      .sign(this.privateKey);
+    const issuedAt = Math.floor(now.getTime() / 1000);
+    const accessToken = signJwt(
+      {
+        sub: input.userId,
+        iss: this.config.get('API_PUBLIC_URL'),
+        iat: issuedAt,
+        exp: issuedAt + accessTtl,
+        jti: randomUUID(),
+        org_id: input.orgId,
+        org_type: input.orgType,
+        roles: input.roles,
+        scope: input.permissions,
+        sid: sessionId,
+        mfa: input.mfa,
+      },
+      this.privateKey,
+    );
 
     // The refresh token is opaque random, not a JWT. Nothing needs to read it
     // without the server, and an opaque token cannot leak claims if it is logged.
@@ -175,10 +174,10 @@ export class TokenService implements OnModuleInit {
 
   async verifyAccess(token: string): Promise<AccessTokenClaims> {
     try {
-      const { payload } = await jwtVerify(token, this.publicKey, {
+      const claims = verifyJwt<AccessTokenClaims>(token, this.publicKey, {
         issuer: this.config.get('API_PUBLIC_URL'),
+        nowSeconds: Math.floor(this.clock.nowMs() / 1000),
       });
-      const claims = payload as AccessTokenClaims;
 
       // A valid signature is not enough. If the session was revoked the token is
       // dead even though it has not expired — that is the whole point of keeping

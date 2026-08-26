@@ -15,29 +15,64 @@ type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transa
 
 const txStorage = new AsyncLocalStorage<TxClient>();
 
+/**
+ * Composition, not inheritance, and for a concrete reason.
+ *
+ * Prisma 6 returns a Proxy from `new PrismaClient()`, and its `get` trap forwards
+ * to the raw target without preserving the proxy as the receiver. So inside a
+ * getter defined on a *subclass prototype*, `this` is the bare target and every
+ * model accessor (`this.event_outbox`, `this.unit`, ...) is undefined — while the
+ * same access from outside works fine. That is a genuinely nasty failure: it
+ * looks like a dependency-injection problem and it only bites on the non-
+ * transactional path.
+ *
+ * Holding the client in a field sidesteps the whole thing.
+ */
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService implements OnModuleInit, OnModuleDestroy {
+  private readonly client: PrismaClient;
+
   constructor(config: AppConfig) {
-    super({
+    this.client = new PrismaClient({
       datasources: { db: { url: config.get('DATABASE_URL') } },
-      log:
-        config.get('NODE_ENV') === 'development'
-          ? [{ emit: 'event', level: 'query' }, 'warn', 'error']
-          : ['warn', 'error'],
+      log: config.get('NODE_ENV') === 'development' ? ['warn', 'error'] : ['warn', 'error'],
     });
   }
 
   async onModuleInit(): Promise<void> {
-    await this.$connect();
+    await this.client.$connect();
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.$disconnect();
+    await this.client.$disconnect();
   }
 
   /** The client to use right now: the ambient transaction if there is one. */
   get db(): TxClient {
-    return txStorage.getStore() ?? this;
+    return txStorage.getStore() ?? this.client;
+  }
+
+  // --- delegated escape hatches -------------------------------------------
+  // Raw SQL is how the hot paths in 02_ARCHITECTURE.md §4 are written; these
+  // route through `db`, so raw statements join the ambient transaction too.
+
+  $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: unknown[]): Promise<T> {
+    return (this.db as PrismaClient).$queryRaw(query, ...values) as Promise<T>;
+  }
+  $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T> {
+    return (this.db as PrismaClient).$queryRawUnsafe(query, ...values) as Promise<T>;
+  }
+  $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number> {
+    return (this.db as PrismaClient).$executeRaw(query, ...values);
+  }
+  $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number> {
+    return (this.db as PrismaClient).$executeRawUnsafe(query, ...values);
+  }
+  $connect(): Promise<void> {
+    return this.client.$connect();
+  }
+  $disconnect(): Promise<void> {
+    return this.client.$disconnect();
   }
 
   /**
@@ -52,7 +87,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     const existing = txStorage.getStore();
     if (existing) return fn();
 
-    return this.$transaction(
+    return this.client.$transaction(
       async (tx) => txStorage.run(tx as TxClient, fn),
       {
         // Serializable would be safer still, but the order-confirmation flow takes

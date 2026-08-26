@@ -114,9 +114,9 @@ export class HealthService {
     });
 
     checks.outbox = await this.safe(async () => {
-      const dead = await this.prisma.event_outbox.count({ where: { status: 'DEAD_LETTER' } });
+      const dead = await this.prisma.db.event_outbox.count({ where: { status: 'DEAD_LETTER' } });
       if (dead > 0) throw Object.assign(new Error(`${dead} dead-lettered event(s) need a human`), { value: dead });
-      const pending = await this.prisma.event_outbox.count({ where: { status: 'PENDING' } });
+      const pending = await this.prisma.db.event_outbox.count({ where: { status: 'PENDING' } });
       return { value: { pending, deadLettered: 0 } };
     });
 

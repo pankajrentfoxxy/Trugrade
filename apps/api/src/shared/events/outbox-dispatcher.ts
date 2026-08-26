@@ -90,7 +90,7 @@ export class OutboxDispatcher {
         }
 
         if (errors.length === 0) {
-          await this.prisma.event_outbox.update({
+          await this.prisma.db.event_outbox.update({
             where: { id: row.id },
             data: { status: 'DISPATCHED', dispatched_at: now, attempts: row.attempts + 1 },
           });
@@ -98,7 +98,7 @@ export class OutboxDispatcher {
         } else {
           const attempts = row.attempts + 1;
           const dead = attempts >= MAX_ATTEMPTS;
-          await this.prisma.event_outbox.update({
+          await this.prisma.db.event_outbox.update({
             where: { id: row.id },
             data: {
               status: dead ? 'DEAD_LETTER' : 'FAILED',
@@ -131,13 +131,13 @@ export class OutboxDispatcher {
 
   /** Ops action: put a dead-lettered event back in the queue. Audit-logged by the caller. */
   async replay(eventId: string): Promise<void> {
-    await this.prisma.event_outbox.update({
+    await this.prisma.db.event_outbox.update({
       where: { id: eventId },
       data: { status: 'PENDING', attempts: 0, next_retry_at: null, last_error: null },
     });
   }
 
   async deadLetterCount(): Promise<number> {
-    return this.prisma.event_outbox.count({ where: { status: 'DEAD_LETTER' } });
+    return this.prisma.db.event_outbox.count({ where: { status: 'DEAD_LETTER' } });
   }
 }
