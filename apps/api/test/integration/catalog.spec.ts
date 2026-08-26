@@ -19,6 +19,7 @@ import { CatalogService } from '../../src/modules/catalog';
 import { SkuRepository } from '../../src/modules/catalog/internal/sku.repository';
 import { ConditionImageService } from '../../src/modules/catalog/internal/condition-image.service';
 import { SkuRequestService } from '../../src/modules/catalog/internal/sku-request.service';
+import { CatalogSearchService } from '../../src/modules/catalog/internal/catalog-search.service';
 import {
   closeTestDb,
   migrateTestDatabase,
@@ -59,6 +60,7 @@ beforeAll(async () => {
       SkuRepository,
       ConditionImageService,
       SkuRequestService,
+      CatalogSearchService,
     ],
   }).compile();
 

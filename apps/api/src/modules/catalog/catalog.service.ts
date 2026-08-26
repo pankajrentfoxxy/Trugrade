@@ -2,6 +2,13 @@ import { Injectable } from '@nestjs/common';
 import type { Grade, ResolvedImages } from '@trugrade/contracts';
 import { PrismaService } from '../../shared/db/prisma.service';
 import { ConditionImageService, type UploadImageInput } from './internal/condition-image.service';
+import {
+  CatalogSearchService,
+  type CatalogFilters,
+  type Facets,
+  type SearchInput,
+  type SearchResult,
+} from './internal/catalog-search.service';
 import { SkuRepository, type SkuRow } from './internal/sku.repository';
 import {
   SkuRequestService,
@@ -39,6 +46,19 @@ export interface ICatalogService {
    */
   resolveImages(skuId: string, grade: Grade): Promise<ResolvedImages>;
 
+  /**
+   * Search and browse the catalog. CAT-009b: the result carries catalog terms
+   * only — there is no path from here to a vendor, and that is a guarantee of
+   * this interface, not an implementation detail of today's query.
+   */
+  search(input: SearchInput): Promise<SearchResult>;
+
+  /**
+   * Counts for the filter rail, under the filters AND the query already
+   * applied — the rail must describe the page it sits beside.
+   */
+  facets(filters: CatalogFilters, q?: string): Promise<Facets>;
+
   /** Near matches for a proposed SKU, shown to the vendor BEFORE they submit. */
   nearMatches(draft: SkuRequestDraft): Promise<NearMatch[]>;
 
@@ -52,6 +72,7 @@ export class CatalogService implements ICatalogService {
     private readonly skus: SkuRepository,
     private readonly images: ConditionImageService,
     private readonly requests: SkuRequestService,
+    private readonly searchIndex: CatalogSearchService,
   ) {}
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
@@ -77,6 +98,22 @@ export class CatalogService implements ICatalogService {
 
   uploadImage(input: UploadImageInput): Promise<{ id: string }> {
     return this.images.upload(input);
+  }
+
+  search(input: SearchInput): Promise<SearchResult> {
+    return this.searchIndex.search(input);
+  }
+
+  facets(filters: CatalogFilters, q?: string): Promise<Facets> {
+    return this.searchIndex.facets(filters, q);
+  }
+
+  /**
+   * Rebuild the search view. Ops and the CSV importer call this; a SKU that is
+   * in the catalog but not in the view is one nobody can list against.
+   */
+  refreshSearchIndex(): Promise<void> {
+    return this.searchIndex.refreshSearchIndex();
   }
 
   nearMatches(draft: SkuRequestDraft): Promise<NearMatch[]> {

@@ -1,0 +1,201 @@
+import * as React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { CatalogTreeRoute, type CatalogBrand } from '../src/routes/CatalogTree';
+import { SkuRequestsRoute, type SkuRequestRow } from '../src/routes/SkuRequests';
+
+function mockJson(body: unknown): void {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => body } as Response);
+}
+
+const CATALOG: CatalogBrand[] = [
+  {
+    id: 'b1',
+    name: 'Dell',
+    series: [
+      {
+        id: 's1',
+        name: 'Latitude',
+        models: [
+          {
+            id: 'm1',
+            name: 'Latitude 5420',
+            skus: [
+              {
+                id: 'k1',
+                skuCode: 'DEL-LAT5420-I5-16-512',
+                label: 'i5-1145G7 · 16 GB · 512 GB NVMe',
+                isActive: true,
+                liveListingCount: 4,
+              },
+              {
+                id: 'k2',
+                skuCode: 'DEL-LAT5420-I5-8-256',
+                label: 'i5-1145G7 · 8 GB · 256 GB NVMe',
+                isActive: false,
+                liveListingCount: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'b2',
+    name: 'Lenovo',
+    series: [
+      {
+        id: 's2',
+        name: 'ThinkPad',
+        models: [
+          {
+            id: 'm2',
+            name: 'ThinkPad T14 Gen 2',
+            skus: [
+              {
+                id: 'k3',
+                skuCode: 'LEN-T14G2-I7-16-512',
+                label: 'i7-1165G7 · 16 GB · 512 GB NVMe',
+                isActive: true,
+                liveListingCount: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('the catalog tree keeps all four levels', () => {
+  it('shows brand, series, model and the SKU code under it', async () => {
+    mockJson(CATALOG);
+    render(<CatalogTreeRoute />);
+    await screen.findByText('Dell');
+
+    expect(screen.getByText('Latitude')).toBeInTheDocument();
+    expect(screen.getByText('Latitude 5420')).toBeInTheDocument();
+    expect(screen.getByText('DEL-LAT5420-I5-16-512')).toBeInTheDocument();
+    // A deprecated SKU stays visible: it is still the SKU that past orders and
+    // past QC reports were written against.
+    expect(screen.getByText('Deprecated')).toBeInTheDocument();
+    expect(screen.getByText('4 live listings')).toBeInTheDocument();
+  });
+
+  it('filters on the whole path, so a brand name keeps the SKUs under it', async () => {
+    mockJson(CATALOG);
+    render(<CatalogTreeRoute />);
+    await screen.findByText('Dell');
+
+    await userEvent.type(screen.getByLabelText('Filter'), 'lenovo');
+
+    expect(screen.getByText('ThinkPad T14 Gen 2')).toBeInTheDocument();
+    expect(screen.queryByText('Latitude 5420')).not.toBeInTheDocument();
+  });
+
+  it('distinguishes a filtered-empty result from an empty catalog', async () => {
+    mockJson(CATALOG);
+    render(<CatalogTreeRoute />);
+    await screen.findByText('Dell');
+
+    await userEvent.type(screen.getByLabelText('Filter'), 'macbook');
+
+    // The failure this catches: telling an admin the catalog is empty when it is
+    // their filter that is, which invites a duplicate brand being created.
+    expect(screen.getByText(/The catalog is not empty/)).toBeInTheDocument();
+    expect(screen.queryByText('The catalog is empty')).not.toBeInTheDocument();
+  });
+
+  it('guides the first brand when there is genuinely nothing', async () => {
+    mockJson([]);
+    render(<CatalogTreeRoute />);
+    expect(await screen.findByText('The catalog is empty')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add the first brand/i })).toBeInTheDocument();
+  });
+
+  it('says the catalog did not load, and that nothing changed', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 500 } as Response);
+    render(<CatalogTreeRoute />);
+    expect(await screen.findByText('The catalog did not load')).toBeInTheDocument();
+    expect(screen.getByText(/Catalog unavailable \(500\)/)).toBeInTheDocument();
+  });
+});
+
+const REQUEST: SkuRequestRow = {
+  id: 'r1',
+  vendorName: 'Alpha Systems Private Limited',
+  rawBrand: 'Dell',
+  rawModel: 'Latitide 5420',
+  rawConfig: 'i5 11th gen, 16GB, 512 NVMe, 14 inch FHD',
+  ageHours: 19,
+  proposedSpec: { RAM: '16 GB', Storage: '512 GB NVMe', CPU: 'i5-1145G7' },
+  nearMatches: [
+    {
+      skuId: 'k1',
+      skuCode: 'DEL-LAT5420-I5-16-512',
+      label: 'Dell Latitude 5420 · i5-1145G7 · 16 GB · 512 GB',
+      similarity: 1,
+      exact: true,
+    },
+    {
+      skuId: 'k2',
+      skuCode: 'DEL-LAT5420-I5-8-256',
+      label: 'Dell Latitude 5420 · i5-1145G7 · 8 GB · 256 GB',
+      similarity: 0.82,
+      exact: false,
+    },
+  ],
+};
+
+describe('the SKU request queue is built for duplicates', () => {
+  it('puts the proposed spec beside the closest SKUs and states each score', async () => {
+    mockJson([REQUEST]);
+    render(<SkuRequestsRoute />);
+    await screen.findByText('Dell Latitide 5420');
+
+    expect(screen.getByText('i5 11th gen, 16GB, 512 NVMe, 14 inch FHD')).toBeInTheDocument();
+    expect(screen.getByText('512 GB NVMe')).toBeInTheDocument();
+    // The score is stated, not implied by position: 100% and 82% both sit at the
+    // top of a short list and only one of them is a merge.
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('82%')).toBeInTheDocument();
+    expect(screen.getByText('Same specification')).toBeInTheDocument();
+  });
+
+  it('blocks Approve when a SKU with the same specification already exists', async () => {
+    mockJson([REQUEST]);
+    render(<SkuRequestsRoute />);
+    await screen.findByText('Dell Latitide 5420');
+
+    const approve = screen.getByRole('button', { name: /approve and create the sku/i });
+    // aria-disabled, not disabled: the reason has to be reachable, and the
+    // failure it prevents — a duplicate SKU splitting every listing, price band
+    // and image set that follows — is not guessable from a greyed-out button.
+    expect(approve).toHaveAttribute('aria-disabled', 'true');
+    expect(approve).toHaveAccessibleDescription(/Merge into it instead/);
+    expect(screen.getByText(/1 already exist under another name/)).toBeInTheDocument();
+  });
+
+  it('allows Approve when nothing close exists', async () => {
+    mockJson([{ ...REQUEST, nearMatches: [] }]);
+    render(<SkuRequestsRoute />);
+    await screen.findByText('Dell Latitide 5420');
+
+    expect(screen.getByRole('button', { name: /approve and create the sku/i })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByText(/genuinely new configuration/)).toBeInTheDocument();
+  });
+
+  it('reads as success, not failure, when the queue is empty', async () => {
+    mockJson([]);
+    render(<SkuRequestsRoute />);
+    expect(await screen.findByText('No pending requests')).toBeInTheDocument();
+  });
+});
