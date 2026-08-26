@@ -97,6 +97,16 @@ export interface VerdictInput {
   /** A seal is applied only after a pass; absent during evaluation is normal. */
   seal?: { code: string; photoKey: string | null };
   policy?: AutoApprovalPolicy;
+  /**
+   * The grade thresholds in effect **on the day the report was written**, read
+   * from `catalog.grade_definition`. Callers with a database must pass them.
+   *
+   * Defaulting to the constant keeps the DB-free unit tests honest without
+   * making the constant authoritative: a report from six months ago has to be
+   * re-readable against the numbers that applied then, and a value compiled into
+   * the binary cannot do that.
+   */
+  gradeThresholds?: GradeThresholds;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,19 +157,39 @@ function capGrade(current: Grade | null, cap: Grade | null): Grade | null {
 }
 
 /**
- * Grade from the measured battery, per `catalog.grade_definition`.
+ * The numbers a grade is decided by, as read from `catalog.grade_definition`.
+ *
+ * Supplied by the caller rather than imported. Rule 7(5) makes the grading claim
+ * a liability trigger and the CCPA Misleading Advertisements Guidelines 2022
+ * test claims against reality — and a threshold compiled into the binary cannot
+ * be defended against a report written six months ago under different numbers.
+ * The table row is effective-dated precisely so an old report stays readable
+ * against the rules that applied when it was written.
+ *
+ * `GRADE_THRESHOLDS` stays the seed input and the DB-free fixture. It is no
+ * longer what the engine consults.
+ */
+export type GradeThresholds = Readonly<
+  Record<Grade, { minBatteryHealthPct: number; maxCycleCount: number }>
+>;
+
+/**
+ * Grade from the measured battery.
+ *
  * An unreported battery does not silently pass — it caps at A, because we would
  * otherwise be certifying A+ on a figure nobody measured.
  */
-function gradeFromBattery(m: QcMeasurements): { grade: Grade | null; measured: boolean } {
+function gradeFromBattery(
+  m: QcMeasurements,
+  thresholds: GradeThresholds,
+): { grade: Grade | null; measured: boolean } {
   if (m.batteryHealthPct === undefined || !Number.isFinite(m.batteryHealthPct)) {
     return { grade: 'A', measured: false };
   }
   const pct = m.batteryHealthPct;
-  if (pct >= GRADE_THRESHOLDS.A_PLUS.minBatteryHealthPct)
-    return { grade: 'A_PLUS', measured: true };
-  if (pct >= GRADE_THRESHOLDS.A.minBatteryHealthPct) return { grade: 'A', measured: true };
-  if (pct >= GRADE_THRESHOLDS.B.minBatteryHealthPct) return { grade: 'B', measured: true };
+  if (pct >= thresholds.A_PLUS.minBatteryHealthPct) return { grade: 'A_PLUS', measured: true };
+  if (pct >= thresholds.A.minBatteryHealthPct) return { grade: 'A', measured: true };
+  if (pct >= thresholds.B.minBatteryHealthPct) return { grade: 'B', measured: true };
   // Below the B floor the machine is not sellable at any grade.
   return { grade: null, measured: true };
 }
@@ -251,7 +281,7 @@ export function evaluateQcReport(input: VerdictInput): VerdictResult {
   }
 
   // --- 3. Battery ------------------------------------------------------------
-  const battery = gradeFromBattery(m);
+  const battery = gradeFromBattery(m, input.gradeThresholds ?? GRADE_THRESHOLDS);
   grade = capGrade(grade, battery.grade);
   if (!battery.measured) {
     cappedBy.push({ area: 'BATTERY', outcome: 'NOT_MEASURED' });
