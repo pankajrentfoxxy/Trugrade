@@ -80,6 +80,21 @@ const CONFIG: Array<[string, unknown, string]> = [
     true,
     'Auto-listing at the vendor-declared grade when inspection found a different one is OUR misrepresentation under r.7(2), not theirs.',
   ],
+  [
+    'qc.auto_approve_require_spec_match',
+    true,
+    'Confirmed 26 Aug 2026 — the catalog SKU the vendor selected must match the hardware QC detected. QC-025. Compared after the usable-vs-installed RAM and GiB-vs-GB storage corrections, so an honest 15 GB reading on a 16 GB machine is not treated as a lie.',
+  ],
+  [
+    'qc.spec_match_screen_tolerance_in',
+    0.2,
+    'Panel sizes are reported to one decimal and vary by a tenth. Beyond this is a different panel.',
+  ],
+  [
+    'qc.spec_match_cpu_blocking',
+    true,
+    'A CPU difference is BLOCKING, per the seeded qc_tolerance_rule. An i3 sold as an i5 is not a repricing question.',
+  ],
   ['qc.auto_approve_require_seal', true, 'No seal, and no seal without a photograph.'],
   [
     'qc.auto_approve_require_serial_match',

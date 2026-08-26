@@ -352,6 +352,7 @@ describe('every gate can be switched off individually', () => {
         blockOnRequiredFail: false,
         blockOnRequiredNotMeasured: false,
         requireGradeMatch: false,
+        requireSpecMatch: false,
         requireSeal: false,
         requireSerialMatch: false,
       },

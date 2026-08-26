@@ -23,6 +23,12 @@ import {
   type QcAreaOutcome,
   type QcVerdict,
 } from './rules';
+import {
+  compareSpec,
+  type DeclaredSpec,
+  type DetectedSpec,
+  type SpecMatchResult,
+} from './spec-match';
 
 // ---------------------------------------------------------------------------
 // Inputs
@@ -62,6 +68,11 @@ export interface AutoApprovalPolicy {
   blockOnRequiredNotMeasured: boolean;
   /** A grade mismatch auto-listed at the declared grade is our misrepresentation. */
   requireGradeMatch: boolean;
+  /**
+   * The declared SKU configuration must match the detected hardware.
+   * QC-025: declare 16 GB, present an 8 GB machine, get a MISMATCH.
+   */
+  requireSpecMatch: boolean;
   requireSeal: boolean;
   requireSerialMatch: boolean;
 }
@@ -71,6 +82,7 @@ export const DEFAULT_AUTO_APPROVAL: AutoApprovalPolicy = Object.freeze({
   blockOnRequiredFail: true,
   blockOnRequiredNotMeasured: true,
   requireGradeMatch: true,
+  requireSpecMatch: true,
   requireSeal: true,
   requireSerialMatch: true,
 });
@@ -78,6 +90,10 @@ export const DEFAULT_AUTO_APPROVAL: AutoApprovalPolicy = Object.freeze({
 export interface VerdictInput {
   declaredGrade: Grade;
   measurements: QcMeasurements;
+  /** The SKU the vendor picked from the catalog. Omit to skip the spec check. */
+  declaredSpec?: DeclaredSpec;
+  /** What the tool reported. Absent fields are unknowns, never mismatches. */
+  detectedSpec?: DetectedSpec;
   /** A seal is applied only after a pass; absent during evaluation is normal. */
   seal?: { code: string; photoKey: string | null };
   policy?: AutoApprovalPolicy;
@@ -95,6 +111,7 @@ export type BlockReason =
   | 'REQUIRED_AREA_NOT_MEASURED'
   | 'GRADE_MISMATCH'
   | 'BELOW_MINIMUM_GRADE'
+  | 'SPEC_MISMATCH'
   | 'NO_SEAL'
   | 'SEAL_NOT_PHOTOGRAPHED'
   | 'NOT_LISTABLE_TOOL_GRADE';
@@ -115,6 +132,8 @@ export interface VerdictResult {
   requiresGradeCorrection: boolean;
   /** Areas that capped the grade, for the console and the certificate face. */
   cappedBy: Array<{ area: QcArea; outcome: QcAreaOutcome }>;
+  /** Declared-vs-detected, when a SKU was supplied. Drives qc_mismatch rows. */
+  specMatch?: SpecMatchResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +210,15 @@ export function evaluateQcReport(input: VerdictInput): VerdictResult {
     };
   }
 
+  // --- 1b. Declared configuration vs detected hardware (QC-025) --------------
+  // The vendor picked a SKU; the tool read the machine. A BLOCKING difference —
+  // RAM, storage, CPU, a BIOS or MDM lock, a failing drive — means this is not
+  // the machine that was listed, and no grade or score makes that acceptable.
+  const specMatch =
+    input.declaredSpec && input.detectedSpec
+      ? compareSpec(input.declaredSpec, input.detectedSpec)
+      : undefined;
+
   // --- 2. Component floor rules (07 §3.1) ------------------------------------
   // A weighted mean cannot express "one critical component failed", so the mean
   // never decides alone. Eleven areas at 100 and one at 30 averages to ~94, and
@@ -263,6 +291,16 @@ export function evaluateQcReport(input: VerdictInput): VerdictResult {
   const requiresGradeCorrection = grade !== null && grade !== input.declaredGrade;
   if (requiresGradeCorrection && policy.requireGradeMatch) blockedBy.push('GRADE_MISMATCH');
 
+  // --- 7b. Specification --------------------------------------------------
+  if (policy.requireSpecMatch && specMatch && !specMatch.matches) {
+    blockedBy.push('SPEC_MISMATCH');
+  }
+  // A blocking spec difference is not listable at any grade, gate or no gate.
+  if (specMatch?.blocking) {
+    grade = null;
+    if (!blockedBy.includes('SPEC_MISMATCH')) blockedBy.push('SPEC_MISMATCH');
+  }
+
   // --- 8. Seal ---------------------------------------------------------------
   if (policy.requireSeal) {
     if (!input.seal) blockedBy.push('NO_SEAL');
@@ -270,10 +308,11 @@ export function evaluateQcReport(input: VerdictInput): VerdictResult {
   }
 
   // --- 9. Verdict ------------------------------------------------------------
+  const specMismatched = Boolean(specMatch && !specMatch.matches);
   const verdict: QcVerdict =
     grade === null || !scorePassed
       ? 'FAIL'
-      : requiresGradeCorrection
+      : requiresGradeCorrection || specMismatched
         ? 'MISMATCH'
         : cappedBy.length > 0
           ? 'PASS_WITH_NOTE'
@@ -291,15 +330,18 @@ export function evaluateQcReport(input: VerdictInput): VerdictResult {
       cappedBy,
       score: m.qcScore,
       policy,
+      specMatch,
     }),
     requiresGradeCorrection,
     cappedBy,
+    specMatch,
   };
 }
 
 /** Most-blocking first, so the vendor is told the thing that actually stops them. */
 const REASON_PRIORITY: readonly BlockReason[] = [
   'SERIAL_MISMATCH',
+  'SPEC_MISMATCH',
   'NOT_LISTABLE_TOOL_GRADE',
   'BELOW_MINIMUM_GRADE',
   'REQUIRED_AREA_FAILED',
@@ -345,6 +387,7 @@ function messageFor(
     cappedBy: VerdictResult['cappedBy'];
     score: number;
     policy: AutoApprovalPolicy;
+    specMatch?: SpecMatchResult;
   },
 ): string {
   if (reasons.length === 0) {
@@ -359,6 +402,18 @@ function messageFor(
     .map((c) => AREA_LABEL[c.area] ?? c.area);
 
   switch (reasons[0]) {
+    case 'SPEC_MISMATCH': {
+      // Lead with the blocking differences; they are the ones that stop the sale.
+      const worst =
+        ctx.specMatch?.mismatches.filter((x) => x.severity === 'BLOCKING') ??
+        ctx.specMatch?.mismatches ??
+        [];
+      const first = worst[0] ?? ctx.specMatch?.mismatches[0];
+      const others = (ctx.specMatch?.mismatches.length ?? 0) - 1;
+      return others > 0
+        ? `${first?.message} (${others} other difference${others > 1 ? 's' : ''} on the report.)`
+        : (first?.message ?? 'The machine inspected does not match the configuration you listed.');
+    }
     case 'BELOW_MINIMUM_GRADE':
       return 'This unit does not reach grade B, which is the lowest grade we list. It cannot be sold on the platform — please withdraw it.';
     case 'NOT_LISTABLE_TOOL_GRADE':

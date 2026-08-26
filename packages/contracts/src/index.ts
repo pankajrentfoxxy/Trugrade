@@ -5,3 +5,4 @@ export * from './money';
 export * from './events';
 export * from './roles';
 export * from './qc-verdict';
+export * from './spec-match';
