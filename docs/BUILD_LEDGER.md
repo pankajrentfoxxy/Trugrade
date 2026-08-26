@@ -12,9 +12,9 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | ID | Task | Status | Commit | Screens verified | Notes |
 |----|------|--------|--------|------------------|-------|
 | T1 | Console shell and chrome | DONE | 13ab439 | console shell, both themes, 900/600 | Dark chrome per 09_FRONTEND_LOCKED; shell/Shell.tsx + nav.ts; screenshots in .screenshots/T1-console-shell/ |
-| T2 | Console design conformance pass | DONE |  | 21 routes, both themes, 1440/900/600 | All 25 route files restyled; 13 hand-rolled tables → DataBoard; archetype declared on every route; board state in the URL; screenshots in docs/review/. **Blocked on a packages/ui defect: see "Open questions".** |
+| T2 | Console design conformance pass | DONE | 944eac9 | 126 shots: 21 routes x 2 themes x 1440/900/600 | All 25 route files; 13 hand-rolled tables to DataBoard; archetype on every route; board state in the URL; 0 stray hex. Exposed two defects, both FIXED in 944eac9: the API not booting (DocumentService unregistered) and cn() stripping text colours. |
 | T3 | packages/ui gap-fill | DONE | 13ab439 | Storybook, both themes | All 20 components exported: StepRail WhyRail OtpInput FormSection AddressCard DocumentViewer RecordHeader SidePanel KpiRow QueueList Timeline + DataBoard density-aware |
-| T4 | Customer registration - shell and steps 1-2 | TODO |  |  |  |
+| T4 | Customer registration - shell and steps 1-2 | DOING |  |  |  |
 | T5 | Customer registration - step 3 statutory | TODO |  |  |  |
 | T6 | Customer registration - steps 4-5 and submission | TODO |  |  |  |
 | T7 | Vendor registration - steps 1-3 | TODO |  |  |  |
@@ -62,66 +62,43 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 
 ## Open questions
 
-### 1. `cn()` silently strips every colour class. Six lines, `packages/ui`, blocking.
+_None open. A blocked task is recorded here with what was tried, marked BLOCKED in
+the table, and skipped — the run does not idle waiting for an answer._
 
-`packages/ui/src/lib/cn.ts` calls bare `twMerge`. `tailwind-merge` does not know
-this project's custom `fontSize` scale, so it classifies `text-body-sm`,
-`text-label`, `text-data`, `text-h3` … as **text-colour** classes and drops
-whatever real colour sits on the other side of them. Reproduce:
+## Resolved
 
-```
-$ cd packages/ui && node -e "const {twMerge}=require('tailwind-merge');
-  console.log(twMerge('bg-acc text-acc-on','h-11 px-5 text-body-sm'))"
-bg-acc h-11 px-5 text-body-sm      # text-acc-on is gone
-```
+**`cn()` stripped every colour class** — raised by T2, fixed in 944eac9.
+`tailwind-merge` resolves from a map of Tailwind's DEFAULT classes and had never seen
+this preset's ten custom sizes, so `text-body-sm` fell back to "colour" and dropped the
+real colour beside it. Every amber primary action rendered --ink-2 on --acc: 1.7:1
+measured, against the 11.2:1 in 09_FRONTEND_LOCKED section 9. `cn()` now extends
+tailwind-merge with the preset's font-size group; browser-measured 11.09:1 in both
+themes. `cn.spec.ts` reads the preset so a size added there and not here fails loudly.
 
-Consequences, on every screen:
+**The API did not boot** — raised by T2, fixed in 944eac9. `DocumentService` was injected
+into `OnboardingController` and missing from `KycModule.providers`. Typecheck, lint and
+every unit test passed; only starting the process found it.
 
-- **`Button variant="primary"` loses `text-acc-on`** and inherits `--ink-2`.
-  Amber fill, `#A8B1BE` text — about 1.7:1, where §9 of `09_FRONTEND_LOCKED.md`
-  claims 11.2:1. Verified in the browser: `getComputedStyle` on the KYC Approve
-  button returns `color: rgb(168,177,190)` on `background: rgb(255,182,39)`.
-- `danger` loses `text-white`; `link` loses `text-acc-ink`.
-- **`StatusPill` and `GradeBadge` lose `text-label` / `text-data`** — the
-  *sizes* — so every pill renders at the inherited 14px instead of 10.5px, and
-  `DataTable`'s column headers with them. This is the single biggest reason the
-  console's type scale does not match `docs/reference/homepage.html`.
+## packages/ui gaps reported by T2 — fix when a task needs them
 
-The fix is one file:
+- No `<select>`, `<textarea>` or `<input type=date>` in the package. T2 kept one copy in
+  `apps/console/src/lib/controls.tsx`. They belong in `packages/ui` — fold in during Wave 2,
+  which is form-heavy.
+- `DataBoard` has no card container. The reference's `.tbl` + `.tbh` is the table's own
+  chrome; T2 added `Board` app-side for seven boards.
+- `Button` has no `asChild`/`as`, so a primary action that navigates must drop its `href`.
+- `KpiRow`, `RecordHeader`, `Breadcrumb`, `Stepper` render raw `<a href>` — a full page
+  reload on every drill-down in an SPA. They need a link-component injection point.
+- `Stepper` marks a completed step with a green tick. Green is reserved for PASS/FAIL;
+  a finished step is neither.
+- `PriceBreakup` requires `valuationMethod` and sums lines to a total — a buyer landed-price
+  shape that does not fit a vendor payout preview (gross minus deductions).
 
-```ts
-import { extendTailwindMerge } from 'tailwind-merge';
-const twMerge = extendTailwindMerge({
-  extend: {
-    classGroups: {
-      'font-size': [
-        { text: ['display-1','display-2','h1','h2','h3','body-lg','body','body-sm','label','data'] },
-      ],
-    },
-  },
-});
-```
+## Known bugs, not yet fixed
 
-T2 did not apply it: `packages/ui` is T3's lane and another session shares this
-tree. **T2's screenshots in `docs/review/` show the defect** — every amber
-primary action in them is unreadable for this reason and no other.
-
-### 2. The API does not boot, so T2's screenshots used a mock.
-
-`node apps/api/dist/main.js` dies at startup:
-
-```
-UnknownDependenciesException: Nest can't resolve dependencies of the
-OnboardingController (KycService, AuditService, VerificationService, ?).
-Please make sure that the argument DocumentService at index [3] is available
-in the KycModule context.
-```
-
-`apps/api/src/modules/kyc/internal/document.service.ts` exists but is not in
-`KycModule`'s `providers`. It is an untracked file — in-flight work from the
-other lane — so T2 left it alone and drove the console against a stub of the
-read endpoints instead. Every screenshot is the real console; only the JSON
-behind it is fake.
+- `postJson` in `apps/console/src/routes/vendor/api.ts` reads `message` off the body root,
+  but `DomainExceptionFilter` nests it under `error` — so every actionable refusal renders
+  as "that did not go through (422)". Behaviour fix, deliberately not done inside a restyle.
 
 ## Notes carried forward
 
