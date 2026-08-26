@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
+import { THEME_PREPAINT_SCRIPT } from '@trugrade/ui';
 import '@trugrade/ui/globals.css';
 import './globals.css';
 
@@ -15,16 +16,24 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <html lang="en">
+    <html lang="en" data-t="dark">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
+        {/*
+          The pre-paint theme read. This MUST be a blocking inline script in
+          <head>: by the time React hydrates, the wrong theme has already been
+          painted, and a light-theme user would get a dark flash on every
+          navigation. `dark` is the attribute on <html> above, so the default
+          costs nothing and only an opted-out user pays for this script.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_PREPAINT_SCRIPT }} />
       </head>
-      <body className="bg-paper text-ink">
+      <body className="bg-ground text-ink-2">
         {children}
         {/*
           Rule 4(2) of the Consumer Protection (e-Commerce) Rules 2020: legal

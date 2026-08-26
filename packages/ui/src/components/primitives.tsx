@@ -14,17 +14,18 @@ const buttonVariants = cva(
     variants: {
       variant: {
         /**
-         * `--acc-hi`, not `--acc`.
+         * Amber fill, `--acc-on` text. `09_FRONTEND_LOCKED.md` §5: there is no
+         * other primary style.
          *
-         * White on `--acc` (#B4611C) measures 4.499:1 — below the 4.5:1 AA floor
-         * by a thousandth, which is a fail. `--acc-hi` (#8F4C14) is 6.54:1.
-         * `--acc` remains the accent for the mark, the found-dot and borders,
-         * where it carries no text.
+         * The pairing measures 11.2:1, which is why the text token is near-black
+         * rather than white — white on this amber fails outright. The previous
+         * palette needed a darkened amber to clear 4.5:1 with white text; this
+         * one solves it the other way round and gets a far better ratio.
          */
-        primary: 'bg-acc-hi text-white hover:bg-acc active:translate-y-px',
-        secondary: 'bg-sheet-2 text-ink border border-rule hover:bg-paper',
+        primary: 'bg-acc text-acc-on hover:bg-acc-dk active:translate-y-px',
+        secondary: 'bg-sheet-2 text-ink border border-rule hover:bg-ground',
         ghost: 'bg-transparent text-ink-2 hover:bg-sheet-2',
-        link: 'bg-transparent text-acc-hi underline underline-offset-4 hover:text-acc',
+        link: 'bg-transparent text-acc-ink underline underline-offset-4 hover:text-acc',
         danger: 'bg-fail text-white hover:opacity-90',
       },
       size: {
@@ -211,13 +212,13 @@ const pillVariants = cva(
     variants: {
       tone: {
         neutral: 'bg-sheet-2 text-ink-2 border border-rule',
-        info: 'bg-acc-wash text-acc-hi',
-        pass: 'bg-pass-wash text-pass',
+        info: 'bg-acc-wash text-acc-ink',
+        pass: 'bg-sheet-2 text-pass',
         // Rule 4: outlined, never filled. --warn sits close to the accent in
         // hue, and a filled warn chip is confusable with a primary action at a
         // glance. PASS and FAIL fill normally; WARN does not.
         warn: 'bg-transparent text-warn border border-warn',
-        fail: 'bg-fail-wash text-fail',
+        fail: 'bg-sheet-2 text-fail',
         processing: 'bg-sheet-2 text-ink-2 border border-rule',
       },
     },
@@ -438,7 +439,7 @@ export function EmptyState({
         className,
       )}
     >
-      <h3 className="font-display text-h3 text-ink">{title}</h3>
+      <h3 className="font-sans text-h3 text-ink">{title}</h3>
       {body && <p className="max-w-prose text-body-sm text-ink-2">{body}</p>}
       {action}
     </div>
@@ -520,7 +521,7 @@ export function RepresentativeImage({
   const passport = passportHref ? (
     <>
       Your unit&rsquo;s actual inspection report and photographs are on its{' '}
-      <a href={passportHref} className="text-acc-hi underline underline-offset-2">
+      <a href={passportHref} className="text-acc-ink underline underline-offset-2">
         unit passport
       </a>
       .

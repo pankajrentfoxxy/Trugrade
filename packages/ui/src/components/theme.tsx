@@ -1,3 +1,10 @@
+'use client';
+
+// Interactive: this module uses React state, refs or context, none of which
+// exist in a server component. The storefront is a Next App Router app, so
+// without this directive importing anything from the package barrel drags a
+// client-only API into an RSC render and fails at request time rather than at
+// build time.
 import * as React from 'react';
 import { cn } from '../lib/cn';
 

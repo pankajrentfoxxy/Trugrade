@@ -1,3 +1,10 @@
+'use client';
+
+// Interactive: this module uses React state, refs or context, none of which
+// exist in a server component. The storefront is a Next App Router app, so
+// without this directive importing anything from the package barrel drags a
+// client-only API into an RSC render and fails at request time rather than at
+// build time.
 import * as React from 'react';
 import { Money, priceFromNetPayout, type MarginRule, type Grade } from '@trugrade/contracts';
 import { cn } from '../lib/cn';
@@ -75,7 +82,7 @@ export function CommissionReadout({
     <div className={cn('rounded border border-rule bg-sheet-2 p-5', className)}>
       <div className="flex items-baseline justify-between gap-4">
         <span className="text-body text-ink">Our commission</span>
-        <span className="font-mono text-h2 tnum text-acc-hi" data-testid="commission-pct">
+        <span className="font-mono text-h2 tnum text-acc-ink" data-testid="commission-pct">
           {breakdown.commissionPct}%
         </span>
       </div>
