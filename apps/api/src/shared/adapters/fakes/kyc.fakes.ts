@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Money, panFromGstin, stateCodeFromGstin } from '@trugrade/contracts';
+import { Money, stateCodeFromGstin } from '@trugrade/contracts';
 import {
   BankVerificationPort,
   GstinVerificationPort,
@@ -47,25 +47,48 @@ const ok = <T>(data: T, extra: Partial<VerificationResult<T>> = {}): Verificatio
 
 @Injectable()
 export class FakeGstinVerification extends GstinVerificationPort {
-  async verify(gstin: string, expectedLegalName?: string): Promise<VerificationResult<GstinTaxpayer>> {
+  async verify(
+    gstin: string,
+    expectedLegalName?: string,
+  ): Promise<VerificationResult<GstinTaxpayer>> {
     const suffix = gstin.slice(-2).toUpperCase();
 
     if (suffix === 'Z9') {
-      return { outcome: 'PROVIDER_ERROR', provider: 'fake', latencyMs: 30_000, costPaise: 0,
-        reason: "We couldn't reach the GST portal. We'll retry automatically — nothing for you to do." };
+      return {
+        outcome: 'PROVIDER_ERROR',
+        provider: 'fake',
+        latencyMs: 30_000,
+        costPaise: 0,
+        reason:
+          "We couldn't reach the GST portal. We'll retry automatically — nothing for you to do.",
+      };
     }
     if (suffix === 'Z8') {
-      return { outcome: 'TIMEOUT', provider: 'fake', latencyMs: 30_000, costPaise: 0,
-        reason: "The GST portal didn't respond. We'll retry automatically." };
+      return {
+        outcome: 'TIMEOUT',
+        provider: 'fake',
+        latencyMs: 30_000,
+        costPaise: 0,
+        reason: "The GST portal didn't respond. We'll retry automatically.",
+      };
     }
     if (suffix === 'Z4') {
-      return { outcome: 'FAIL', provider: 'fake', latencyMs: 140, costPaise: 200,
-        reason: 'The GST portal has no record of this GSTIN. Check the number against your certificate.' };
+      return {
+        outcome: 'FAIL',
+        provider: 'fake',
+        latencyMs: 140,
+        costPaise: 200,
+        reason:
+          'The GST portal has no record of this GSTIN. Check the number against your certificate.',
+      };
     }
 
     const taxpayer: GstinTaxpayer = {
       gstin,
-      legalName: suffix === 'Z2' ? 'Entirely Different Traders LLP' : (expectedLegalName ?? 'Alpha Systems Private Limited'),
+      legalName:
+        suffix === 'Z2'
+          ? 'Entirely Different Traders LLP'
+          : (expectedLegalName ?? 'Alpha Systems Private Limited'),
       tradeName: 'Alpha Systems',
       status: suffix === 'Z3' ? 'CANCELLED' : 'ACTIVE',
       stateCode: stateCodeFromGstin(gstin) ?? '06',
@@ -75,14 +98,28 @@ export class FakeGstinVerification extends GstinVerificationPort {
     };
 
     if (taxpayer.status === 'CANCELLED') {
-      return { outcome: 'FAIL', data: taxpayer, provider: 'fake', latencyMs: 140, costPaise: 200,
-        reason: 'This GSTIN is cancelled on the GST portal. We can only onboard an active registration.' };
+      return {
+        outcome: 'FAIL',
+        data: taxpayer,
+        provider: 'fake',
+        latencyMs: 140,
+        costPaise: 200,
+        reason:
+          'This GSTIN is cancelled on the GST portal. We can only onboard an active registration.',
+      };
     }
 
     const score = expectedLegalName ? nameSimilarity(expectedLegalName, taxpayer.legalName) : 1;
     if (expectedLegalName && score < 0.7) {
-      return { outcome: 'MISMATCH', data: taxpayer, matchScore: score, provider: 'fake', latencyMs: 140, costPaise: 200,
-        reason: `The GST portal shows this GSTIN registered to "${taxpayer.legalName}", which doesn't match the business name you entered.` };
+      return {
+        outcome: 'MISMATCH',
+        data: taxpayer,
+        matchScore: score,
+        provider: 'fake',
+        latencyMs: 140,
+        costPaise: 200,
+        reason: `The GST portal shows this GSTIN registered to "${taxpayer.legalName}", which doesn't match the business name you entered.`,
+      };
     }
 
     return ok(taxpayer, { matchScore: score });
@@ -93,12 +130,22 @@ export class FakeGstinVerification extends GstinVerificationPort {
 export class FakePanVerification extends PanVerificationPort {
   async verify(pan: string, expectedName?: string): Promise<VerificationResult<PanHolder>> {
     if (pan === 'AAAPZ9999Z') {
-      return { outcome: 'PROVIDER_ERROR', provider: 'fake', latencyMs: 5_000, costPaise: 0,
-        reason: "We couldn't reach the PAN service. We'll retry automatically." };
+      return {
+        outcome: 'PROVIDER_ERROR',
+        provider: 'fake',
+        latencyMs: 5_000,
+        costPaise: 0,
+        reason: "We couldn't reach the PAN service. We'll retry automatically.",
+      };
     }
     if (pan === 'AAAPZ0000Z') {
-      return { outcome: 'FAIL', provider: 'fake', latencyMs: 110, costPaise: 150,
-        reason: 'This PAN is not valid. Check it against your PAN card.' };
+      return {
+        outcome: 'FAIL',
+        provider: 'fake',
+        latencyMs: 110,
+        costPaise: 150,
+        reason: 'This PAN is not valid. Check it against your PAN card.',
+      };
     }
 
     const fourth = pan[3] ?? 'C';
@@ -123,16 +170,30 @@ export class FakeBankVerification extends BankVerificationPort {
     const tail = accountNumber.slice(-4);
 
     if (tail === '0009') {
-      return { outcome: 'PROVIDER_ERROR', provider: 'fake', latencyMs: 8_000, costPaise: 0,
-        reason: "We couldn't reach the bank. We'll retry automatically." };
+      return {
+        outcome: 'PROVIDER_ERROR',
+        provider: 'fake',
+        latencyMs: 8_000,
+        costPaise: 0,
+        reason: "We couldn't reach the bank. We'll retry automatically.",
+      };
     }
     if (tail === '0008') {
-      return { outcome: 'FAIL', provider: 'fake', latencyMs: 900, costPaise: Number(Money.rupees(1).paise),
-        reason: 'The bank reports this account as closed. Add a different payout account.' };
+      return {
+        outcome: 'FAIL',
+        provider: 'fake',
+        latencyMs: 900,
+        costPaise: Number(Money.rupees(1).paise),
+        reason: 'The bank reports this account as closed. Add a different payout account.',
+      };
     }
 
     const beneficiaryName =
-      tail === '0002' ? 'Unrelated Person' : tail === '0001' ? `${expectedName} Enterprises` : expectedName;
+      tail === '0002'
+        ? 'Unrelated Person'
+        : tail === '0001'
+          ? `${expectedName} Enterprises`
+          : expectedName;
 
     const holder: BankAccountHolder = {
       accountNumber,
@@ -145,21 +206,45 @@ export class FakeBankVerification extends BankVerificationPort {
 
     const score = nameSimilarity(expectedName, beneficiaryName);
     if (score < 0.7) {
-      return { outcome: 'FAIL', data: holder, matchScore: score, provider: 'fake', latencyMs: 900, costPaise: 100,
-        reason: `The bank holds this account in the name "${beneficiaryName}", which doesn't match your registered business name. Payouts can only go to an account in your own name.` };
+      return {
+        outcome: 'FAIL',
+        data: holder,
+        matchScore: score,
+        provider: 'fake',
+        latencyMs: 900,
+        costPaise: 100,
+        reason: `The bank holds this account in the name "${beneficiaryName}", which doesn't match your registered business name. Payouts can only go to an account in your own name.`,
+      };
     }
     if (score < 0.9) {
-      return { outcome: 'MISMATCH', data: holder, matchScore: score, provider: 'fake', latencyMs: 900, costPaise: 100,
-        reason: `The bank holds this account as "${beneficiaryName}". That is close to your registered name but not identical, so we'll have someone check it.` };
+      return {
+        outcome: 'MISMATCH',
+        data: holder,
+        matchScore: score,
+        provider: 'fake',
+        latencyMs: 900,
+        costPaise: 100,
+        reason: `The bank holds this account as "${beneficiaryName}". That is close to your registered name but not identical, so we'll have someone check it.`,
+      };
     }
     return ok(holder, { matchScore: score, costPaise: 100 });
   }
 
-  async lookupIfsc(ifsc: string): Promise<VerificationResult<{ bank: string; branch: string; city: string }>> {
+  async lookupIfsc(
+    ifsc: string,
+  ): Promise<VerificationResult<{ bank: string; branch: string; city: string }>> {
     if (ifsc.startsWith('ZZZZ')) {
-      return { outcome: 'FAIL', provider: 'fake', latencyMs: 60, costPaise: 0,
-        reason: "We don't recognise this bank code. Please check the IFSC." };
+      return {
+        outcome: 'FAIL',
+        provider: 'fake',
+        latencyMs: 60,
+        costPaise: 0,
+        reason: "We don't recognise this bank code. Please check the IFSC.",
+      };
     }
-    return ok({ bank: 'HDFC Bank', branch: 'Udyog Vihar, Gurugram', city: 'Gurugram' }, { costPaise: 0 });
+    return ok(
+      { bank: 'HDFC Bank', branch: 'Udyog Vihar, Gurugram', city: 'Gurugram' },
+      { costPaise: 0 },
+    );
   }
 }

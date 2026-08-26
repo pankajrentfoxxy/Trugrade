@@ -15,7 +15,9 @@ export type IntegrationMode = (typeof INTEGRATION_MODES)[number];
 
 const boolish = z
   .union([z.boolean(), z.string()])
-  .transform((v) => (typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase())));
+  .transform((v) =>
+    typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase()),
+  );
 
 export const envSchema = z
   .object({
@@ -46,7 +48,10 @@ export const envSchema = z
     JWT_PRIVATE_KEY: z.string().optional(),
     JWT_PUBLIC_KEY: z.string().optional(),
     JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().default(900),
-    JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().default(30 * 24 * 3600),
+    JWT_REFRESH_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .default(30 * 24 * 3600),
     SESSION_COOKIE_DOMAIN: z.string().default('localhost'),
 
     INTEGRATION_MODE: z.enum(INTEGRATION_MODES).default('mock'),
@@ -72,14 +77,16 @@ export const envSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['PII_ENCRYPTION_KEY'],
-          message: 'PII_ENCRYPTION_KEY is required in production — PAN and bank details are encrypted at the column.',
+          message:
+            'PII_ENCRYPTION_KEY is required in production — PAN and bank details are encrypted at the column.',
         });
       }
       if (!env.JWT_PRIVATE_KEY && !env.JWT_PUBLIC_KEY) {
         ctx.addIssue({
           code: 'custom',
           path: ['JWT_PRIVATE_KEY'],
-          message: 'Production must supply the JWT keypair from Secrets Manager, not from a file path in the image.',
+          message:
+            'Production must supply the JWT keypair from Secrets Manager, not from a file path in the image.',
         });
       }
     }
@@ -87,12 +94,52 @@ export const envSchema = z
 
 export type Env = z.infer<typeof envSchema>;
 
+/**
+ * Cross-field rules, run against the RAW source rather than the parsed object.
+ *
+ * Zod skips `superRefine` entirely when the base object fails, so if a production
+ * deploy is missing both DATABASE_URL and PII_ENCRYPTION_KEY it would report only
+ * the first — and the operator would discover the second on the next restart.
+ * A boot-time config error should name everything wrong at once.
+ */
+function crossFieldIssues(source: NodeJS.ProcessEnv): string[] {
+  const issues: string[] = [];
+  const nodeEnv = source.NODE_ENV ?? 'development';
+
+  // 04_TEST_PLAN.md §1.4.3: `live` is impossible in CI. Not a warning — a throw.
+  if (source.INTEGRATION_MODE === 'live' && nodeEnv !== 'production') {
+    issues.push(
+      '  INTEGRATION_MODE: INTEGRATION_MODE=live is only permitted when NODE_ENV=production. A live carrier or payment call from a non-production process books a real pickup or moves real money.',
+    );
+  }
+
+  if (nodeEnv === 'production') {
+    if (!source.PII_ENCRYPTION_KEY) {
+      issues.push(
+        '  PII_ENCRYPTION_KEY: PII_ENCRYPTION_KEY is required in production — PAN and bank details are encrypted at the column.',
+      );
+    }
+    if (!source.JWT_PRIVATE_KEY && !source.JWT_PUBLIC_KEY) {
+      issues.push(
+        '  JWT_PRIVATE_KEY: Production must supply the JWT keypair from Secrets Manager, not from a file path in the image.',
+      );
+    }
+  }
+
+  return issues;
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = envSchema.safeParse(source);
-  if (!parsed.success) {
-    const detail = parsed.error.issues
-      .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('\n');
+  const cross = crossFieldIssues(source);
+
+  if (!parsed.success || cross.length) {
+    const base = parsed.success
+      ? []
+      : parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
+    // De-duplicate: a rule expressed both in the schema's superRefine and here
+    // must not be printed twice.
+    const detail = [...new Set([...base, ...cross])].join('\n');
     throw new Error(`Invalid environment:\n${detail}`);
   }
   return parsed.data;

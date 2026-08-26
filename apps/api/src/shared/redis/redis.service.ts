@@ -69,6 +69,10 @@ export class LockService {
     opts: { ttlMs?: number; waitMs?: number } = {},
   ): Promise<T> {
     const ttl = opts.ttlMs ?? 10_000;
+    // Real elapsed wall time, deliberately not ClockPort. A lock deadline is
+    // about how long a caller has actually been waiting; freezing it with a test
+    // clock would make a contention test spin forever instead of timing out.
+    // eslint-disable-next-line no-restricted-syntax -- wall-clock deadline, not business time
     const deadline = Date.now() + (opts.waitMs ?? 5_000);
     const sorted = [...new Set(keys)].sort();
     const held: Array<{ key: string; token: string }> = [];
@@ -83,6 +87,7 @@ export class LockService {
             acquired = true;
             break;
           }
+          // eslint-disable-next-line no-restricted-syntax -- wall-clock deadline, not business time
           if (Date.now() > deadline) break;
           await new Promise((r) => setTimeout(r, 25 + Math.floor(Math.random() * 50)));
         }
@@ -108,7 +113,11 @@ export class LockService {
     }
   }
 
-  withLock<T>(key: string, fn: () => Promise<T>, opts?: { ttlMs?: number; waitMs?: number }): Promise<T> {
+  withLock<T>(
+    key: string,
+    fn: () => Promise<T>,
+    opts?: { ttlMs?: number; waitMs?: number },
+  ): Promise<T> {
     return this.withLocks([key], fn, opts);
   }
 }
@@ -137,11 +146,7 @@ export class RateLimiter {
   /** Returns remaining allowance. Throws `RateLimitedError` when exhausted. */
   async consume(rule: RateLimitRule, subject: string, cost = 1): Promise<number> {
     const key = `rl:${rule.name}:${subject}`;
-    const results = await this.redis.client
-      .multi()
-      .incrby(key, cost)
-      .ttl(key)
-      .exec();
+    const results = await this.redis.client.multi().incrby(key, cost).ttl(key).exec();
 
     const count = Number(results?.[0]?.[1] ?? 0);
     const ttl = Number(results?.[1]?.[1] ?? -1);

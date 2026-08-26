@@ -168,7 +168,8 @@ export const serialNumberSchema = bind(
     .transform((v) => normaliseSerial(v) ?? '')
     .pipe(z.string().regex(SERIAL_NUMBER.pattern!, { message: SERIAL_NUMBER.message }))
     .refine((v) => !isPlaceholderSerial(v), {
-      message: "That looks like a firmware placeholder, not a serial. Enter the number printed on the chassis.",
+      message:
+        'That looks like a firmware placeholder, not a serial. Enter the number printed on the chassis.',
     }),
   SERIAL_NUMBER,
 );
@@ -192,30 +193,27 @@ export const valuationMethodSchema = z.enum(VALUATION_METHODS);
  * Money crosses the wire as a fixed-2dp decimal string, never a number.
  * A JSON number would go through an IEEE-754 double and VR-126 exists to stop that.
  */
-export const moneySchema = z
-  .union([z.string(), z.number()])
-  .transform((v, ctx) => {
-    if (typeof v === 'number') {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Send money as a decimal string ("1234.50"), never a JSON number.',
-      });
-      return z.NEVER;
-    }
-    try {
-      return Money.parse(v);
-    } catch (e) {
-      ctx.addIssue({ code: 'custom', message: (e as Error).message });
-      return z.NEVER;
-    }
-  });
+export const moneySchema = z.union([z.string(), z.number()]).transform((v, ctx) => {
+  if (typeof v === 'number') {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Send money as a decimal string ("1234.50"), never a JSON number.',
+    });
+    return z.NEVER;
+  }
+  try {
+    return Money.parse(v);
+  } catch (e) {
+    ctx.addIssue({ code: 'custom', message: (e as Error).message });
+    return z.NEVER;
+  }
+});
 
 const boundedMoney = (r: Rule) =>
   bind(
-    moneySchema.refine(
-      (m) => m.gte(Money.rupees(r.min!)) && m.lte(Money.rupees(r.max!)),
-      { message: r.message },
-    ),
+    moneySchema.refine((m) => m.gte(Money.rupees(r.min!)) && m.lte(Money.rupees(r.max!)), {
+      message: r.message,
+    }),
     r,
   );
 

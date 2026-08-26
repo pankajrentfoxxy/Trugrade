@@ -5,8 +5,14 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./brand": { "types": "./dist/brand.d.ts", "default": "./dist/brand.js" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./brand": {
+      "types": "./dist/brand.d.ts",
+      "default": "./dist/brand.js"
+    },
     "./eslint": "./eslint/index.js",
     "./eslint/plugin": "./eslint/plugin.js",
     "./tailwind": "./tailwind-preset.js",
@@ -15,7 +21,12 @@
     "./tsconfig/next.json": "./tsconfig/next.json",
     "./tsconfig/react-lib.json": "./tsconfig/react-lib.json"
   },
-  "files": ["dist", "eslint", "tsconfig", "tailwind-preset.js"],
+  "files": [
+    "dist",
+    "eslint",
+    "tsconfig",
+    "tailwind-preset.js"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",

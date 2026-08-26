@@ -17,10 +17,19 @@ import type { TestingModule } from '@nestjs/testing';
 import { permissionsFor, type Permission, type Role } from '@trugrade/contracts';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
-import { ContextModule, OrgScope, RequestContextService, type Principal } from '../../src/shared/db/org-scope';
+import {
+  ContextModule,
+  OrgScope,
+  RequestContextService,
+  type Principal,
+} from '../../src/shared/db/org-scope';
 import { RedisService, LockService, RateLimiter } from '../../src/shared/redis/redis.service';
 import { TokenService } from '../../src/shared/auth/token.service';
-import { ForbiddenError, RateLimitedError, UnauthenticatedError } from '../../src/shared/errors/domain-errors';
+import {
+  ForbiddenError,
+  RateLimitedError,
+  UnauthenticatedError,
+} from '../../src/shared/errors/domain-errors';
 
 let moduleRef: TestingModule;
 let scope: OrgScope;
@@ -105,7 +114,9 @@ describe('IDN-050…IDN-079 — org scope at the repository layer', () => {
   });
 
   it('lets a vendor ask for their own org id explicitly', () => {
-    const scoped = as(principal(), () => scope.scoped({ vendor_org_id: VENDOR_A }, 'vendor_org_id'));
+    const scoped = as(principal(), () =>
+      scope.scoped({ vendor_org_id: VENDOR_A }, 'vendor_org_id'),
+    );
     expect(scoped).toEqual({ vendor_org_id: VENDOR_A });
   });
 
@@ -120,7 +131,9 @@ describe('IDN-050…IDN-079 — org scope at the repository layer', () => {
   });
 
   it('assertOwns rejects a row fetched by id that belongs to someone else', () => {
-    expect(() => as(principal(), () => scope.assertOwns(VENDOR_B, 'listing'))).toThrow(ForbiddenError);
+    expect(() => as(principal(), () => scope.assertOwns(VENDOR_B, 'listing'))).toThrow(
+      ForbiddenError,
+    );
     expect(() => as(principal(), () => scope.assertOwns(VENDOR_A, 'listing'))).not.toThrow();
   });
 
@@ -137,7 +150,13 @@ describe('IDN-050…IDN-079 — org scope at the repository layer', () => {
 
 describe('the role x permission matrix', () => {
   it('a vendor role holds no *.any.* permission — the cross-org read simply does not exist for them', () => {
-    for (const role of ['VENDOR_OWNER', 'VENDOR_ADMIN', 'VENDOR_OPS', 'VENDOR_FINANCE', 'VENDOR_VIEWER'] as Role[]) {
+    for (const role of [
+      'VENDOR_OWNER',
+      'VENDOR_ADMIN',
+      'VENDOR_OPS',
+      'VENDOR_FINANCE',
+      'VENDOR_VIEWER',
+    ] as Role[]) {
       const perms = [...permissionsFor([role])];
       expect(perms.filter((p) => p.includes('.any.'))).toEqual([]);
     }
@@ -153,21 +172,25 @@ describe('the role x permission matrix', () => {
 
   it('the auditor role is read-only everywhere, including the audit log', () => {
     const perms = [...permissionsFor(['AUDITOR'])] as Permission[];
-    const writes = perms.filter((p) => /\.(write|issue|post|approve|run|execute|assign|action|plan|handle|acknowledge|upload|ingest|recheck|triage|resolve|override|create|respond|schedule)$/.test(p));
+    const writes = perms.filter((p) =>
+      /\.(write|issue|post|approve|run|execute|assign|action|plan|handle|acknowledge|upload|ingest|recheck|triage|resolve|override|create|respond|schedule)$/.test(
+        p,
+      ),
+    );
     expect(writes).toEqual([]);
   });
 
   it('only FINANCE and the superadmin can post to the ledger', () => {
-    const canPost = (['FINANCE', 'PLATFORM_SUPERADMIN', 'OPS_MANAGER', 'SUPPORT', 'VENDOR_OWNER'] as Role[]).filter(
-      (r) => permissionsFor([r]).has('payment.ledger.post'),
-    );
+    const canPost = (
+      ['FINANCE', 'PLATFORM_SUPERADMIN', 'OPS_MANAGER', 'SUPPORT', 'VENDOR_OWNER'] as Role[]
+    ).filter((r) => permissionsFor([r]).has('payment.ledger.post'));
     expect(canPost.sort()).toEqual(['FINANCE', 'PLATFORM_SUPERADMIN']);
   });
 
   it('only FINANCE and the superadmin can run a payout', () => {
-    const canRun = (['FINANCE', 'PLATFORM_SUPERADMIN', 'OPS_MANAGER', 'VENDOR_FINANCE'] as Role[]).filter((r) =>
-      permissionsFor([r]).has('procurement.payout.run'),
-    );
+    const canRun = (
+      ['FINANCE', 'PLATFORM_SUPERADMIN', 'OPS_MANAGER', 'VENDOR_FINANCE'] as Role[]
+    ).filter((r) => permissionsFor([r]).has('procurement.payout.run'));
     expect(canRun.sort()).toEqual(['FINANCE', 'PLATFORM_SUPERADMIN']);
   });
 });
@@ -324,9 +347,9 @@ describe('locks are an optimisation, and they sort their keys', () => {
 
   it('a second holder cannot steal a lock that is still held', async () => {
     await locks.withLock('listing:y', async () => {
-      await expect(locks.withLock('listing:y', async () => undefined, { waitMs: 100 })).rejects.toThrow(
-        RateLimitedError,
-      );
+      await expect(
+        locks.withLock('listing:y', async () => undefined, { waitMs: 100 }),
+      ).rejects.toThrow(RateLimitedError);
     });
   });
 

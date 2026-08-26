@@ -96,7 +96,9 @@ describe('DEFECT 1 / DATA-05, DATA-06 — partition runway', () => {
       await db.$executeRawUnsafe(`DROP TABLE platform.${c.child}`);
     }
 
-    const rows = await db.$queryRaw<Array<{ table_name: string; runway_days: number; is_critical: boolean }>>`
+    const rows = await db.$queryRaw<
+      Array<{ table_name: string; runway_days: number; is_critical: boolean }>
+    >`
       SELECT table_name, runway_days, is_critical FROM ops.v_partition_runway
       WHERE table_name = 'integration_log'`;
 
@@ -212,6 +214,7 @@ describe('DEFECT 3 / LST-051, DATA-03 — the seal-less sellable unit', () => {
     expect(fixed[0]!.seal_ok).toBe(false);
 
     // And the original view, reconstructed here, provably does not find it.
+    // eslint-disable-next-line @trugrade/no-cross-schema-join -- this IS the defect: reproducing the pre-fix view is the whole assertion
     await db.$executeRawUnsafe(`
       CREATE OR REPLACE VIEW listing.v_sellability_drift_prefix AS
       SELECT u.id AS unit_id
@@ -366,7 +369,8 @@ describe('DEFECT 10 — no placeholder credentials survive in any migration', ()
       const file = join(root, dir, 'migration.sql');
       const sql = readFileSync(file, 'utf8');
       if (sql.includes('CHANGE_ME' + '_IN_PRODUCTION')) offenders.push(dir);
-      if (/CREATE\s+ROLE\s+\w+\s+LOGIN\s+PASSWORD/i.test(sql)) offenders.push(`${dir} (CREATE ROLE ... PASSWORD)`);
+      if (/CREATE\s+ROLE\s+\w+\s+LOGIN\s+PASSWORD/i.test(sql))
+        offenders.push(`${dir} (CREATE ROLE ... PASSWORD)`);
     }
     expect(offenders).toEqual([]);
   });
@@ -386,14 +390,23 @@ describe('the most important index in the database — VR-077, LST-005 to LST-01
       pickupAddressId: first.pickupAddressId,
     });
     await expect(
-      makeUnit({ listingId, vendorOrgId: first.vendorOrgId, skuId: second.skuId, serial: first.serial }),
+      makeUnit({
+        listingId,
+        vendorOrgId: first.vendorOrgId,
+        skuId: second.skuId,
+        serial: first.serial,
+      }),
     ).rejects.toThrow();
   });
 
   it('LST-006 — the same serial cannot be listed by a *different* vendor either', async () => {
     const first = await seedSellableUnit();
     const otherVendor = await makeOrganization({ legal_name: 'Beta Infotech LLP' });
-    const otherAddress = await makeAddress(otherVendor, { city: 'Noida', state_code: '09', pincode: '201301' });
+    const otherAddress = await makeAddress(otherVendor, {
+      city: 'Noida',
+      state_code: '09',
+      pincode: '201301',
+    });
     const catalog = await makeCatalog();
     const listingId = await makeListing({
       vendorOrgId: otherVendor,

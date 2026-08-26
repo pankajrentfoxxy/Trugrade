@@ -30,7 +30,8 @@ export class Money {
   static parse(value: string | Money): Money {
     if (value instanceof Money) return value;
     const s = String(value).trim().replace(/,/g, '');
-    if (!/^-?\d+(\.\d+)?$/.test(s)) throw new MoneyError(`Not a decimal amount: ${JSON.stringify(value)}`);
+    if (!/^-?\d+(\.\d+)?$/.test(s))
+      throw new MoneyError(`Not a decimal amount: ${JSON.stringify(value)}`);
     const negative = s.startsWith('-');
     const [whole = '0', frac = ''] = (negative ? s.slice(1) : s).split('.');
     if (frac.length > 2) {
@@ -61,7 +62,7 @@ export class Money {
    */
   static fromRatio(base: Money, numerator: bigint, denominator: bigint): Money {
     if (denominator === 0n) throw new MoneyError('Division by zero in Money.fromRatio');
-    const negative = base.paise < 0n !== numerator < 0n !== denominator < 0n;
+    const negative = (base.paise < 0n !== numerator < 0n) !== denominator < 0n;
     const abs = (x: bigint) => (x < 0n ? -x : x);
     const n = abs(base.paise) * abs(numerator);
     const d = abs(denominator);

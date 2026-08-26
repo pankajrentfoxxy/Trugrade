@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 
 /**
@@ -53,8 +55,6 @@ export function migrateTestDatabase(): void {
 
 function isUpToDate(): boolean {
   try {
-    const { readdirSync } = require('node:fs') as typeof import('node:fs');
-    const { join } = require('node:path') as typeof import('node:path');
     const dirs = readdirSync(join(__dirname, '..', '..', 'prisma', 'migrations'), {
       withFileTypes: true,
     }).filter((d) => d.isDirectory()).length;
@@ -62,11 +62,20 @@ function isUpToDate(): boolean {
     const out = execFileSync(
       'docker',
       [
-        'exec', 'trugrade-postgres', 'psql', '-U', 'trugrade', '-d', 'trugrade_test', '-tAc',
-        "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL",
+        'exec',
+        'trugrade-postgres',
+        'psql',
+        '-U',
+        'trugrade',
+        '-d',
+        'trugrade_test',
+        '-tAc',
+        'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL',
       ],
       { stdio: ['ignore', 'pipe', 'ignore'] },
-    ).toString().trim();
+    )
+      .toString()
+      .trim();
 
     return Number(out) === dirs && dirs > 0;
   } catch {

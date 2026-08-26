@@ -105,7 +105,10 @@ describe('TDS arithmetic (VR-138) — the boundary that costs 30% of the purchas
   function tdsOn(cumulativeBefore: Money, invoiceExGst: Money, hasPan: boolean): Money {
     const cumulativeAfter = cumulativeBefore.add(invoiceExGst);
     if (cumulativeAfter.lte(THRESHOLD)) return Money.ZERO;
-    const chargeable = Money.max(cumulativeAfter.sub(Money.max(cumulativeBefore, THRESHOLD)), Money.ZERO);
+    const chargeable = Money.max(
+      cumulativeAfter.sub(Money.max(cumulativeBefore, THRESHOLD)),
+      Money.ZERO,
+    );
     return Money.percentOf(chargeable, hasPan ? 0.1 : 5);
   }
 

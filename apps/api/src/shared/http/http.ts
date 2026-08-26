@@ -1,14 +1,14 @@
 import {
-  ArgumentsHost,
+  type ArgumentsHost,
   Catch,
-  CallHandler,
-  ExceptionFilter,
-  ExecutionContext,
+  type CallHandler,
+  type ExceptionFilter,
+  type ExecutionContext,
   HttpException,
   Injectable,
   Logger,
-  NestInterceptor,
-  PipeTransform,
+  type NestInterceptor,
+  type PipeTransform,
   Module,
   Global,
 } from '@nestjs/common';
@@ -70,7 +70,8 @@ export class DomainExceptionFilter implements ExceptionFilter {
     };
 
     if (domain.code === 'RATE_LIMITED') {
-      const retry = (domain.detail as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds;
+      const retry = (domain.detail as { retryAfterSeconds?: number } | undefined)
+        ?.retryAfterSeconds;
       if (retry) res.setHeader('Retry-After', String(retry));
     }
 
@@ -106,9 +107,14 @@ export class DomainExceptionFilter implements ExceptionFilter {
 
     // Anything unrecognised is a 500 with a deliberately opaque message. The real
     // error is in the log, keyed by requestId; it does not go on the wire.
-    return new DomainError('INTERNAL', 500, 'Something went wrong at our end. We have been notified.', {
-      detail: { original: (e as Error)?.message },
-    });
+    return new DomainError(
+      'INTERNAL',
+      500,
+      'Something went wrong at our end. We have been notified.',
+      {
+        detail: { original: (e as Error)?.message },
+      },
+    );
   }
 }
 
@@ -169,5 +175,8 @@ export class ZodValidationPipe implements PipeTransform {
 }
 
 @Global()
-@Module({ providers: [RequestContextInterceptor, DomainExceptionFilter], exports: [RequestContextInterceptor, DomainExceptionFilter] })
+@Module({
+  providers: [RequestContextInterceptor, DomainExceptionFilter],
+  exports: [RequestContextInterceptor, DomainExceptionFilter],
+})
 export class HttpModule {}

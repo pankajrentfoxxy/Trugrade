@@ -108,7 +108,9 @@ export class OutboxDispatcher {
                 ? null
                 : new Date(
                     now.getTime() +
-                      (BACKOFF_SECONDS[Math.min(attempts - 1, BACKOFF_SECONDS.length - 1)] ?? 3600) * 1000,
+                      (BACKOFF_SECONDS[Math.min(attempts - 1, BACKOFF_SECONDS.length - 1)] ??
+                        3600) *
+                        1000,
                   ),
             },
           });

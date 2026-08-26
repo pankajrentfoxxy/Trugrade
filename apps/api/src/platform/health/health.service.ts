@@ -66,7 +66,12 @@ export class HealthService {
 
     checks.partitionRunway = await this.safe(async () => {
       const rows = await this.prisma.$queryRaw<
-        Array<{ table_schema: string; table_name: string; runway_days: number; is_critical: boolean }>
+        Array<{
+          table_schema: string;
+          table_name: string;
+          runway_days: number;
+          is_critical: boolean;
+        }>
       >`SELECT table_schema, table_name, runway_days, is_critical FROM ops.v_partition_runway ORDER BY runway_days`;
 
       const worst = rows[0];
@@ -75,7 +80,9 @@ export class HealthService {
         throw Object.assign(
           new Error(
             `${critical.length} partitioned table(s) below ${PARTITION_RUNWAY_DAYS.alertBelow} days of runway: ` +
-              critical.map((c) => `${c.table_schema}.${c.table_name} (${c.runway_days}d)`).join(', '),
+              critical
+                .map((c) => `${c.table_schema}.${c.table_name} (${c.runway_days}d)`)
+                .join(', '),
           ),
           { value: rows },
         );
@@ -83,7 +90,10 @@ export class HealthService {
       return {
         value: {
           minRunwayDays: worst?.runway_days ?? null,
-          tables: rows.map((r) => ({ table: `${r.table_schema}.${r.table_name}`, days: r.runway_days })),
+          tables: rows.map((r) => ({
+            table: `${r.table_schema}.${r.table_name}`,
+            days: r.runway_days,
+          })),
         },
       };
     });
@@ -115,7 +125,10 @@ export class HealthService {
 
     checks.outbox = await this.safe(async () => {
       const dead = await this.prisma.db.event_outbox.count({ where: { status: 'DEAD_LETTER' } });
-      if (dead > 0) throw Object.assign(new Error(`${dead} dead-lettered event(s) need a human`), { value: dead });
+      if (dead > 0)
+        throw Object.assign(new Error(`${dead} dead-lettered event(s) need a human`), {
+          value: dead,
+        });
       const pending = await this.prisma.db.event_outbox.count({ where: { status: 'PENDING' } });
       return { value: { pending, deadLettered: 0 } };
     });

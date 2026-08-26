@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # `live` is refused outside production by the env loader; this is belt and braces.
+  INTEGRATION_MODE: mock
+
+jobs:
+  lint:
+    name: 1 · lint (incl. module boundaries)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @trugrade/config build
+      - run: pnpm --filter @trugrade/contracts build
+      # A cross-module import or a cross-schema JOIN fails the build here.
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  typecheck:
+    name: 2 · typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @trugrade/config build
+      - run: pnpm --filter @trugrade/contracts build
+      - run: pnpm --filter @trugrade/api db:generate
+      - run: pnpm typecheck
+
+  unit:
+    name: 3 · unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @trugrade/config build
+      - run: pnpm --filter @trugrade/contracts build
+      - run: pnpm test:unit
+
+  integration:
+    name: 4 · integration (real Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Real Postgres 16. The constraints under test — partial unique indexes,
+        # EXCLUDE, triggers, transaction atomicity — do not exist in a fake.
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trugrade
+          POSTGRES_PASSWORD: trugrade_dev
+          POSTGRES_DB: trugrade_test
+        ports: ['5442:5432']
+        options: >-
+          --health-cmd "pg_isready -U trugrade" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6389:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://trugrade:trugrade_dev@localhost:5442/trugrade_test?schema=public
+      DATABASE_URL_TEST: postgresql://trugrade:trugrade_dev@localhost:5442/trugrade_test?schema=public
+      REDIS_URL: redis://localhost:6389
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @trugrade/config build
+      - run: pnpm --filter @trugrade/contracts build
+      - name: Enable the extensions the schema depends on
+        run: >-
+          PGPASSWORD=trugrade_dev psql -h localhost -p 5442 -U trugrade -d trugrade_test
+          -c "CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS btree_gist;
+          CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS citext;
+          CREATE EXTENSION IF NOT EXISTS unaccent;"
+      - run: pnpm --filter @trugrade/api db:migrate
+      - run: pnpm --filter @trugrade/api db:generate
+      - run: pnpm --filter @trugrade/api test:integration
+
+  migrate-check:
+    name: 5 · migrations run clean on an empty database
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trugrade
+          POSTGRES_PASSWORD: trugrade_dev
+          POSTGRES_DB: fresh
+        ports: ['5443:5432']
+        options: >-
+          --health-cmd "pg_isready -U trugrade" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://trugrade:trugrade_dev@localhost:5443/fresh?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Enable extensions
+        run: >-
+          PGPASSWORD=trugrade_dev psql -h localhost -p 5443 -U trugrade -d fresh
+          -c "CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS btree_gist;
+          CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS citext;
+          CREATE EXTENSION IF NOT EXISTS unaccent;"
+      - run: pnpm --filter @trugrade/api db:migrate
+      - name: Partition runway must be at least 90 days
+        run: >-
+          PGPASSWORD=trugrade_dev psql -h localhost -p 5443 -U trugrade -d fresh -tAc
+          "SELECT count(*) FROM ops.v_partition_runway WHERE runway_days < 90" | grep -qx 0
+      - name: No placeholder credentials anywhere
+        run: "! grep -rn 'CHANGE_ME_IN_PRODUCTION' apps packages infra"
+
+  design-system:
+    name: 6 · design system (axe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @trugrade/config build
+      - run: pnpm --filter @trugrade/contracts build
+      # A component with an axe violation fails the build.
+      - run: pnpm --filter @trugrade/ui test
+      - run: pnpm --filter @trugrade/ui build-storybook
+
+  build:
+    name: 7 · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @trugrade/api db:generate
+      - run: pnpm build
+
+  secrets:
+    name: 8 · secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

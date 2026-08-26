@@ -12,14 +12,20 @@
 
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
-import { PrismaClient } from '@prisma/client';
+import { type PrismaClient } from '@prisma/client';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
 import { ContextModule, RequestContextService } from '../../src/shared/db/org-scope';
 import { EventBus } from '../../src/shared/events/event-bus';
 import { OutboxDispatcher } from '../../src/shared/events/outbox-dispatcher';
-import { closeTestDb, migrateTestDatabase, testDatabaseUrl, testDb, truncateAll } from '../support/db';
+import {
+  closeTestDb,
+  migrateTestDatabase,
+  testDatabaseUrl,
+  testDb,
+  truncateAll,
+} from '../support/db';
 
 let moduleRef: TestingModule;
 let bus: EventBus;

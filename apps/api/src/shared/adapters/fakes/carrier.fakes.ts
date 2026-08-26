@@ -23,7 +23,10 @@ import { ConflictError, ProviderError } from '../../errors/domain-errors';
  */
 abstract class BaseFakeCarrier extends CarrierPort {
   /** awb -> the events emitted so far, so tracking is replayable and orderable. */
-  protected readonly shipments = new Map<string, { input: CreateShipmentInput; events: TrackingEvent[] }>();
+  protected readonly shipments = new Map<
+    string,
+    { input: CreateShipmentInput; events: TrackingEvent[] }
+  >();
   /** idempotencyKey -> awb. A retried timeout must not book a second shipment. */
   protected readonly idempotency = new Map<string, string>();
 
@@ -56,13 +59,19 @@ abstract class BaseFakeCarrier extends CarrierPort {
         },
       ],
     });
-    return { awb, carrierShipmentId: awb, labelUrl: `memory://label/${awb}`, estimatedDeliveryDate: '2026-08-29' };
+    return {
+      awb,
+      carrierShipmentId: awb,
+      labelUrl: `memory://label/${awb}`,
+      estimatedDeliveryDate: '2026-08-29',
+    };
   }
 
   protected validate(_input: CreateShipmentInput): void {}
 
   async cancelShipment(awb: string, _reason: string): Promise<void> {
-    if (!this.shipments.has(awb)) throw new ProviderError(this.code, { awb, reason: 'unknown AWB' });
+    if (!this.shipments.has(awb))
+      throw new ProviderError(this.code, { awb, reason: 'unknown AWB' });
   }
 
   async track(awb: string): Promise<TrackingEvent[]> {
@@ -71,12 +80,21 @@ abstract class BaseFakeCarrier extends CarrierPort {
     return s.events;
   }
 
-  async checkServiceability(_from: string, to: string, _weightGrams: number): Promise<ServiceabilityResult> {
+  async checkServiceability(
+    _from: string,
+    to: string,
+    _weightGrams: number,
+  ): Promise<ServiceabilityResult> {
     // 79xxxx is the north-east; genuinely non-serviceable for several carriers.
     if (to.startsWith('79')) return { serviceable: false, isOda: false, services: [] };
     // ODA pincodes carry a surcharge that must reach the landed price.
     const isOda = to.startsWith('19') || to.startsWith('79') || to.endsWith('999');
-    return { serviceable: true, isOda, estimatedDays: isOda ? 6 : 3, services: ['SURFACE', 'EXPRESS'] };
+    return {
+      serviceable: true,
+      isOda,
+      estimatedDays: isOda ? 6 : 3,
+      services: ['SURFACE', 'EXPRESS'],
+    };
   }
 
   legalNdrActions(rawStatusCode: string): NdrAction[] {
@@ -94,7 +112,11 @@ abstract class BaseFakeCarrier extends CarrierPort {
     }
   }
 
-  async submitNdrAction(awb: string, action: NdrAction, _detail?: Record<string, string>): Promise<{ requestId: string }> {
+  async submitNdrAction(
+    awb: string,
+    action: NdrAction,
+    _detail?: Record<string, string>,
+  ): Promise<{ requestId: string }> {
     const s = this.shipments.get(awb);
     if (!s) throw new ProviderError(this.code, { awb });
     const last = s.events[s.events.length - 1];
@@ -163,7 +185,10 @@ export class FakeDelhivery extends BaseFakeCarrier {
     }
 
     if (!input.sellerGstin) {
-      throw new ProviderError('DELHIVERY', { reason: 'seller_gst_tin is mandatory', retryable: false });
+      throw new ProviderError('DELHIVERY', {
+        reason: 'seller_gst_tin is mandatory',
+        retryable: false,
+      });
     }
     if (!input.packages[0]?.hsnCode) {
       throw new ProviderError('DELHIVERY', { reason: 'hsn_code is mandatory', retryable: false });
@@ -258,14 +283,19 @@ export class FakePorter extends BaseFakeCarrier {
       throw new ProviderError('PORTER', { reason: 'INTRA_CITY_ONLY', retryable: false });
     }
     const grams = input.packages.reduce((a, p) => a + p.weightGrams, 0);
-    if (grams > 20_000) throw new ProviderError('PORTER', { reason: 'WEIGHT_EXCEEDS_2W', retryable: false });
+    if (grams > 20_000)
+      throw new ProviderError('PORTER', { reason: 'WEIGHT_EXCEEDS_2W', retryable: false });
   }
 
   /** Tracking is capped at 1 request per minute. */
   override async track(awb: string): Promise<TrackingEvent[]> {
     const now = Date.parse('2026-08-26T00:00:00Z') + this.lastTrackMs;
     if (this.lastTrackMs !== -Infinity && now - this.lastTrackMs < 60_000) {
-      throw new ProviderError('PORTER', { reason: 'TRACKING_BUDGET', retryAfterSeconds: 60, retryable: true });
+      throw new ProviderError('PORTER', {
+        reason: 'TRACKING_BUDGET',
+        retryAfterSeconds: 60,
+        retryable: true,
+      });
     }
     this.lastTrackMs = now;
     return super.track(awb);
@@ -278,6 +308,11 @@ export class FakeInHouse extends BaseFakeCarrier {
   /** Our own riders — no third-party constraints, full control, NCR pilot rail. */
   override async checkServiceability(_from: string, to: string): Promise<ServiceabilityResult> {
     const ncr = /^(11|12[012]|20[13]|24[15])/.test(to);
-    return { serviceable: ncr, isOda: false, estimatedDays: ncr ? 1 : undefined, services: ncr ? ['SAME_DAY', 'NEXT_DAY'] : [] };
+    return {
+      serviceable: ncr,
+      isOda: false,
+      estimatedDays: ncr ? 1 : undefined,
+      services: ncr ? ['SAME_DAY', 'NEXT_DAY'] : [],
+    };
   }
 }

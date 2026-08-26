@@ -1,0 +1,4 @@
+{
+  "extends": "@trugrade/config/tsconfig/react-lib.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx", "*.ts", ".storybook/**/*.ts", ".storybook/**/*.tsx"]
+}

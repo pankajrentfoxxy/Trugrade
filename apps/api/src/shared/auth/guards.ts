@@ -1,6 +1,6 @@
 import {
-  CanActivate,
-  ExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
   Injectable,
   SetMetadata,
   createParamDecorator,
@@ -33,11 +33,13 @@ export const RequirePermissions = (...perms: Permission[]): MethodDecorator & Cl
 export const RequireRoles = (...roles: Role[]): MethodDecorator & ClassDecorator =>
   SetMetadata(REQUIRED_ROLES, roles);
 
-export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): Principal => {
-  const req = ctx.switchToHttp().getRequest<Request & { principal?: Principal }>();
-  if (!req.principal) throw new UnauthenticatedError();
-  return req.principal;
-});
+export const CurrentUser = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): Principal => {
+    const req = ctx.switchToHttp().getRequest<Request & { principal?: Principal }>();
+    if (!req.principal) throw new UnauthenticatedError();
+    return req.principal;
+  },
+);
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -146,4 +148,3 @@ export class PermissionsGuard implements CanActivate {
     return true;
   }
 }
-

@@ -52,7 +52,10 @@ export interface GstinTaxpayer {
 }
 
 export abstract class GstinVerificationPort {
-  abstract verify(gstin: string, expectedLegalName?: string): Promise<VerificationResult<GstinTaxpayer>>;
+  abstract verify(
+    gstin: string,
+    expectedLegalName?: string,
+  ): Promise<VerificationResult<GstinTaxpayer>>;
 }
 
 export interface PanHolder {
@@ -83,7 +86,9 @@ export abstract class BankVerificationPort {
     ifsc: string,
     expectedName: string,
   ): Promise<VerificationResult<BankAccountHolder>>;
-  abstract lookupIfsc(ifsc: string): Promise<VerificationResult<{ bank: string; branch: string; city: string }>>;
+  abstract lookupIfsc(
+    ifsc: string,
+  ): Promise<VerificationResult<{ bank: string; branch: string; city: string }>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,14 +321,22 @@ export abstract class CarrierPort {
   abstract createShipment(input: CreateShipmentInput): Promise<ShipmentResult>;
   abstract cancelShipment(awb: string, reason: string): Promise<void>;
   abstract track(awb: string): Promise<TrackingEvent[]>;
-  abstract checkServiceability(fromPincode: string, toPincode: string, weightGrams: number): Promise<ServiceabilityResult>;
+  abstract checkServiceability(
+    fromPincode: string,
+    toPincode: string,
+    weightGrams: number,
+  ): Promise<ServiceabilityResult>;
   /**
    * Which NDR actions the carrier will actually accept for this raw status code.
    * Asking first is what stops us firing an action the carrier rejects and
    * burning hours of a 36-hour response window.
    */
   abstract legalNdrActions(rawStatusCode: string): NdrAction[];
-  abstract submitNdrAction(awb: string, action: NdrAction, detail?: Record<string, string>): Promise<{ requestId: string }>;
+  abstract submitNdrAction(
+    awb: string,
+    action: NdrAction,
+    detail?: Record<string, string>,
+  ): Promise<{ requestId: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +344,11 @@ export abstract class CarrierPort {
 // ---------------------------------------------------------------------------
 
 export abstract class ObjectStorePort {
-  abstract presignUpload(key: string, contentType: string, maxBytes: number): Promise<{ url: string; fields?: Record<string, string> }>;
+  abstract presignUpload(
+    key: string,
+    contentType: string,
+    maxBytes: number,
+  ): Promise<{ url: string; fields?: Record<string, string> }>;
   abstract presignDownload(key: string, ttlSeconds: number): Promise<string>;
   abstract put(key: string, body: Buffer, contentType: string): Promise<void>;
   abstract get(key: string): Promise<Buffer>;
@@ -364,7 +381,11 @@ export interface QcSessionRequest {
 export abstract class QcPlatformPort {
   abstract createSession(req: QcSessionRequest): Promise<{ sessionId: string }>;
   /** Vendor suspension revokes their licence and their agents stop certifying. */
-  abstract issueVendorLicence(input: { organizationId: string; maxAgents: number; features: string[] }): Promise<{ licenceKey: string }>;
+  abstract issueVendorLicence(input: {
+    organizationId: string;
+    maxAgents: number;
+    features: string[];
+  }): Promise<{ licenceKey: string }>;
   abstract revokeVendorLicence(organizationId: string, reason: string): Promise<void>;
   /** The public key the certificate signature is verified against, fetched from
    *  a stable URL rather than by asking DeviceSure whether it is telling the truth. */

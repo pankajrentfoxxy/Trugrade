@@ -1,8 +1,14 @@
-import { Global, Injectable, Module, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  Global,
+  Injectable,
+  Module,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { AppConfig, ConfigModule } from '../config';
-import { ConflictError, DomainError } from '../errors/domain-errors';
+import { ConflictError, type DomainError } from '../errors/domain-errors';
 
 /**
  * The transaction-scoped client. Everything inside `runInTransaction` sees the
@@ -11,7 +17,10 @@ import { ConflictError, DomainError } from '../errors/domain-errors';
  * its caller opened. That matters most in the three flows that must be atomic
  * (02_ARCHITECTURE.md §4).
  */
-type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+type TxClient = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;
 
 const txStorage = new AsyncLocalStorage<TxClient>();
 
@@ -87,18 +96,15 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     const existing = txStorage.getStore();
     if (existing) return fn();
 
-    return this.client.$transaction(
-      async (tx) => txStorage.run(tx as TxClient, fn),
-      {
-        // Serializable would be safer still, but the order-confirmation flow takes
-        // explicit row locks (FOR UPDATE / SKIP LOCKED) and the quantity CHECK is
-        // the real guarantee, so ReadCommitted plus explicit locking is both
-        // correct and far less prone to spurious retries under load.
-        isolationLevel: opts.isolationLevel ?? Prisma.TransactionIsolationLevel.ReadCommitted,
-        timeout: opts.timeoutMs ?? 15_000,
-        maxWait: 5_000,
-      },
-    );
+    return this.client.$transaction(async (tx) => txStorage.run(tx as TxClient, fn), {
+      // Serializable would be safer still, but the order-confirmation flow takes
+      // explicit row locks (FOR UPDATE / SKIP LOCKED) and the quantity CHECK is
+      // the real guarantee, so ReadCommitted plus explicit locking is both
+      // correct and far less prone to spurious retries under load.
+      isolationLevel: opts.isolationLevel ?? Prisma.TransactionIsolationLevel.ReadCommitted,
+      timeout: opts.timeoutMs ?? 15_000,
+      maxWait: 5_000,
+    });
   }
 
   /** True when called inside `runInTransaction`. Used by the outbox to assert placement. */
@@ -147,19 +153,25 @@ export function translatePrismaError(e: unknown): DomainError | undefined {
       );
     }
     if (target.includes('uq_qcrep_current')) {
-      return new ConflictError('This unit already has a current inspection report.', { constraint: target });
+      return new ConflictError('This unit already has a current inspection report.', {
+        constraint: target,
+      });
     }
     if (target.includes('seal_code')) {
       return new ConflictError('That seal code has already been used.', { constraint: target });
     }
     if (target.includes('unit_id')) {
-      return new ConflictError('That unit is already allocated to another order.', { constraint: target });
+      return new ConflictError('That unit is already allocated to another order.', {
+        constraint: target,
+      });
     }
     return new ConflictError('That value is already in use.', { constraint: target });
   }
 
   if (e.code === 'P2003') {
-    return new ConflictError('That reference points at something that no longer exists.', { constraint: target });
+    return new ConflictError('That reference points at something that no longer exists.', {
+      constraint: target,
+    });
   }
 
   // A CHECK or EXCLUDE violation surfaces as a raw query error; the important

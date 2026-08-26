@@ -4,7 +4,10 @@
   "globalDependencies": ["**/.env"],
   "globalEnv": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "INTEGRATION_MODE"],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**", "storybook-static/**"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "storybook-static/**"]
+    },
     "typecheck": { "dependsOn": ["^build"] },
     "lint": {},
     "test:unit": { "dependsOn": ["^build"] },

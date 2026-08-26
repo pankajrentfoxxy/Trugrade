@@ -95,7 +95,9 @@ describe('VR-META-04 — no dark patterns in the copy (CCPA Guidelines 2023)', (
 
   it('uses no false urgency or scarcity device', () => {
     for (const m of messages) {
-      expect(m).not.toMatch(/\b(hurry|only \d+ left|last chance|act now|limited time|ending soon)\b/i);
+      expect(m).not.toMatch(
+        /\b(hurry|only \d+ left|last chance|act now|limited time|ending soon)\b/i,
+      );
     }
   });
 

@@ -187,7 +187,8 @@ export const MOBILE_E164 = rule({
 export const EMAIL = rule({
   id: 'VR-032',
   field: 'identity.user_account.email',
-  pattern: /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/,
+  pattern:
+    /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/,
   max: 254,
   message: 'Enter a valid email address.',
   enforcedAt: ['C', 'D', 'S', 'DB'],
@@ -507,8 +508,7 @@ export const PRICE_GUARDRAILS = Object.freeze({
   marketBlockPct: 0.6,
   floorMessage: (min: string) =>
     `This price is below our minimum margin. Minimum sellable price is ${min}.`,
-  marginSchemeMessage:
-    'For margin-scheme stock the selling price must exceed the purchase price.',
+  marginSchemeMessage: 'For margin-scheme stock the selling price must exceed the purchase price.',
 });
 
 export const GRADES = Object.freeze(['A_PLUS', 'A', 'B'] as const);
@@ -671,20 +671,10 @@ export type QcArea = (typeof QC_AREAS)[number];
  * A missing value is not a passing value (07 §2, 08 §8 rule 3).
  * NOT_MEASURED is a distinct outcome from PASS and it caps the grade.
  */
-export const QC_AREA_OUTCOMES = Object.freeze([
-  'PASS',
-  'WARN',
-  'FAIL',
-  'NOT_MEASURED',
-] as const);
+export const QC_AREA_OUTCOMES = Object.freeze(['PASS', 'WARN', 'FAIL', 'NOT_MEASURED'] as const);
 export type QcAreaOutcome = (typeof QC_AREA_OUTCOMES)[number];
 
-export const QC_VERDICTS = Object.freeze([
-  'PASS',
-  'PASS_WITH_NOTE',
-  'MISMATCH',
-  'FAIL',
-] as const);
+export const QC_VERDICTS = Object.freeze(['PASS', 'PASS_WITH_NOTE', 'MISMATCH', 'FAIL'] as const);
 export type QcVerdict = (typeof QC_VERDICTS)[number];
 
 /**

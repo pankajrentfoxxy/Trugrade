@@ -110,13 +110,10 @@ describe('VR-030 — mobile normalisation', () => {
     expect(mobileSchema.parse(input)).toBe(expected);
   });
 
-  it.each(['5876543210', '98765432', '98765432101', 'abcdefghij', ''])(
-    'rejects %s',
-    (bad) => {
-      expect(normaliseMobile(bad)).toBeNull();
-      expect(() => mobileSchema.parse(bad)).toThrow();
-    },
-  );
+  it.each(['5876543210', '98765432', '98765432101', 'abcdefghij', ''])('rejects %s', (bad) => {
+    expect(normaliseMobile(bad)).toBeNull();
+    expect(() => mobileSchema.parse(bad)).toThrow();
+  });
 });
 
 describe('VR-032/VR-033 — email', () => {
@@ -143,16 +140,13 @@ describe('VR-076 — serial number', () => {
     expect(serialNumberSchema.parse(' 5cd-1234 abc ')).toBe('5CD1234ABC');
   });
 
-  it.each([
-    'TOBEFILLEDBYOEM',
-    'SYSTEMSERIALNUMBER',
-    'DEFAULTSTRING',
-    '0123456789',
-    'AAAAAAAA',
-  ])('rejects the firmware placeholder %s', (bad) => {
-    expect(isPlaceholderSerial(bad)).toBe(true);
-    expect(() => serialNumberSchema.parse(bad)).toThrow();
-  });
+  it.each(['TOBEFILLEDBYOEM', 'SYSTEMSERIALNUMBER', 'DEFAULTSTRING', '0123456789', 'AAAAAAAA'])(
+    'rejects the firmware placeholder %s',
+    (bad) => {
+      expect(isPlaceholderSerial(bad)).toBe(true);
+      expect(() => serialNumberSchema.parse(bad)).toThrow();
+    },
+  );
 
   it('rejects a serial shorter than 5 characters', () => {
     expect(() => serialNumberSchema.parse('AB12')).toThrow();
@@ -278,7 +272,9 @@ describe('SKU normalisation — one key, however the machine is spelled', () => 
 
   it('does not collapse a genuinely different configuration', () => {
     expect(skuNormalizedKey({ ...canonical, ramGb: 8 })).not.toBe(skuNormalizedKey(canonical));
-    expect(skuNormalizedKey({ ...canonical, storageGb: 256 })).not.toBe(skuNormalizedKey(canonical));
+    expect(skuNormalizedKey({ ...canonical, storageGb: 256 })).not.toBe(
+      skuNormalizedKey(canonical),
+    );
   });
 
   it('normalises capacity however it is written', () => {

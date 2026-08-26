@@ -40,9 +40,18 @@ module.exports = {
       },
       fontSize: {
         // 08_BRAND_SYSTEM.md §5 type scale. [size, {lineHeight, weight, letterSpacing}]
-        'display-1': ['clamp(36px,5.6vw,60px)', { lineHeight: '1.02', fontWeight: '700', letterSpacing: '-0.02em' }],
-        'display-2': ['clamp(28px,4vw,42px)', { lineHeight: '1.08', fontWeight: '700', letterSpacing: '-0.018em' }],
-        h1: ['clamp(23px,3vw,31px)', { lineHeight: '1.18', fontWeight: '600', letterSpacing: '-0.012em' }],
+        'display-1': [
+          'clamp(36px,5.6vw,60px)',
+          { lineHeight: '1.02', fontWeight: '700', letterSpacing: '-0.02em' },
+        ],
+        'display-2': [
+          'clamp(28px,4vw,42px)',
+          { lineHeight: '1.08', fontWeight: '700', letterSpacing: '-0.018em' },
+        ],
+        h1: [
+          'clamp(23px,3vw,31px)',
+          { lineHeight: '1.18', fontWeight: '600', letterSpacing: '-0.012em' },
+        ],
         h2: ['21px', { lineHeight: '1.25', fontWeight: '600', letterSpacing: '-0.008em' }],
         h3: ['17px', { lineHeight: '1.35', fontWeight: '600' }],
         'body-lg': ['18px', { lineHeight: '1.6', fontWeight: '400' }],
@@ -53,8 +62,18 @@ module.exports = {
       },
       spacing: {
         // The scale that did not exist anywhere in the prototypes.
-        1: '2px', 2: '4px', 3: '8px', 4: '12px', 5: '16px', 6: '20px',
-        7: '24px', 8: '32px', 9: '40px', 10: '48px', 11: '64px', 12: '80px',
+        1: '2px',
+        2: '4px',
+        3: '8px',
+        4: '12px',
+        5: '16px',
+        6: '20px',
+        7: '24px',
+        8: '32px',
+        9: '40px',
+        10: '48px',
+        11: '64px',
+        12: '80px',
       },
       borderRadius: {
         xs: 'var(--r-xs)',
@@ -68,7 +87,10 @@ module.exports = {
       maxWidth: { container: 'var(--maxw)' },
       transitionTimingFunction: { standard: 'cubic-bezier(.2,0,0,1)' },
       keyframes: {
-        'toast-in': { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'none' } },
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'none' },
+        },
         shake: {
           '0%,100%': { transform: 'translateX(0)' },
           '20%,60%': { transform: 'translateX(-4px)' },

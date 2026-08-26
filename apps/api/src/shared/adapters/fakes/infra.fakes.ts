@@ -36,7 +36,9 @@ export class NotificationOutbox {
     return this.sent;
   }
   last(templateCode?: string): (NotificationRequest & { id: string }) | undefined {
-    const matching = templateCode ? this.sent.filter((s) => s.templateCode === templateCode) : this.sent;
+    const matching = templateCode
+      ? this.sent.filter((s) => s.templateCode === templateCode)
+      : this.sent;
     return matching[matching.length - 1];
   }
   forRecipient(to: string): ReadonlyArray<NotificationRequest & { id: string }> {
@@ -57,11 +59,17 @@ export class FakeNotification extends NotificationPort {
   async send(req: NotificationRequest): Promise<NotificationReceipt> {
     // Deterministic triggers: mobile ending 99 fails permanently, 98 is delayed.
     if (req.to.endsWith('99')) {
-      return { providerMessageId: randomUUID(), accepted: false, reason: 'Permanent delivery failure (fake trigger)' };
+      return {
+        providerMessageId: randomUUID(),
+        accepted: false,
+        reason: 'Permanent delivery failure (fake trigger)',
+      };
     }
     const id = randomUUID();
     this.outbox.record(req, id);
-    this.logger.debug(`[${req.channel}] ${req.templateCode} -> ${req.to} ${JSON.stringify(req.variables)}`);
+    this.logger.debug(
+      `[${req.channel}] ${req.templateCode} -> ${req.to} ${JSON.stringify(req.variables)}`,
+    );
     return { providerMessageId: id, accepted: true };
   }
 }
@@ -166,7 +174,7 @@ export class FakeEwayBill extends EwayBillPort {
     const days = Math.max(1, Math.ceil(req.transportDistanceKm / 200));
     const generatedAt = new Date('2026-08-26T00:00:00Z');
     const result: EwayBillResult = {
-      ewbNumber: String(1e11 + Math.abs(hash(req.documentNumber)) % 1e11).slice(0, 12),
+      ewbNumber: String(1e11 + (Math.abs(hash(req.documentNumber)) % 1e11)).slice(0, 12),
       validUntil: new Date(generatedAt.getTime() + days * 86_400_000).toISOString(),
       generatedAt: generatedAt.toISOString(),
     };
@@ -183,7 +191,8 @@ export class FakeEwayBill extends EwayBillPort {
     if (!bill) throw new ProviderError('nic-ewb', { code: '306' });
     // The real API refuses a cancellation more than 24 h after generation.
     const age = Date.parse('2026-08-26T00:00:00Z') - Date.parse(bill.generatedAt);
-    if (age > 86_400_000) throw new ProviderError('nic-ewb', { code: '312', message: 'Cannot cancel after 24 hours' });
+    if (age > 86_400_000)
+      throw new ProviderError('nic-ewb', { code: '312', message: 'Cannot cancel after 24 hours' });
     bill.cancelled = true;
   }
 }
@@ -212,8 +221,15 @@ export class FakeEInvoice extends EInvoicePort {
 export class FakeObjectStore extends ObjectStorePort {
   private readonly objects = new Map<string, { body: Buffer; contentType: string }>();
 
-  async presignUpload(key: string, contentType: string, maxBytes: number): Promise<{ url: string; fields?: Record<string, string> }> {
-    return { url: `memory://upload/${key}`, fields: { 'content-type': contentType, 'max-bytes': String(maxBytes) } };
+  async presignUpload(
+    key: string,
+    contentType: string,
+    maxBytes: number,
+  ): Promise<{ url: string; fields?: Record<string, string> }> {
+    return {
+      url: `memory://upload/${key}`,
+      fields: { 'content-type': contentType, 'max-bytes': String(maxBytes) },
+    };
   }
   async presignDownload(key: string, ttlSeconds: number): Promise<string> {
     return `memory://download/${key}?exp=${ttlSeconds}`;
@@ -255,7 +271,11 @@ export class FakeQcPlatform extends QcPlatformPort {
     return { sessionId: randomUUID() };
   }
 
-  async issueVendorLicence(input: { organizationId: string; maxAgents: number; features: string[] }): Promise<{ licenceKey: string }> {
+  async issueVendorLicence(input: {
+    organizationId: string;
+    maxAgents: number;
+    features: string[];
+  }): Promise<{ licenceKey: string }> {
     const key = `DS-${createHash('sha1').update(input.organizationId).digest('hex').slice(0, 16).toUpperCase()}`;
     this.licences.set(input.organizationId, { key, revoked: false });
     return { licenceKey: key };

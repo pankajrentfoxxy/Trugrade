@@ -11,7 +11,7 @@ ruleTester.run('no-cross-schema-join', rule, {
   valid: [
     {
       name: 'single-schema query',
-      code: "const q = `SELECT * FROM listing.unit u JOIN listing.listing l ON l.id = u.listing_id`;",
+      code: 'const q = `SELECT * FROM listing.unit u JOIN listing.listing l ON l.id = u.listing_id`;',
     },
     {
       name: 'quoted identifiers, still one schema',
@@ -29,7 +29,7 @@ ruleTester.run('no-cross-schema-join', rule, {
   invalid: [
     {
       name: 'listing joined to qc',
-      code: "const q = `SELECT * FROM listing.unit u JOIN qc.qc_report r ON r.unit_id = u.id`;",
+      code: 'const q = `SELECT * FROM listing.unit u JOIN qc.qc_report r ON r.unit_id = u.id`;',
       errors: [{ messageId: 'crossSchema', data: { schemas: 'listing, qc' } }],
     },
     {

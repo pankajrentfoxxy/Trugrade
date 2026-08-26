@@ -23,7 +23,7 @@ module.exports = {
     schema: [],
     messages: {
       crossSchema:
-        'This SQL touches two module schemas ({{schemas}}). Cross-module reads go through the owning module\'s service interface, not a JOIN.',
+        "This SQL touches two module schemas ({{schemas}}). Cross-module reads go through the owning module's service interface, not a JOIN.",
     },
   },
   create(context) {

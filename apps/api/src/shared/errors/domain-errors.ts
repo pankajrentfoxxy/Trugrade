@@ -36,7 +36,11 @@ export class DomainError extends Error {
     code: ErrorCode,
     httpStatus: number,
     message: string,
-    opts: { detail?: Record<string, unknown>; fields?: Record<string, string>; cause?: unknown } = {},
+    opts: {
+      detail?: Record<string, unknown>;
+      fields?: Record<string, string>;
+      cause?: unknown;
+    } = {},
   ) {
     super(message, { cause: opts.cause });
     this.name = new.target.name;

@@ -2,7 +2,7 @@ import { Global, Logger, Module, type Provider } from '@nestjs/common';
 import { AppConfig, ConfigModule } from '../config';
 import {
   BankVerificationPort,
-  CarrierPort,
+  type CarrierPort,
   EInvoicePort,
   EwayBillPort,
   GstinVerificationPort,
@@ -13,7 +13,11 @@ import {
   QcPlatformPort,
   VirtualAccountPort,
 } from './ports';
-import { FakeBankVerification, FakeGstinVerification, FakePanVerification } from './fakes/kyc.fakes';
+import {
+  FakeBankVerification,
+  FakeGstinVerification,
+  FakePanVerification,
+} from './fakes/kyc.fakes';
 import {
   FakeEInvoice,
   FakeEwayBill,

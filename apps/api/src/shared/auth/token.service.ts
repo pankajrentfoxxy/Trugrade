@@ -51,8 +51,6 @@ interface SessionRecord {
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
-
-
 @Injectable()
 export class TokenService implements OnModuleInit {
   private readonly logger = new Logger(TokenService.name);
@@ -158,7 +156,12 @@ export class TokenService implements OnModuleInit {
       userAgent: input.userAgent,
       ip: input.ip,
     };
-    await this.redis.client.set(this.sessionKey(sessionId), JSON.stringify(record), 'EX', refreshTtl);
+    await this.redis.client.set(
+      this.sessionKey(sessionId),
+      JSON.stringify(record),
+      'EX',
+      refreshTtl,
+    );
     await this.redis.client.sadd(this.familyKey(familyId), sessionId);
     await this.redis.client.expire(this.familyKey(familyId), refreshTtl);
     await this.redis.client.sadd(this.userKey(input.userId), sessionId);

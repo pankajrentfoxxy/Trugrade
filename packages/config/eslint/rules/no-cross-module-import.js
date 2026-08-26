@@ -52,8 +52,7 @@ module.exports = {
       ImportDeclaration: (node) => check(node, node.source.value),
       ExportNamedDeclaration: (node) => node.source && check(node, node.source.value),
       ExportAllDeclaration: (node) => node.source && check(node, node.source.value),
-      ImportExpression: (node) =>
-        node.source.type === 'Literal' && check(node, node.source.value),
+      ImportExpression: (node) => node.source.type === 'Literal' && check(node, node.source.value),
       'CallExpression[callee.name="require"]': (node) => {
         const arg = node.arguments[0];
         if (arg && arg.type === 'Literal') check(node, arg.value);

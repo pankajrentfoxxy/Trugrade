@@ -39,7 +39,9 @@ export function normaliseEmail(input: string | null | undefined): string | null 
 /** VR-076: upper-case, strip spaces and hyphens. Applied before the uniqueness check. */
 export function normaliseSerial(input: string | null | undefined): string | null {
   if (!input) return null;
-  const s = String(input).toUpperCase().replace(/[\s\-_]/g, '');
+  const s = String(input)
+    .toUpperCase()
+    .replace(/[\s\-_]/g, '');
   return s.length ? s : null;
 }
 

@@ -37,7 +37,11 @@ export const LEGAL_DISCLOSURE = {
     state: string;
     pincode: string;
   }>,
-  customerCare: { email: BRAND.support, phone: '+91-000-000-0000', hours: 'Mon–Sat, 10:00–18:00 IST' },
+  customerCare: {
+    email: BRAND.support,
+    phone: '+91-000-000-0000',
+    hours: 'Mon–Sat, 10:00–18:00 IST',
+  },
   /** r.4(4)–(5): a named person, resident in India. Acknowledge in 48 h, redress in 1 month. */
   grievanceOfficer: {
     name: 'To be appointed before launch',

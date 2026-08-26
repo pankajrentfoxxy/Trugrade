@@ -36,7 +36,8 @@ const DRIFT_CHECKS: readonly DriftCheck[] = [
   {
     name: 'sellability_drift',
     view: 'listing.v_sellability_drift',
-    meaning: 'A unit is flagged sellable when it is not — expired QC, broken seal, or no seal at all.',
+    meaning:
+      'A unit is flagged sellable when it is not — expired QC, broken seal, or no seal at all.',
   },
   {
     name: 'expiring_documents',
@@ -47,7 +48,8 @@ const DRIFT_CHECKS: readonly DriftCheck[] = [
   {
     name: 'expiring_qc',
     view: 'qc.v_expiring_qc',
-    meaning: 'Inspections expiring within 14 days. Warn the vendor so stock does not silently unlist.',
+    meaning:
+      'Inspections expiring within 14 days. Warn the vendor so stock does not silently unlist.',
   },
 ];
 
@@ -79,12 +81,20 @@ export class IntegrityJobs {
       if (created > 0) {
         this.logger.log(
           `Created ${created} partition(s): ` +
-            rows.filter((r) => r.created_count > 0).map((r) => `${r.table_schema}.${r.table_name} x${r.created_count}`).join(', '),
+            rows
+              .filter((r) => r.created_count > 0)
+              .map((r) => `${r.table_schema}.${r.table_name} x${r.created_count}`)
+              .join(', '),
         );
       }
 
       const runway = await this.prisma.$queryRaw<
-        Array<{ table_schema: string; table_name: string; runway_days: number; is_critical: boolean }>
+        Array<{
+          table_schema: string;
+          table_name: string;
+          runway_days: number;
+          is_critical: boolean;
+        }>
       >`SELECT * FROM ops.v_partition_runway WHERE is_critical`;
 
       if (runway.length) {
@@ -140,7 +150,9 @@ export class IntegrityJobs {
   async drainOutbox(): Promise<void> {
     const r = await this.outbox.drain();
     if (r.deadLettered > 0) {
-      this.logger.error(`${r.deadLettered} event(s) dead-lettered. Inspect and replay from the ops console.`);
+      this.logger.error(
+        `${r.deadLettered} event(s) dead-lettered. Inspect and replay from the ops console.`,
+      );
     }
   }
 

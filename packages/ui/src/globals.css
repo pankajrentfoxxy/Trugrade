@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Trugrade — the "Anodised" palette.
+ * 08_BRAND_SYSTEM.md §4. Supersedes the navy/cyan/orange tokens in _CONTEXT.md
+ * and Part 1 of 03_UX_SPEC.md. There is no orange in this system.
+ *
+ * Three rules keep this from drifting:
+ *   1. Signal blue is a MEANING, not a decoration. It marks a measured value and
+ *      the primary action, and nothing else. The moment it appears on a hero
+ *      background the tolerance dot stops meaning anything.
+ *   2. Grades are NOT semantic colours. A+, A and B are all sellable — neutral
+ *      type with a tolerance band beside them. Green/amber/red are reserved for
+ *      PASS/WARN/FAIL. A grade is a position on a scale; an outcome is a verdict.
+ *   3. Never declare a colour inside a @media or [data-theme] block that is not
+ *      also declared on bare :root. That is how a page renders one theme's text
+ *      on the other theme's ground.
+ */
+
+@layer base {
+  :root {
+    /* ink */
+    --ink: #14181d;
+    --ink-2: #3d4650;
+    --ink-3: #68727e;
+    --ink-4: #8f98a3;
+
+    /* grounds */
+    --ground: #eff1ee;
+    --surface: #ffffff;
+    --surface-2: #f7f8f6;
+    --rule: #dcdfda;
+    --rule-2: #e9ebe7;
+    --band: #d3d7d1;
+
+    /* signal — measured values and the primary action ONLY */
+    --signal: #1f3ce0;
+    --signal-hi: #1730b8;
+    --signal-wash: #e8ebfd;
+    --signal-ink: #1730b8;
+
+    /* semantic — test outcomes ONLY */
+    --pass: #0e7a55;
+    --pass-wash: #e3f2eb;
+    --warn: #8a5709;
+    --warn-wash: #faefdd;
+    --fail: #a82a1c;
+    --fail-wash: #fbe9e6;
+
+    /* elevation */
+    --sh-1: 0 1px 2px rgba(20, 24, 29, 0.05);
+    --sh-2: 0 1px 2px rgba(20, 24, 29, 0.05), 0 10px 26px rgba(20, 24, 29, 0.07);
+    --sh-3: 0 20px 48px rgba(20, 24, 29, 0.14);
+
+    /* radii — flatter than the old system; instruments are not pill-shaped */
+    --r-xs: 3px;
+    --r-sm: 5px;
+    --r: 7px;
+    --r-lg: 10px;
+    --r-xl: 14px;
+
+    --maxw: 1160px;
+
+    --font-display: 'Instrument Sans', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  /* System preference. Guarded so an explicit light choice still wins. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --ink: #e8ebee;
+      --ink-2: #aab3be;
+      --ink-3: #7e8792;
+      --ink-4: #616a75;
+      --ground: #0b0e12;
+      --surface: #151a20;
+      --surface-2: #1b2129;
+      --rule: #28303a;
+      --rule-2: #212932;
+      --band: #2c3540;
+      --signal: #7b90ff;
+      --signal-hi: #9aaaff;
+      --signal-wash: #151e43;
+      --signal-ink: #9aaaff;
+      --pass: #3fbe8c;
+      --pass-wash: #0d2a20;
+      --warn: #dfa351;
+      --warn-wash: #2c2110;
+      --fail: #f0806e;
+      --fail-wash: #2f1712;
+      --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --sh-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px rgba(0, 0, 0, 0.34);
+      --sh-3: 0 20px 48px rgba(0, 0, 0, 0.5);
+    }
+  }
+
+  /* Explicit choice. Repeated verbatim so the toggle wins in both directions. */
+  :root[data-theme='dark'] {
+    --ink: #e8ebee;
+    --ink-2: #aab3be;
+    --ink-3: #7e8792;
+    --ink-4: #616a75;
+    --ground: #0b0e12;
+    --surface: #151a20;
+    --surface-2: #1b2129;
+    --rule: #28303a;
+    --rule-2: #212932;
+    --band: #2c3540;
+    --signal: #7b90ff;
+    --signal-hi: #9aaaff;
+    --signal-wash: #151e43;
+    --signal-ink: #9aaaff;
+    --pass: #3fbe8c;
+    --pass-wash: #0d2a20;
+    --warn: #dfa351;
+    --warn-wash: #2c2110;
+    --fail: #f0806e;
+    --fail-wash: #2f1712;
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --sh-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 26px rgba(0, 0, 0, 0.34);
+    --sh-3: 0 20px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /**
+   * The focus ring is signal blue, 2px, 3px offset — never removed, never a
+   * colour that fails contrast. The old prototypes used a cyan ring at 2.64:1;
+   * the indicator itself failed WCAG. Do not reproduce it.
+   */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+    border-radius: var(--r-xs);
+  }
+
+  /* Digits that stack must align. Ten prices that do not is the difference
+     between a tool and a toy. */
+  :where(td, th) :where(.tnum),
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .tg-container {
+    max-width: var(--maxw);
+    margin-inline: auto;
+    padding-inline: 20px;
+  }
+
+  /* Screen-reader-only, for the labels that carry meaning colour cannot. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}

@@ -1,4 +1,10 @@
-import { createPrivateKey, createPublicKey, createSign, createVerify, timingSafeEqual } from 'node:crypto';
+import {
+  createPrivateKey,
+  createPublicKey,
+  createSign,
+  createVerify,
+  timingSafeEqual,
+} from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
 
 /**
@@ -47,7 +53,10 @@ export function importPublicKey(pem: string): KeyObject {
 export function signJwt(claims: JwtClaims, privateKey: KeyObject): string {
   const payload = b64u(claims);
   const signingInput = `${HEADER}.${payload}`;
-  const signature = createSign('RSA-SHA256').update(signingInput).sign(privateKey).toString('base64url');
+  const signature = createSign('RSA-SHA256')
+    .update(signingInput)
+    .sign(privateKey)
+    .toString('base64url');
   return `${signingInput}.${signature}`;
 }
 

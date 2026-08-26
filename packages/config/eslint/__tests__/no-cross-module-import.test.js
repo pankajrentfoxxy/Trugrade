@@ -50,19 +50,19 @@ ruleTester.run('no-cross-module-import', rule, {
   ],
   invalid: [
     {
-      name: 'reaching another module\'s repository layer',
+      name: "reaching another module's repository layer",
       filename: F('ordering'),
       code: "import { UnitRepository } from '../listing/internal/unit.repository';",
       errors: [{ messageId: 'deepImport' }],
     },
     {
-      name: 'reaching another module\'s entities',
+      name: "reaching another module's entities",
       filename: F('procurement'),
       code: "import type { Unit } from 'src/modules/listing/entities/unit';",
       errors: [{ messageId: 'deepImport' }],
     },
     {
-      name: 'reaching another module\'s private DTOs',
+      name: "reaching another module's private DTOs",
       filename: F('storefrontless', 'x.ts').replace('storefrontless', 'catalog'),
       code: "import { QcReportDto } from '../qc/dto/qc-report.dto';",
       errors: [{ messageId: 'deepImport' }],
