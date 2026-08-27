@@ -23,6 +23,7 @@ import {
 } from './api';
 import { StepAccount, type AccountValues } from './StepAccount';
 import { StepCompany } from './StepCompany';
+import { StepStatutory, WHY_STATUTORY } from './StepStatutory';
 
 /**
  * Customer registration — **archetype D, flow**: the step rail on the left, one
@@ -42,9 +43,9 @@ import { StepCompany } from './StepCompany';
  * and it is where a returning applicant lands with their answers already in the
  * fields.
  *
- * Steps 3 to 5 (statutory, contacts, documents) are not built yet. They are in
- * the rail because the API says they exist, and landing on one says so plainly
- * rather than showing an empty form.
+ * Steps 4 and 5 (contacts, documents) are not built yet. They are in the rail
+ * because the API says they exist, and landing on one says so plainly rather
+ * than showing an empty form.
  */
 
 type Phase = 'checking' | 'ready' | 'unreachable' | 'wrong-account';
@@ -74,6 +75,7 @@ const asProgress = (d: StepDefinition): StepProgress => ({
   completionPct: 0,
   blockingReason: null,
   lastSavedAt: null,
+  fields: [],
 });
 
 export interface RegisterFlowProps {
@@ -97,6 +99,13 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
   const [activeTerm, setActiveTerm] = React.useState<string | undefined>();
   /** Carries step 1's company name into step 2 before any draft exists. */
   const [typedCompanyName, setTypedCompanyName] = React.useState('');
+  /**
+   * `constitution_type`, taken from the org rather than from a draft. Step 2's
+   * answers are cleared the moment it completes, so by step 3 this is the only
+   * place the constitution still exists — and step 3 needs it to be able to say
+   * "this PAN belongs to an individual, but you told us private limited".
+   */
+  const [constitution, setConstitution] = React.useState<string | null>(null);
 
   // The rail collapses below the width at which it stops being a rail — the
   // same 1024px where the grid drops to one column. A `<details>` cannot be
@@ -116,12 +125,14 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
       loaded: {
         steps: StepProgress[];
         resumeAt: string | null;
+        constitution?: string | null;
       },
       loadedAnswers: Record<string, Record<string, unknown>>,
       landOn?: string,
     ): void => {
       setSteps(loaded.steps);
       setAnswers(loadedAnswers);
+      setConstitution(loaded.constitution ?? null);
       const wanted = landOn ?? loaded.resumeAt ?? loaded.steps[0]?.stepCode;
       if (wanted) setCurrentCode(wanted);
       // ISO strings sort chronologically, so the newest save is the last one.
@@ -266,12 +277,19 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
 
   /* ---------------------------------------------------------------- step 2 */
 
-  const saveCompanyDraft = async (
+  /**
+   * One save and one continue for every draft step, taking the code as an
+   * argument. Steps 2 and 3 do the same three things — write the draft, mark the
+   * step complete, move on — and a second copy per step is how the two drift
+   * into disagreeing about what a failed save does to what was typed.
+   */
+  const saveDraft = async (
+    stepCode: string,
     values: Record<string, unknown>,
     completionPct: number,
   ): Promise<boolean> => {
     if (!registered) return false;
-    const saved = await saveStep('BUSINESS_PROFILE', values, completionPct);
+    const saved = await saveStep(stepCode, values, completionPct);
     if (!saved.ok) {
       // The banner stays until the next successful save. The form keeps every
       // value — a failed save must never be a silent loss.
@@ -279,20 +297,21 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
       return false;
     }
     setSaveFailure(null);
-    setAnswers((a) => ({ ...a, BUSINESS_PROFILE: values }));
+    setAnswers((a) => ({ ...a, [stepCode]: values }));
     setSavedAt(new Date().toISOString());
     return true;
   };
 
-  const continueFromCompany = async (
+  const continueFrom = async (
+    stepCode: string,
     values: Record<string, unknown>,
     completionPct: number,
   ): Promise<Record<string, string> | null> => {
     setBusy(true);
     try {
-      if (!(await saveCompanyDraft(values, completionPct))) return null;
+      if (!(await saveDraft(stepCode, values, completionPct))) return null;
       if (current?.status !== 'COMPLETE') {
-        const done = await completeStep('BUSINESS_PROFILE');
+        const done = await completeStep(stepCode);
         if (!done.ok) {
           setSaveFailure(done.message);
           return null;
@@ -320,9 +339,15 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     blockers: s.blockingReason ? [s.blockingReason] : undefined,
   }));
 
-  const whyItems: WhyRailItem[] = steps
-    .filter((s) => s.purposeNote)
-    .map((s) => ({ term: s.title, explanation: s.purposeNote }));
+  const whyItems: WhyRailItem[] = [
+    ...steps
+      .filter((s) => s.purposeNote)
+      .map((s) => ({ term: s.title, explanation: s.purposeNote })),
+    // The step's own `purpose_note` is one sentence. The primary GSTIN decides
+    // how this buyer is invoiced from here on, so step 3 adds the paragraph the
+    // seed has no room for — and only while step 3 is the step on screen.
+    ...(currentCode === 'STATUTORY' ? WHY_STATUTORY : []),
+  ];
 
   const rail = (
     <StepRail
@@ -438,8 +463,28 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
             }
             busy={busy}
             blockingReason={current?.blockingReason}
-            onSaveDraft={(values, pct) => void saveCompanyDraft(values, pct)}
-            onContinue={continueFromCompany}
+            onSaveDraft={(values, pct) => void saveDraft('BUSINESS_PROFILE', values, pct)}
+            onContinue={(values, pct) => continueFrom('BUSINESS_PROFILE', values, pct)}
+            onFieldFocus={setActiveTerm}
+          />
+        ) : currentCode === 'STATUTORY' ? (
+          <StepStatutory
+            answers={answers.STATUTORY ?? {}}
+            fallbackLegalName={
+              (typeof answers.BUSINESS_PROFILE?.legalName === 'string'
+                ? (answers.BUSINESS_PROFILE.legalName as string)
+                : '') ||
+              typedCompanyName ||
+              (typeof answers.ACCOUNT?.companyName === 'string'
+                ? (answers.ACCOUNT.companyName as string)
+                : '')
+            }
+            constitution={constitution}
+            fields={current?.fields}
+            busy={busy}
+            blockingReason={current?.blockingReason}
+            onSaveDraft={(values, pct) => void saveDraft('STATUTORY', values, pct)}
+            onContinue={(values, pct) => continueFrom('STATUTORY', values, pct)}
             onFieldFocus={setActiveTerm}
           />
         ) : (

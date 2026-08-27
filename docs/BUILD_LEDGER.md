@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T06:20:00+00:00  
-Currently: T4 done. Next: T5 - customer registration, step 3 statutory
+Updated: 2026-08-27T07:40:00+00:00  
+Currently: T6 - customer registration steps 4-5 and submission
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -14,9 +14,9 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T1 | Console shell and chrome | DONE | 13ab439 | console shell, both themes, 900/600 | Dark chrome per 09_FRONTEND_LOCKED; shell/Shell.tsx + nav.ts; screenshots in .screenshots/T1-console-shell/ |
 | T2 | Console design conformance pass | DONE | 944eac9 | 126 shots: 21 routes x 2 themes x 1440/900/600 | All 25 route files; 13 hand-rolled tables to DataBoard; archetype on every route; board state in the URL; 0 stray hex. Exposed two defects, both FIXED in 944eac9: the API not booting (DocumentService unregistered) and cn() stripping text colours. |
 | T3 | packages/ui gap-fill | DONE | 13ab439 | Storybook, both themes | All 20 components exported: StepRail WhyRail OtpInput FormSection AddressCard DocumentViewer RecordHeader SidePanel KpiRow QueueList Timeline + DataBoard density-aware |
-| T4 | Customer registration - shell and steps 1-2 | DONE |  | 26 shots: 13 states x 2 themes, incl. 1440/900/600 | `/register` is archetype D, driven end to end against the running API: real OTPs, a real account, a real draft resumed after a cold load. Rail and "why we ask" copy come from `kyc.onboarding_step_definition`, never a client constant. Added ONE endpoint: `GET /api/onboarding/steps/definitions?orgType=` (`@Public`, on `OnboardingLeadController`) because the rail must draw before an org exists. Storefront now has a real jest harness (5 tests) in place of `--passWithNoTests`. |
-| T5 | Customer registration - step 3 statutory | TODO |  |  |  |
-| T6 | Customer registration - steps 4-5 and submission | TODO |  |  |  |
+| T4 | Customer registration - shell and steps 1-2 | DONE | b0acc96 | 26 shots, both themes, 1440/900/600 | Archetype D. Rail drawn from seeded step definitions, purpose_note is the why-rail copy. Save-and-resume verified with a cold reload. Added GET /api/onboarding/steps/definitions (@Public). Fixed: header classes that existed in no stylesheet, footer unreadable in light, ThemeToggle hydration failure, Stepper green tick. |
+| T5 | Customer registration - step 3 statutory | DONE | (pending) | 34 shots, both themes, 1440/900/600 | PASS shows the returned legal name; FAIL names the reason; PROVIDER_ERROR never blames the applicant, never consumes an attempt, retries with visible backoff. Checksum + embedded-PAN conflict caught client-side. Fixed a cross-tenant rate-limit hole and the invalid GSTIN example. |
+| T6 | Customer registration - steps 4-5 and submission | DOING |  |  |  |
 | T7 | Vendor registration - steps 1-3 | TODO |  |  |  |
 | T8 | Vendor registration - steps 4-5 | TODO |  |  |  |
 | T9 | Vendor registration - steps 6-7 and submission | TODO |  |  |  |
@@ -62,7 +62,30 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 
 ## Open questions
 
-_None open. A blocked task is recorded here with what was tried, marked BLOCKED in
+### 1. Value-shopping pauses an honest multi-state buyer. Commercial call, not a coding one.
+
+`checkForValueShopping` throws ConflictError and pauses an application at the THIRD
+distinct value for a check type in 24h. That is right for PAN, CIN, TAN and a payout
+account — one company, one lawful answer, so a third is a pattern.
+
+It is wrong for GSTIN, and registration step 3 is where it bites: one legal entity holds
+one GSTIN **per state it is registered in**, and that step exists to collect the extra
+ones. A buyer operating in Delhi, Haryana and Karnataka is paused for suspected fraud
+while entering exactly what we asked them for.
+
+Raising the threshold for GSTIN was the obvious fix and I did not take it — it weakens a
+fraud control without making it correct, and how many registrations we tolerate before
+pausing is your decision. The screen renders the pause honestly as a "Checks paused"
+banner rather than a field error, so nothing is silently broken today.
+
+**The sharper rule, if you want it instead of a number:** characters 3-12 of a GSTIN ARE
+the holder's PAN. Every GSTIN one org submits must carry the SAME embedded PAN — three
+state registrations of one company share one; three companies' GSTINs do not. That
+catches shopping on the second attempt and never fires on a legitimate multi-state buyer.
+It needs the embedded PAN stored beside the hash in `verification_check`, so it is a
+schema change rather than a constant. Say which you want.
+
+_Nothing else open. A blocked task is recorded here with what was tried, marked BLOCKED in
 the table, and skipped — the run does not idle waiting for an answer._
 
 ## Resolved
@@ -89,10 +112,48 @@ every unit test passed; only starting the process found it.
 - `Button` has no `asChild`/`as`, so a primary action that navigates must drop its `href`.
 - `KpiRow`, `RecordHeader`, `Breadcrumb`, `Stepper` render raw `<a href>` — a full page
   reload on every drill-down in an SPA. They need a link-component injection point.
-- `Stepper` marks a completed step with a green tick. Green is reserved for PASS/FAIL;
-  a finished step is neither.
 - `PriceBreakup` requires `valuationMethod` and sums lines to a total — a buyer landed-price
   shape that does not fit a vendor payout preview (gross minus deductions).
+
+## Reported by T5 — not fixed, they are `apps/api`
+
+- **The verification rate limit is keyed on the value alone, not on the applicant.**
+  `VerificationService.assertRetryAllowed` filters `verification_check` by
+  `check_type + input_hash + 24h` with no `org_id`, so five consuming attempts on a
+  PAN anywhere on the platform lock that PAN out for everyone. It also means one
+  org can burn another org's budget for a value it happens to know. Found because
+  the capture script reused one PAN across runs and the second run was refused.
+- **`checkForValueShopping` fires on the third GSTIN, and this screen exists to
+  collect several.** Three *distinct* GSTINs from one org in 24 hours throws
+  `ConflictError` and pauses the application — but a buyer with registrations in
+  Haryana, Karnataka and Maharashtra is the normal case for step 3, not a fraud
+  signal. The screen renders the pause honestly (`T5-value-shopping-paused-*`)
+  rather than as a field error, but the rule needs a carve-out for values the
+  applicant is deliberately adding to one step.
+- **No step promotion, so `organization.constitution` is never written.**
+  `completeStep` takes a promotion function and no module has registered one, so
+  step 2's constitution stays in `draft_json` and `organization.constitution`
+  stays null. Two things on step 3 are therefore inert: `onboarding_field_requirement`
+  cannot decide that a private limited company must supply a CIN (it renders as
+  optional), and `verifyPan`'s VR-008 check — "this PAN belongs to an individual
+  but you selected private limited" — is never armed, because the client has no
+  constitution to send. Both are wired and start working the day a STATUTORY /
+  BUSINESS_PROFILE promotion lands.
+- **`GSTIN.message` in `@trugrade/contracts` gives an invalid example.**
+  "e.g. 06ABCDE1234F1Z5" fails its own check digit — the correct one is 4. Cosmetic,
+  but it is the string every GSTIN field in the product shows, and a worked example
+  that would be refused by the validator beside it is worse than none.
+
+## Contracts gaps reported by T5
+
+- **No client-side provider retry schedule.** `PROVIDER_RETRY_SCHEDULE_SECONDS`
+  lives in `apps/api/src/modules/kyc/internal/verification.service.ts`, which the
+  storefront cannot import. Step 3 defines its own, shorter, ladder because the
+  two are different things (a server retrying out of band vs a person waiting at a
+  form) — but the fact that a screen has to invent one says the contract is missing.
+- **No state-code → state-name map.** `stateCodeFromGstin` returns "06" and
+  `VerificationService.stateName` holds a private eight-entry lookup. The screen
+  can only show the bare code.
 
 ## Gaps reported by T4
 

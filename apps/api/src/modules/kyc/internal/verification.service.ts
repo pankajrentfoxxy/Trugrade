@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import {
+  GSTIN,
   isValidGstin,
   panFromGstin,
   stateCodeFromGstin,
@@ -47,6 +48,31 @@ import {
 const MAX_ATTEMPTS_PER_DAY = 5;
 const COOLDOWN_AFTER_ATTEMPTS = 3;
 const COOLDOWN_MINUTES = 15;
+/**
+ * How many DIFFERENT values for one check type, from one applicant in 24 hours,
+ * stop looking like typing and start looking like someone shopping for a value
+ * that passes. PHASE_01: "a third attempt with different values is a signal,
+ * not a coincidence."
+ *
+ * KNOWN TENSION, deliberately left as-is and raised in docs/BUILD_LEDGER.md:
+ * this fires on an honest buyer. One legal entity holds one GSTIN PER STATE, and
+ * registration step 3 exists to collect the extra ones — so a buyer operating in
+ * Delhi, Haryana and Karnataka is paused for fraud while entering exactly what
+ * we asked for.
+ *
+ * Raising the number for GSTIN was the obvious fix and is the wrong one: it
+ * weakens a fraud control without making it correct, and how many registrations
+ * we tolerate before pausing an application is a commercial call, not a coding
+ * one.
+ *
+ * The correct rule is sharper than any threshold. Characters 3-12 of a GSTIN
+ * ARE the holder's PAN, so every GSTIN one org submits must carry the SAME
+ * embedded PAN — three state registrations of one company share one, three
+ * companies' GSTINs do not. That catches shopping on the second attempt instead
+ * of the third and never fires on a legitimate multi-state buyer. It needs the
+ * embedded PAN recorded beside the hash, which `verification_check` does not
+ * store today, so it is a schema change rather than a constant.
+ */
 const FRAUD_FLAG_DISTINCT_VALUES = 3;
 
 /** Exponential backoff for automatic provider retries. Never consumes an attempt. */
@@ -155,6 +181,23 @@ export class VerificationService {
         input_hash: inputHash,
         checked_at: { gte: since },
         status: { in: ['PASS', 'FAIL', 'MISMATCH'] },
+        // SCOPED TO THE APPLICANT. Without this the budget was keyed on the
+        // VALUE alone, and a GSTIN is public information — it is printed on
+        // every invoice its holder issues. So any org could spend another org's
+        // five daily attempts on a GSTIN it simply looked up, and the victim
+        // would hit "You have tried this too many times today" having tried
+        // nothing at all. A registration flow that a competitor can close from
+        // the outside is worse than one with no limit.
+        //
+        // It also broke the honest case: two genuine applicants who share an
+        // accountant, or the same operator onboarding several clients, would
+        // exhaust each other.
+        //
+        // `checkForValueShopping` below already scoped itself this way; only
+        // this query was missed. The sentence the applicant reads — "you have
+        // tried this too many times" — was only ever true per applicant.
+        ...(subject.orgId ? { org_id: subject.orgId } : {}),
+        ...(subject.orgId ? {} : subject.leadId ? { lead_id: subject.leadId } : {}),
       },
       orderBy: { checked_at: 'desc' },
     });
@@ -264,8 +307,11 @@ export class VerificationService {
     opts: { expectedLegalName?: string; expectedPan?: string; triggeredBy?: string | null } = {},
   ): Promise<VerificationOutcomeView> {
     const gstin = normaliseGstin(gstinRaw);
-    if (!gstin)
-      throw new ValidationError('Enter a valid 15-character GSTIN (e.g. 06ABCDE1234F1Z5).');
+    // The message comes from the rule rather than being retyped here. It was a
+    // second copy, and it had drifted: it still carried the example GSTIN that
+    // fails its own check digit, so fixing the rule alone would have left this
+    // path showing the wrong thing.
+    if (!gstin) throw new ValidationError(GSTIN.message);
 
     // VR-002: the check digit is arithmetic we can do here. Failing it locally
     // turns a 30-second round trip into an instant "you mistyped a character",

@@ -587,6 +587,46 @@ describe('the retry policy the source document leaves open', () => {
     ).rejects.toThrow(/several different values/);
   });
 
+  /**
+   * The budget belongs to the APPLICANT, not to the value.
+   *
+   * `assertRetryAllowed` filtered `verification_check` on check_type + input_hash
+   * with no org scope, and a GSTIN is public information — it is printed on every
+   * invoice its holder issues. So a competitor could look one up, spend against
+   * it, and the real applicant would meet a cooldown they never triggered. A
+   * registration flow a rival can close from the outside is worse than one with
+   * no limit.
+   *
+   * Three attempts is all it costs: COOLDOWN_AFTER_ATTEMPTS is 3, so the fourth
+   * attempt on that value is refused for fifteen minutes. Written as the attack
+   * rather than as an assertion that the filter exists — the attacker burns the
+   * value, then the victim, who has touched nothing, must still verify cleanly
+   * on their first try.
+   */
+  it('one org cannot spend the attempts belonging to another org', async () => {
+    // Distinct contacts: registerVendor defaults to one email and one mobile,
+    // and two orgs in one test would collide on the uniqueness check.
+    const attacker = await registerVendor();
+    const victim = await registerVendor({
+      email: 'rahul@betasystems.in',
+      mobile: '+919876543299',
+    });
+    const shared = gstinEndingIn('Z4'); // a FAIL, so every attempt consumes one
+
+    for (let i = 0; i < 3; i++) {
+      await inRequest(() => kyc.verifyGstin(shared, { orgId: attacker.orgId }));
+    }
+    // The attacker has now locked themselves out of that value.
+    await expect(
+      inRequest(() => kyc.verifyGstin(shared, { orgId: attacker.orgId })),
+    ).rejects.toThrow(/wait 15 minutes/i);
+
+    // The victim has spent nothing, so nothing is spent.
+    const first = await inRequest(() => kyc.verifyGstin(shared, { orgId: victim.orgId }));
+    expect(first.attemptNo).toBe(1);
+    expect(first.attemptsRemaining).toBe(4);
+  });
+
   it('a run of provider errors does not exhaust the budget', async () => {
     const { orgId } = await registerVendor();
     for (let i = 0; i < 6; i++) {

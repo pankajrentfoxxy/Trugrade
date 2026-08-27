@@ -142,6 +142,18 @@ export interface StepDefinition {
 
 export type StepStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'SUBMITTED' | 'NEEDS_FIX' | 'COMPLETE';
 
+/**
+ * A field this org must supply on a step, after the constitution gate.
+ * `onboarding_field_requirement` data — CIN for a private limited company, an
+ * LLPIN for an LLP, and nothing at all for a proprietorship.
+ */
+export interface FieldRequirement {
+  fieldCode: string;
+  label: string;
+  required: boolean;
+  helpText: string | null;
+}
+
 export interface StepProgress extends StepDefinition {
   isRequired: boolean;
   status: StepStatus;
@@ -149,12 +161,16 @@ export interface StepProgress extends StepDefinition {
   /** Verbatim from the reviewer. Rendered as written, never summarised. */
   blockingReason: string | null;
   lastSavedAt: string | null;
+  /** Already gated by constitution: render these, do not re-derive them. */
+  fields: FieldRequirement[];
 }
 
 export interface ResumableOnboarding {
   orgId: string;
   status: string;
   progress: {
+    /** `constitution_type`, the org's own. Survives step 2's draft being cleared. */
+    constitution: string | null;
     steps: StepProgress[];
     /** Where the client lands: the first required step that is not COMPLETE. */
     resumeAt: string | null;
@@ -184,3 +200,83 @@ export const saveStep = (
 
 export const completeStep = (stepCode: string): Promise<ApiResult<null>> =>
   post<null>(`/api/onboarding/steps/${stepCode}/complete`);
+
+/* ==========================================================================
+ * Verification — POST /api/onboarding/verify/*
+ * ======================================================================== */
+
+/**
+ * The five things a check can come back as.
+ *
+ * `PROVIDER_ERROR` and `TIMEOUT` are the same thing to the applicant and are
+ * **not** failures: the portal did not answer, no attempt was consumed, and
+ * there is nothing for them to correct. `willRetryAutomatically` is the flag to
+ * branch on rather than the string, because it is the server's own answer to
+ * "is this ours to fix".
+ */
+export type VerificationOutcome = 'PASS' | 'FAIL' | 'MISMATCH' | 'PROVIDER_ERROR' | 'TIMEOUT';
+
+export interface VerificationOutcomeView {
+  id: string;
+  checkType: string;
+  outcome: VerificationOutcome;
+  /** The server's own wording. Rendered verbatim — it names what failed. */
+  message: string;
+  /**
+   * The resolved entity. On a GSTIN this carries `legalName`, which is the
+   * whole reason a tick is trustworthy: a name that is not theirs is the most
+   * useful signal on this screen.
+   */
+  resolved?: Record<string, unknown>;
+  matchScore?: number;
+  attemptNo: number;
+  /** Of five per day, per value. A provider error does not spend one. */
+  attemptsRemaining: number;
+  willRetryAutomatically: boolean;
+}
+
+/** What the GST portal returned, as far as this screen reads it. */
+export interface GstinTaxpayer {
+  legalName?: string;
+  tradeName?: string;
+  status?: string;
+  stateCode?: string;
+  registrationDate?: string;
+  taxpayerType?: string;
+  principalAddress?: string;
+}
+
+export interface PanHolder {
+  name?: string;
+  status?: string;
+  holderType?: string;
+}
+
+export const verifyGstin = (input: {
+  gstin: string;
+  expectedLegalName?: string;
+  expectedPan?: string;
+}): Promise<ApiResult<VerificationOutcomeView>> =>
+  post<VerificationOutcomeView>('/api/onboarding/verify/gstin', input);
+
+export const verifyPan = (input: {
+  pan: string;
+  expectedName?: string;
+  entityType?: string;
+}): Promise<ApiResult<VerificationOutcomeView>> =>
+  post<VerificationOutcomeView>('/api/onboarding/verify/pan', input);
+
+/** One row of this org's own attempt history, masked exactly as a reviewer sees it. */
+export interface VerificationAttempt {
+  id: string;
+  checkType: string;
+  outcome: string;
+  maskedInput: string;
+  provider: string;
+  failureReason: string | null;
+  attemptNo: number;
+  checkedAt: string;
+}
+
+export const getVerifications = (): Promise<ApiResult<VerificationAttempt[]>> =>
+  get<VerificationAttempt[]>('/api/onboarding/verifications');

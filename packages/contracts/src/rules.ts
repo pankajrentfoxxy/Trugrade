@@ -39,7 +39,17 @@ export const GSTIN = rule({
   id: 'VR-001',
   field: 'kyc.gst_record.gstin',
   pattern: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-  message: 'Enter a valid 15-character GSTIN (e.g. 06ABCDE1234F1Z5).',
+  // The example used to be 06ABCDE1234F1Z5, which fails its OWN check digit —
+  // the mod-36 algorithm makes the last character 4, not 5. So the message shown
+  // when a GSTIN is refused offered, as the model of a correct one, a GSTIN that
+  // `isValidGstin` also rejects: copy the shape, adapt it, get refused twice,
+  // with nothing on screen explaining why.
+  //
+  // It is spelled out as a shape rather than as a plausible-looking identifier
+  // on purpose. A syntactically valid GSTIN in a public error string belongs to
+  // some real Haryana business, and examples get pasted into forms.
+  message:
+    'Enter a valid 15-character GSTIN — two digits for the state, then a PAN, then three more characters. The last character is a checksum, so a single mistyped letter makes the whole number invalid.',
   enforcedAt: ['C', 'D', 'DB'],
 });
 

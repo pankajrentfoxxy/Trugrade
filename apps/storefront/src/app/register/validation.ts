@@ -1,10 +1,17 @@
 import {
+  CIN,
   EMAIL,
   FULL_NAME,
+  GSTIN,
   MOBILE_E164,
+  PAN,
+  PAN_HOLDER_TYPE,
   PASSWORD_BLOCKLIST_WORDS,
+  isValidGstin,
   normaliseEmail,
+  normaliseGstin,
   normaliseMobile,
+  panFromGstin,
 } from '@trugrade/contracts';
 
 /**
@@ -239,4 +246,76 @@ export function normaliseWebsite(value: string): { url?: string; error?: string 
   if (!parsed.hostname.includes('.') || parsed.hostname.endsWith('.'))
     return { error: 'That is not a web address. Try something like acme.co.in.' };
   return { url: parsed.toString() };
+}
+
+/* ==========================================================================
+ * Statutory — GSTIN, PAN, CIN
+ * ========================================================================
+ *
+ * Every rule below is the shared one from `@trugrade/contracts`, because the
+ * server refuses on exactly these and a client that disagrees either spends a
+ * provider call on a string that cannot be a GSTIN or refuses one that can.
+ *
+ * The order matters: shape, then checksum, then the cross-field check. A value
+ * that fails any of them never reaches the GST portal, so a mistyped character
+ * costs a keystroke rather than one of five daily attempts.
+ */
+
+/** `06abcce1234f6z1` → `06ABCCE1234F6Z1`. What the server stores and compares. */
+export const toGstin = (value: string): string => normaliseGstin(value) ?? '';
+
+export const toPan = (value: string): string => value.trim().toUpperCase();
+
+/**
+ * Three different messages, because three different things are wrong and only
+ * the third one is subtle. "Invalid input" would collapse all three.
+ */
+export function validateGstin(value: string): string | undefined {
+  const gstin = toGstin(value);
+  if (gstin.length === 0) return 'Enter the GSTIN of the entity we should invoice.';
+  if (gstin.length !== 15)
+    return `A GSTIN is 15 characters. This one is ${gstin.length}.`;
+  if (!GSTIN.pattern?.test(gstin)) return GSTIN.message;
+  // VR-002: the last character is arithmetic over the first fourteen, so a
+  // single mistyped character is caught here rather than by the portal.
+  if (!isValidGstin(gstin))
+    return 'That is not a valid GSTIN — the last character does not match the rest. Check it against your certificate.';
+  return undefined;
+}
+
+export function validatePan(value: string): string | undefined {
+  const pan = toPan(value);
+  if (pan.length === 0) return 'Enter the PAN of the entity we should invoice.';
+  if (pan.length !== 10) return `A PAN is 10 characters. This one is ${pan.length}.`;
+  if (!PAN.pattern?.test(pan)) return PAN.message;
+  return undefined;
+}
+
+/**
+ * VR-006 — characters 3 to 12 of a GSTIN **are** the holder's PAN.
+ *
+ * A real and common error: someone pastes a group company's GSTIN beside their
+ * own PAN. Catching it here names both values instead of letting the portal
+ * come back with a legal name nobody recognises.
+ */
+export function gstinPanConflict(gstinValue: string, panValue: string): string | undefined {
+  const gstin = toGstin(gstinValue);
+  const pan = toPan(panValue);
+  if (gstin.length !== 15 || pan.length !== 10) return undefined;
+  const embedded = panFromGstin(gstin);
+  if (!embedded || embedded === pan) return undefined;
+  return `This GSTIN belongs to PAN ${embedded}, not to ${pan}. One of the two is from a different entity.`;
+}
+
+/** VR-008 — the 4th character of a PAN is the holder type. */
+export function panHolderType(value: string): string | undefined {
+  const pan = toPan(value);
+  return pan.length === 10 ? PAN_HOLDER_TYPE[pan[3] as string] : undefined;
+}
+
+export function validateCin(value: string, required: boolean): string | undefined {
+  const cin = value.trim().toUpperCase();
+  if (cin.length === 0)
+    return required ? 'Enter the CIN from your certificate of incorporation.' : undefined;
+  return CIN.pattern?.test(cin) ? undefined : CIN.message;
 }
