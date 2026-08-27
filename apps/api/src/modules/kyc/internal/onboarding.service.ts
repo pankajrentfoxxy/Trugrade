@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { AuditService } from '../../identity';
@@ -316,14 +317,16 @@ export class OnboardingService {
           blocking_reason: null,
           // Cleared on COMPLETE: the real tables are now the source of truth, and
           // a stale draft is a second copy of the answer that can disagree.
-          draft_json: undefined,
+          //
+          // `Prisma.DbNull`, not `null` and not `undefined`. On a `Json?` column
+          // Prisma reads `undefined` as "leave it alone" and refuses a bare
+          // `null` outright, so the clear used to be a second statement AFTER
+          // the transaction had committed — which put the one write that
+          // destroys the answers outside the rollback that protects them.
+          draft_json: Prisma.DbNull,
         },
       });
     });
-
-    await this.prisma.$executeRaw`
-      UPDATE kyc.onboarding_progress SET draft_json = NULL
-      WHERE org_id = ${orgId}::uuid AND step_code = ${stepCode}`;
 
     await this.audit.record({
       action: 'kyc.onboarding.step_completed',

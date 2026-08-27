@@ -14,3 +14,7 @@ export {
   VendorService,
 } from './vendor.service';
 export { VendorModule } from './vendor.module';
+
+// Onboarding step promotion. `kyc` owns the stepper and the transaction; the
+// five `vendor.*` tables four of its steps land in are owned here.
+export { VendorPromotionService } from './internal/promotion.service';

@@ -92,7 +92,7 @@ export const BANK_CHANGE_ALERT_TEMPLATE = 'BANK_ACCOUNT_CHANGED';
  * ciphertext, and a fixed local key is honest about being local. What must never
  * happen is a readable account number sitting in a column named `_enc`.
  */
-const DEV_PII_KEY = 'trugrade-local-pii-key';
+export const DEV_PII_KEY = 'trugrade-local-pii-key';
 
 export type CheckType =
   | 'GSTIN'
@@ -381,12 +381,21 @@ export class VerificationService {
     // VR-008: the 4th character encodes the holder type. A PAN whose type
     // contradicts the declared constitution is a mistake worth catching here,
     // with a message that says which two things disagree.
-    if (opts.entityType) {
+    //
+    // The constitution the ORGANISATION declared is the fallback, and it is the
+    // half of this rule that used to be dead: `organization.constitution` was
+    // never written by anything, so a client that omitted `entityType` — which
+    // the vendor wizard does once step 2 is behind it — got no check at all.
+    // Step promotion writes the column now, so the rule has an input. Read
+    // straight off the row for the same reason `ownerAlertTargets` reads
+    // `user_account` here: one indexed point lookup on a human-triggered call.
+    const entityType = opts.entityType ?? (await this.declaredConstitution(subject.orgId));
+    if (entityType) {
       const fourth = pan[3];
-      const expected = this.panCharForEntity(opts.entityType);
+      const expected = this.panCharForEntity(entityType);
       if (expected && fourth && fourth !== expected) {
         throw new ValidationError(
-          `This PAN belongs to ${this.panHolderDescription(fourth)}, but you selected "${opts.entityType}". Check which is right.`,
+          `This PAN belongs to ${this.panHolderDescription(fourth)}, but you selected "${entityType}". Check which is right.`,
           { pan: 'The PAN type does not match the constitution you selected.' },
         );
       }
@@ -403,6 +412,16 @@ export class VerificationService {
     return this.toView(id, 'PAN', result, attemptNo, attemptsRemaining, {
       passMessage: result.data ? `Valid · ${(result.data as { name: string }).name}` : 'Verified.',
     });
+  }
+
+  /** What this org told us it is. NULL before BUSINESS_PROFILE is promoted. */
+  private async declaredConstitution(orgId: string | null | undefined): Promise<string | null> {
+    if (!orgId) return null;
+    const org = await this.prisma.db.organization.findUnique({
+      where: { id: orgId },
+      select: { constitution: true },
+    });
+    return org?.constitution ?? null;
   }
 
   private panCharForEntity(entityType: string): string | null {

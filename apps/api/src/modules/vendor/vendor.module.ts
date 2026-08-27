@@ -5,6 +5,7 @@ import { ClockModule } from '../../shared/clock';
 import { VendorController } from './vendor.controller';
 import { VendorService } from './vendor.service';
 import { LicenceService } from './internal/licence.service';
+import { VendorPromotionService } from './internal/promotion.service';
 
 /**
  * The vendor's own org, and the DeviceSure licence that follows its KYC state.
@@ -19,7 +20,7 @@ import { LicenceService } from './internal/licence.service';
 @Module({
   imports: [PrismaModule, ClockModule, AdaptersModule],
   controllers: [VendorController],
-  providers: [VendorService, LicenceService],
-  exports: [VendorService],
+  providers: [VendorService, LicenceService, VendorPromotionService],
+  exports: [VendorService, VendorPromotionService],
 })
 export class VendorModule {}

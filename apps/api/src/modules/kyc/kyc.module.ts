@@ -6,6 +6,7 @@ import { OnboardingService } from './internal/onboarding.service';
 import { VerificationService } from './internal/verification.service';
 import { ConsentService } from './internal/consent.service';
 import { DocumentService } from './internal/document.service';
+import { StepPromotionService } from './internal/promotion.service';
 import {
   KycReviewController,
   OnboardingController,
@@ -31,6 +32,7 @@ import {
     // passed every unit test while failing to BOOT — Nest resolves the graph at
     // runtime and nothing before that point looks at it.
     DocumentService,
+    StepPromotionService,
   ],
   exports: [KycService],
 })

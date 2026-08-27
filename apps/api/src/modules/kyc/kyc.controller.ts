@@ -25,10 +25,11 @@ import { ForbiddenError } from '../../shared/errors/domain-errors';
 import { RequestContextService, type Principal } from '../../shared/db/org-scope';
 import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.service';
 import { ValidationError } from '../../shared/errors/domain-errors';
-import { AuditService, IdentityService, type OrganizationSummary } from '../identity';
+import { IdentityService, type OrganizationSummary } from '../identity';
 import { VendorService, type VendorReviewCaptures } from '../vendor';
 import { KycService, type OnboardingSummary, type ReviewQueueItem } from './kyc.service';
 import type { StepDefinitionView } from './internal/onboarding.service';
+import { StepPromotionService } from './internal/promotion.service';
 import type { ConsentPurpose, ConsentState } from './internal/consent.service';
 import {
   VerificationService,
@@ -293,13 +294,13 @@ export class KycReviewController {
 export class OnboardingController {
   constructor(
     private readonly kyc: KycService,
-    private readonly audit: AuditService,
     // The internal service directly, not through `KycService`. It is this
     // module's own provider and this is this module's own controller, so the
     // seam rule is not in play; adding a pass-through would only put a second
     // signature between the route and the control it invokes.
     private readonly verification: VerificationService,
     private readonly documents: DocumentService,
+    private readonly promotions: StepPromotionService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -367,18 +368,14 @@ export class OnboardingController {
    *
    * `completeStep` takes a *promotion* — the writes that move the draft into the
    * tables that own it — and clears `draft_json` afterwards, on the principle
-   * that the promoted tables then become the single source of truth. No module
-   * has registered a promotion for a step code yet, so the only honest thing
-   * this layer can do is make sure the answers survive that clearing: the audit
-   * log is append-only, redacts PAN and account numbers on the way in, and is
-   * written inside the same transaction, so a failed completion leaves neither
-   * a completed step nor an orphan record of one.
+   * that the promoted tables then become the single source of truth. That
+   * promotion is `StepPromotionService`, and it is one line here on purpose: the
+   * whole point of the seam is that the answers are written by the modules that
+   * own the destination tables, not by a controller that knows all of them.
    *
-   * ponytail: an audit row is a record, not a queryable profile. When a step's
-   * real destination exists (`gst_profile` for STATUTORY, `vendor_capability`
-   * for CAPABILITY), the upgrade is that module exporting a promotion function
-   * through its barrel and this handler passing it instead — not a bigger
-   * controller.
+   * Everything the promotion does happens inside the completion's transaction,
+   * so a promotion that fails half way leaves the step incomplete with its draft
+   * intact — which is what a person who pressed Submit and saw an error expects.
    */
   @Post('steps/:stepKey/complete')
   @HttpCode(204)
@@ -387,16 +384,9 @@ export class OnboardingController {
     @Param('stepKey', new ZodValidationPipe(stepCodeSchema)) stepKey: string,
   ): Promise<void> {
     const orgId = ownOrgId(user);
-    return this.kyc.completeStep(orgId, stepKey, async (answers) => {
-      await this.audit.record({
-        action: 'kyc.onboarding.step_answers',
-        entityType: 'onboarding_progress',
-        entityId: `${orgId}:${stepKey}`,
-        after: answers,
-        actorUserId: user.userId,
-        actorOrgId: orgId,
-      });
-    });
+    return this.kyc.completeStep(orgId, stepKey, (answers) =>
+      this.promotions.promote({ orgId, userId: user.userId, stepCode: stepKey, answers }),
+    );
   }
 
   /**

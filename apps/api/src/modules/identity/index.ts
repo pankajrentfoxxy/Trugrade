@@ -18,3 +18,13 @@ export { IdentityModule } from './identity.module';
 export { AuditService, type AuditEntry, maskValue, redact } from './internal/audit.service';
 export { OtpService, type IssueOtpResult } from './internal/otp.service';
 export { PasswordService, type PasswordCheckResult } from './internal/password.service';
+
+// `kyc` runs the onboarding stepper; the tables three of its steps promote into
+// — `organization`, `org_address`, `org_contact` — are this module's. It asks
+// through here rather than writing them, which is the seam doing its job.
+export {
+  OrgPromotionService,
+  type AddressPromotion,
+  type ContactPromotion,
+  type OrgProfilePatch,
+} from './internal/promotion.service';
