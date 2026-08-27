@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T09:10:00+00:00  
-Currently: T8 - vendor registration steps 4-5 (capability, facility and contacts)
+Updated: 2026-08-27T10:20:00+00:00  
+Currently: T9 - vendor registration steps 6-7 and submission
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -18,7 +18,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T5 | Customer registration - step 3 statutory | DONE | 71d75ef | 34 shots, both themes, 1440/900/600 | PASS shows the returned legal name; FAIL names the reason; PROVIDER_ERROR never blames the applicant, never consumes an attempt, retries with visible backoff. Checksum + embedded-PAN conflict caught client-side. Fixed a cross-tenant rate-limit hole and the invalid GSTIN example. |
 | T6 | Customer registration - steps 4-5 and submission | DONE | fa6484b | 30 shots, both themes, 1440/900/600 | Contacts+addresses with receiving hours, document upload with real magic-byte and age refusals, review screen, submitted and NEEDS_FIX states. Fixed four missing-renders-as-achieved defects. Uploader visible progress fixed in packages/ui (10f5b9d). |
 | T7 | Vendor registration - steps 1-3 | DONE | a2da740 | 42 shots, both themes, 1440/900/600 | RegisterFlow is one shell for both flows (buyer 5 steps, vendor 7). StepAccount/StepStatutory shared so the PROVIDER_ERROR ladder and checksum guard exist once. CIN/Udyam/TAN render Captured-not-verified. Fixed: vendors could not register at all (MFA), /auth/session lying about mfaRequired, two time-bomb tests, Input mono missing tnum. |
-| T8 | Vendor registration - steps 4-5 | DOING |  |  |  |
+| T8 | Vendor registration - steps 4-5 | DONE |  | 60 shots, both themes, 1440/900/600 | `can_dropship` and `dispatch_address` are three-state questions with no default (`register/YesNo.tsx`), not checkboxes — unanswered is visible and refusable. Grade mix comes from `GET /public/grades`, totals 100 and prints its denominator per row. Every day of the week is answered or ticked closed, and ticking closed clears the window. |
 | T9 | Vendor registration - steps 6-7 and submission | TODO |  |  |  |
 | T10 | Sign-in, both portals, surrounding states | TODO |  |  |  |
 | T11 | Search results /search | TODO |  |  |  |
@@ -101,6 +101,61 @@ themes. `cn.spec.ts` reads the preset so a size added there and not here fails l
 **The API did not boot** — raised by T2, fixed in 944eac9. `DocumentService` was injected
 into `OnboardingController` and missing from `KycModule.providers`. Typecheck, lint and
 every unit test passed; only starting the process found it.
+
+## Reported by T8 — not fixed, they are outside `apps/storefront`
+
+- **`vendor_capability.can_dropship` and `can_provide_serials_upfront` both
+  default to `TRUE`, and both are questions with two real answers.** A column
+  default is the answer the database gives when nobody asked, and on these two
+  that default is the commercially convenient one. The screen refuses to inherit
+  it — `YesNo` holds `null` until somebody presses a radio — but the defaults
+  mean any *other* writer of these rows (an import, a back-office form, a
+  fixture) asserts "yes, they can dispatch direct" on a supplier's behalf.
+  `DEFAULT NULL` with a NOT NULL added at promotion would say what is true.
+
+- **`vendor_facility.dispatch_address_id` is nullable and means "the facility
+  address".** That is a reasonable normalisation and a dangerous read: every
+  consumer has to remember the fallback, and the one that forgets prints the
+  wrong **Dispatch From** on an e-way bill. The screen makes the choice explicit
+  and prints back the address that will actually be used, but nothing in the
+  schema distinguishes "same as the facility" from "never asked".
+
+- **`vendor_capability.sourcing_channels` is a bare `TEXT[]`** — no CHECK, no
+  enum, no contract. The eight codes the form offers exist only in
+  `apps/storefront/src/app/register/picklists.ts`. Category, facility type and
+  vehicle access all have CHECK constraints and were copied from them verbatim;
+  this one had nothing to copy.
+
+- **`facility_hours.day_of_week` is `INT CHECK (0..6)` with nothing saying which
+  end is Sunday.** Taken as the JavaScript convention (0 = Sunday) because that
+  is what every client reading it back will assume, and written down in
+  `WEEK_DAYS`. It should be a comment on the column or an enum.
+
+- **No `onboarding_field_requirement` rows for CAPABILITY or FACILITY_CONTACTS.**
+  Both steps return an empty `fields` array, so unlike step 3 nothing on these
+  two screens is server-driven. That is survivable — neither step has a
+  constitution gate — but it means the shape of the two biggest forms in the
+  vendor flow lives entirely in the client.
+
+- **Still no step promotion** (T5, T6 and T7 all reported it). `completeStep`
+  clears `draft_json`, so once step 4 or 5 is COMPLETE its answers exist only in
+  the audit row. `vendor_capability`, `vendor_facility`, `facility_hours`,
+  `facility_holiday`, `org_address` and `org_contact` all stay empty. The draft
+  shapes written here use those tables' own column names precisely so a
+  promotion is a mapping rather than a redesign.
+
+## Contracts gaps reported by T8
+
+- **No option list for supply category, sourcing channel, facility type,
+  vehicle access or contact type.** Three of the five are CHECK constraints in
+  the baseline migration and were copied verbatim; two are not defined anywhere.
+  All five are in `picklists.ts` with the same note the T4–T7 lists carry: they
+  belong in `@trugrade/contracts` or `platform_config` before the vendor console
+  grows a filter that has to agree with this form.
+- **No grade list in contracts either** — but the catalogue has one, so step 4
+  reads `GET /public/grades` and splits stock across whatever it returns. When
+  it does not answer, the question is stood down rather than asked against a
+  guess. That is the pattern the five lists above should follow.
 
 ## Reported by T7 — not fixed, they are outside `apps/storefront`
 

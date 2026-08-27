@@ -61,6 +61,13 @@ const VENDOR_STEPS = [
   'AGREEMENT',
 ].map((code, i) => definition(code, i + 1, `Vendor ${code}`));
 
+/** The catalogue's three grades, in its own order. `GET /public/grades` data. */
+const GRADES = [
+  { grade: 'A_PLUS', customerDescription: 'As new.' },
+  { grade: 'A', customerDescription: 'Light wear.' },
+  { grade: 'B', customerDescription: 'Visible wear, fully working.' },
+];
+
 const BUYER_STEPS = [
   'ACCOUNT',
   'BUSINESS_PROFILE',
@@ -78,7 +85,7 @@ beforeEach(() => {
 
 describe('the step rail', () => {
   it('draws seven steps for a vendor and five for a buyer, from one component', async () => {
-    const vendor = render(<VendorRegistration definitions={VENDOR_STEPS} brands={['Dell']} />);
+    const vendor = render(<VendorRegistration definitions={VENDOR_STEPS} brands={['Dell']} grades={GRADES} />);
     const vendorRail = await screen.findByTestId('step-rail');
     expect(vendorRail).toHaveTextContent('0 of 7 done');
     // The last three exist only in the vendor seed. If the shell held its own
@@ -97,7 +104,7 @@ describe('the step rail', () => {
   });
 
   it('registers the organisation the flow is for, not whichever one is hard-coded', async () => {
-    render(<VendorRegistration definitions={VENDOR_STEPS} brands={[]} />);
+    render(<VendorRegistration definitions={VENDOR_STEPS} brands={[]} grades={GRADES} />);
     await screen.findByTestId('step-rail');
 
     fill(/Your full name/, 'Rohan Deshpande');

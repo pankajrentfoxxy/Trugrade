@@ -5,6 +5,8 @@ import type { WhyRailItem } from '@trugrade/ui';
 import type { FieldRequirement, StepDefinition } from '../../register/api';
 import { RegisterFlow, type StepContext } from '../../register/RegisterFlow';
 import { StepStatutory, type StatutoryCopy } from '../../register/StepStatutory';
+import { StepCapability } from './StepCapability';
+import { StepFacility } from './StepFacility';
 import { StepVendorBusiness } from './StepVendorBusiness';
 import { StepVendorContact } from './StepVendorContact';
 
@@ -12,11 +14,10 @@ import { StepVendorContact } from './StepVendorContact';
  * The vendor half of registration: which component renders which of the seven
  * seeded step codes, and the copy the seed has no room for.
  *
- * Steps 4 to 7 — CAPABILITY, FACILITY_CONTACTS, DOCUMENTS_BANK and AGREEMENT —
- * have no entry here yet and are T8 and T9. They still appear in the rail,
- * because the rail is the API's step list rather than this map, and the shell
- * renders "not built yet" for a code it has no renderer for. Adding one is a
- * line in `RENDERERS`.
+ * Steps 6 and 7 — DOCUMENTS_BANK and AGREEMENT — have no entry here yet and are
+ * T9. They still appear in the rail, because the rail is the API's step list
+ * rather than this map, and the shell renders "not built yet" for a code it has
+ * no renderer for. Adding one is a line in `renderers`.
  */
 
 /**
@@ -101,6 +102,67 @@ const WHY_VENDOR_STATUTORY: readonly WhyRailItem[] = [
   },
 ];
 
+const WHY_CAPABILITY: readonly WhyRailItem[] = [
+  {
+    term: 'Dispatching direct',
+    explanation: (
+      <>
+        <span className="block">
+          We are the seller on the invoice, but we never hold your stock. When a customer orders a
+          machine we buy that exact serial from you and sell it on our own invoice, and the machine
+          travels from your dock to theirs — it never comes to us.
+        </span>
+        <span className="mt-2 block">
+          So whether you can dispatch to a third party is not a detail. A supplier who cannot is a
+          materially different supplier: we would have to take the goods in first, which is a
+          different cost base and a different legal posture. Answer it either way — a “no” is a real
+          answer that changes what happens next, not a failure.
+        </span>
+      </>
+    ),
+  },
+  {
+    term: 'Grade mix',
+    explanation:
+      'A+, A and B are all sellable — the grade is a position on a scale, not a verdict. What the mix tells us is which buyers to put you in front of: a fleet refresh wants A+ and a training lab wants B. It has to add to 100% of what you move in a month, because the part that does not add up is stock nobody has described.',
+  },
+  {
+    term: 'Serial numbers',
+    explanation:
+      'Every machine we sell is listed by its own serial, with its own inspection report and its own certificate. If you can send serials with the offer, your stock is listed unit by unit and a buyer can read the passport of the exact machine before ordering it. If you cannot, it still sells — as a pool, with the serial attached at dispatch.',
+  },
+];
+
+const WHY_FACILITY: readonly WhyRailItem[] = [
+  {
+    term: 'Dispatch address',
+    explanation: (
+      <>
+        <span className="block">
+          The address you name here is printed as <span className="text-ink">Dispatch From</span> on
+          the e-way bill for every consignment that leaves that site — for as long as you supply us.
+        </span>
+        <span className="mt-2 block">
+          A registered office and a loading dock are frequently different buildings, and a
+          consignment whose e-way bill starts at the wrong one can be detained, with the penalty
+          measured against the invoice value. That is why nothing is chosen for you here: correcting
+          it later means a fresh e-way bill for every consignment already in transit.
+        </span>
+      </>
+    ),
+  },
+  {
+    term: 'Operating hours',
+    explanation:
+      'A pick-up booked for a shut dock is a machine that does not move and a slot nobody else could use. A day you are closed is an answer — tick it, and we simply will not offer that day.',
+  },
+  {
+    term: 'WhatsApp and language',
+    explanation:
+      'Optional, both of them. A dispatch window on WhatsApp reaches a warehouse supervisor faster than an email nobody opens until Monday, and we write in the language the contact chooses. Leave either blank and we will not invent one — we default to email, in English, and say so.',
+  },
+];
+
 /** Step 1's company name, then step 2's legal name, then nothing. */
 const legalNameFor = (ctx: StepContext): string =>
   (typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
@@ -115,11 +177,22 @@ export interface VendorRegistrationProps {
   definitions: StepDefinition[] | null;
   /** The catalogue's own brands, server-rendered. Null when the API did not answer. */
   brands: string[] | null;
+  /**
+   * The catalogue's own grades, server-rendered, for step 4's mix. Null when the
+   * API did not answer — the step then stands the question down rather than
+   * splitting stock across a list this app invented.
+   */
+  grades: { grade: string; customerDescription: string }[] | null;
 }
+
+/** Step 1's answer, read back so step 4 does not ask for brands from scratch. */
+const listFrom = (answers: Record<string, unknown> | undefined, key: string): string[] =>
+  Array.isArray(answers?.[key]) ? (answers[key] as string[]) : [];
 
 export function VendorRegistration({
   definitions,
   brands,
+  grades,
 }: VendorRegistrationProps): React.JSX.Element {
   const renderers = React.useMemo<Record<string, (ctx: StepContext) => React.ReactNode>>(
     () => ({
@@ -168,9 +241,44 @@ export function VendorRegistration({
           onFieldFocus={ctx.onFieldFocus}
         />
       ),
+      CAPABILITY: (ctx) => (
+        <StepCapability
+          answers={ctx.answers}
+          brands={brands ?? []}
+          grades={grades ?? []}
+          brandsFromStepOne={listFrom(ctx.allAnswers.ACCOUNT, 'brands')}
+          otherBrandsFromStepOne={
+            typeof ctx.allAnswers.ACCOUNT?.otherBrands === 'string'
+              ? (ctx.allAnswers.ACCOUNT.otherBrands as string)
+              : ''
+          }
+          busy={ctx.busy}
+          blockingReason={ctx.step?.blockingReason}
+          onSaveDraft={ctx.saveDraft}
+          onContinue={ctx.continueFrom}
+          onFieldFocus={ctx.onFieldFocus}
+        />
+      ),
+      FACILITY_CONTACTS: (ctx) => (
+        <StepFacility
+          answers={ctx.answers}
+          busy={ctx.busy}
+          blockingReason={ctx.step?.blockingReason}
+          onSaveDraft={ctx.saveDraft}
+          onContinue={ctx.continueFrom}
+          onFieldFocus={ctx.onFieldFocus}
+        />
+      ),
     }),
-    [brands],
+    [brands, grades],
   );
+
+  const whyFor = (code: string): readonly WhyRailItem[] => {
+    if (code === 'STATUTORY') return WHY_VENDOR_STATUTORY;
+    if (code === 'CAPABILITY') return WHY_CAPABILITY;
+    if (code === 'FACILITY_CONTACTS') return WHY_FACILITY;
+    return [];
+  };
 
   return (
     <RegisterFlow
@@ -178,7 +286,7 @@ export function VendorRegistration({
       orgType="VENDOR"
       railLabel="Become a Trugrade supplier"
       renderers={renderers}
-      whyFor={(code) => (code === 'STATUTORY' ? WHY_VENDOR_STATUTORY : [])}
+      whyFor={whyFor}
       wrongAccountBody="This form registers a supplier. You are signed in on a buyer account — sign out here if you also want to sell to us, and register the selling entity separately."
     />
   );

@@ -446,3 +446,44 @@ export const receivingHoursLabel = (
   opensAt: string,
   closesAt: string,
 ): string => `${daysLabel}, ${opensAt}–${closesAt}`;
+
+/* ==========================================================================
+ * Counts — capacity, lead time, testing stations
+ * ======================================================================== */
+
+/**
+ * A whole number, with the reason it is bounded in the message.
+ *
+ * `<input type="number">` already refuses letters, so this is not re-typing the
+ * browser: it is what catches `2.5`, `-1` and an empty required field, all
+ * three of which reach the draft as a string and none of which the column can
+ * hold — `monthly_capacity_units`, `lead_time_days`, `storage_capacity_units`
+ * and `testing_stations` are every one of them `INT`.
+ */
+export function validateCount(
+  value: string,
+  options: { required: boolean; min?: number; max?: number; missing: string; unit: string },
+): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return options.required ? options.missing : undefined;
+  if (!/^\d+$/.test(trimmed))
+    return `Enter a whole number of ${options.unit}. No decimals, no ranges — give us the number you would stand behind.`;
+  const parsed = Number(trimmed);
+  const min = options.min ?? 0;
+  if (parsed < min) return `That has to be at least ${min}.`;
+  if (options.max !== undefined && parsed > options.max)
+    return `That is more than ${options.max.toLocaleString('en-IN')} ${options.unit}. If it is genuinely that large, tell your account manager and we will set it up by hand.`;
+  return undefined;
+}
+
+/**
+ * A WhatsApp number, which is optional everywhere it is asked for.
+ *
+ * Same rule as a mobile — the platform stores one form of a number and one only
+ * — but blank is a real answer here: plenty of finance departments do not want
+ * a dispatch note on somebody's personal WhatsApp, and a form that refuses to
+ * move on until they invent one gets a fake number typed into it.
+ */
+export function validateWhatsapp(value: string): string | undefined {
+  return value.trim().length === 0 ? undefined : validateMobile(value);
+}

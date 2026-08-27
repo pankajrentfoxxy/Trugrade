@@ -310,3 +310,162 @@ export const MONTHLY_VOLUMES: readonly Option[] = [
 
 /** `identity.organization.employee_count_band`, same column as the buyer's. */
 export const STAFF_BANDS = EMPLOYEE_BANDS;
+
+/* ==========================================================================
+ * Vendor registration — step 4, capability
+ * ========================================================================
+ *
+ * Same report as every list above: none of these has a server-side definition
+ * in `@trugrade/contracts` or `platform_config`. Two of them at least have a
+ * definition in the *database* and are copied from it verbatim, which is noted
+ * against each; `SOURCING_CHANNELS` has none anywhere and is the one that will
+ * drift first.
+ */
+
+/**
+ * `vendor.vendor_capability.category`, verbatim from its CHECK constraint.
+ *
+ * A sixth option here is a value the column refuses, so the list is the
+ * constraint and nothing else. It is what routes a stock enquiry, which is why
+ * the labels say what the buyer would call the machine rather than what the
+ * column calls it.
+ */
+export const SUPPLY_CATEGORIES = [
+  {
+    code: 'BUSINESS_LAPTOP',
+    label: 'Business laptops',
+    note: 'ThinkPad, Latitude, EliteBook and the like. Most of what we sell.',
+  },
+  {
+    code: 'WORKSTATION',
+    label: 'Mobile workstations',
+    note: 'Quadro or RTX class. ThinkPad P, ZBook, Precision.',
+  },
+  { code: 'CONSUMER', label: 'Consumer laptops', note: 'Inspiron, IdeaPad, Pavilion, Vivobook.' },
+  { code: 'MACBOOK', label: 'MacBook', note: 'Air and Pro, Intel or Apple silicon.' },
+  { code: 'CHROMEBOOK', label: 'Chromebook', note: 'Usually education fleets.' },
+] as const;
+
+/**
+ * Where the stock comes from. **No definition anywhere** —
+ * `vendor_capability.sourcing_channels` is a bare `TEXT[]` with no CHECK, no
+ * enum and no contract, so these eight codes exist only here. Reported: they
+ * belong in `platform_config` before the ops console grows a filter on them.
+ *
+ * It matters commercially rather than descriptively: a corporate buy-back lot
+ * arrives with an asset register and a wipe obligation, an auction lot arrives
+ * with neither, and the two are underwritten differently.
+ */
+export const SOURCING_CHANNELS = [
+  {
+    code: 'CORPORATE_BUYBACK',
+    label: 'Corporate buy-back',
+    note: 'Fleets bought directly from the company that used them.',
+  },
+  {
+    code: 'ITAD_CONTRACT',
+    label: 'ITAD contract',
+    note: 'Disposal contracts where you are the appointed processor.',
+  },
+  { code: 'LEASE_RETURN', label: 'Off-lease returns', note: 'End-of-term returns from a lessor.' },
+  {
+    code: 'AUCTION',
+    label: 'Auction or liquidation',
+    note: 'Lots bought at auction, usually without an asset register.',
+  },
+  { code: 'IMPORT', label: 'Imported stock', note: 'Landed under your own IEC.' },
+  {
+    code: 'OEM_REFURB',
+    label: 'OEM refurbished programme',
+    note: 'Stock from a brand’s own refurbishment channel.',
+  },
+  {
+    code: 'RETAIL_RETURN',
+    label: 'Retail returns and open box',
+    note: 'Returns from a retailer or marketplace.',
+  },
+  { code: 'TRADE_IN', label: 'Consumer trade-in', note: 'Individual machines taken in exchange.' },
+] as const;
+
+/* ==========================================================================
+ * Vendor registration — step 5, facility and contacts
+ * ======================================================================== */
+
+/** `vendor.vendor_facility.facility_type`, verbatim from its CHECK constraint. */
+export const FACILITY_TYPES: readonly Option[] = [
+  { value: '', label: 'Select what this site is' },
+  { value: 'WAREHOUSE', label: 'Warehouse — stock is stored here' },
+  { value: 'REFURB_UNIT', label: 'Refurbishment unit — machines are worked on here' },
+  { value: 'OFFICE', label: 'Office' },
+  { value: 'RETAIL', label: 'Retail counter' },
+];
+
+/**
+ * `vendor.vendor_facility.vehicle_access`, verbatim from its CHECK constraint.
+ *
+ * The column defaults to TEMPO and this list does not: a default that decides
+ * which vehicle we send is a default that puts a 19-foot truck down a lane it
+ * cannot reverse out of.
+ */
+export const VEHICLE_ACCESS: readonly Option[] = [
+  { value: '', label: 'Select the largest vehicle that can reach the door' },
+  { value: 'TRUCK', label: 'Truck — a 19 ft container can reach the loading point' },
+  { value: 'TEMPO', label: 'Tempo — up to a 14 ft light commercial vehicle' },
+  { value: 'BIKE_ONLY', label: 'Two-wheeler only — no four-wheeler access' },
+];
+
+/**
+ * The four contacts a supplier is asked for, as `identity.org_contact`
+ * `contact_type` codes from the CHECK constraint.
+ *
+ * OWNER is asked again here even though registration created the account: the
+ * person who filled the form in is often not the person who signs the
+ * agreement, and assuming they are is how a purchase order goes to somebody who
+ * left in March.
+ */
+export const VENDOR_CONTACT_ROLES = [
+  {
+    code: 'OWNER',
+    label: 'Owner or director',
+    required: true,
+    purpose:
+      'Who signs the vendor agreement and answers for the business. We contact them about the relationship, not about individual orders.',
+  },
+  {
+    code: 'LOGISTICS',
+    label: 'Operations',
+    required: true,
+    purpose:
+      'Who confirms a purchase order, packs it and hands it to the carrier. Every PO and every pick-up window goes here.',
+  },
+  {
+    code: 'FINANCE',
+    label: 'Finance',
+    required: true,
+    purpose:
+      'Who raises your invoice and reconciles the payout. The TDS certificate and the payout advice go here.',
+  },
+  {
+    code: 'WAREHOUSE',
+    label: 'Warehouse',
+    required: false,
+    purpose:
+      'Optional but worth giving: the person actually at the dock when a QC technician or a carrier arrives.',
+  },
+] as const;
+
+/**
+ * `vendor.facility_hours.day_of_week`, which is `0..6` with no comment saying
+ * which end is Sunday. Taken as the JavaScript convention — `Date.getDay()`
+ * returns 0 for Sunday — because that is what every client that reads it back
+ * will assume. Displayed Monday first, which is how a working week is read.
+ */
+export const WEEK_DAYS = [
+  { day: 1, label: 'Monday', short: 'Mon' },
+  { day: 2, label: 'Tuesday', short: 'Tue' },
+  { day: 3, label: 'Wednesday', short: 'Wed' },
+  { day: 4, label: 'Thursday', short: 'Thu' },
+  { day: 5, label: 'Friday', short: 'Fri' },
+  { day: 6, label: 'Saturday', short: 'Sat' },
+  { day: 0, label: 'Sunday', short: 'Sun' },
+] as const;

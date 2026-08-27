@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getBrands, getStats, getStepDefinitions } from '../../../lib/api';
+import { getBrands, getGrades, getStats, getStepDefinitions } from '../../../lib/api';
 import { SiteHeader } from '../../SiteHeader';
 import { VendorRegistration } from './VendorRegistration';
 
@@ -27,10 +27,13 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function Page(): Promise<React.JSX.Element> {
-  const [stats, definitions, brands] = await Promise.all([
+  const [stats, definitions, brands, grades] = await Promise.all([
     getStats(),
     getStepDefinitions('VENDOR'),
     getBrands(),
+    // Step 4 splits the supplier's stock across the grades. They are a policy
+    // decision held in the catalogue, so they are fetched rather than listed.
+    getGrades(),
   ]);
 
   return (
@@ -42,6 +45,14 @@ export default async function Page(): Promise<React.JSX.Element> {
           <VendorRegistration
             definitions={definitions}
             brands={brands ? brands.map((b) => b.name) : null}
+            grades={
+              grades
+                ? grades.map((g) => ({
+                    grade: g.grade,
+                    customerDescription: g.customerDescription,
+                  }))
+                : null
+            }
           />
         </div>
       </div>
