@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T13:10:00+00:00  
-Currently: T12 - product detail at /laptops/[slug] with the supply-point comparison board
+Updated: 2026-08-27T20:10:00+00:00  
+Currently: T13 - unit passport at /unit/[serial]
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -22,7 +22,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T9 | Vendor registration - steps 6-7 and submission | DONE | 6ea119e | 86 shots, both themes, 1440/900/600 | Documents+bank with a real penny-drop, agreement+payout, review, submission, application status. Extracted three shared pieces rather than copying T6's: `DocumentChecklist`, `review-parts`, `verification`. Fixed a live API defect — the penny-drop hashed one value for the policy and another for the record, so the retry limit never bound and one typo paused an application. |
 | T10 | Sign-in, both portals, surrounding states | DONE | 9046aff | 138 shots, 23 states x 2 themes x 3 widths | Closes Wave 2. Rate limit shows the server's real countdown off Retry-After. MFA says out loud that it is an emailed code, not TOTP, and login/otp refuses MFA_REQUIRED_ROLES. Enumeration closed structurally (deliver:false). Fixed: reviewer's rejection reason reaching nobody, an SLA promise under a rejection, db.ts skipping migrations on any private test DB, wordmark invisible in light. |
 | T11 | Search results /search | DONE | 012086b | 50 shots, 10 states x 2 themes x 3 widths | Archetype B. Reuses the homepage rail rather than building a second. Whole board state in the URL. Zero-count facets disabled not hidden. Grade counts from unit.grade_actual. Unmeasured battery renders 'Not measured', never 0%. No supplier nameable. |
-| T12 | Product detail /laptops/[slug] | DOING |  |  |  |
+| T12 | Product detail /laptops/[slug] | DONE |  | 66 shots, 20 states x 2 themes, 1440 + 900/600 | Archetype C. Built `GET /api/public/skus/:skuId/offers` — the per-SKU board, which did not exist. Ten supply points on the hero SKU, grouped on (code, city) so the two `F`s stay distinct. Landed price = our price + freight + GST, whole break-up behind one disclosure. Below the sample threshold: "New supplier · N units", never a percentage. MARGIN runs as its own pool with `MARGIN_ITC_LABEL`. p95 190 ms at 10 supply points / 105 units. |
 | T13 | Unit passport /unit/[serial] | TODO |  |  |  |
 | T14 | Certificate verification /qc/verify/[code] | TODO |  |  |  |
 | T15 | Cart | TODO |  |  |  |
@@ -59,6 +59,109 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T12 — the endpoint that did not exist, and what it cost
+
+`GET /api/public/offers` is the HOMEPAGE grid: one row per (SKU, grade), a price
+RANGE and a COUNT of supply points, aggregated precisely so it cannot name a
+source. The comparison board needs the opposite shape — one row per supply point
+— so `GET /api/public/skus/:skuId/offers?pincode=&grade=` is new, and lives in
+`listing` beside the stock it reads.
+
+Four things about it are decisions rather than code:
+
+- **`pincode` is optional and its absence is a distinct answer.** `delivery` is a
+  three-armed union: `NONE`, `DELIVERABLE`, `UNSERVICEABLE`. "Nobody has told us
+  where to deliver" and "we cannot deliver there" are different sentences, and a
+  screen that renders the first as the second tells a buyer in Bengaluru we
+  refuse them when they have not typed anything yet. With no pincode the board
+  returns its evidence — grades, unit counts, supply-point counts — and no
+  prices, and the screen asks. **No pincode is invented**: a delivered price to
+  somewhere the buyer never named is worse than an empty state, and quoting a
+  "from" figure that grows at checkout is drip pricing (CCPA 2023). `/search`
+  made the same call in T11 and the two screens agree.
+- **The row is `(supply point, valuation pool, listing)`.** `(code, city)` is the
+  supply point and never the code alone — the seeded board has an `F` in Noida
+  and a different vendor's `F` in Faridabad, and grouping on the letter welds
+  them into one row without failing anything. The valuation method is part of the
+  key because a MARGIN unit gives thinner input credit at the same price.
+- **A lane we could not price is not a row.** `unpricedSupplyPoints` counts them
+  so the screen can say so; a landed price missing its freight is a price
+  misrepresentation under CP e-Comm r.6(5).
+- **`landedPriceForBuyer` could not be called from a public route.** It reads the
+  listing through the scoped repository, and `OrgScope` throws
+  `org_scope_without_principal` for an anonymous caller — it says in as many
+  words that a public endpoint must come through a public repository method. So
+  `publicPricingFacts` + `landedPriceForPublicOffer` are the public path, and
+  both ends call the same `landedPrice()`: one definition of what a buyer pays,
+  reached two ways.
+
+**Measured:** board p95 **190 ms**, median 104 ms (40 runs across four delivery
+pincodes, ten supply points, 105 sellable units, freight batched into one call),
+against the 500 ms budget in PHASE_05 Task 5.
+
+Integration is **549/549 across 29 suites** (was 523/28); storefront unit tests
+are 58 across 9 suites (was 45 across 8). The new suite drives the board rather
+than asserting a guard exists: it groups two vendors both labelled `F`, reads
+back two rows, and fails if they merge; it sweeps the serialised payload for
+every seeded vendor's id, legal name, address, phone and dispatch pincode with
+`findVendorIdentityLeaks`; and it checks the order is unchanged after a vendor's
+legal name is rewritten to sort last.
+
+## Reported by T12 — fixed, and it is `apps/api/src/modules/qc`
+
+- **`VendorQualityService.qualityForSupplyPoints` was unreachable from any other
+  module.** It is the read model the whole comparison board sells on, it is
+  correct, it is tested — and it was neither on `IQcService` nor exported from
+  the barrel, so the only way to reach it was to import `qc/internal/`, which the
+  `no-cross-module-import` rule forbids. `QcService` now delegates to it in three
+  lines and the barrel re-exports the two types the answer needs. The
+  alternative was reading `qc.vendor_sku_quality` from `listing`, which would put
+  the small-sample suppression — the one thing in that file with legal
+  consequences under r.7(2) — in two places.
+
+## Reported by T12 — not fixed, they are outside my files
+
+- **`OfferRow` hard-codes `variant="primary"` on its action, so a ten-row board
+  renders ten amber buttons.** `09_FRONTEND_LOCKED.md` allows one amber control
+  per screen, and `docs/reference/homepage.html` draws exactly that: `.sel` on
+  the best row and `.sel.gh` on the rest. The component takes no emphasis prop
+  and `packages/ui` is outside this task's files, so the board ships with ten.
+  **One prop fixes it** — `OfferRowProps.emphasis?: 'primary' | 'secondary'`,
+  defaulting to secondary, with the caller marking the lowest-landed row.
+- **`SupplyPointOffer.batteryHealthPct` has no denominator.** The row renders
+  `87–94%` for a supply point where ten of twelve units were measured, and
+  CLAUDE.md asks every percentage to carry its denominator. The API returns
+  `batteryMeasured` and the component has nowhere to put it; the per-unit list
+  below the board prints "Not measured" per serial, which is the honest half that
+  is reachable today. `batteryHealthPct: { min, max, measured, of }` is the fix.
+- **`OfferGrid` computes "Lowest landed" within its own grid**, so running MARGIN
+  and REGULAR as two visually distinct pools (PHASE_05 Task 5) puts the label on
+  the cheapest MARGIN row as well. The pool note says out loud that the rows are
+  ranked among themselves; a `lowestLanded` override on the grid would say it
+  better.
+- **There is no public URL for a condition image.** `GET /catalog/skus/:id?grade=`
+  returns `s3Key`, `altText` and the match level, and nothing serves a key to a
+  browser — no presigned-download route, and the dev bucket holds zero objects
+  against 608 catalogued rows. The page therefore renders ONE
+  `RepresentativeImage` placeholder with its mandatory caption and says how many
+  photographs are catalogued for that grade, rather than six broken images with
+  six identical captions. A `GET /public/condition-images/:id` that presigns for
+  60 seconds is the missing piece, and it belongs in `catalog`.
+- **`truetech_warranty` is `NONE` on every seeded listing**, so the term a
+  customer is sold is not stored anywhere before a sale — `platform.warranty` is
+  written at order time. The board computes it the way the PRICE was computed:
+  `max(vendor months + the margin rule's top-up, platform.warranty_min_total_months)`,
+  in `PricingService.customerWarrantyMonths`. The listing column is what should
+  carry it, written when the listing is priced.
+- **The freight on this board is Rs 149 to every NCR pincode and Rs 298 to
+  250001**, straight off `logistics.carrier_rate_card` (0.01–5 kg, NCR→NCR, base
+  149, ODA surcharge 149). The task brief quoted Rs 284 / Rs 433, which no row in
+  the seeded card produces — worth reconciling before those numbers appear in a
+  test.
+- **`catalog.model` has no `slug`**, so `/laptops/[slug]` takes the SKU id, which
+  is what T11's cards already link to. A real slug is an SEO decision and a
+  catalog column, not a storefront workaround.
 
 ## Reported by T10 — what MFA actually is today
 

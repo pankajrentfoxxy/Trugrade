@@ -21,7 +21,11 @@ import {
   PreconditionFailedError,
   ValidationError,
 } from '../../../shared/errors/domain-errors';
-import { ListingRepository, type ListingRow } from './listing.repository';
+import {
+  ListingRepository,
+  type ListingRow,
+  type PublicPricingFacts,
+} from './listing.repository';
 import { MarginRuleRepository } from './margin-rule.repository';
 
 /**
@@ -491,6 +495,87 @@ export class PricingService {
       deliveryStateCode: opts.deliveryStateCode,
       ourStateCode: opts.ourStateCode,
     });
+  }
+
+  /**
+   * The same number as `landedPriceForBuyer`, for a caller with no principal.
+   *
+   * `landedPriceForBuyer` reads the listing through the scoped repository, which
+   * refuses outright when nobody is signed in — `OrgScope` says in as many words
+   * that a public endpoint must come through a public repository method rather
+   * than through a scoped one with its guard relaxed. So the comparison board
+   * fetches its facts through `publicPricingFacts` and hands them here, and both
+   * paths end in the same `landedPrice()` call: one definition of what a buyer
+   * pays, reached two ways.
+   *
+   * `freight` is required for the reason it is required everywhere else. A lane
+   * nobody could price is not a lane that is free (CP e-Comm r.6(5)); the caller
+   * that could not get a quote must not render a row at all.
+   *
+   * `valuationMethod` is deliberately NOT passed through to `landedPrice`. Rule
+   * 32(5) values a MARGIN supply on (sale - purchase) per serial, and the serial
+   * is not known until allocation — so the board quotes tax on the full value,
+   * which is the higher figure, and labels the ITC consequence instead. A price
+   * that went DOWN at allocation would be the harmless direction; guessing which
+   * serial ships would not be.
+   */
+  landedPriceForPublicOffer(
+    facts: PublicPricingFacts,
+    opts: { deliveryStateCode: string; ourStateCode: string; freight: Money },
+  ): LandedPrice {
+    return landedPrice({
+      sellingPrice: facts.sellingPrice,
+      freight: opts.freight,
+      gstRatePct: facts.gstRatePct,
+      deliveryStateCode: opts.deliveryStateCode,
+      ourStateCode: opts.ourStateCode,
+    });
+  }
+
+  /**
+   * The TOTAL warranty months a buyer is sold, per listing.
+   *
+   * The split is never returned, and there is deliberately no argument that
+   * would produce it: the vendor/platform division is a commercial arrangement
+   * between us and the supply point, and a Phase 5 exit criterion is that it
+   * appears nowhere in a customer payload.
+   *
+   * It is computed rather than read because pre-sale there is nothing to read.
+   * `platform.warranty` is written when a unit is sold, and `truetech_warranty`
+   * on the listing is a band the vendor wizard has never had to set — every
+   * seeded listing carries NONE. The term the customer is actually sold is the
+   * one the PRICE was built from: `max(vendor months + the rule's top-up, the
+   * platform floor)`, which is `priceFromNetPayout`'s own arithmetic. Restating
+   * it here would be a second definition, so this asks the same rule the pricing
+   * engine asked and applies the same `Math.max`.
+   *
+   * No rule matching means nobody has decided what we add on top of this vendor
+   * — so the answer is the platform floor, which is the term we guarantee on
+   * every unit whatever the rule says. Never zero: "we have not decided" must
+   * not render as "no warranty".
+   */
+  async customerWarrantyMonths(
+    facts: readonly PublicPricingFacts[],
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (facts.length === 0) return out;
+
+    const cfg = await this.config();
+    const floor = num(cfg, 'platform.warranty_min_total_months');
+
+    for (const f of facts) {
+      // ponytail: one rule resolution per listing. Ten listings is ten indexed
+      // reads of a table with a few dozen rows, inside a 500 ms budget the
+      // freight batch and the quality read dominate. If a board ever carries
+      // hundreds of supply points, the fix is a batched `resolveMany`, not a
+      // cache that ops edits cannot invalidate.
+      const matched = await this.rules.resolveFor(f.skuId, f.grade, f.vendorAskPrice);
+      out.set(
+        f.listingId,
+        Math.max(f.vendorWarrantyMonths + (matched?.rule.warrantyTopUpMonths ?? 0), floor),
+      );
+    }
+    return out;
   }
 
   // -------------------------------------------------------------------------

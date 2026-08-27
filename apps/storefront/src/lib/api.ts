@@ -178,3 +178,150 @@ export async function getSearch(qs: string): Promise<SearchResponse | null> {
     return null;
   }
 }
+
+/* ==========================================================================
+ * Product detail — `/laptops/[slug]`
+ * ======================================================================== */
+
+/** One condition photograph, as `catalog.condition_image` holds it. */
+export interface ConditionImage {
+  id: string;
+  grade: string;
+  viewCode: string;
+  s3Key: string;
+  altText: string;
+  isPrimary: boolean;
+  sortOrder: number;
+}
+
+export interface ResolvedImages {
+  images: ConditionImage[];
+  /** SKU / MODEL / SERIES / PLACEHOLDER — the caption widens with the anchor. */
+  match: 'SKU' | 'MODEL' | 'SERIES' | 'PLACEHOLDER';
+  isGeneric: boolean;
+  placeholderReason?: string;
+}
+
+export interface SkuDetail {
+  skuId: string;
+  skuCode: string;
+  brandName: string;
+  seriesName: string;
+  modelName: string;
+  cpuBrand: string;
+  cpuFamily: string;
+  cpuModel: string;
+  cpuGeneration: string;
+  ramGb: number;
+  storageGb: number;
+  storageType: string;
+  gpuType: string;
+  gpuModel: string | null;
+  screenSizeIn: number;
+  resolution: string;
+  isTouch: boolean;
+  osSupported: string;
+  hsnCode: string;
+  isActive: boolean;
+  images: ResolvedImages | null;
+}
+
+/**
+ * The declared specification and the condition photographs for one grade.
+ *
+ * `catalog` owns both and answers for both, which is why this is a second call
+ * rather than a bigger offers response: what a machine IS belongs to the
+ * catalogue and what was MEASURED belongs to listing, and the endpoint that
+ * joined them would be a third definition of a SKU living in a page.
+ */
+export const getSkuDetail = (skuId: string, grade: string): Promise<SkuDetail | null> =>
+  get<SkuDetail>(`/catalog/skus/${skuId}?grade=${grade}`, 60);
+
+export type QualityHeadline =
+  | { kind: 'SCORE'; avgQcScore: number; gradeAccuracyPct: number; unitsInspected: number }
+  | { kind: 'NEW_SUPPLIER'; unitsInspected: number; label: string };
+
+export interface OfferUnit {
+  serialNumber: string;
+  qcScore: number | null;
+  /** `null` when the battery was not measured. Never rendered as 0%. */
+  batteryHealthPct: number | null;
+  inspectedOn: string | null;
+  expiresOn: string | null;
+  expiresInDays: number | null;
+  valuationMethod: 'REGULAR' | 'MARGIN';
+}
+
+export interface SupplyPointOfferRow {
+  listingId: string;
+  /** `A`, `F` — unique within its city and not across cities. */
+  supplyPointCode: string;
+  city: string;
+  label: string;
+  grade: string;
+  /** Decimal string. Money does not survive a round trip as a float. */
+  landedPrice: string;
+  priceLines: Array<{ label: string; amount: string }>;
+  isInterState: boolean;
+  valuationMethod: 'REGULAR' | 'MARGIN';
+  quality: QualityHeadline;
+  batteryHealthPct: { min: number; max: number } | null;
+  batteryMeasured: number;
+  totalWarrantyMonths: number;
+  unitsAvailable: number;
+  inspectedOn: string | null;
+  qcExpiresOn: string | null;
+  qcExpiresInDays: number | null;
+  dispatchCommitment: string;
+  units: OfferUnit[];
+}
+
+export interface OfferBoard {
+  skuId: string;
+  grade: string;
+  grades: Array<{
+    grade: string;
+    unitsAvailable: number;
+    supplyPoints: number;
+    fromPrice: string;
+  }>;
+  pincode: string | null;
+  /**
+   * Three arms. "Nobody has told us where to deliver" and "we cannot deliver
+   * there" are different statements, and a screen that renders the first as the
+   * second tells a buyer we refuse them when they have not typed anything yet.
+   */
+  delivery:
+    | { kind: 'NONE' }
+    | { kind: 'DELIVERABLE'; etaDays: number }
+    | { kind: 'UNSERVICEABLE'; reason: string };
+  offers: SupplyPointOfferRow[];
+  unitsAvailable: number;
+  supplyPoints: number;
+  unpricedSupplyPoints: number;
+}
+
+/**
+ * The supply-point comparison board for one SKU, landed to one pincode.
+ *
+ * Not cached: the pincode is the buyer's, the prices are landed to it, and a
+ * board answered from another destination's entry would be a wrong price on the
+ * most load-bearing screen in the product. The endpoint itself sets a 15-second
+ * `Cache-Control` for anything in front of it that shares an audience.
+ */
+export async function getOfferBoard(
+  skuId: string,
+  params: { pincode?: string; grade?: string },
+): Promise<OfferBoard | null> {
+  const qs = new URLSearchParams();
+  if (params.pincode) qs.set('pincode', params.pincode);
+  if (params.grade) qs.set('grade', params.grade);
+  try {
+    const res = await fetch(`${API_BASE}/public/skus/${skuId}/offers?${qs.toString()}`, {
+      cache: 'no-store',
+    });
+    return res.ok ? ((await res.json()) as OfferBoard) : null;
+  } catch {
+    return null;
+  }
+}

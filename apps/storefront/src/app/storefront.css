@@ -482,3 +482,91 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .pager .shown{font-size:12.5px;color:var(--ink-2)}
 .pager .shown b{color:var(--ink);font-weight:700}
 
+
+/* ==========================================================================
+ * T12 — /laptops/[slug]. Archetype C: identity header, evidence, actions.
+ * ========================================================================== */
+
+/* The record's two columns. The side panel is the actions, and it is 320px
+   because the pincode field inside it is six digits and a button — wider is a
+   column of air, narrower wraps the button under the input. */
+.rec{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;margin-top:20px}
+.evid{min-width:0;display:flex;flex-direction:column;gap:28px}
+.sidep{display:flex;flex-direction:column;gap:12px;position:sticky;top:14px}
+.recskel{padding:20px 0}
+
+/* Section headings reuse the reference's `.sh`, so a section on this page and a
+   section on the homepage are the same object. */
+.evid section{scroll-margin-top:14px}
+
+/* ---- the grade and supply-point selectors ---- */
+/* `.chipf` is the reference's filter chip. An active chip is amber because an
+   active state is one of the three things amber is allowed to mean. */
+.gsel{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.gsel .chipf{display:flex;flex-direction:column;gap:2px;padding:8px 12px;line-height:1.3;
+  min-height:44px;justify-content:center}
+.gsel .chipf .c{font-size:10px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.gsel .chipf.on .c{color:var(--acc-on)}
+.gsel .chipf:hover{border-color:var(--acc)}
+
+/* ---- condition gallery ---- */
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.gal.one{grid-template-columns:minmax(0,520px);gap:6px}
+
+/* ---- specification ---- */
+/* A definition list rather than a table: it is one machine's attributes, not
+   rows to compare, and a two-column table of nine facts is a table pretending. */
+.specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+.specs>div{display:flex;justify-content:space-between;gap:16px;align-items:baseline;
+  padding:11px 16px;border-bottom:1px solid var(--rule-2)}
+.specs dt{font-size:12.5px;color:var(--ink-3)}
+.specs dd{font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right}
+
+/* ---- the board itself ---- */
+/* `OfferGrid` brings its own table. These rules give it the reference's row
+   rhythm inside the `.tbl` card, and nothing else: the component owns its
+   cells. */
+.obrd{padding:0 4px}
+.obrd table{min-width:1040px}
+.obrd td,.obrd th{padding:12px 12px}
+.obrd+.obrd{border-top:1px solid var(--rule)}
+.poolnote{margin:0;padding:12px 16px;background:var(--acc-wash);border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.poolnote b{color:var(--ink)}
+/* A certificate about to lapse, on a serial row. Amber: it is a measured fact
+   with a date on it, not a verdict, so it is never --fail. */
+.expsoon{display:block;font-size:10px;color:var(--acc-ink);font-variant-numeric:tabular-nums}
+.itc{font-size:11.5px;color:var(--acc-ink)}
+
+/* ---- the actions panel ---- */
+.pinform label{display:block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.pinrow{display:flex;gap:8px}
+.pinrow input{flex:1;min-width:0;height:44px;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:var(--r-sm);padding:0 12px;color:var(--ink);font-size:14px;
+  font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.pinrow input::placeholder{color:var(--ink-4)}
+.pinrow button{white-space:nowrap;min-height:44px}
+.facts{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.facts>div{display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+  padding:9px 0;border-bottom:1px solid var(--rule-2)}
+.facts>div:last-child{border-bottom:0}
+.facts dt{font-size:12.5px;color:var(--ink-3)}
+.facts dd{font-size:13px;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.facts .denom{display:block;font-size:10px}
+.why .whybody{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.why p{font-size:12.5px;line-height:1.6;color:var(--ink-2);margin:0}
+.why b{color:var(--ink)}
+
+@media(max-width:1000px){
+  .rec{grid-template-columns:1fr}
+  /* The panel stops being a rail and becomes the first block: on a phone the
+     pincode is the first thing to answer, not the last. */
+  .sidep{position:static;order:-1}
+  .gal{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:640px){
+  .specs{grid-template-columns:1fr}
+  .gal{grid-template-columns:1fr}
+  .gal.one{grid-template-columns:1fr}
+}

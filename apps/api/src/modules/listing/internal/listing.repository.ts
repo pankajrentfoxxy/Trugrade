@@ -49,6 +49,56 @@ export type ListingStatus =
   | 'EXPIRED'
   | 'DELISTED';
 
+/** One sellable unit as the public comparison board may see it. */
+export interface PublicBoardUnit {
+  id: string;
+  serialNumber: string;
+  listingId: string | null;
+  grade: Grade;
+  retailPrice: Money;
+  /** `null` when the battery was not measured. Never zero. */
+  batteryHealthPct: number | null;
+  qcScore: number | null;
+  qcPassedAt: Date | null;
+  qcValidUntil: Date | null;
+  valuationMethod: 'REGULAR' | 'MARGIN';
+  supplyPointCode: string;
+  city: string;
+  dispatchSlaHours: number;
+  gstRatePct: number;
+  /** Freight input. Finer than a city, so it never leaves the module. */
+  pickupLocationId: string;
+}
+
+interface RawBoardUnit {
+  id: string;
+  serial_number: string;
+  listing_id: string | null;
+  grade: string;
+  retail_price: unknown;
+  battery_health_pct: unknown;
+  qc_score: number | null;
+  qc_passed_at: Date | null;
+  qc_valid_until: Date | null;
+  valuation_method: string | null;
+  supply_point_code: string | null;
+  city: string | null;
+  dispatch_sla_hours: number;
+  gst_rate: unknown;
+  pickup_location_id: string;
+}
+
+/** Pricing inputs for one listing. Vendor-internal; see `publicPricingFacts`. */
+export interface PublicPricingFacts {
+  listingId: string;
+  skuId: string;
+  grade: Grade;
+  sellingPrice: Money;
+  gstRatePct: number;
+  vendorWarrantyMonths: number;
+  vendorAskPrice: Money;
+}
+
 export interface ListingRow {
   id: string;
   vendorOrgId: string;
@@ -861,4 +911,127 @@ export class ListingRepository {
        WHERE id = ${imageId}::uuid AND listing_id = ${listingId}::uuid`;
     return deleted > 0;
   }
+
+  // -------------------------------------------------------------------------
+  // The public read path — no principal, therefore no org predicate
+  // -------------------------------------------------------------------------
+
+  /**
+   * Every sellable unit of one SKU, with the facts the comparison board ranks
+   * on. **Unscoped on purpose**: the caller is an anonymous buyer, and
+   * `OrgScope` says in as many words that a public endpoint must come through a
+   * public repository method rather than through a scoped one with the guard
+   * turned off.
+   *
+   * `vendor_org_id`, `vendor_ask_price`, `purchase_price` and `margin_rule_id`
+   * are all in `v_sellable_unit` and none of them is selected. The org id is
+   * used once, inside the JOIN, to resolve the supply point — and the
+   * `(code, city)` pair it produces is the only thing about the source that
+   * leaves this method.
+   *
+   * `supply_point` is joined on `(vendor_org_id, code)` and never on `code`
+   * alone: the code is unique within a city, so two vendors in two cities can
+   * both be "F", and joining on the code alone would attribute one vendor's
+   * stock to another.
+   */
+  async publicBoardUnits(skuId: string): Promise<PublicBoardUnit[]> {
+    const rows = await this.prisma.$queryRaw<RawBoardUnit[]>`
+      SELECT u.id, u.serial_number, u.listing_id,
+             u.grade_actual::text        AS grade,
+             u.retail_price, u.battery_health_pct, u.qc_score,
+             u.qc_passed_at, u.qc_valid_until,
+             u.valuation_method, u.supply_point_code, sp.city,
+             l.dispatch_sla_hours, l.gst_rate, l.pickup_location_id
+        FROM listing.v_sellable_unit u
+        JOIN listing.supply_point sp
+             ON sp.vendor_org_id = u.vendor_org_id
+            AND sp.code = u.supply_point_code
+        JOIN listing.listing l ON l.id = u.listing_id
+       WHERE u.sku_id = ${skuId}::uuid
+         AND u.grade_actual IS NOT NULL
+         AND u.retail_price IS NOT NULL
+         AND u.supply_point_code IS NOT NULL`;
+
+    return rows.map((r) => ({
+      id: r.id,
+      serialNumber: r.serial_number,
+      listingId: r.listing_id,
+      grade: r.grade as Grade,
+      retailPrice: moneyFromDb(r.retail_price as string) ?? Money.ZERO,
+      // Never coerced to zero. A battery nobody measured must not render as a
+      // dead one, and there is no way back from a 0 written here.
+      batteryHealthPct: r.battery_health_pct === null ? null : Number(r.battery_health_pct),
+      qcScore: r.qc_score === null ? null : Number(r.qc_score),
+      qcPassedAt: r.qc_passed_at,
+      qcValidUntil: r.qc_valid_until,
+      valuationMethod: r.valuation_method === 'MARGIN' ? 'MARGIN' : 'REGULAR',
+      supplyPointCode: r.supply_point_code ?? '',
+      city: r.city ?? '',
+      dispatchSlaHours: Number(r.dispatch_sla_hours),
+      gstRatePct: Number(r.gst_rate),
+      pickupLocationId: r.pickup_location_id,
+    }));
+  }
+
+  /**
+   * The dispatch pincode behind each pickup address.
+   *
+   * A separate statement rather than a JOIN, because `org_address` is
+   * `identity`'s table and this module may not join across the seam
+   * (`createDraft` reads it the same way, for the same reason). The pincode is
+   * freight input only: it is finer than a city, so it is resolved here and
+   * never returned to a buyer.
+   */
+  async pickupPincodes(addressIds: readonly string[]): Promise<Map<string, string>> {
+    if (addressIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; pincode: string }>>`
+      SELECT id, pincode FROM identity.org_address WHERE id = ANY(${[...addressIds]}::uuid[])`;
+    return new Map(rows.map((r) => [r.id, r.pincode.trim()]));
+  }
+
+  /**
+   * What pricing needs to quote a public offer, per listing.
+   *
+   * **`vendorAskPrice` is in here and must not leave `listing`.** It is present
+   * for one reason: the margin rule that decides how many months of warranty we
+   * add on top of the vendor's own is banded on the ask, so the term the
+   * customer is sold cannot be computed without it. The ask itself is not part
+   * of any answer this module gives a buyer.
+   */
+  async publicPricingFacts(listingIds: readonly string[]): Promise<Map<string, PublicPricingFacts>> {
+    if (listingIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        sku_id: string;
+        grade: string;
+        unit_price: unknown;
+        gst_rate: unknown;
+        vendor_warranty_months: number;
+        vendor_ask_price: unknown;
+      }>
+    >`
+      SELECT l.id, l.sku_id, l.grade::text AS grade, l.unit_price, l.gst_rate,
+             l.vendor_warranty_months,
+             COALESCE((SELECT max(u.vendor_ask_price) FROM listing.unit u WHERE u.listing_id = l.id),
+                      l.unit_price) AS vendor_ask_price
+        FROM listing.listing l
+       WHERE l.id = ANY(${[...listingIds]}::uuid[])`;
+
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          listingId: r.id,
+          skuId: r.sku_id,
+          grade: r.grade as Grade,
+          sellingPrice: moneyFromDb(r.unit_price as string) ?? Money.ZERO,
+          gstRatePct: Number(r.gst_rate),
+          vendorWarrantyMonths: Number(r.vendor_warranty_months),
+          vendorAskPrice: moneyFromDb(r.vendor_ask_price as string) ?? Money.ZERO,
+        },
+      ]),
+    );
+  }
+
 }

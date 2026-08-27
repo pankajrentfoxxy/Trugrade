@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../shared/db/prisma.service';
 import { ClockModule } from '../../shared/clock';
 import { ListingController } from './listing.controller';
+import { ListingPublicController } from './listing-public.controller';
+import { OfferBoardService } from './internal/offer-board.service';
+import { LogisticsModule } from '../logistics';
+import { QcModule } from '../qc';
 import { ListingService } from './listing.service';
 import { ListingRepository } from './internal/listing.repository';
 import { MarginRuleRepository } from './internal/margin-rule.repository';
@@ -32,8 +36,15 @@ import { LocalQcVisitPort, QcVisitPort, SubmitService } from './internal/submit.
  * grows a visit service of its own, this one line is what changes.
  */
 @Module({
-  imports: [PrismaModule, ClockModule],
-  controllers: [ListingController],
+  // `QcModule` and `LogisticsModule` are here for the comparison board and for
+  // nothing else. Neither imports this one, so there is no cycle: `catalog` and
+  // `ordering` import `listing`, `listing` imports `qc` and `logistics`, and the
+  // graph stays a tree. The board could not be assembled without them — the two
+  // quality numbers are `qc`'s aggregates and the freight inside every landed
+  // price is `logistics`' rate card, and reading either from here would be a
+  // second definition of a number with legal consequences.
+  imports: [PrismaModule, ClockModule, QcModule, LogisticsModule],
+  controllers: [ListingController, ListingPublicController],
   providers: [
     ListingService,
     ListingRepository,
@@ -43,6 +54,7 @@ import { LocalQcVisitPort, QcVisitPort, SubmitService } from './internal/submit.
     SourcingService,
     StockMovementService,
     SubmitService,
+    OfferBoardService,
     { provide: QcVisitPort, useClass: LocalQcVisitPort },
   ],
   exports: [ListingService],

@@ -9,4 +9,13 @@
  * to this file is an architectural decision, not a convenience.
  */
 export { type IQcService, QcService } from './qc.service';
+/**
+ * Types only, and they are genuinely part of the contract: `SupplyPointQuality`
+ * is what `qualityForSupplyPoints` returns, and a caller cannot type the answer
+ * without it. The service that computes them stays private.
+ */
+export {
+  type SupplyPointQuality,
+  type SupplyPointRef,
+} from './internal/vendor-quality.service';
 export { QcModule } from './qc.module';

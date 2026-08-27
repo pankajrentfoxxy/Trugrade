@@ -357,3 +357,30 @@ describe('OfferGrid — what the buyer is deciding on', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 });
+
+describe('OfferGrid — one primary action, not ten', () => {
+  /**
+   * The row used to hard-code variant="primary", so a board of ten supply points
+   * painted ten amber buttons. CLAUDE.md allows one primary action per screen,
+   * and 09_FRONTEND_LOCKED says why it matters: amber means a primary action, a
+   * measured value or an active state, and "the moment it becomes a decorative
+   * wash, the QC score chip stops meaning anything". Ten amber buttons beside
+   * ten amber QC scores is that wash — and it tells the buyer nothing, because
+   * every row shouts equally.
+   *
+   * Asserted as what a person sees — how many amber buttons are on screen —
+   * rather than that a prop exists.
+   */
+  it('gives the amber to exactly one row however many supply points there are', () => {
+    // Scoped to the table. OfferGrid renders BOTH a table and a card list and
+    // hides one with display:none per viewport — jsdom applies no CSS, so an
+    // unscoped query sees every row twice and "one primary" would read as two.
+    const { container } = render(
+      <OfferGrid offers={OFFERS} caption={CAPTION} onAdd={() => {}} />,
+    );
+    const table = container.querySelector('table')!;
+    const adds = within(table).getAllByRole('button', { name: /Add .* to cart/ });
+    expect(adds.length).toBeGreaterThan(1);
+    expect(adds.filter((b) => b.className.includes('bg-acc'))).toHaveLength(1);
+  });
+});

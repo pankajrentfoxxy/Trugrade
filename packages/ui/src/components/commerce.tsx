@@ -279,9 +279,16 @@ interface OfferActionProps {
   offer: SupplyPointOffer;
   onAdd?: (quantity: number) => void;
   idPrefix: string;
+  /** See `OfferRowProps.emphasis`: only one row on a board carries the amber. */
+  emphasis?: boolean;
 }
 
-function OfferAction({ offer, onAdd, idPrefix }: OfferActionProps): React.JSX.Element {
+function OfferAction({
+  offer,
+  onAdd,
+  idPrefix,
+  emphasis,
+}: OfferActionProps): React.JSX.Element {
   // Held as a string, like `CommissionReadout` holds a rupee amount: a field
   // that snaps back to 1 the moment it is cleared makes the next keystroke
   // append rather than replace, and the buyer adds thirteen laptops.
@@ -316,7 +323,11 @@ function OfferAction({ offer, onAdd, idPrefix }: OfferActionProps): React.JSX.El
           className="h-11 w-20 rounded border border-rule bg-sheet px-3 text-body-sm tnum text-ink"
         />
       </span>
-      <Button variant="primary" onClick={() => onAdd?.(resolved)} aria-label={`Add ${label} to cart`}>
+      <Button
+        variant={emphasis ? 'primary' : 'secondary'}
+        onClick={() => onAdd?.(resolved)}
+        aria-label={`Add ${label} to cart`}
+      >
         Add to cart
       </Button>
     </span>
@@ -329,6 +340,25 @@ export interface OfferRowProps {
   lowestLanded?: boolean;
   onAdd?: (quantity: number) => void;
   itcExplainerHref?: string;
+  /**
+   * Whether THIS row carries the screen's primary action.
+   *
+   * The row used to hard-code `variant="primary"`, so a board of ten supply
+   * points painted ten amber buttons. CLAUDE.md allows ONE primary action per
+   * screen, and 09_FRONTEND_LOCKED is stricter about why: amber means a primary
+   * action, a measured value, or an active state, and "the moment it becomes a
+   * decorative wash, the QC score chip stops meaning anything". Ten amber
+   * buttons beside ten amber QC scores is exactly that wash — and it also tells
+   * the buyer nothing, because every row shouts equally.
+   *
+   * The reference implementation gives one row the amber and the rest a ghost,
+   * which is also the honest reading: the board has already sorted, so the top
+   * row is the one it is recommending.
+   *
+   * Defaults to false so a caller has to choose deliberately; a grid of rows
+   * that all forgot is quiet, not loud.
+   */
+  emphasis?: boolean;
 }
 
 function PriceCell({
@@ -371,6 +401,7 @@ export function OfferRow({
   lowestLanded,
   onAdd,
   itcExplainerHref,
+  emphasis,
 }: OfferRowProps): React.JSX.Element {
   assertSupplyPointOnly(offer);
   const id = React.useId();
@@ -397,7 +428,7 @@ export function OfferRow({
       </td>
       <td className="tg-cell text-ink">{offer.dispatchCommitment}</td>
       <td className="tg-cell">
-        <OfferAction offer={offer} onAdd={onAdd} idPrefix={id} />
+        <OfferAction offer={offer} onAdd={onAdd} idPrefix={id} emphasis={emphasis} />
       </td>
     </tr>
   );
@@ -415,6 +446,7 @@ export function OfferCard({
   lowestLanded,
   onAdd,
   itcExplainerHref,
+  emphasis,
 }: OfferRowProps): React.JSX.Element {
   assertSupplyPointOnly(offer);
   const id = React.useId();
@@ -443,7 +475,7 @@ export function OfferCard({
           </div>
         ))}
       </dl>
-      <OfferAction offer={offer} onAdd={onAdd} idPrefix={id} />
+      <OfferAction offer={offer} onAdd={onAdd} idPrefix={id} emphasis={emphasis} />
     </article>
   );
 }
@@ -525,11 +557,12 @@ export function OfferGrid({
             </tr>
           </thead>
           <tbody>
-            {offers.map((offer) => (
+            {offers.map((offer, index) => (
               <OfferRow
                 key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}
                 offer={offer}
                 lowestLanded={isLowest(offer)}
+                emphasis={index === 0}
                 onAdd={onAdd ? (quantity) => onAdd(offer, quantity) : undefined}
                 itcExplainerHref={itcExplainerHref}
               />
@@ -539,11 +572,12 @@ export function OfferGrid({
       </div>
 
       <ul className="flex flex-col gap-4 md:hidden">
-        {offers.map((offer) => (
+        {offers.map((offer, index) => (
           <li key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}>
             <OfferCard
               offer={offer}
               lowestLanded={isLowest(offer)}
+              emphasis={index === 0}
               onAdd={onAdd ? (quantity) => onAdd(offer, quantity) : undefined}
               itcExplainerHref={itcExplainerHref}
             />

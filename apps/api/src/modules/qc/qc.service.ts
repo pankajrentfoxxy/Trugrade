@@ -2,6 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { ClockPort } from '../../shared/clock';
 import { PrismaService } from '../../shared/db/prisma.service';
 import { QcRepository } from './internal/qc.repository';
+import {
+  VendorQualityService,
+  type SupplyPointQuality,
+  type SupplyPointRef,
+} from './internal/vendor-quality.service';
+import type { Grade } from '@trugrade/contracts';
 
 /**
  * The public interface of the `qc` module.
@@ -41,6 +47,24 @@ export interface IQcService {
    * ever performed and call it the number of machines checked.
    */
   countCurrentReports(): Promise<number>;
+
+  /**
+   * The two numbers the supply-point comparison board sells on, per supply
+   * point, served from the cached read model.
+   *
+   * On the interface because the storefront's product page is a caller in
+   * another module and the alternative was reading `qc.vendor_sku_quality` from
+   * `listing` — which would put the small-sample suppression, the one thing here
+   * with legal consequences under CP e-Comm r.7(2), in two places.
+   *
+   * Keyed on `(code, city)` and never on the code alone: the code is unique
+   * within a city, so "Supply Point F" is a different vendor in Noida than it is
+   * in Faridabad.
+   */
+  qualityForSupplyPoints(
+    points: readonly SupplyPointRef[],
+    opts?: { skuId?: string; grade?: Grade },
+  ): Promise<SupplyPointQuality[]>;
 }
 
 @Injectable()
@@ -49,6 +73,7 @@ export class QcService implements IQcService {
     private readonly repo: QcRepository,
     private readonly clock: ClockPort,
     private readonly prisma: PrismaService,
+    private readonly quality: VendorQualityService,
   ) {}
 
   /**
@@ -85,5 +110,13 @@ export class QcService implements IQcService {
 
   async countCurrentReports(): Promise<number> {
     return this.prisma.db.qc_report.count({ where: { is_current: true } });
+  }
+
+  /** Delegated verbatim: the aggregates and their suppression live in one file. */
+  qualityForSupplyPoints(
+    points: readonly SupplyPointRef[],
+    opts: { skuId?: string; grade?: Grade } = {},
+  ): Promise<SupplyPointQuality[]> {
+    return this.quality.qualityForSupplyPoints(points, opts);
   }
 }
