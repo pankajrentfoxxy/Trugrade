@@ -18,6 +18,17 @@ export interface Principal {
   roles: readonly Role[];
   permissions: ReadonlySet<Permission>;
   sessionId: string;
+  /**
+   * Whether this session has satisfied second-factor authentication.
+   *
+   * Carried on the principal rather than left in the JWT, because a @Public()
+   * route resolves a principal WITHOUT `PermissionsGuard`'s MFA check — so it is
+   * the one place a still-owing session is visible, and /auth/session has to be
+   * able to say so. Re-verifying the token there instead means a try/catch whose
+   * failure arm has to guess, and the safe-looking guess (assume satisfied)
+   * fails open on exactly the field that must not.
+   */
+  mfaSatisfied: boolean;
   /** Set when a platform admin is deliberately reading across orgs. Audit-logged. */
   crossOrgReason?: string;
 }

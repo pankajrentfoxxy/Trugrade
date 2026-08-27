@@ -12,11 +12,13 @@ import {
 } from './api';
 import {
   gstinPanConflict,
+  hasIdentifierRule,
   panHolderType,
   toGstin,
   toPan,
-  validateCin,
   validateGstin,
+  validateIdentifier,
+  validateIncorporationDate,
   validatePan,
 } from './validation';
 
@@ -130,9 +132,40 @@ export interface StatutoryValues {
   pan: string;
   panOutcome: VerificationOutcomeView | null;
   panDeferred: boolean;
-  cin: string;
+  /**
+   * The registry identifiers, keyed by `field_code`. **Captured, never verified**
+   * — see `CapturedFields` below for why that distinction is the whole section.
+   */
+  captured: Record<string, string>;
   gstins: GstinRow[];
 }
+
+/** Everything that differs in wording between the buyer and the vendor flow. */
+export interface StatutoryCopy {
+  panDescription: string;
+  gstinDescription: string;
+  confirmConsequence: string;
+  primaryTitle: string;
+  primaryDescription: string;
+  primaryMissing: string;
+  primaryNote: string;
+}
+
+export const BUYER_STATUTORY_COPY: StatutoryCopy = {
+  panDescription:
+    'The permanent account number of the entity we invoice. Every GSTIN you add below has to belong to it.',
+  gstinDescription:
+    'Add every registration you want to buy against. Each one is checked against the GST portal on its own.',
+  confirmConsequence:
+    'Invoices raised against this GSTIN will carry the name above. Confirming it is what lets us bill you.',
+  primaryTitle: 'Which one do we invoice?',
+  primaryDescription:
+    'The primary registration decides the billing entity on every invoice and whether the tax is IGST or CGST plus SGST. The right-hand rail explains what changes if it is wrong.',
+  primaryMissing:
+    'Choose which registration we invoice. It sets the billing entity and the tax split on every order.',
+  primaryNote:
+    'Nothing is chosen for you here. Changing it later needs a reviewer, because it changes how you are invoiced from that point on.',
+};
 
 let keySeed = 0;
 const nextKey = (): string => {
@@ -152,6 +185,7 @@ const emptyRow = (): GstinRow => ({
 export function readStatutoryDraft(
   answers: Record<string, unknown>,
   fallbackLegalName = '',
+  fields: readonly FieldRequirement[] = [],
 ): StatutoryValues {
   const str = (key: string): string =>
     typeof answers[key] === 'string' ? (answers[key] as string) : '';
@@ -169,7 +203,10 @@ export function readStatutoryDraft(
     panOutcome:
       (answers.panOutcome as VerificationOutcomeView | null | undefined) ?? null,
     panDeferred: answers.panDeferred === true,
-    cin: str('cin'),
+    // Each identifier is stored under its own `field_code` at the top level of
+    // the draft, not nested — so `answers.STATUTORY.cin` keeps meaning what it
+    // meant before this step learned about the other four.
+    captured: Object.fromEntries(fields.map((f) => [f.fieldCode, str(f.fieldCode)])),
     gstins: rows.length > 0 ? rows : [emptyRow()],
   };
 }
@@ -182,15 +219,21 @@ const panSettled = (v: StatutoryValues): boolean =>
   v.panDeferred || v.panOutcome?.outcome === 'PASS';
 
 /**
- * Four things have to be true, and `completion_pct` counts how many are.
- * CIN is a fifth only when this org's constitution actually requires one.
+ * Three things have to be true, and `completion_pct` counts how many are. Every
+ * identifier this org's constitution actually requires is one more.
  */
-export function completionOf(values: StatutoryValues, cinRequired: boolean): number {
+export function completionOf(
+  values: StatutoryValues,
+  fields: readonly FieldRequirement[],
+  today: Date,
+): number {
   const checks = [
     panSettled(values),
     values.gstins.some(rowSettled),
     values.gstins.some((r) => r.isPrimary),
-    ...(cinRequired ? [validateCin(values.cin, true) === undefined] : []),
+    ...fields
+      .filter((f) => f.required)
+      .map((f) => capturedError(f, values.captured[f.fieldCode] ?? '', today) === undefined),
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
@@ -201,10 +244,106 @@ const toDraft = (values: StatutoryValues): Record<string, unknown> => ({
   pan: values.pan,
   panOutcome: values.panOutcome,
   panDeferred: values.panDeferred,
-  cin: values.cin,
+  ...values.captured,
   gstins: values.gstins.map(({ key: _key, ...row }) => row),
   primaryGstin: values.gstins.find((r) => r.isPrimary)?.gstin ?? null,
 });
+
+/* ==========================================================================
+ * The registry identifiers — captured, and honestly not verified
+ * ======================================================================== */
+
+/**
+ * `incorporation_date` is a date; everything else is a fixed-shape code.
+ *
+ * The list is `onboarding_field_requirement` data, so this only has to say how
+ * to *render* a code, not which ones exist. A field seeded there tomorrow gets a
+ * labelled text box and the same "captured" treatment without a release.
+ */
+const isDateField = (fieldCode: string): boolean => fieldCode.endsWith('_date');
+
+function capturedError(
+  field: FieldRequirement,
+  value: string,
+  today: Date,
+): string | undefined {
+  return isDateField(field.fieldCode)
+    ? validateIncorporationDate(value, field.required, today)
+    : validateIdentifier(field.fieldCode, value, field.required, field.label);
+}
+
+interface CapturedFieldsProps {
+  fields: readonly FieldRequirement[];
+  values: Record<string, string>;
+  errors: Record<string, string>;
+  onChange: (fieldCode: string, value: string) => void;
+  onBlur: () => void;
+  onFocus: () => void;
+}
+
+/**
+ * **Nothing in this section is verified, and it says so once, at the top.**
+ *
+ * `CheckType` in `verification.service.ts` names UDYAM and CIN, but no route
+ * exposes either and TAN is not in the union at all — so there is no answer this
+ * screen could get back from a registry, and a tick beside one of these numbers
+ * would mean "you typed something the right shape". A missing check renders as a
+ * missing check: the shape is confirmed, the ownership is a reviewer's job, and
+ * the sentence saying which is which sits above the fields rather than being
+ * left for the applicant to infer from an absent tick.
+ */
+function CapturedFields({
+  fields,
+  values,
+  errors,
+  onChange,
+  onBlur,
+  onFocus,
+}: CapturedFieldsProps): React.JSX.Element {
+  return (
+    <>
+      <div className="flex flex-col gap-2 rounded border border-rule bg-sheet-2 p-4">
+        <StatusPill className="self-start" tone="neutral" label="Recorded, not checked" />
+        <p className="text-body-sm text-ink-2">
+          We check the format of each number below, and nothing more. There is no registry
+          look-up behind any of them yet, so none of them will show as verified — one of our
+          reviewers confirms them against the certificate you upload later.
+        </p>
+      </div>
+
+      {fields.map((field) => {
+        const value = values[field.fieldCode] ?? '';
+        const coded = hasIdentifierRule(field.fieldCode);
+        return (
+          <div key={field.fieldCode} className="flex flex-col gap-2">
+            <Input
+              label={field.label}
+              required={field.required}
+              mono={coded}
+              type={isDateField(field.fieldCode) ? 'date' : 'text'}
+              maxLength={coded ? 21 : undefined}
+              autoComplete="off"
+              hint={field.helpText ?? undefined}
+              value={value}
+              onFocus={onFocus}
+              onBlur={onBlur}
+              onChange={(e) =>
+                onChange(field.fieldCode, coded ? e.target.value.toUpperCase() : e.target.value)
+              }
+              error={errors[field.fieldCode]}
+            />
+            {/* A missing value never renders as a passing one — and neither does
+                an unverifiable one. This is the line that would otherwise be a
+                tick. */}
+            <p className="font-mono text-label uppercase tracking-[0.13em] text-ink-4">
+              {value.trim().length > 0 ? 'Captured — not verified' : 'Not provided'}
+            </p>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 /* ==========================================================================
  * One check's result — the same panel for a GSTIN and for the PAN
@@ -405,8 +544,13 @@ export interface StepStatutoryProps {
   fallbackLegalName?: string;
   /** `constitution_type` from the org itself; step 2's draft is gone by now. */
   constitution?: string | null;
-  /** Already gated by constitution — CIN for a company, nothing for a proprietor. */
+  /**
+   * Already gated by constitution — CIN for a company, nothing for a proprietor.
+   * Rendered as given: the server decides which apply and which are required.
+   */
   fields?: readonly FieldRequirement[];
+  /** Buyer or vendor wording. Everything else on this screen is identical. */
+  copy: StatutoryCopy;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
   onContinue: (
     values: Record<string, unknown>,
@@ -422,6 +566,7 @@ export function StepStatutory({
   fallbackLegalName = '',
   constitution,
   fields = [],
+  copy,
   onSaveDraft,
   onContinue,
   busy,
@@ -429,7 +574,7 @@ export function StepStatutory({
   blockingReason,
 }: StepStatutoryProps): React.JSX.Element {
   const [values, setValues] = React.useState<StatutoryValues>(() =>
-    readStatutoryDraft(answers, fallbackLegalName),
+    readStatutoryDraft(answers, fallbackLegalName, fields),
   );
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   /** Keys currently in flight. `pan` is a key here too. */
@@ -457,8 +602,9 @@ export function StepStatutory({
    */
   const retriesUsed = React.useRef<Record<string, number>>({});
 
-  const cinRule = fields.find((f) => f.fieldCode === 'cin');
-  const cinRequired = cinRule?.required ?? false;
+  // Read once and passed in, so the date rule can be tested at a year boundary
+  // rather than against whatever the clock says at the moment it runs.
+  const today = React.useMemo(() => new Date(), []);
 
   const isChecking = (key: string): boolean => checking.includes(key);
 
@@ -484,7 +630,7 @@ export function StepStatutory({
    */
   const persist = (next: StatutoryValues): void => {
     latest.current = next;
-    onSaveDraft(toDraft(next), completionOf(next, cinRequired));
+    onSaveDraft(toDraft(next), completionOf(next, fields, today));
   };
 
   const runCheck = async (key: string): Promise<void> => {
@@ -700,12 +846,11 @@ export function StepStatutory({
     }
 
     if (!values.gstins.some((r) => r.isPrimary))
-      found.primary =
-        'Choose which registration we invoice. It sets the billing entity and the tax split on every order.';
+      found.primary = copy.primaryMissing;
 
-    if (cinRule) {
-      const cin = validateCin(values.cin, cinRequired);
-      if (cin) found.cin = cin;
+    for (const field of fields) {
+      const problem = capturedError(field, values.captured[field.fieldCode] ?? '', today);
+      if (problem) found[field.fieldCode] = problem;
     }
 
     return found;
@@ -748,7 +893,7 @@ export function StepStatutory({
       {/* ------------------------------------------------------------- PAN */}
       <FormSection
         title="PAN"
-        description="The permanent account number of the entity we invoice. Every GSTIN you add below has to belong to it."
+        description={copy.panDescription}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="min-w-0 flex-1">
@@ -836,7 +981,7 @@ export function StepStatutory({
       {/* ----------------------------------------------------------- GSTINs */}
       <FormSection
         title="GST registrations"
-        description="Add every registration you want to buy against. Each one is checked against the GST portal on its own."
+        description={copy.gstinDescription}
         status={
           <>
             <span className="tnum">{settledCount}</span> of{' '}
@@ -951,7 +1096,7 @@ export function StepStatutory({
                 </dl>
                 <Checkbox
                   label="Yes, this is our business"
-                  consequence="Invoices raised against this GSTIN will carry the name above. Confirming it is what lets us bill you."
+                  consequence={copy.confirmConsequence}
                   checked={row.confirmed}
                   onChange={(confirmed) => {
                     setRow(row.key, { confirmed });
@@ -972,8 +1117,8 @@ export function StepStatutory({
 
       {/* ---------------------------------------------------------- primary */}
       <FormSection
-        title="Which one do we invoice?"
-        description="The primary registration decides the billing entity on every invoice and whether the tax is IGST or CGST plus SGST. The right-hand rail explains what changes if it is wrong."
+        title={copy.primaryTitle}
+        description={copy.primaryDescription}
       >
         <fieldset
           className="flex flex-col gap-2"
@@ -1019,30 +1164,34 @@ export function StepStatutory({
               {errors.primary}
             </p>
           )}
-          <p className="text-body-sm text-ink-2">
-            Nothing is chosen for you here. Changing it later needs a reviewer, because it changes
-            how you are invoiced from that point on.
-          </p>
+          <p className="text-body-sm text-ink-2">{copy.primaryNote}</p>
         </fieldset>
       </FormSection>
 
       {/* -------------------------------------------- constitution-gated fields */}
-      {cinRule && (
-        <FormSection title="Incorporation">
-          <Input
-            label={cinRule.label}
-            mono
-            maxLength={21}
-            required={cinRequired}
-            hint={cinRule.helpText ?? '21 characters, from your certificate of incorporation.'}
-            value={values.cin}
-            onFocus={() => onFieldFocus('Statutory')}
-            onBlur={() => saveOnBlur()}
-            onChange={(e) => {
-              setError('cin', undefined);
-              setValues((v) => ({ ...v, cin: e.target.value.toUpperCase() }));
+      {fields.length > 0 && (
+        <FormSection
+          title="Registry numbers"
+          description="Which of these you are asked for depends on your constitution — a proprietorship is never asked for a CIN."
+          status={
+            <>
+              <span className="tnum">
+                {fields.filter((f) => (values.captured[f.fieldCode] ?? '').trim().length > 0).length}
+              </span>{' '}
+              of <span className="tnum">{fields.length}</span> provided
+            </>
+          }
+        >
+          <CapturedFields
+            fields={fields}
+            values={values.captured}
+            errors={errors}
+            onFocus={() => onFieldFocus('Registry numbers')}
+            onBlur={saveOnBlur}
+            onChange={(fieldCode, value) => {
+              setError(fieldCode, undefined);
+              setValues((v) => ({ ...v, captured: { ...v.captured, [fieldCode]: value } }));
             }}
-            error={errors.cin}
           />
         </FormSection>
       )}

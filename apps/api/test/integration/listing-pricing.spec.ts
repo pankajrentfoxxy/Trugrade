@@ -65,7 +65,15 @@ let addressId: string;
 
 function principal(orgId: string, orgType: 'VENDOR' | 'PLATFORM', userId: string): Principal {
   const roles: Role[] = orgType === 'PLATFORM' ? ['OPS_MANAGER'] : ['VENDOR_OWNER'];
-  return { userId, orgId, orgType, roles, permissions: permissionsFor(roles), sessionId: 's' };
+  return {
+    userId,
+    orgId,
+    orgType,
+    roles,
+    permissions: permissionsFor(roles),
+    sessionId: 's',
+    mfaSatisfied: true,
+  };
 }
 
 function as<T>(p: Principal, fn: () => Promise<T>): Promise<T> {

@@ -108,6 +108,17 @@ export interface SessionView {
   orgType: 'VENDOR' | 'BUYER' | 'INTERNAL';
   roles: string[];
   permissions: string[];
+  /**
+   * A second factor is outstanding and every non-public route will refuse until
+   * it lands. True for `MFA_REQUIRED_ROLES` — VENDOR_OWNER among them — so a
+   * supplier meets this the moment their account is created.
+   *
+   * **Trustworthy on the registration response, not on `GET /auth/session`**:
+   * that route reports `false` whenever a principal resolves, and it resolves
+   * for a session whose token says `mfa: false`. Reported. On a resumed session
+   * the 403 from the first onboarding call is what tells us instead.
+   */
+  mfaRequired: boolean;
 }
 
 export const sendOtp = (channel: OtpChannel, value: string): Promise<ApiResult<OtpSent>> =>
@@ -128,12 +139,46 @@ export interface RegisterInput {
   password: string;
 }
 
-/** BUYER only from this screen. A vendor registers through its own seven-step flow. */
-export const register = (input: RegisterInput): Promise<ApiResult<SessionView>> =>
-  post<SessionView>('/api/auth/register', { orgType: 'BUYER', ...input });
+/**
+ * `orgType` decides the owner role the server grants — CUSTOMER_OWNER or
+ * VENDOR_OWNER — and therefore which seven or five steps the org is given. It
+ * is a parameter rather than a constant because the buyer flow and the vendor
+ * flow are the same shell over the same endpoint, and a hard-coded 'BUYER' here
+ * is how the second one silently registers the wrong kind of organisation.
+ */
+export const register = (
+  orgType: 'BUYER' | 'VENDOR',
+  input: RegisterInput,
+): Promise<ApiResult<SessionView>> =>
+  post<SessionView>('/api/auth/register', { orgType, ...input });
 
 export const getSession = (): Promise<ApiResult<SessionView>> =>
   get<SessionView>('/api/auth/session');
+
+/* ==========================================================================
+ * The second factor — POST /api/auth/mfa/*
+ * ======================================================================== */
+
+export interface MfaCodeSent {
+  /** Masked by the server. Never re-derived here — see `OtpSent.sentTo`. */
+  sentTo: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+  /** Non-production only. Never rendered; it exists so tests can drive the flow. */
+  devCode?: string;
+}
+
+/**
+ * Both routes are `@Public()` server-side, for the reason that makes them work
+ * at all: the session that needs them is the one the guard is refusing. They
+ * still run authenticated — the principal comes from the access cookie and the
+ * refresh cookie is what `mfa/verify` rotates.
+ */
+export const requestMfaCode = (): Promise<ApiResult<MfaCodeSent>> =>
+  post<MfaCodeSent>('/api/auth/mfa/otp');
+
+export const verifyMfa = (code: string): Promise<ApiResult<SessionView>> =>
+  post<SessionView>('/api/auth/mfa/verify', { code });
 
 /* ==========================================================================
  * Onboarding — the stepper

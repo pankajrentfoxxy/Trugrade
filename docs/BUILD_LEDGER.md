@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T08:05:00+00:00  
-Currently: T7 - vendor registration steps 1-3
+Updated: 2026-08-27T09:10:00+00:00  
+Currently: T8 - vendor registration steps 4-5
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -17,7 +17,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T4 | Customer registration - shell and steps 1-2 | DONE | b0acc96 | 26 shots, both themes, 1440/900/600 | Archetype D. Rail drawn from seeded step definitions, purpose_note is the why-rail copy. Save-and-resume verified with a cold reload. Added GET /api/onboarding/steps/definitions (@Public). Fixed: header classes that existed in no stylesheet, footer unreadable in light, ThemeToggle hydration failure, Stepper green tick. |
 | T5 | Customer registration - step 3 statutory | DONE | 71d75ef | 34 shots, both themes, 1440/900/600 | PASS shows the returned legal name; FAIL names the reason; PROVIDER_ERROR never blames the applicant, never consumes an attempt, retries with visible backoff. Checksum + embedded-PAN conflict caught client-side. Fixed a cross-tenant rate-limit hole and the invalid GSTIN example. |
 | T6 | Customer registration - steps 4-5 and submission | DONE | fa6484b | 30 shots, both themes, 1440/900/600 | Contacts+addresses with receiving hours, document upload with real magic-byte and age refusals, review screen, submitted and NEEDS_FIX states. Fixed four missing-renders-as-achieved defects. Uploader visible progress fixed in packages/ui (10f5b9d). |
-| T7 | Vendor registration - steps 1-3 | DOING |  |  |  |
+| T7 | Vendor registration - steps 1-3 | DONE | (uncommitted) | 40 shots, both themes, 1440/900/600 | Route `/sell/register`. **One shell, two flows**: `RegisterFlow` now takes `orgType`, a rail label and a step-code -> renderer map; the buyer and the vendor each supply their own. `StepAccount` and `StepStatutory` are shared with a copy object and a slot; vendor step 2 is its own file. Found and fixed the blocker that made the flow impossible: a VENDOR_OWNER is created with MFA outstanding and every onboarding call 403s until a code lands - `MfaGate` is now part of registration. CIN/LLPIN/Udyam/TAN render as captured, never verified: no route exists for any of them. |
 | T8 | Vendor registration - steps 4-5 | TODO |  |  |  |
 | T9 | Vendor registration - steps 6-7 and submission | TODO |  |  |  |
 | T10 | Sign-in, both portals, surrounding states | TODO |  |  |  |
@@ -101,6 +101,71 @@ themes. `cn.spec.ts` reads the preset so a size added there and not here fails l
 **The API did not boot** — raised by T2, fixed in 944eac9. `DocumentService` was injected
 into `OnboardingController` and missing from `KycModule.providers`. Typecheck, lint and
 every unit test passed; only starting the process found it.
+
+## Reported by T7 — not fixed, they are outside `apps/storefront`
+
+- **A vendor could not register at all, and nothing said so.** `VENDOR_OWNER` is
+  in `MFA_REQUIRED_ROLES`, so `POST /auth/register` returns `mfaRequired: true`
+  and `AuthGuard` then refuses every non-public route — `POST /onboarding/start`
+  is a 403 on the very next call. Fixed screen-side by `register/MfaGate.tsx`,
+  which is now part of step 1 and of a resumed session. Two API problems remain
+  underneath it:
+  - **`GET /auth/session` reports `mfaRequired: false` for a session that has
+    not satisfied MFA.** When a principal resolves — which it does on that
+    `@Public()` route even with `mfa: false` in the token — the handler returns
+    a hard-coded `false`. Only the refresh branch reads the claim. A client
+    therefore cannot ask whether a factor is outstanding; the flow has to infer
+    it from a 403 on the next call, which is what it now does.
+  - **`mfa/otp` sends a code to the address the applicant verified sixty seconds
+    earlier.** Correct as a second factor for a *login*, thin as one during
+    registration: the same mailbox proves the same thing twice. The backlog
+    (T10) says "mandatory TOTP for owner accounts", and there is no TOTP
+    enrolment anywhere in the API — `AADHAAR_ESIGN` is the only other factor in
+    `CheckType`. The panel is honest about what it is; the enrolment is missing.
+
+- **No verification route for CIN, LLPIN, Udyam or TAN.** `CheckType` names
+  `UDYAM` and `CIN`; no controller exposes either, and `TAN` is not in the union
+  at all. So step 3 captures all four and says, once and out loud, that it checks
+  the format and nothing else — "Captured — not verified", never a tick. When a
+  route lands, the fields already render from `onboarding_field_requirement` and
+  only the outcome panel has to be wired.
+
+- **`onboarding_field_requirement` seeds `incorporation_date` on STATUTORY; the
+  backlog puts it on step 2.** Both are defensible and asking twice is not, so
+  `VendorRegistration` drops it from step 3's list (`ASKED_EARLIER`) and step 2
+  owns it. The seed and the step that actually asks should agree — a client-side
+  filter over server-side data is the wrong place for that decision to live.
+
+- **`onboarding_field_requirement` has no row for TAN.** Declared client-side in
+  `VendorRegistration.tsx` in the endpoint's own shape, so it renders and
+  validates like the seeded four and so the constant is what gets deleted when a
+  row appears.
+
+- **The registration rate limits are still keyed on IP alone** — T6 reported the
+  OTP one, and `auth-register` (10 a day) is the same shape. Four accounts is one
+  capture run. `scripts/t7-shots.mjs` clears the dev keys explicitly and says why;
+  in production one applicant behind an office NAT locks out the building.
+
+- **`Input mono` does not set `tabular-nums`.** Browser-measured
+  `font-variant-numeric: normal` on every GSTIN, PAN, CIN, Udyam, TAN and PIN
+  input in both flows. Visually a no-op in IBM Plex Mono, whose digits are already
+  fixed-width, but CLAUDE.md asks for it on every number and the fix belongs in
+  `Input`'s `mono` branch in `packages/ui`, not in six call sites.
+
+- **`statutory.spec.tsx` timed out under `pnpm test`'s parallel load** once the
+  vendor flow added four fields to the step it renders: seventy `act` flushes of
+  a bigger form crossed Jest's default five seconds, and timing out inside
+  `useFakeTimers` skipped the `useRealTimers` cleanup, which turned one failure
+  into six. Given an explicit 30 s timeout, with the reason written above it.
+
+## Contracts gaps reported by T7
+
+- **No option list for a vendor's business category or monthly volume.**
+  `vendor_profile.business_category` is a free `String` and
+  `.monthly_volume_estimate` a bare `Int`, so nothing defines what may go in
+  either. Written in `picklists.ts` beside the buyer's five, same report: they
+  belong in `platform_config` or contracts before the vendor console grows a
+  filter that has to agree with this form.
 
 ## packages/ui gaps reported by T2 — fix when a task needs them
 

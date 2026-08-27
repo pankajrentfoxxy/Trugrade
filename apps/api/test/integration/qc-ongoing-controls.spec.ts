@@ -34,8 +34,21 @@ import {
 } from '../support/db';
 import { seedSellableUnit } from '../support/factories';
 
-/** 09:00 IST on the 26th. Every window in this suite is reckoned from here. */
-const NOW = new Date('2026-08-26T03:30:00.000Z');
+/**
+ * 09:00 IST TODAY. Every window in this suite is reckoned from here.
+ *
+ * The date has to track the real one. `seedSellableUnit` writes qc_valid_until
+ * relative to the DATABASE's CURRENT_DATE, while the service reads this fake
+ * clock — so a hardcoded instant agreed with the database on exactly one day and
+ * silently disagreed by one row afterwards. Pinning the day was hiding a
+ * disagreement rather than removing one: the fixed TIME is what these tests
+ * actually need, because the windows are reckoned in IST and a run at 23:00 UTC
+ * would otherwise land on the following IST day.
+ */
+const NOW = (() => {
+  const [y, m, d] = new Date().toISOString().slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d!, 3, 30, 0));
+})();
 
 let moduleRef: TestingModule;
 let raw: PrismaClient;

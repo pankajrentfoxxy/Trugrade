@@ -47,7 +47,7 @@ export function SiteHeader({
             <a href="/verify">Verify a certificate</a>
             <a href="/track">Track order</a>
             <a href="/help">Help</a>
-            <a href="/sell" style={{ color: 'var(--acc)', fontWeight: 600 }}>
+            <a href="/sell/register" style={{ color: 'var(--acc)', fontWeight: 600 }}>
               Sell on {BRAND.name} &rarr;
             </a>
           </div>

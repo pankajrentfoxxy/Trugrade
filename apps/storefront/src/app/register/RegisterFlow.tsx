@@ -16,6 +16,7 @@ import {
   getOnboarding,
   getSession,
   register,
+  requestMfaCode,
   saveStep,
   startOnboarding,
   submitForReview,
@@ -23,16 +24,23 @@ import {
   type StepDefinition,
   type StepProgress,
 } from './api';
-import { Review } from './Review';
-import { StepAccount, type AccountValues } from './StepAccount';
-import { StepCompany } from './StepCompany';
-import { StepContacts, WHY_CONTACTS } from './StepContacts';
-import { StepDocuments, WHY_DOCUMENTS } from './StepDocuments';
-import { StepStatutory, WHY_STATUTORY } from './StepStatutory';
+import { MfaGate } from './MfaGate';
+import type { AccountValues } from './StepAccount';
 
 /**
- * Customer registration — **archetype D, flow**: the step rail on the left, one
- * step in the middle, and the "why we ask" rail on the right.
+ * Registration — **archetype D, flow**: the step rail on the left, one step in
+ * the middle, and the "why we ask" rail on the right.
+ *
+ * **One shell, two flows.** A buyer has five steps and a vendor has seven, but
+ * the first three share their codes (ACCOUNT, BUSINESS_PROFILE, STATUTORY), the
+ * same save-and-resume, the same verification outcomes and the same rail. The
+ * difference between them is almost entirely *data* — the seeded definitions,
+ * the `purpose_note` copy, and which constitution-gated fields
+ * `onboarding_field_requirement` returns. What genuinely differs is which
+ * component renders a given step code, so that is the one thing the caller
+ * supplies: a map from step code to renderer. Everything else here is shared,
+ * because a second copy of this file is how the two flows drift into disagreeing
+ * about what a failed save does to what was typed.
  *
  * Two things about the shell are load-bearing.
  *
@@ -97,12 +105,84 @@ const asProgress = (d: StepDefinition): StepProgress => ({
   fields: [],
 });
 
+/**
+ * Everything a step needs from the shell, in one object.
+ *
+ * Passed rather than each step reaching for its own copy of the draft: the shell
+ * owns the merge of "what the server returned" with "what this session typed",
+ * and a step that reads around it sees the wrong half of that after a completion
+ * clears a draft server-side.
+ */
+export interface StepContext {
+  /** This step's answers, server-side draft merged with what was typed here. */
+  answers: Record<string, unknown>;
+  /** Every step's, for a step that reads one before it. */
+  allAnswers: Record<string, Record<string, unknown>>;
+  step: StepProgress | undefined;
+  /** `constitution_type` from the org itself; step 2's draft may be gone. */
+  constitution: string | null;
+  /** Step 1's company name, carried before any draft exists. */
+  typedCompanyName: string;
+  registered: boolean;
+  busy: boolean;
+  onFieldFocus: (term: string) => void;
+  saveDraft: (values: Record<string, unknown>, completionPct: number) => void;
+  continueFrom: (
+    values: Record<string, unknown>,
+    completionPct: number,
+  ) => Promise<Record<string, string> | null>;
+  /**
+   * ACCOUNT only. Creates the organisation if it does not exist yet, then saves
+   * and completes the step. `extras` are the fields this flow asks on step 1
+   * that the other does not — a buyer's lead source, a vendor's city and volume.
+   */
+  continueFromAccount: (
+    values: AccountValues,
+    extras?: Record<string, unknown>,
+  ) => Promise<Record<string, string> | null>;
+}
+
+/** What the shell hands a review screen. `Review` in the buyer flow matches it. */
+export interface ReviewContext {
+  steps: readonly StepProgress[];
+  answers: Record<string, Record<string, unknown>>;
+  orgStatus: string;
+  slaDueAt: string | null;
+  slaBreached: boolean;
+  isSubmittable: boolean;
+  onEdit: (stepCode: string) => void;
+  onSubmit: () => Promise<string | null>;
+}
+
 export interface RegisterFlowProps {
   /** Server-rendered so the rail is drawn on first paint, not after a fetch. */
   definitions: StepDefinition[] | null;
+  /** Decides the owner role at registration and which session may resume here. */
+  orgType: 'BUYER' | 'VENDOR';
+  /** The rail's accessible name. "Create a buyer account", "Become a supplier". */
+  railLabel: string;
+  /** Step code → its component. A code with no entry renders as not built yet. */
+  renderers: Record<string, (ctx: StepContext) => React.ReactNode>;
+  /**
+   * Copy the step's own `purpose_note` has no room for, per step code. The rail
+   * is otherwise the API's own text and nothing is written beside a field.
+   */
+  whyFor?: (stepCode: string) => readonly WhyRailItem[];
+  /** Shown when the signed-in session belongs to the other kind of account. */
+  wrongAccountBody: string;
+  /** Absent until a flow has a review screen; the last step then has no next. */
+  review?: (ctx: ReviewContext) => React.ReactNode;
 }
 
-export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Element {
+export function RegisterFlow({
+  definitions,
+  orgType,
+  railLabel,
+  renderers,
+  whyFor,
+  wrongAccountBody,
+  review,
+}: RegisterFlowProps): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>(definitions ? 'checking' : 'unreachable');
   const [steps, setSteps] = React.useState<StepProgress[]>(() =>
     (definitions ?? []).map(asProgress),
@@ -130,6 +210,20 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
   const [slaDueAt, setSlaDueAt] = React.useState<string | null>(null);
   const [slaBreached, setSlaBreached] = React.useState(false);
   const [isSubmittable, setIsSubmittable] = React.useState(false);
+  /**
+   * The masked address a second-factor code went to, while one is outstanding.
+   *
+   * `MFA_REQUIRED_ROLES` covers VENDOR_OWNER, so a supplier account meets the
+   * guard the instant it is created and every onboarding call 403s until a code
+   * lands. Held here rather than inside step 1 because it also happens on a
+   * *resumed* session, where there is no step 1 in flight to own it.
+   */
+  const [mfaSentTo, setMfaSentTo] = React.useState<string | null>(null);
+  /** What to finish once the factor lands. Null on a resume: there is nothing pending. */
+  const pendingAccount = React.useRef<{
+    values: AccountValues;
+    extras: Record<string, unknown>;
+  } | null>(null);
 
   // The rail collapses below the width at which it stops being a rail — the
   // same 1024px where the grid drops to one column. A `<details>` cannot be
@@ -192,7 +286,7 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
         setPhase('ready');
         return;
       }
-      if (session.data.orgType !== 'BUYER' || !session.data.orgId) {
+      if (session.data.orgType !== orgType || !session.data.orgId) {
         setPhase('wrong-account');
         return;
       }
@@ -201,13 +295,26 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
       // Idempotent, and safe on every mount — which is how it is meant to be
       // called. The client should not have to know whether registration or a
       // constitution change already materialised these rows.
-      await startOnboarding();
+      const started = await startOnboarding();
       if (cancelled) return;
+
+      // A 403 here is `AuthGuard` holding an outstanding second factor, not an
+      // outage: `GET /auth/session` reports `mfaRequired: false` for a session
+      // whose token says otherwise, so the refusal is the only honest signal a
+      // returning vendor gives us. Rendering "we could not load the steps" would
+      // be wrong about a problem they can fix in ten seconds.
+      if (!started.ok && started.status === 403) {
+        await openMfa();
+        if (cancelled) return;
+        setPhase('ready');
+        return;
+      }
 
       const onboarding = await getOnboarding();
       if (cancelled) return;
       if (!onboarding.ok) {
-        setPhase('unreachable');
+        setPhase(onboarding.status === 403 ? 'ready' : 'unreachable');
+        if (onboarding.status === 403) await openMfa();
         return;
       }
 
@@ -222,7 +329,7 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     return () => {
       cancelled = true;
     };
-  }, [definitions, applyOnboarding]);
+  }, [definitions, applyOnboarding, orgType]);
 
   /** The step lives in the URL, so a reload and a rail link land in one place. */
   const goTo = React.useCallback((code: string): void => {
@@ -235,31 +342,32 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
 
   const current = steps.find((s) => s.stepCode === currentCode);
 
+  /* --------------------------------------------------------- second factor */
+
   /**
-   * The GSTINs step 3 verified, for step 4's billing addresses.
-   *
-   * Read, never asked for again. Once step 4 has a draft of its own it carries
-   * its own copy — which is what survives step 3 being marked COMPLETE and its
-   * draft cleared server-side.
+   * Ask for a code and put the gate on screen. Never called speculatively — only
+   * when the server has actually refused, or said it is about to.
    */
-  const savedGstins = React.useMemo<string[]>(() => {
-    const rows = answers.STATUTORY?.gstins;
-    if (!Array.isArray(rows)) return [];
-    return rows
-      .map((row) => (row as { gstin?: unknown }).gstin)
-      .filter((g): g is string => typeof g === 'string' && g.length === 15);
-  }, [answers.STATUTORY]);
+  const openMfa = async (): Promise<void> => {
+    const sent = await requestMfaCode();
+    if (!sent.ok) {
+      setSaveFailure(sent.message);
+      return;
+    }
+    setMfaSentTo(sent.data.sentTo);
+  };
 
   /* ---------------------------------------------------------------- step 1 */
 
   const continueFromAccount = async (
     values: AccountValues,
+    extras: Record<string, unknown> = {},
   ): Promise<Record<string, string> | null> => {
     setBusy(true);
     setSaveFailure(null);
     try {
       if (!registered) {
-        const created = await register({
+        const created = await register(orgType, {
           companyName: values.companyName,
           fullName: values.fullName,
           email: values.email,
@@ -276,12 +384,21 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
             : { password: created.message };
         }
         setRegistered(true);
+        if (created.data.mfaRequired) {
+          // Not an error and not a step: the account exists, and the answers on
+          // screen are held until the factor lands rather than being written to
+          // an endpoint that is about to refuse them.
+          pendingAccount.current = { values, extras };
+          await openMfa();
+          return null;
+        }
         await startOnboarding();
       }
 
       setTypedCompanyName(values.companyName);
 
       const draft = {
+        ...extras,
         fullName: values.fullName,
         companyName: values.companyName,
         email: values.email,
@@ -313,6 +430,26 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * The code was accepted and the session has been rotated with `mfa: true`.
+   *
+   * `startOnboarding` first in both arms: it is idempotent, and it is the call
+   * that was refused a moment ago, so nothing this org has can be read or
+   * written until it has actually run once.
+   */
+  const afterMfa = async (): Promise<void> => {
+    setMfaSentTo(null);
+    const pending = pendingAccount.current;
+    pendingAccount.current = null;
+    await startOnboarding();
+    if (pending) {
+      await continueFromAccount(pending.values, pending.extras);
+      return;
+    }
+    await reload();
+    setPhase('ready');
   };
 
   /* ---------------------------------------------------------------- step 2 */
@@ -385,18 +522,17 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     ...steps
       .filter((s) => s.purposeNote)
       .map((s) => ({ term: s.title, explanation: s.purposeNote })),
-    // The step's own `purpose_note` is one sentence. The primary GSTIN decides
-    // how this buyer is invoiced from here on, so step 3 adds the paragraph the
-    // seed has no room for — and only while step 3 is the step on screen.
-    ...(currentCode === 'STATUTORY' ? WHY_STATUTORY : []),
-    ...(currentCode === 'CONTACTS_ADDRESSES' ? WHY_CONTACTS : []),
-    ...(currentCode === 'DOCUMENTS' ? WHY_DOCUMENTS : []),
+    // The step's own `purpose_note` is one sentence. Where a step makes the
+    // applicant take a decision the seed has no room to explain — the primary
+    // GSTIN, say — the flow contributes the paragraph, and only while that step
+    // is the one on screen.
+    ...(whyFor?.(currentCode) ?? []),
   ];
 
   const rail = (
     <StepRail
       steps={railSteps}
-      label="Create a buyer account"
+      label={railLabel}
       savedAt={savedAt ? formatSaved(savedAt) : undefined}
       className={wide ? undefined : 'static max-h-none'}
     />
@@ -422,7 +558,7 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     return (
       <EmptyState
         title="You are already signed in, on a different kind of account"
-        body="This form creates a buyer account. Vendor and staff accounts are managed in the console. Sign out here if you need to register a second organisation."
+        body={wrongAccountBody}
         action={
           <Button variant="secondary" onClick={() => window.location.assign('/')}>
             Back to the shop
@@ -439,7 +575,10 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
    * that still accepts edits after submission is a lie about what happens next.
    */
   const withUs = AFTER_SUBMISSION.includes(orgStatus);
-  const reviewing = currentCode === REVIEW || withUs;
+  // A flow with no review screen yet cannot land on one. It falls through to the
+  // renderer lookup below, which says the step is not built rather than
+  // rendering an empty summary of an application nobody can submit.
+  const reviewing = Boolean(review) && (currentCode === REVIEW || withUs);
 
   const submit = async (): Promise<string | null> => {
     const result = await submitForReview();
@@ -448,6 +587,31 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     if (!result.ok) return result.message;
     await reload(REVIEW);
     return null;
+  };
+
+  /** Bound to the step on screen, so a renderer never passes its own code back. */
+  const stepContext: StepContext = {
+    answers: answers[currentCode] ?? {},
+    allAnswers: answers,
+    step: current,
+    // The org's own value when there is one. There is not, today: no module has
+    // registered a step promotion, so `organization.constitution` stays null and
+    // the server's copy is always null with it. The answer typed on step 2 is
+    // the same fact and is the only place it exists in this session — without
+    // this fallback, VR-008 ("this PAN belongs to an individual, but you told us
+    // private limited") can never fire, because the client has nothing to send.
+    constitution:
+      constitution ??
+      (typeof answers.BUSINESS_PROFILE?.constitution === 'string'
+        ? (answers.BUSINESS_PROFILE.constitution as string)
+        : null),
+    typedCompanyName,
+    registered,
+    busy,
+    onFieldFocus: setActiveTerm,
+    saveDraft: (values, pct) => void saveDraft(currentCode, values, pct),
+    continueFrom: (values, pct) => continueFrom(currentCode, values, pct),
+    continueFromAccount,
   };
 
   return (
@@ -525,17 +689,19 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
           </p>
         )}
 
-        {reviewing ? (
-          <Review
-            steps={steps}
-            answers={answers}
-            orgStatus={orgStatus}
-            slaDueAt={slaDueAt}
-            slaBreached={slaBreached}
-            isSubmittable={isSubmittable}
-            onEdit={goTo}
-            onSubmit={submit}
-          />
+        {mfaSentTo ? (
+          <MfaGate sentTo={mfaSentTo} onVerified={afterMfa} />
+        ) : reviewing && review ? (
+          review({
+            steps,
+            answers,
+            orgStatus,
+            slaDueAt,
+            slaBreached,
+            isSubmittable,
+            onEdit: goTo,
+            onSubmit: submit,
+          })
         ) : phase === 'checking' ? (
           <div className="flex flex-col gap-4 rounded-lg border border-rule bg-sheet p-5">
             <Skeleton lines={6} />
@@ -543,79 +709,20 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
               Checking whether you already have an application in progress…
             </p>
           </div>
-        ) : currentCode === 'ACCOUNT' ? (
-          <StepAccount
-            answers={answers.ACCOUNT ?? {}}
-            registered={registered}
-            busy={busy}
-            onContinue={continueFromAccount}
-            onFieldFocus={setActiveTerm}
-          />
-        ) : currentCode === 'BUSINESS_PROFILE' ? (
-          <StepCompany
-            answers={answers.BUSINESS_PROFILE ?? {}}
-            fallbackLegalName={
-              typedCompanyName ||
-              (typeof answers.ACCOUNT?.companyName === 'string'
-                ? (answers.ACCOUNT.companyName as string)
-                : '')
-            }
-            busy={busy}
-            blockingReason={current?.blockingReason}
-            onSaveDraft={(values, pct) => void saveDraft('BUSINESS_PROFILE', values, pct)}
-            onContinue={(values, pct) => continueFrom('BUSINESS_PROFILE', values, pct)}
-            onFieldFocus={setActiveTerm}
-          />
-        ) : currentCode === 'STATUTORY' ? (
-          <StepStatutory
-            answers={answers.STATUTORY ?? {}}
-            fallbackLegalName={
-              (typeof answers.BUSINESS_PROFILE?.legalName === 'string'
-                ? (answers.BUSINESS_PROFILE.legalName as string)
-                : '') ||
-              typedCompanyName ||
-              (typeof answers.ACCOUNT?.companyName === 'string'
-                ? (answers.ACCOUNT.companyName as string)
-                : '')
-            }
-            constitution={constitution}
-            fields={current?.fields}
-            busy={busy}
-            blockingReason={current?.blockingReason}
-            onSaveDraft={(values, pct) => void saveDraft('STATUTORY', values, pct)}
-            onContinue={(values, pct) => continueFrom('STATUTORY', values, pct)}
-            onFieldFocus={setActiveTerm}
-          />
-        ) : currentCode === 'CONTACTS_ADDRESSES' ? (
-          <StepContacts
-            answers={answers.CONTACTS_ADDRESSES ?? {}}
-            gstins={savedGstins}
-            busy={busy}
-            blockingReason={current?.blockingReason}
-            onSaveDraft={(values, pct) => void saveDraft('CONTACTS_ADDRESSES', values, pct)}
-            onContinue={(values, pct) => continueFrom('CONTACTS_ADDRESSES', values, pct)}
-            onFieldFocus={setActiveTerm}
-          />
-        ) : currentCode === 'DOCUMENTS' ? (
-          <StepDocuments
-            answers={answers.DOCUMENTS ?? {}}
-            busy={busy}
-            blockingReason={current?.blockingReason}
-            onSaveDraft={(values, pct) => void saveDraft('DOCUMENTS', values, pct)}
-            onContinue={(values, pct) => continueFrom('DOCUMENTS', values, pct)}
-            onFieldFocus={setActiveTerm}
-          />
         ) : (
-          <EmptyState
-            title={`${current?.title ?? 'This step'} is not built yet`}
-            body="Your answers so far are saved and this application is waiting for you. This step opens shortly; nothing you have entered is lost in the meantime."
-            action={
-              <Button variant="secondary" onClick={() => window.location.assign('/')}>
-                Back to the shop
-              </Button>
-            }
-          />
+          (renderers[currentCode]?.(stepContext) ?? (
+            <EmptyState
+              title={`${current?.title ?? 'This step'} is not built yet`}
+              body="Your answers so far are saved and this application is waiting for you. This step opens shortly; nothing you have entered is lost in the meantime."
+              action={
+                <Button variant="secondary" onClick={() => window.location.assign('/')}>
+                  Back to the shop
+                </Button>
+              }
+            />
+          ))
         )}
+
       </main>
 
       {/* The right rail is the API's own `purpose_note` for every step, never

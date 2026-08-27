@@ -13,7 +13,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 // Also loaded by `jest.setup.ts` at runtime; imported here so `tsc --noEmit`
 // sees the matcher augmentation, which the setup file is outside `include` for.
 import '@testing-library/jest-dom';
-import { RegisterFlow } from './RegisterFlow';
+import { BuyerRegistration } from './BuyerRegistration';
 import type { StepDefinition } from './api';
 
 /* --------------------------------------------------------------- fetch stub */
@@ -75,7 +75,7 @@ describe('the step rail', () => {
     const served = [definition('ACCOUNT', 1, 'Kingfisher'), definition('OTHER', 2, 'Marmalade')];
     stubFetch({ 'GET /api/auth/session': { status: 401, body: { error: {} } } });
 
-    render(<RegisterFlow definitions={served} />);
+    render(<BuyerRegistration definitions={served} />);
 
     const rail = await screen.findByTestId('step-rail');
     expect(within(rail).getByText('Kingfisher')).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe('the step rail', () => {
       },
     });
 
-    render(<RegisterFlow definitions={served} />);
+    render(<BuyerRegistration definitions={served} />);
 
     // The seeded titles win over the ones this render started with.
     const rail = screen.getByTestId('step-rail');
@@ -168,7 +168,7 @@ describe('a resumed session', () => {
       },
     });
 
-    render(<RegisterFlow definitions={[account, company]} />);
+    render(<BuyerRegistration definitions={[account, company]} />);
 
     const legalName = await screen.findByLabelText(/Legal name/);
     expect(legalName).toHaveValue('Ferrous Works Private Limited');
@@ -188,7 +188,7 @@ describe('consent', () => {
     const account = definition('ACCOUNT', 1, 'Account');
     stubFetch({ 'GET /api/auth/session': { status: 401, body: { error: {} } } });
 
-    const { container } = render(<RegisterFlow definitions={[account]} />);
+    const { container } = render(<BuyerRegistration definitions={[account]} />);
     await screen.findByText('Create account and continue');
 
     expect(container.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);

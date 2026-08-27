@@ -269,3 +269,44 @@ export const LANGUAGES: readonly Option[] = [
   { value: 'EN', label: 'English' },
   { value: 'HI', label: 'हिन्दी — Hindi' },
 ];
+
+/* ==========================================================================
+ * Vendor registration — steps 1 to 3
+ * ========================================================================
+ *
+ * Same report as the buyer lists above: none of these has a server-side
+ * definition. `vendor.vendor_profile.business_category` is a free `String` and
+ * `.monthly_volume_estimate` is a bare `Int`, so nothing in the API, the seed
+ * or `@trugrade/contracts` says what may go in either. Written here, and
+ * reported as a gap — they belong in `platform_config` beside the buyer lists,
+ * before the vendor console grows a filter that has to agree with this form.
+ */
+
+/** `vendor_profile.business_category`. What the supplier actually is. */
+export const VENDOR_CATEGORIES: readonly Option[] = [
+  { value: '', label: 'Select what best describes you' },
+  { value: 'REFURBISHER', label: 'Refurbisher — we repair and grade in-house' },
+  { value: 'ITAD', label: 'ITAD — we dispose of retired corporate fleets' },
+  { value: 'LEASING', label: 'Leasing company — we sell off-lease returns' },
+  { value: 'TRADER', label: 'Trader or wholesaler' },
+  { value: 'OEM_PARTNER', label: 'OEM or brand-authorised partner' },
+  { value: 'RETAILER', label: 'Retailer with buy-back stock' },
+  { value: 'OTHER', label: 'Something else' },
+];
+
+/**
+ * `vendor_profile.monthly_volume_estimate` is an integer, so the code is the
+ * band's lower bound rather than a range string — a band that has to be parsed
+ * back out of "51-200" is a band that will be parsed wrong once.
+ */
+export const MONTHLY_VOLUMES: readonly Option[] = [
+  { value: '', label: 'Select the monthly volume' },
+  { value: '10', label: 'Up to 25 laptops a month' },
+  { value: '25', label: '25 to 100 a month' },
+  { value: '100', label: '100 to 250 a month' },
+  { value: '250', label: '250 to 500 a month' },
+  { value: '500', label: 'More than 500 a month' },
+];
+
+/** `identity.organization.employee_count_band`, same column as the buyer's. */
+export const STAFF_BANDS = EMPLOYEE_BANDS;

@@ -1,6 +1,9 @@
 import {
   ADDRESS_LINE1,
   CIN,
+  LLPIN,
+  TAN,
+  UDYAM,
   EMAIL,
   FULL_NAME,
   GSTIN,
@@ -315,11 +318,66 @@ export function panHolderType(value: string): string | undefined {
   return pan.length === 10 ? PAN_HOLDER_TYPE[pan[3] as string] : undefined;
 }
 
-export function validateCin(value: string, required: boolean): string | undefined {
-  const cin = value.trim().toUpperCase();
-  if (cin.length === 0)
-    return required ? 'Enter the CIN from your certificate of incorporation.' : undefined;
-  return CIN.pattern?.test(cin) ? undefined : CIN.message;
+/**
+ * The registry identifiers step 3 captures — CIN, LLPIN, Udyam and TAN.
+ *
+ * **Shape only, and that is the whole point.** `CheckType` in
+ * `verification.service.ts` names UDYAM and CIN, but no route exposes either and
+ * TAN is not in the union at all, so nothing on the platform can confirm that
+ * one of these belongs to the applicant. The pattern is the strongest thing that
+ * can honestly be said about the value, and the screen says exactly that beside
+ * it rather than showing a tick it has not earned.
+ *
+ * Keyed on `field_code` from `onboarding_field_requirement`, so a field seeded
+ * there is validated here without a second list to keep in step. An unknown code
+ * is accepted as free text — a rule we do not have is not a refusal we can make.
+ */
+const IDENTIFIER_RULES: Record<string, { pattern?: RegExp; message: string }> = {
+  cin: CIN,
+  llpin: LLPIN,
+  udyam_number: UDYAM,
+  tan: TAN,
+};
+
+/** Whether a code has a shape rule at all. Drives the mono/uppercase treatment. */
+export const hasIdentifierRule = (fieldCode: string): boolean => fieldCode in IDENTIFIER_RULES;
+
+export function validateIdentifier(
+  fieldCode: string,
+  value: string,
+  required: boolean,
+  label: string,
+): string | undefined {
+  const trimmed = value.trim().toUpperCase();
+  if (trimmed.length === 0) return required ? `Enter the ${label} — it is required for your constitution.` : undefined;
+  const rule = IDENTIFIER_RULES[fieldCode];
+  if (!rule?.pattern) return undefined;
+  return rule.pattern.test(trimmed) ? undefined : rule.message;
+}
+
+export const validateCin = (value: string, required: boolean): string | undefined =>
+  validateIdentifier('cin', value, required, 'CIN');
+
+/**
+ * A date of incorporation, which is a fact with two edges: a company cannot be
+ * incorporated tomorrow, and the Companies Act of 1956 is the earliest registry
+ * anything on this platform could come from. Anything between is the applicant's
+ * to state and not ours to second-guess.
+ */
+export function validateIncorporationDate(
+  value: string,
+  required: boolean,
+  today: Date,
+): string | undefined {
+  if (value.trim().length === 0)
+    return required ? 'Enter the date on your certificate of incorporation.' : undefined;
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return 'Enter the date as it appears on the certificate.';
+  if (parsed.getTime() > today.getTime())
+    return 'That date is in the future. Use the date printed on the certificate of incorporation.';
+  if (parsed.getFullYear() < 1956)
+    return 'That is earlier than the companies register goes. Check the year on the certificate.';
+  return undefined;
 }
 
 /* ==========================================================================

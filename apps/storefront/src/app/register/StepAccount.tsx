@@ -16,7 +16,7 @@ import {
 } from './validation';
 
 /**
- * Step 1 — Account.
+ * Step 1 — Account, for both flows.
  *
  * This step is where the account actually comes into existence: both codes are
  * proved here, and `POST /auth/register` refuses without them. Everything after
@@ -27,7 +27,34 @@ import {
  * transaction and will not create an org without a name. Step 2 opens with that
  * name already filled in and editable — asking once and confirming later is the
  * honest version; inventing a placeholder name to satisfy the endpoint is not.
+ *
+ * **The vendor flow uses this component, not a copy of it.** The identity half —
+ * the two OTP exchanges and the strength meter — is the half that has to be
+ * right, and `POST /auth/register` refuses without both proofs whichever kind of
+ * organisation is being created. What differs between a buyer and a supplier is
+ * three or four extra fields and some wording, so those are a slot and a copy
+ * object rather than a second file that only one of them gets the next fix to.
  */
+
+/** Everything that differs in wording between the two flows. */
+export interface AccountCopy {
+  identityDescription: string;
+  companyNameLabel: string;
+  companyNameHint: string;
+  reachDescription: string;
+  submitLabel: string;
+}
+
+export const BUYER_ACCOUNT_COPY: AccountCopy = {
+  identityDescription:
+    'The person who opens the account is its owner and can add colleagues later.',
+  companyNameLabel: 'Company legal name',
+  companyNameHint:
+    'Exactly as it appears on your GST certificate. You can correct it on the next step.',
+  reachDescription:
+    'Both are verified now, because they are what an order confirmation and a delivery OTP go to.',
+  submitLabel: 'Create account and continue',
+};
 
 export interface AccountValues {
   fullName: string;
@@ -144,6 +171,15 @@ export interface StepAccountProps {
   onContinue: (values: AccountValues) => Promise<Record<string, string> | null>;
   busy: boolean;
   onFieldFocus: (term: string) => void;
+  copy?: AccountCopy;
+  /**
+   * Fields this flow asks on step 1 that the other does not. The caller owns
+   * their state, their errors and their validation, and merges them into the
+   * draft in its own `onContinue` — this component neither knows nor stores them.
+   */
+  extras?: React.ReactNode;
+  /** Returns false to hold the submit. The caller renders its own messages. */
+  validateExtras?: () => boolean;
 }
 
 export function StepAccount({
@@ -152,6 +188,9 @@ export function StepAccount({
   onContinue,
   busy,
   onFieldFocus,
+  copy = BUYER_ACCOUNT_COPY,
+  extras,
+  validateExtras,
 }: StepAccountProps): React.JSX.Element {
   const [values, setValues] = React.useState<AccountValues>(() =>
     Object.keys(answers).length > 0 ? readDraft(answers) : EMPTY,
@@ -186,7 +225,10 @@ export function StepAccount({
     const weakness = strength.missing[0];
     if (!registered && weakness) found.password = weakness;
 
-    if (Object.keys(found).length > 0) {
+    // Both halves are checked before either refuses, so a submit never reports
+    // the identity fields and then, on the next press, the extras.
+    const extrasOk = validateExtras ? validateExtras() : true;
+    if (Object.keys(found).length > 0 || !extrasOk) {
       setErrors(found);
       return;
     }
@@ -199,7 +241,7 @@ export function StepAccount({
     <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)} noValidate>
       <FormSection
         title="Who you are"
-        description="The person who opens the account is its owner and can add colleagues later."
+        description={copy.identityDescription}
       >
         <Input
           label="Your full name"
@@ -211,8 +253,8 @@ export function StepAccount({
           error={errors.fullName}
         />
         <Input
-          label="Company legal name"
-          hint="Exactly as it appears on your GST certificate. You can correct it on the next step."
+          label={copy.companyNameLabel}
+          hint={copy.companyNameHint}
           required
           value={values.companyName}
           onFocus={() => onFieldFocus('Account')}
@@ -223,7 +265,7 @@ export function StepAccount({
 
       <FormSection
         title="How we reach you"
-        description="Both are verified now, because they are what an order confirmation and a delivery OTP go to."
+        description={copy.reachDescription}
         status={
           <>
             <span className="tnum">{Number(emailVerified) + Number(mobileVerified)}</span> of{' '}
@@ -293,6 +335,8 @@ export function StepAccount({
         </FormSection>
       )}
 
+      {extras}
+
       <FormSection title="One last thing">
         <Select
           label="How did you hear about us?"
@@ -306,7 +350,7 @@ export function StepAccount({
 
       <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
-          Create account and continue
+          {copy.submitLabel}
         </Button>
         <p className="text-body-sm text-ink-3">
           Already registered?{' '}

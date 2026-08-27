@@ -354,7 +354,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             a cycle you choose. No bidding, no marketplace fees, and your name never appears on the
             storefront.
           </p>
-          <a className="pill acc" href="/sell">
+          <a className="pill acc" href="/sell/register">
             Apply to supply &rarr;
           </a>
         </div>

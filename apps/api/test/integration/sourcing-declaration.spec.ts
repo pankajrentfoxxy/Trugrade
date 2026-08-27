@@ -198,7 +198,7 @@ function principal(orgId: string, userId: string): Principal {
     orgType: 'VENDOR',
     roles,
     permissions: permissionsFor(roles),
-    sessionId: 'sess-sourcing',
+    sessionId: 'sess-sourcing', mfaSatisfied: true,
   };
 }
 

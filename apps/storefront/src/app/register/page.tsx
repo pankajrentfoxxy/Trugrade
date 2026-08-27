@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getStats, getStepDefinitions } from '../../lib/api';
 import { SiteHeader } from '../SiteHeader';
-import { RegisterFlow } from './RegisterFlow';
+import { BuyerRegistration } from './BuyerRegistration';
 
 /**
  * **Archetype D — Flow.** Step rail, one step, "why we ask" rail.
@@ -34,7 +34,7 @@ export default async function Page(): Promise<React.JSX.Element> {
 
       <div className="body">
         <div className="wrap">
-          <RegisterFlow definitions={definitions} />
+          <BuyerRegistration definitions={definitions} />
         </div>
       </div>
     </>

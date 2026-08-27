@@ -415,9 +415,27 @@ export class IdentityController {
   ): Promise<SessionResponse> {
     const principal = this.ctx.principal;
     if (principal) {
+      // `mfaRequired` comes off the principal, not hardcoded false.
+      //
+      // It used to be false here unconditionally, which made this route lie
+      // about the one session it exists to describe. This is a @Public() route,
+      // so a principal reaches it having skipped `PermissionsGuard`'s MFA check
+      // — precisely the session that still owes a second factor. Every guarded
+      // route then 403s with `mfa_required` while /auth/session insists nothing
+      // is outstanding.
+      //
+      // Not hypothetical: VENDOR_OWNER is in MFA_REQUIRED_ROLES, so a vendor
+      // could register, be told they were signed in, and have the very next
+      // call — POST /onboarding/start — refused. The client's only recourse was
+      // to infer the state from a 403, which is guessing from a symptom.
+      //
+      // The guard already verified the token and read `claims.mfa`; it now keeps
+      // the answer on the principal. Re-verifying the cookie here instead needed
+      // a try/catch, and its failure arm had to guess — with the safe-LOOKING
+      // guess (assume satisfied) failing open on the one field that must not.
       return {
         ...principalOf(principal),
-        mfaRequired: false,
+        mfaRequired: !principal.mfaSatisfied,
         accessToken: cookie(req, ACCESS_COOKIE),
       };
     }

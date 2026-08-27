@@ -165,7 +165,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
           // text floor and the 3:1 floor for meaningful graphics.
           'h-11 rounded border bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3',
           'transition-colors',
-          mono && 'font-mono uppercase tracking-wide',
+          // `tnum` and not just `font-mono`. CLAUDE.md: every number is IBM Plex
+          // Mono WITH tabular-nums, and this branch is what renders every GSTIN,
+          // PAN, CIN, Udyam, TAN, IFSC and pincode the product asks for. Without
+          // it a digit changing mid-field shifts the characters after it, which
+          // is exactly the jitter tabular figures exist to stop — most visible
+          // while someone types a 15-character GSTIN one character at a time.
+          mono && 'font-mono tnum uppercase tracking-wide',
           error || verifyState === 'rejected' ? 'border-fail' : 'border-rule',
           verifyState === 'verified' && 'border-pass',
           className,

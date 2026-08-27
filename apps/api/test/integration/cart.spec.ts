@@ -82,7 +82,7 @@ function asBuyer<T>(fn: () => Promise<T>): Promise<T> {
     orgType: 'BUYER',
     roles,
     permissions: permissionsFor(roles),
-    sessionId: 's',
+    sessionId: 's', mfaSatisfied: true,
   };
   return ctx.run({ requestId: 't' }, () => {
     ctx.setPrincipal(principal);
@@ -398,7 +398,7 @@ describe('cart', () => {
           orgType: 'BUYER',
           roles,
           permissions: permissionsFor(roles),
-          sessionId: 's2',
+          sessionId: 's2', mfaSatisfied: true,
         });
         return carts.view(mine.id);
       }),

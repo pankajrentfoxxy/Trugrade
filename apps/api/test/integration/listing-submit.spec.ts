@@ -59,7 +59,7 @@ function vendor(): Principal {
     orgType: 'VENDOR',
     roles,
     permissions: permissionsFor(roles),
-    sessionId: 'sess-1',
+    sessionId: 'sess-1', mfaSatisfied: true,
   };
 }
 
@@ -279,7 +279,7 @@ describe('submit requests an inspection instead of going live', () => {
           orgType: 'VENDOR',
           roles,
           permissions: permissionsFor(roles),
-          sessionId: 's2',
+          sessionId: 's2', mfaSatisfied: true,
         },
         () => submit.submit(listingId),
       ),

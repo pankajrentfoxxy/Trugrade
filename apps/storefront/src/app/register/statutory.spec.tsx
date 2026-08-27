@@ -10,7 +10,7 @@
 import * as React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { StepStatutory } from './StepStatutory';
+import { StepStatutory, BUYER_STATUTORY_COPY } from './StepStatutory';
 import type { VerificationOutcomeView } from './api';
 
 /* --------------------------------------------------------------- fetch stub */
@@ -81,6 +81,7 @@ function renderStep(answers: Record<string, unknown>): void {
       answers={answers}
       fallbackLegalName="Alpha Systems Private Limited"
       constitution="PVT_LTD"
+      copy={BUYER_STATUTORY_COPY}
       busy={false}
       onSaveDraft={noop}
       onContinue={async () => null}
@@ -124,6 +125,15 @@ describe('a GST portal that does not answer', () => {
     expect(box).toHaveTextContent(/Retrying automatically in/);
   });
 
+  /**
+   * Seventy `act` flushes of a form that grew four more fields when the vendor
+   * flow started sharing it, so the default five seconds is now inside the
+   * margin on a loaded machine — `pnpm test` runs every package at once. A
+   * timeout is what this needs: the assertions are the same, and a test that
+   * fails on scheduling rather than on behaviour is worse than a slow one.
+   * Timing out mid-fake-timers also skips the `useRealTimers` below, which is
+   * what turned one failure into six.
+   */
   it('offers to continue rather than dead-ending, once the retries are spent', async () => {
     jest.useFakeTimers();
     try {
@@ -153,7 +163,7 @@ describe('a GST portal that does not answer', () => {
     } finally {
       jest.useRealTimers();
     }
-  });
+  }, 30_000);
 });
 
 /* ============================== VR-006 — the PAN inside the GSTIN must agree */

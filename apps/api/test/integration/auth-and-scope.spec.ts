@@ -51,7 +51,7 @@ function principal(overrides: Partial<Principal> = {}): Principal {
     orgType: 'VENDOR',
     roles,
     permissions: permissionsFor(roles),
-    sessionId: 'sess-1',
+    sessionId: 'sess-1', mfaSatisfied: true,
     ...overrides,
   };
 }

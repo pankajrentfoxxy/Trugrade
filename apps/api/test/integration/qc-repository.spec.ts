@@ -478,7 +478,11 @@ describe('technicians and rules', () => {
   });
 
   it('reads the tolerance rules in force on a date, one per field', async () => {
-    const today = await repo.findToleranceRules('2026-08-26');
+    // Asked for TODAY, not a literal date. The seed stamps `effective_from` with
+    // the day it ran, so a hardcoded '2026-08-26' passed only on a database
+    // seeded on or before that day and failed every day after — a test that
+    // starts failing on a calendar boundary rather than on a code change.
+    const today = await repo.findToleranceRules(new Date().toISOString().slice(0, 10));
     expect(today.length).toBeGreaterThan(0);
     expect(new Set(today.map((r) => r.field)).size).toBe(today.length);
     // A report from before any rule existed must not silently pick up today's.

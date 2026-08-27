@@ -74,6 +74,7 @@ export class AuthGuard implements CanActivate {
       roles: claims.roles,
       permissions: new Set(claims.scope),
       sessionId: claims.sid,
+      mfaSatisfied: claims.mfa,
     };
     req.principal = principal;
     this.ctx.setPrincipal(principal);
