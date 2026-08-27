@@ -19,6 +19,20 @@ import {
 import { SerialService, type SerialCsvReport } from './internal/serial.service';
 
 /**
+ * `warranty_duration` in months, for the only two bands a buyer filters on.
+ * `D7`/`D30` are day-scale bands and deliberately map to nothing: rounding a
+ * seven-day warranty up to "6 months" is a misrepresentation, not a rounding.
+ */
+const WARRANTY_MONTHS: Readonly<Record<string, number | null>> = {
+  NONE: null,
+  D7: null,
+  D30: null,
+  M3: 3,
+  M6: 6,
+  M12: 12,
+};
+
+/**
  * The row types travel with the service, not out of `internal/` directly — the
  * barrel names one file, and a sibling module importing "the repository's
  * types" is one refactor away from importing the repository.
@@ -220,6 +234,21 @@ export interface IListingService {
    * instead of handing ordering a join.
    */
   availabilityByListing(listingIds: readonly string[]): Promise<Map<string, ListingAvailability>>;
+
+  /**
+   * Every sellable unit, reduced to the facts a buyer's search may know.
+   *
+   * The storefront's faceted search needs unit measurements (grade, battery,
+   * score, price) beside catalogue specification (brand, memory, screen), and
+   * those two live in two schemas that may not be joined. So this answers the
+   * listing half and the caller composes on `sku_id`, exactly as `publicOffers`
+   * and `brands` already do.
+   *
+   * Reads `v_sellable_unit`, so a unit whose QC expired at midnight or whose
+   * seal was broken is not in the answer — the search never re-states the
+   * predicate, which is the only way there stays one definition of sellable.
+   */
+  sellableUnitFacts(): Promise<SellableUnitFacts[]>;
 }
 
 /**
@@ -241,6 +270,29 @@ export interface PublicOffer {
   batteryMax: number;
   /** One real serial, so the viewfinder brackets are vouching for something. */
   sampleSerial: string;
+}
+
+/**
+ * One sellable unit as a buyer's search may see it.
+ *
+ * `vendor_org_id` resolves the supply point and then stays in this module: the
+ * pair (`supplyPointCode`, `city`) is the ONLY thing about the source that ever
+ * leaves it, and `supplyPointLabel()` is what renders it.
+ */
+export interface SellableUnitFacts {
+  skuId: string;
+  grade: Grade;
+  /** Decimal string. A search that sorts on price must not sort on a float. */
+  retailPrice: string;
+  /** `null` when the battery was not measured — never rendered as zero. */
+  batteryHealthPct: number | null;
+  qcScore: number | null;
+  supplyPointCode: string | null;
+  city: string | null;
+  dispatchSlaHours: number | null;
+  /** Our own warranty on the unit, in months. `null` when none is offered. */
+  warrantyMonths: number | null;
+  serialNumber: string;
 }
 
 /**
@@ -473,6 +525,64 @@ export class ListingService implements IListingService {
       batteryMin: Number(r.batt_min ?? 0),
       batteryMax: Number(r.batt_max ?? 0),
       sampleSerial: r.sample_serial,
+    }));
+  }
+
+  async sellableUnitFacts(): Promise<SellableUnitFacts[]> {
+    // ponytail: every sellable unit in one read, filtered and faceted in the
+    // caller. At 48 units that is free and it keeps the two schemas apart; past
+    // a few thousand this becomes a filtered query per request with the facet
+    // counts computed in SQL over a materialised view.
+    //
+    // The supply point is resolved through `vendor_org_id`, which is why the
+    // join is here rather than in the caller: the org id is the thing that must
+    // not leave this module, and the code/city pair is what replaces it.
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        sku_id: string;
+        grade: string;
+        retail_price: unknown;
+        battery_health_pct: unknown;
+        qc_score: number | null;
+        supply_point_code: string | null;
+        city: string | null;
+        dispatch_sla_hours: number | null;
+        warranty: string | null;
+        serial_number: string;
+      }>
+    >`
+      SELECT u.sku_id,
+             u.grade_actual::text        AS grade,
+             u.retail_price,
+             u.battery_health_pct,
+             u.qc_score,
+             u.supply_point_code,
+             sp.city,
+             l.dispatch_sla_hours,
+             l.truetech_warranty::text   AS warranty,
+             u.serial_number
+        FROM listing.v_sellable_unit u
+        LEFT JOIN listing.supply_point sp
+               ON sp.vendor_org_id = u.vendor_org_id
+              AND sp.code = u.supply_point_code
+        LEFT JOIN listing.listing l ON l.id = u.listing_id
+       WHERE u.retail_price IS NOT NULL
+         AND u.grade_actual IS NOT NULL`;
+
+    return rows.map((r) => ({
+      skuId: r.sku_id,
+      grade: r.grade as Grade,
+      retailPrice: (moneyFromDb(r.retail_price as string) ?? Money.ZERO).toString(),
+      // A unit whose battery was never measured stays null all the way to the
+      // screen, where it reads "Not measured". Coercing it to 0 here would make
+      // an unmeasured machine look like a dead one.
+      batteryHealthPct: r.battery_health_pct === null ? null : Number(r.battery_health_pct),
+      qcScore: r.qc_score === null ? null : Number(r.qc_score),
+      supplyPointCode: r.supply_point_code,
+      city: r.city,
+      dispatchSlaHours: r.dispatch_sla_hours === null ? null : Number(r.dispatch_sla_hours),
+      warrantyMonths: WARRANTY_MONTHS[r.warranty ?? 'NONE'] ?? null,
+      serialNumber: r.serial_number,
     }));
   }
 

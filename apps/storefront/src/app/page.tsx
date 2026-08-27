@@ -1,5 +1,6 @@
 import { BRAND } from '@trugrade/config/brand';
-import { getBrands, getGrades, getOffers, getStats } from '../lib/api';
+import { getOffers, getSearch, getStats } from '../lib/api';
+import { CategoryStrip } from './CategoryStrip';
 import { FilterRail } from './FilterRail';
 import { SiteHeader } from './SiteHeader';
 
@@ -26,17 +27,6 @@ export const revalidate = 60;
 
 const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 
-const CATEGORIES = [
-  'All laptops',
-  'Business',
-  'Mobile workstations',
-  'MacBooks',
-  'Ready in 24h',
-  'By brand',
-  'By grade',
-  'Bulk pricing',
-] as const;
-
 const PROCESS = [
   [
     'Sourced',
@@ -57,12 +47,11 @@ const PROCESS = [
 ] as const;
 
 export default async function HomePage(): Promise<React.JSX.Element> {
-  const [stats, brands, grades, offers] = await Promise.all([
-    getStats(),
-    getBrands(),
-    getGrades(),
-    getOffers(),
-  ]);
+  // The rail is fed from the same endpoint that feeds `/search`, so the counts
+  // beside each option on the homepage are the counts the results page will
+  // honour. Two sources for one rail is how a facet starts promising stock that
+  // the search behind it does not return.
+  const [stats, search, offers] = await Promise.all([getStats(), getSearch(''), getOffers()]);
 
   const inspected = stats?.unitsInspected ?? 0;
   const sellable = stats?.unitsSellable ?? 0;
@@ -72,30 +61,17 @@ export default async function HomePage(): Promise<React.JSX.Element> {
       <SiteHeader inspected={stats ? inspected : null} />
 
       {/* 3 — CATEGORY STRIP. Laptops only; everything else is marked SOON. */}
-      <div className="cats">
-        <div className="wrap">
-          {CATEGORIES.map((c, i) => (
-            <a
-              key={c}
-              href={i === 0 ? '/browse' : `/browse?c=${encodeURIComponent(c)}`}
-              className={i === 0 ? 'on' : undefined}
-            >
-              {c}
-            </a>
-          ))}
-          {/* Non-interactive on purpose: the ambition reads without promising
-              stock that does not exist. */}
-          <span className="soon">
-            Desktops, monitors &amp; parts <b>SOON</b>
-          </span>
-        </div>
-      </div>
+      <CategoryStrip query="" />
 
       {/* 4 — BODY: filter rail + main. No third rail. */}
       <div className="body">
         <div className="wrap">
           <div className="cols">
-            <FilterRail brands={brands ?? []} grades={grades ?? []} />
+            <FilterRail
+              facets={search?.facets ?? {}}
+              query=""
+              total={search?.total ?? 0}
+            />
 
             <main>
               {/* 4a — HERO */}

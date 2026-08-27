@@ -82,12 +82,12 @@ export function SearchBar(): React.JSX.Element {
     if (!term) return lookup;
 
     return [
-      { group: 'Models', badge: 'MODEL', label: term, href: `/browse?q=${encodeURIComponent(term)}` },
+      { group: 'Models', badge: 'MODEL', label: term, href: `/search?q=${encodeURIComponent(term)}` },
       {
         group: 'Configuration',
         badge: 'SPEC',
         label: `${term} — inspected stock`,
-        href: `/browse?q=${encodeURIComponent(term)}&sort=score`,
+        href: `/search?q=${encodeURIComponent(term)}&sort=score`,
       },
       ...lookup,
     ];
@@ -107,7 +107,7 @@ export function SearchBar(): React.JSX.Element {
       window.location.href = `/unit/${encodeURIComponent(term)}`;
       return;
     }
-    window.location.href = `/browse?q=${encodeURIComponent(term)}&scope=${scope}`;
+    window.location.href = `/search?q=${encodeURIComponent(term)}`;
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {

@@ -214,7 +214,7 @@ summary:hover{background:var(--sheet-2)}
 .pc .spec{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-3);line-height:1.4}
 .pc .bat{display:flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-3)}
 .pc .bat i{flex:1;height:4px;background:var(--rule);border-radius:2px;overflow:hidden;max-width:56px}
-.pc .bat i b{display:block;height:100%;background:var(--pass)}
+.pc .bat i b{display:block;height:100%;background:var(--acc)}
 .pc .pr{font-family:"IBM Plex Mono",monospace;font-size:16px;font-weight:600;margin-top:auto;color:var(--ink)}
 .pc .pr small{display:block;font-size:9.5px;font-weight:400;color:var(--ink-4);letter-spacing:.03em}
 .pc .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);
@@ -361,3 +361,124 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .authcard .tickrule { margin-bottom: var(--s4); }
 @media (max-width: 900px) { .authwrap { grid-template-columns: 1fr; } .authside { display: none; } }
 @media (max-width: 700px) { .authcard { padding: var(--s7) var(--s5); } }
+
+/* ==========================================================================
+ * T11 — /search. Additions the reference mock never needed.
+ * ========================================================================== */
+
+/* The reference sets `font-family` on its numeric classes but not
+   `font-variant-numeric`, so a column of ten prices in Plex Mono still shifts
+   on a `1`. Every one of these carries a number, a serial or a code. */
+.fopt .c,.fhead .n,.sclab,.range input,.pc .gr,.pc .qc,.pc .sn,.pc .spec,
+.pc .bat,.pc .pr,.money,.num,.tbh .m,.legal,.pays span,.sugg a .r,
+.cats .soon b,.sugg .ic,.pstep .n,.fpill .c{font-variant-numeric:tabular-nums}
+
+/* A missing measurement. Never a tick, never a zero, never a bar at 0%. */
+.notmeasured{color:var(--ink-4);font-style:normal}
+/* The denominator every percentage carries. */
+.denom{color:var(--ink-4);font-weight:400}
+.ink4{color:var(--ink-4)}
+.ulink{color:var(--acc-ink);text-decoration:underline;text-underline-offset:3px}
+
+/* ---- rail: disabled options, sub-groups, notes, errors ---- */
+.railzone{min-width:0}
+/* A zero-count option is DISABLED at --ink-4, never hidden. */
+.fopt.off{color:var(--ink-4);cursor:not-allowed}
+.fopt.off .c{color:var(--ink-4)}
+.fopt.off input{cursor:not-allowed;opacity:.5}
+.fopt input:disabled{cursor:not-allowed}
+.fpill.off{color:var(--ink-4);border-color:var(--rule-2);cursor:not-allowed}
+.fpill.off:hover{border-color:var(--rule-2);color:var(--ink-4)}
+.fpill .c{margin-left:5px;font-size:10px;color:var(--ink-4)}
+.fpill.on .c{color:var(--acc-on)}
+.fsub{margin-top:9px}
+.fnote{margin:7px 0 0;font-size:11px;color:var(--ink-4);line-height:1.45}
+.fnote.off{border-left:2px solid var(--rule);padding-left:8px}
+.ferr{margin:6px 0 0;font-size:11.5px;color:var(--fail);line-height:1.45}
+.fmore{background:none;border:0;padding:5px 0 0;text-align:left}
+.fclose{display:none;margin-left:6px;font-size:20px;line-height:1;color:var(--ink-3)}
+.fdone{display:none}
+.fsheetbtn{display:none}
+
+/* ---- result bar ---- */
+.rbar .cnt b{font-weight:700}
+.vtog button[aria-pressed="true"]{background:var(--acc);color:var(--acc-on);font-weight:700}
+
+/* ---- list view ---- */
+/* The reference's `min-width:940px` and its `.scroll` wrapper, kept: a table
+   that shrinks its widest column to forty pixels and sets one word per line is
+   not a narrower table, it is an unreadable one. `DataTable` already wraps
+   itself in an overflow-x container, so the width simply scrolls. */
+.lview{margin-top:0;padding:0 16px}
+.lview table{min-width:920px}
+.lview td{white-space:nowrap}
+/* Headers wrap rather than forcing the table wider than its column: two lines
+   of "INSPECTED GRADE" costs a row of height, one line costs the landed price
+   its place on screen. */
+.lview th{white-space:normal}
+.lmodel{display:block;min-width:210px;white-space:normal}
+.lmodel b{display:block;font-size:13.5px;color:var(--ink);font-weight:600}
+.lmodel .mono{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px;white-space:normal}
+.lmeta{color:var(--ink-4)!important;font-size:10px!important}
+.lunits{display:block}
+.lunits .denom{display:block;font-size:10px;font-weight:400;white-space:nowrap}
+.lview .money{font-size:14px;display:inline-block}
+.lview .money small{color:var(--ink-4)}
+.lview .sel{display:inline-block;white-space:nowrap}
+
+/* ---- pagination ---- */
+.pager{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-top:16px;
+  background:var(--sheet);border:1px solid var(--rule);border-radius:7px;padding:10px 14px}
+.perpage{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3)}
+.perpage select{background:var(--sheet-2);border:1px solid var(--rule);border-radius:5px;
+  padding:6px 9px;font-size:12.5px;color:var(--ink);outline:none;
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* ---- empty and error ---- */
+.empty .retry{margin-top:var(--s5)}
+.empty.err{border-style:solid;border-color:var(--rule)}
+.skrail{padding:14px}
+
+/* ---- under 900px the rail is a full-screen sheet ---- */
+@media(max-width:900px){
+  .fsheetbtn{display:inline-flex;align-items:center;gap:6px;width:100%;justify-content:center;
+    height:44px;background:var(--sheet);border:1px solid var(--rule);border-radius:6px;
+    font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:12px}
+  .fsheetbtn:hover{border-color:var(--acc);color:var(--acc-ink)}
+  .filters{position:fixed;inset:0;z-index:70;max-height:none;border-radius:0;border:0;
+    display:none;overflow-y:auto;overscroll-behavior:contain}
+  .filters.open{display:block}
+  .fclose{display:block}
+  .fhead{height:52px;padding:0 14px}
+  .fdone{display:block;position:sticky;bottom:0;background:var(--sheet-2);
+    border-top:1px solid var(--rule);padding:10px 14px}
+  .fdone button{width:100%;height:44px;background:var(--acc);color:var(--acc-on);
+    border-radius:5px;font-weight:700;font-size:13.5px}
+  /* --chrome with opacity, not a literal: no hex outside globals.css, and the
+     scrim then matches the dialog backdrop the rest of the system uses. */
+  .fscrim{position:fixed;inset:0;z-index:60;background:var(--chrome);opacity:.62}
+  .lview{padding:0 12px}
+}
+
+@media(max-width:600px){
+  .pgrid{grid-template-columns:1fr}
+  .rbar .r{margin-left:0;width:100%;flex-wrap:wrap}
+  .rbar select{flex:1;min-width:0}
+  .pager{flex-direction:column;align-items:stretch}
+  .perpage{margin-left:0}
+}
+
+/* The battery bar was `--pass` in `docs/reference/homepage.html`. Changed, and
+   this is the one place this build departs from that file on purpose: battery
+   health is a MEASURED VALUE, which is one of the three things amber is allowed
+   to mean, and green is reserved for a PASS verdict. A green bar on an 82%
+   battery reads as "this battery passed", which is not a claim we make — 82% is
+   a number, not a verdict. Reported with the review captures. */
+
+/* The board footer. With one page the pagination returns null (one page is not
+   a pagination), so the bar states the count instead of sitting empty. */
+.slider.idle i{background:var(--rule)}
+.slider.idle b{border-color:var(--ink-4)}
+.pager .shown{font-size:12.5px;color:var(--ink-2)}
+.pager .shown b{color:var(--ink);font-weight:700}
+

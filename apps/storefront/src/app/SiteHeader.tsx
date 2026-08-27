@@ -69,7 +69,7 @@ export function SiteHeader({
             </span>
           </a>
 
-          <a className="catbtn" href="/browse">
+          <a className="catbtn" href="/search">
             <i aria-hidden="true">
               <b />
               <b />

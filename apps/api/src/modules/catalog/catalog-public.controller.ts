@@ -1,9 +1,18 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Header, Query } from '@nestjs/common';
 import { Public } from '../../shared/auth/guards';
 import { PrismaService } from '../../shared/db/prisma.service';
 import { ListingService } from '../listing';
 import { OrderingService } from '../ordering';
 import { QcService } from '../qc';
+import {
+  runSearch,
+  SORTS,
+  type CatalogRow,
+  type SearchQuery,
+  type SearchResponse,
+  type SearchRow,
+  type SortKey,
+} from './internal/search-facets';
 
 /**
  * The storefront's public read surface.
@@ -215,4 +224,182 @@ export class CatalogPublicController {
         r.min_battery_health_pct === null ? null : Number(r.min_battery_health_pct),
     }));
   }
+
+  /**
+   * Faceted search — the whole of `09_FRONTEND_LOCKED.md` §6 in one response.
+   *
+   * Results AND facet counts come back together because they are one answer: a
+   * count computed by a second request is a count from a different instant, and
+   * a rail that disagrees with the grid beside it is worse than no counts.
+   *
+   * Composed from two reads rather than one join, for the reason `brands` and
+   * `offers` above give: what a machine IS belongs to catalog and what was
+   * MEASURED belongs to listing, and a query spanning both would be a third
+   * definition of a SKU living in a controller.
+   */
+  @Get('search')
+  @Public()
+  @Header('Cache-Control', 'public, max-age=30')
+  async search(@Query() query: Record<string, string | string[]>): Promise<SearchResponse> {
+    const q = parseSearchQuery(query);
+    const [units, catalog] = await Promise.all([this.listings.sellableUnitFacts(), this.skuSpecs()]);
+
+    const bySku = new Map(catalog.map((c) => [c.skuId, c]));
+    const rows: SearchRow[] = units.flatMap((u) => {
+      const c = bySku.get(u.skuId);
+      // A unit whose SKU went inactive between the two reads is dropped rather
+      // than rendered as a nameless card. There is no honest way to show it.
+      if (!c) return [];
+      return [
+        {
+          ...c,
+          skuId: u.skuId,
+          grade: u.grade,
+          price: Number(u.retailPrice),
+          battery: u.batteryHealthPct,
+          score: u.qcScore,
+          supplyPointCode: u.supplyPointCode,
+          city: u.city,
+          shipHours: u.dispatchSlaHours,
+          warrantyMonths: u.warrantyMonths,
+          serial: u.serialNumber,
+        },
+      ];
+    });
+
+    const answer = runSearch(rows, catalog, q);
+
+    // Two dimensions the rail must show and that nothing measures yet. They come
+    // back as an explicit "not recorded" rather than as rows of zeroes: "we did
+    // not measure this" and "we measured and found none" are different
+    // statements, and printing the second when the first is true is the exact
+    // failure the design system spends a paragraph on.
+    answer.facets.cycles = {
+      key: 'cycles',
+      options: [],
+      unavailable: 'Battery cycle count is not recorded at inspection yet.',
+    };
+    answer.facets.charger = {
+      key: 'charger',
+      options: [],
+      unavailable: 'Whether a charger is included is not recorded at inspection yet.',
+    };
+    return answer;
+  }
+
+  /**
+   * Every active SKU's specification — the source of facet OPTIONS.
+   *
+   * The whole catalogue, not the part with stock: an option that disappears the
+   * moment it hits zero makes people think the site is broken, so "Dell — 0,
+   * disabled" has to be renderable, and that needs Dell to be in the list.
+   */
+  private async skuSpecs(): Promise<CatalogRow[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        brand_slug: string;
+        brand_name: string;
+        series_name: string;
+        model_name: string;
+        cpu_family: string;
+        cpu_model: string;
+        cpu_generation: string;
+        ram_gb: number;
+        storage_gb: number;
+        storage_type: string;
+        screen: unknown;
+        resolution: string;
+        is_touch: boolean;
+        backlit_keyboard: boolean | null;
+        fingerprint_reader: boolean | null;
+        ports_json: unknown;
+      }>
+    >`
+      SELECT s.id, b.slug AS brand_slug, b.name AS brand_name, se.name AS series_name,
+             m.name AS model_name, s.cpu_family, s.cpu_model, s.cpu_generation,
+             s.ram_gb, s.storage_gb, s.storage_type::text AS storage_type,
+             s.screen_size_inch AS screen, s.resolution, s.is_touch,
+             s.backlit_keyboard, s.fingerprint_reader, s.ports_json
+        FROM catalog.sku s
+        JOIN catalog.model m   ON m.id = s.model_id
+        JOIN catalog.series se ON se.id = m.series_id
+        JOIN catalog.brand b   ON b.id = se.brand_id
+       WHERE s.is_active`;
+
+    return rows.map((r) => ({
+      skuId: r.id,
+      brandSlug: r.brand_slug,
+      brandName: r.brand_name,
+      seriesName: r.series_name,
+      modelName: r.model_name,
+      cpuFamily: r.cpu_family,
+      cpuModel: r.cpu_model,
+      cpuGeneration: r.cpu_generation,
+      ramGb: Number(r.ram_gb),
+      storageGb: Number(r.storage_gb),
+      storageType: r.storage_type,
+      screenInch: Number(r.screen),
+      resolution: r.resolution,
+      isTouch: r.is_touch,
+      backlit: r.backlit_keyboard === true,
+      fingerprint: r.fingerprint_reader === true,
+      thunderbolt: Array.isArray(r.ports_json)
+        ? r.ports_json.some((port) => typeof port === 'string' && /thunderbolt/i.test(port))
+        : false,
+    }));
+  }
+}
+
+/* ==========================================================================
+ * Query parsing — the URL is the state
+ * ======================================================================== */
+
+const asArray = (v: string | string[] | undefined): string[] =>
+  v === undefined ? [] : Array.isArray(v) ? v.filter((s) => s !== '') : v === '' ? [] : [v];
+
+const asNumbers = (v: string | string[] | undefined): number[] =>
+  asArray(v)
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
+
+/** A malformed number is absent, never zero: `?bmin=abc` must not mean 0%. */
+const asNumber = (v: string | string[] | undefined, min: number, max: number): number | null => {
+  const raw = asArray(v)[0];
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : null;
+};
+
+const PER_PAGE = [4, 12, 24, 48];
+
+export function parseSearchQuery(query: Record<string, string | string[]>): SearchQuery {
+  const sort = asArray(query.sort)[0];
+  const per = asNumber(query.per, 1, 48);
+  return {
+    q: asArray(query.q)[0] ?? '',
+    brand: asArray(query.brand),
+    series: asArray(query.series),
+    cpu: asArray(query.cpu),
+    gen: asArray(query.gen),
+    ram: asNumbers(query.ram),
+    sgb: asNumbers(query.sgb),
+    stype: asArray(query.stype),
+    grade: asArray(query.grade).filter((g) => g === 'A_PLUS' || g === 'A' || g === 'B'),
+    bmin: asNumber(query.bmin, 0, 100),
+    bmax: asNumber(query.bmax, 0, 100),
+    smin: asNumber(query.smin, 0, 100),
+    pmin: asNumber(query.pmin, 0, Number.MAX_SAFE_INTEGER),
+    pmax: asNumber(query.pmax, 0, Number.MAX_SAFE_INTEGER),
+    screen: asNumbers(query.screen),
+    res: asArray(query.res).filter((r) => r === 'fhd' || r === 'touch'),
+    ship: asNumbers(query.ship),
+    city: asArray(query.city),
+    qty: asNumber(query.qty, 1, 1000),
+    feat: asArray(query.feat),
+    warr: asNumbers(query.warr),
+    sort: (SORTS.some((s) => s.value === sort) ? sort : 'price') as SortKey,
+    page: asNumber(query.page, 1, 10000) ?? 1,
+    per: per !== null && PER_PAGE.includes(per) ? per : 12,
+  };
 }
