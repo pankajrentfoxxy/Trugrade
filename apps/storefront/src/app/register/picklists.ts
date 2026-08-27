@@ -84,3 +84,188 @@ export const HEARD_FROM: readonly Option[] = [
 /** Renders a stored code back as its label, for a resumed draft. */
 export const labelFor = (options: readonly Option[], value: string): string =>
   options.find((o) => o.value === value)?.label ?? value;
+
+/* ==========================================================================
+ * Step 4 — contacts and addresses
+ * ======================================================================== */
+
+/**
+ * `identity.org_contact.contact_type`, verbatim from the CHECK constraint.
+ *
+ * The buyer flow asks for three of the nine. The others belong to a vendor
+ * (WAREHOUSE, LOGISTICS) or are captured elsewhere (OWNER at registration,
+ * GRIEVANCE from the legal pages), and a buyer asked for all nine answers none
+ * of them well.
+ */
+export const CONTACT_ROLES = [
+  {
+    code: 'PROCUREMENT',
+    label: 'Procurement',
+    required: true,
+    purpose: 'Who places and approves orders. Every order confirmation goes here.',
+  },
+  {
+    code: 'FINANCE',
+    label: 'Finance',
+    required: true,
+    purpose: 'Who receives the tax invoice and settles it. Wrong here means an unpaid invoice.',
+  },
+  {
+    code: 'IT_ADMIN',
+    label: 'IT',
+    required: false,
+    purpose: 'Optional. Who we call about an imaging spec, a BIOS password or a wipe certificate.',
+  },
+] as const;
+
+export type ContactRole = (typeof CONTACT_ROLES)[number]['code'];
+
+/**
+ * GST state codes — the first two characters of every GSTIN.
+ *
+ * Held here with the name because `@trugrade/contracts` has no such map:
+ * `stateCodeFromGstin` returns "06" and `VerificationService.stateName` keeps a
+ * private eight-entry lookup that the storefront cannot import. Reported as a
+ * contracts gap. The **code** is what a draft stores; the name is display.
+ *
+ * 25 (Daman and Diu) and 28 (undivided Andhra Pradesh) are deliberately absent:
+ * both were withdrawn, and offering a state nobody can be registered in today
+ * invites a billing address that no GSTIN can match. A GSTIN carrying one is not
+ * refused — `stateNameForGstin` returns undefined and the cross-check stands
+ * down rather than guessing.
+ */
+export const STATES: readonly Option[] = [
+  { value: '', label: 'Select the state' },
+  { value: '01', label: 'Jammu and Kashmir' },
+  { value: '02', label: 'Himachal Pradesh' },
+  { value: '03', label: 'Punjab' },
+  { value: '04', label: 'Chandigarh' },
+  { value: '05', label: 'Uttarakhand' },
+  { value: '06', label: 'Haryana' },
+  { value: '07', label: 'Delhi' },
+  { value: '08', label: 'Rajasthan' },
+  { value: '09', label: 'Uttar Pradesh' },
+  { value: '10', label: 'Bihar' },
+  { value: '11', label: 'Sikkim' },
+  { value: '12', label: 'Arunachal Pradesh' },
+  { value: '13', label: 'Nagaland' },
+  { value: '14', label: 'Manipur' },
+  { value: '15', label: 'Mizoram' },
+  { value: '16', label: 'Tripura' },
+  { value: '17', label: 'Meghalaya' },
+  { value: '18', label: 'Assam' },
+  { value: '19', label: 'West Bengal' },
+  { value: '20', label: 'Jharkhand' },
+  { value: '21', label: 'Odisha' },
+  { value: '22', label: 'Chhattisgarh' },
+  { value: '23', label: 'Madhya Pradesh' },
+  { value: '24', label: 'Gujarat' },
+  { value: '26', label: 'Dadra and Nagar Haveli and Daman and Diu' },
+  { value: '27', label: 'Maharashtra' },
+  { value: '29', label: 'Karnataka' },
+  { value: '30', label: 'Goa' },
+  { value: '31', label: 'Lakshadweep' },
+  { value: '32', label: 'Kerala' },
+  { value: '33', label: 'Tamil Nadu' },
+  { value: '34', label: 'Puducherry' },
+  { value: '35', label: 'Andaman and Nicobar Islands' },
+  { value: '36', label: 'Telangana' },
+  { value: '37', label: 'Andhra Pradesh' },
+  { value: '38', label: 'Ladakh' },
+  { value: '97', label: 'Other territory' },
+];
+
+/** A GST state code to its name, or undefined for a code we do not know. */
+export const stateName = (code: string): string | undefined =>
+  code === '' ? undefined : STATES.find((s) => s.value === code)?.label;
+
+/** The state a GSTIN was issued in. Its first two characters are the code. */
+export const stateNameForGstin = (gstin: string): string | undefined =>
+  stateName(gstin.slice(0, 2));
+
+/**
+ * Receiving days.
+ *
+ * A dock that is shut is a failed delivery, a return leg and a second dispatch
+ * fee, so the hours are asked for rather than assumed — and the assumption a
+ * generic address form makes is "any weekday, any time", which is wrong for
+ * most Indian industrial addresses.
+ */
+export const RECEIVING_DAYS: readonly Option[] = [
+  { value: '', label: 'Select the days' },
+  { value: 'MON_FRI', label: 'Monday to Friday' },
+  { value: 'MON_SAT', label: 'Monday to Saturday' },
+  { value: 'ALL', label: 'All days, including Sunday' },
+];
+
+/* ==========================================================================
+ * Step 5 — documents and preferences
+ * ======================================================================== */
+
+/**
+ * Which documents the **buyer** flow asks for, and whether each is required.
+ *
+ * The labels, the caps, the accepted types and the age rule are NOT here — they
+ * come from `GET /onboarding/documents/types`, which is `kyc.document_type_rule`
+ * data. Only the selection is client-side, and only because that table has no
+ * `org_type` or `step_code` column: all fourteen rows apply to everyone, so
+ * nothing in the API can say which four a buyer is asked for. Reported as an API
+ * gap. A code here that the server does not return is not rendered.
+ */
+export const BUYER_DOCUMENTS = [
+  {
+    docType: 'GST_CERTIFICATE',
+    required: true,
+    purpose: 'The registration certificate for the GSTIN we invoice.',
+  },
+  {
+    docType: 'PAN_CARD',
+    required: true,
+    purpose: 'The PAN of the entity, not of a director.',
+  },
+  {
+    docType: 'SIGNATORY_ID',
+    required: true,
+    purpose:
+      'Photo ID of the person authorised to purchase on this account. Aadhaar, passport or driving licence.',
+  },
+  {
+    docType: 'PO_TEMPLATE',
+    required: false,
+    purpose: 'Optional. If your purchase orders have a fixed format, send one and we will match it.',
+  },
+] as const;
+
+/**
+ * How we may contact this account about an order.
+ *
+ * **Nothing here is ticked by default.** CP e-Comm Rule 4(9) forbids a
+ * pre-selected consent, and a notification channel is exactly the kind of box
+ * that arrives pre-ticked "because everyone wants order updates".
+ */
+export const NOTIFICATION_CHANNELS = [
+  {
+    code: 'EMAIL',
+    label: 'Email',
+    consequence: 'Order confirmations, invoices and dispatch notices go to the contacts above.',
+  },
+  {
+    code: 'WHATSAPP',
+    label: 'WhatsApp',
+    consequence: 'Dispatch and delivery updates on the procurement mobile number.',
+  },
+  {
+    code: 'SMS',
+    label: 'SMS',
+    consequence: 'Delivery-day messages only. We do not send offers by SMS.',
+  },
+] as const;
+
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number]['code'];
+
+/** `platform` notification templates exist in these two. Nothing else is honest yet. */
+export const LANGUAGES: readonly Option[] = [
+  { value: '', label: 'Select a language' },
+  { value: 'EN', label: 'English' },
+  { value: 'HI', label: 'हिन्दी — Hindi' },
+];

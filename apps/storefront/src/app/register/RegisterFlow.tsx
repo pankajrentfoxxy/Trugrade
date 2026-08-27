@@ -18,11 +18,16 @@ import {
   register,
   saveStep,
   startOnboarding,
+  submitForReview,
+  type ResumableOnboarding,
   type StepDefinition,
   type StepProgress,
 } from './api';
+import { Review } from './Review';
 import { StepAccount, type AccountValues } from './StepAccount';
 import { StepCompany } from './StepCompany';
+import { StepContacts, WHY_CONTACTS } from './StepContacts';
+import { StepDocuments, WHY_DOCUMENTS } from './StepDocuments';
 import { StepStatutory, WHY_STATUTORY } from './StepStatutory';
 
 /**
@@ -43,10 +48,24 @@ import { StepStatutory, WHY_STATUTORY } from './StepStatutory';
  * and it is where a returning applicant lands with their answers already in the
  * fields.
  *
- * Steps 4 and 5 (contacts, documents) are not built yet. They are in the rail
- * because the API says they exist, and landing on one says so plainly rather
- * than showing an empty form.
+ * **The review screen is not a sixth step.** `?step=REVIEW` is a place in this
+ * client, not a row in `onboarding_step_definition`, and the rail is still the
+ * five the API defines. Once the application is with a reviewer, every status
+ * from KYC_SUBMITTED onwards lands here regardless of `?step`, because there is
+ * nothing left to fill in.
  */
+
+/** Not a step code. The client's own place, after the last real step. */
+const REVIEW = 'REVIEW';
+
+/** Statuses in which the application is with us and the form is behind us. */
+const AFTER_SUBMISSION = [
+  'KYC_SUBMITTED',
+  'UNDER_REVIEW',
+  'INFO_REQUESTED',
+  'VERIFIED',
+  'REJECTED',
+];
 
 type Phase = 'checking' | 'ready' | 'unreachable' | 'wrong-account';
 
@@ -106,6 +125,11 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
    * "this PAN belongs to an individual, but you told us private limited".
    */
   const [constitution, setConstitution] = React.useState<string | null>(null);
+  /** The org's own status, which decides whether there is still a form to fill. */
+  const [orgStatus, setOrgStatus] = React.useState('REGISTERED');
+  const [slaDueAt, setSlaDueAt] = React.useState<string | null>(null);
+  const [slaBreached, setSlaBreached] = React.useState(false);
+  const [isSubmittable, setIsSubmittable] = React.useState(false);
 
   // The rail collapses below the width at which it stops being a rail — the
   // same 1024px where the grid drops to one column. A `<details>` cannot be
@@ -121,18 +145,18 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
   }, []);
 
   const applyOnboarding = React.useCallback(
-    (
-      loaded: {
-        steps: StepProgress[];
-        resumeAt: string | null;
-        constitution?: string | null;
-      },
-      loadedAnswers: Record<string, Record<string, unknown>>,
-      landOn?: string,
-    ): void => {
+    (data: ResumableOnboarding, landOn?: string): void => {
+      const loaded = data.progress;
       setSteps(loaded.steps);
-      setAnswers(loadedAnswers);
+      // **Merged, not replaced.** `completeStep` clears a step's draft, so the
+      // server stops returning the answers to a step the moment it is finished.
+      // Dropping them here would empty the review screen one step at a time.
+      setAnswers((held) => ({ ...held, ...data.answers }));
       setConstitution(loaded.constitution ?? null);
+      setOrgStatus(data.status);
+      setSlaDueAt(data.slaDueAt);
+      setSlaBreached(data.slaBreached);
+      setIsSubmittable(loaded.isSubmittable);
       const wanted = landOn ?? loaded.resumeAt ?? loaded.steps[0]?.stepCode;
       if (wanted) setCurrentCode(wanted);
       // ISO strings sort chronologically, so the newest save is the last one.
@@ -149,7 +173,7 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
         setSaveFailure(onboarding.message);
         return;
       }
-      applyOnboarding(onboarding.data.progress, onboarding.data.answers, landOn);
+      applyOnboarding(onboarding.data, landOn);
     },
     [applyOnboarding],
   );
@@ -188,12 +212,10 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
       }
 
       const wanted = new URLSearchParams(window.location.search).get('step');
-      const valid = wanted && onboarding.data.progress.steps.some((s) => s.stepCode === wanted);
-      applyOnboarding(
-        onboarding.data.progress,
-        onboarding.data.answers,
-        valid ? wanted : undefined,
-      );
+      const valid =
+        wanted === REVIEW ||
+        (wanted && onboarding.data.progress.steps.some((s) => s.stepCode === wanted));
+      applyOnboarding(onboarding.data, valid && wanted ? wanted : undefined);
       setPhase('ready');
     })();
 
@@ -212,6 +234,21 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
   }, []);
 
   const current = steps.find((s) => s.stepCode === currentCode);
+
+  /**
+   * The GSTINs step 3 verified, for step 4's billing addresses.
+   *
+   * Read, never asked for again. Once step 4 has a draft of its own it carries
+   * its own copy — which is what survives step 3 being marked COMPLETE and its
+   * draft cleared server-side.
+   */
+  const savedGstins = React.useMemo<string[]>(() => {
+    const rows = answers.STATUTORY?.gstins;
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .map((row) => (row as { gstin?: unknown }).gstin)
+      .filter((g): g is string => typeof g === 'string' && g.length === 15);
+  }, [answers.STATUTORY]);
 
   /* ---------------------------------------------------------------- step 1 */
 
@@ -258,6 +295,9 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
         setSaveFailure(saved.message);
         return null;
       }
+      // Held locally as well: completing the step clears the server's copy, and
+      // the review screen has nowhere else to read it back from.
+      setAnswers((a) => ({ ...a, ACCOUNT: draft }));
 
       if (current?.status !== 'COMPLETE') {
         const done = await completeStep('ACCOUNT');
@@ -318,8 +358,10 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
         }
       }
       await reload();
+      // After the last step there is no next one — the review screen is where
+      // the flow goes, and it is a place in this client rather than a step.
       const next = steps.find((s) => s.stepOrder === (current?.stepOrder ?? 0) + 1);
-      if (next) goTo(next.stepCode);
+      goTo(next ? next.stepCode : REVIEW);
       return null;
     } finally {
       setBusy(false);
@@ -347,6 +389,8 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
     // how this buyer is invoiced from here on, so step 3 adds the paragraph the
     // seed has no room for — and only while step 3 is the step on screen.
     ...(currentCode === 'STATUTORY' ? WHY_STATUTORY : []),
+    ...(currentCode === 'CONTACTS_ADDRESSES' ? WHY_CONTACTS : []),
+    ...(currentCode === 'DOCUMENTS' ? WHY_DOCUMENTS : []),
   ];
 
   const rail = (
@@ -389,6 +433,22 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
   }
 
   const stepIndex = steps.findIndex((s) => s.stepCode === currentCode);
+  /**
+   * The form is behind them once the application is with us. Every status from
+   * KYC_SUBMITTED on lands on the review screen whatever `?step` says — a form
+   * that still accepts edits after submission is a lie about what happens next.
+   */
+  const withUs = AFTER_SUBMISSION.includes(orgStatus);
+  const reviewing = currentCode === REVIEW || withUs;
+
+  const submit = async (): Promise<string | null> => {
+    const result = await submitForReview();
+    // A 409 names the steps that are not finished. It is the most useful
+    // sentence on the screen, so it is shown as written.
+    if (!result.ok) return result.message;
+    await reload(REVIEW);
+    return null;
+  };
 
   return (
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px]">
@@ -400,8 +460,19 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
             {/* The step title is the page heading immediately below, so the
                 collapsed rail says only where you are in the sequence. */}
             <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Step <span className="tnum">{stepIndex + 1}</span> of{' '}
-              <span className="tnum">{steps.length}</span>
+              {/* On the review screen there is no current step, and "step 0 of
+                  5" is a position nobody is in. */}
+              {reviewing ? (
+                <>
+                  <span className="tnum">{steps.filter((s) => s.status === 'COMPLETE').length}</span>{' '}
+                  of <span className="tnum">{steps.length}</span> steps done
+                </>
+              ) : (
+                <>
+                  Step <span className="tnum">{stepIndex + 1}</span> of{' '}
+                  <span className="tnum">{steps.length}</span>
+                </>
+              )}
             </span>
             <span className="ml-auto text-body-sm text-acc-ink">All steps</span>
           </summary>
@@ -412,23 +483,40 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
       <main className="flex flex-col gap-5 lg:max-w-[70ch]">
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline gap-3">
-            <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Step <span className="tnum">{Math.max(stepIndex + 1, 1)}</span> of{' '}
-              <span className="tnum">{steps.length}</span>
-            </span>
-            <h1 className="text-h1 text-ink">{current?.title ?? 'Create an account'}</h1>
-            {current?.estimatedMinutes ? (
+            {reviewing ? (
               <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                about <span className="tnum">{current.estimatedMinutes}</span> min
+                <span className="tnum">{steps.filter((s) => s.status === 'COMPLETE').length}</span>{' '}
+                of <span className="tnum">{steps.length}</span> steps done
               </span>
             ) : (
-              <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-4">
-                Duration not measured
+              <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Step <span className="tnum">{Math.max(stepIndex + 1, 1)}</span> of{' '}
+                <span className="tnum">{steps.length}</span>
               </span>
             )}
+            <h1 className="text-h1 text-ink">
+              {/* Nothing is left to check or submit once it is with a reviewer,
+                  and a heading that says otherwise is an instruction nobody can
+                  follow. */}
+              {withUs
+                ? 'Your application'
+                : reviewing
+                  ? 'Check and submit'
+                  : (current?.title ?? 'Create an account')}
+            </h1>
+            {!reviewing &&
+              (current?.estimatedMinutes ? (
+                <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                  about <span className="tnum">{current.estimatedMinutes}</span> min
+                </span>
+              ) : (
+                <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-4">
+                  Duration not measured
+                </span>
+              ))}
             {registered && <StatusPill tone="neutral" label="Signed in" />}
           </div>
-          {current?.purposeNote && <p className="max-w-[62ch]">{current.purposeNote}</p>}
+          {!reviewing && current?.purposeNote && <p className="max-w-[62ch]">{current.purposeNote}</p>}
         </header>
 
         {saveFailure && (
@@ -437,7 +525,18 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
           </p>
         )}
 
-        {phase === 'checking' ? (
+        {reviewing ? (
+          <Review
+            steps={steps}
+            answers={answers}
+            orgStatus={orgStatus}
+            slaDueAt={slaDueAt}
+            slaBreached={slaBreached}
+            isSubmittable={isSubmittable}
+            onEdit={goTo}
+            onSubmit={submit}
+          />
+        ) : phase === 'checking' ? (
           <div className="flex flex-col gap-4 rounded-lg border border-rule bg-sheet p-5">
             <Skeleton lines={6} />
             <p className="text-body-sm text-ink-3" role="status">
@@ -485,6 +584,25 @@ export function RegisterFlow({ definitions }: RegisterFlowProps): React.JSX.Elem
             blockingReason={current?.blockingReason}
             onSaveDraft={(values, pct) => void saveDraft('STATUTORY', values, pct)}
             onContinue={(values, pct) => continueFrom('STATUTORY', values, pct)}
+            onFieldFocus={setActiveTerm}
+          />
+        ) : currentCode === 'CONTACTS_ADDRESSES' ? (
+          <StepContacts
+            answers={answers.CONTACTS_ADDRESSES ?? {}}
+            gstins={savedGstins}
+            busy={busy}
+            blockingReason={current?.blockingReason}
+            onSaveDraft={(values, pct) => void saveDraft('CONTACTS_ADDRESSES', values, pct)}
+            onContinue={(values, pct) => continueFrom('CONTACTS_ADDRESSES', values, pct)}
+            onFieldFocus={setActiveTerm}
+          />
+        ) : currentCode === 'DOCUMENTS' ? (
+          <StepDocuments
+            answers={answers.DOCUMENTS ?? {}}
+            busy={busy}
+            blockingReason={current?.blockingReason}
+            onSaveDraft={(values, pct) => void saveDraft('DOCUMENTS', values, pct)}
+            onContinue={(values, pct) => continueFrom('DOCUMENTS', values, pct)}
             onFieldFocus={setActiveTerm}
           />
         ) : (

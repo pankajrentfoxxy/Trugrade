@@ -18,6 +18,14 @@
  * here reintroduces a literal hex.
  */
 
+/* The browser paints its own widgets — the date and time pickers on step 4 and
+   step 5, the scrollbars, the select arrow — from `color-scheme`, not from our
+   tokens. Without this a dark page renders a white clock icon well, and a
+   near-invisible dark one in dark theme. It belongs beside the token block in
+   `packages/ui/src/globals.css`; it is here because that package is not this
+   task's to change, and it is reported as a gap. */
+:root,:root[data-t="dark"]{color-scheme:dark}
+:root[data-t="light"]{color-scheme:light}
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
 input,select{font-family:inherit}

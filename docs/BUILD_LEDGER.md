@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T07:40:00+00:00  
-Currently: T6 - customer registration steps 4-5 and submission
+Updated: 2026-08-27T08:05:00+00:00  
+Currently: T7 - vendor registration steps 1-3
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -16,7 +16,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T3 | packages/ui gap-fill | DONE | 13ab439 | Storybook, both themes | All 20 components exported: StepRail WhyRail OtpInput FormSection AddressCard DocumentViewer RecordHeader SidePanel KpiRow QueueList Timeline + DataBoard density-aware |
 | T4 | Customer registration - shell and steps 1-2 | DONE | b0acc96 | 26 shots, both themes, 1440/900/600 | Archetype D. Rail drawn from seeded step definitions, purpose_note is the why-rail copy. Save-and-resume verified with a cold reload. Added GET /api/onboarding/steps/definitions (@Public). Fixed: header classes that existed in no stylesheet, footer unreadable in light, ThemeToggle hydration failure, Stepper green tick. |
 | T5 | Customer registration - step 3 statutory | DONE | 71d75ef | 34 shots, both themes, 1440/900/600 | PASS shows the returned legal name; FAIL names the reason; PROVIDER_ERROR never blames the applicant, never consumes an attempt, retries with visible backoff. Checksum + embedded-PAN conflict caught client-side. Fixed a cross-tenant rate-limit hole and the invalid GSTIN example. |
-| T6 | Customer registration - steps 4-5 and submission | DOING |  |  |  |
+| T6 | Customer registration - steps 4-5 and submission | DONE | uncommitted | 30 shots, both themes, 1440/900/600 | Archetype D. Billing address per GSTIN read from step 3, delivery with receiving hours. Uploads are real multipart with per-file progress and per-file refusal in the server's words. Review screen shows a gap as a gap; submission, SLA clock and NEEDS_FIX verbatim. Doc checklist rendered from `document_type_rule`. Not committed - the working tree is shared. |
 | T7 | Vendor registration - steps 1-3 | TODO |  |  |  |
 | T8 | Vendor registration - steps 4-5 | TODO |  |  |  |
 | T9 | Vendor registration - steps 6-7 and submission | TODO |  |  |  |
@@ -143,6 +143,65 @@ every unit test passed; only starting the process found it.
   "e.g. 06ABCDE1234F1Z5" fails its own check digit — the correct one is 4. Cosmetic,
   but it is the string every GSTIN field in the product shows, and a worked example
   that would be refused by the validator beside it is worse than none.
+
+## Reported by T6 - not fixed, they are outside `apps/storefront`
+
+- **`Uploader` shows per-file progress to a screen reader only.** It takes
+  `progressPct`, announces it at the quartiles, and renders an "Uploading" pill
+  with no number and no bar. The backlog asks for visible per-file progress, so
+  `StepDocuments` renders the bar itself, beside the component -
+  `T6-upload-in-flight-*` is a real throttled upload at 49% of 977 KB. Eight
+  lines that belong inside `Uploader`, where every other upload surface gets
+  them for free.
+- **`AddressCard` has no billing mode.** It always renders Landmark, Gate
+  instructions and Receiving hours, so a *billing* address - which is never
+  asked for any of them - shows three "Not provided" rows for fields that do not
+  apply to it. "Not provided" is right for a delivery address nobody asked; it is
+  noise on a billing one. It needs a variant, or the three rows need to be
+  driven by what the caller passes.
+- **`document_type_rule` has no `org_type` or `step_code`.** All fourteen rows
+  apply to everyone, so nothing in the API can say which four a *buyer* is asked
+  for. `picklists.ts` holds the four codes and says so; every rule about each of
+  them - label, cap, accepted types, age - comes from the endpoint. The
+  selection belongs in the table beside the rules it selects.
+- **No `color-scheme` on `:root`.** The browser paints its own widgets - the
+  date and time pickers step 4 and step 5 use, the select arrow, scrollbars -
+  from `color-scheme`, not from our tokens, so a dark page rendered a
+  near-invisible dark clock icon. Set in `apps/storefront/src/app/storefront.css`
+  as a workaround; it belongs next to the token block in
+  `packages/ui/src/globals.css` and should be deleted from the storefront when it
+  lands there.
+- **The OTP rate limit is keyed on IP alone.** `REGISTER_OTP_IP_LIMIT` counts
+  `ctx.ip`, so the capture run exhausted it after ten registrations and the
+  light-theme run was refused for 47 minutes. In production behind an office NAT
+  or a CGNAT, that is one buyer's registrations locking out everybody else's from
+  the same building. Cleared the dev key to finish the captures; the rule needs a
+  second dimension.
+- **A completed step's answers exist nowhere a client can read** - the third time
+  this promotion gap has bitten (T5 reported it first). `completeStep` clears
+  `draft_json` and no module has registered a promotion, so after a cold reload
+  the review screen can show a COMPLETE step's answers only if this session
+  supplied them. It says so plainly rather than rendering five false gaps, and
+  `RegisterFlow` now MERGES the server's answers into what it holds instead of
+  replacing them - without that merge the review screen empties one step at a
+  time as each step completes.
+- **A COMPLETE step is locked and there is no change-request flow.**
+  `saveDraft` refuses a COMPLETE step with "use the change-request flow", and no
+  such flow exists. The review screen therefore offers a link back only for steps
+  that can actually be changed, and says what it takes to change the rest. That
+  is honest about today's API, but it means a buyer who spots a wrong GSTIN on
+  the review screen cannot fix it without a reviewer.
+
+## Contracts gaps reported by T6
+
+- **No GST state-code map, still.** T5 reported it; T6 needed it for real (a
+  billing address must sit in the state that issued its GSTIN) and wrote the
+  36-row list in `apps/storefront/src/app/register/picklists.ts`. Two withdrawn
+  codes - 25 and 28 - are deliberately absent, and an unrecognised code stands
+  the cross-check down rather than guessing.
+- **No option lists for state, receiving days, notification channel or
+  language.** Same shape as the T4 report: written in `picklists.ts` with a
+  comment, belong in `@trugrade/contracts` or `platform_config`.
 
 ## Contracts gaps reported by T5
 

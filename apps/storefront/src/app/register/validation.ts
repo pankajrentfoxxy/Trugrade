@@ -1,10 +1,12 @@
 import {
+  ADDRESS_LINE1,
   CIN,
   EMAIL,
   FULL_NAME,
   GSTIN,
   MOBILE_E164,
   PAN,
+  PINCODE,
   PAN_HOLDER_TYPE,
   PASSWORD_BLOCKLIST_WORDS,
   isValidGstin,
@@ -319,3 +321,70 @@ export function validateCin(value: string, required: boolean): string | undefine
     return required ? 'Enter the CIN from your certificate of incorporation.' : undefined;
   return CIN.pattern?.test(cin) ? undefined : CIN.message;
 }
+
+/* ==========================================================================
+ * Addresses — VR-034, VR-037
+ * ======================================================================== */
+
+export function validateLine1(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return 'Enter the building and street. A rider reads this line first.';
+  return trimmed.length >= (ADDRESS_LINE1.min ?? 5) ? undefined : ADDRESS_LINE1.message;
+}
+
+export function validateCity(value: string): string | undefined {
+  return value.trim().length === 0 ? 'Enter the city or town.' : undefined;
+}
+
+export function validatePincode(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return 'Enter the 6-digit PIN code. It decides the delivery route.';
+  return PINCODE.pattern?.test(trimmed) ? undefined : PINCODE.message;
+}
+
+/**
+ * The GSTIN says which state it was issued in, and a billing address in a
+ * different one is a tax problem rather than a typo we can quietly accept: the
+ * place of supply decides IGST against CGST plus SGST.
+ *
+ * A state code we do not recognise stands the check down rather than guessing —
+ * see `STATES` in `picklists.ts` for the two withdrawn codes.
+ */
+export function billingStateMatchesGstin(
+  gstin: string,
+  stateCode: string,
+  stateNameOf: (code: string) => string | undefined,
+): string | undefined {
+  const issued = stateNameOf(gstin.slice(0, 2));
+  if (!issued || !stateCode) return undefined;
+  if (gstin.slice(0, 2) === stateCode) return undefined;
+  const chosen = stateNameOf(stateCode) ?? stateCode;
+  return (
+    `This GSTIN is registered in ${issued}, but you have given a billing address in ${chosen}. ` +
+    'The billing address for a registration has to be in the state that issued it.'
+  );
+}
+
+/**
+ * Receiving hours, as a pair of times.
+ *
+ * Closing before opening is the one combination that reads as valid and is not,
+ * and it is what an overnight dock (22:00 to 06:00) types in — so the message
+ * says which reading we take rather than refusing them outright.
+ */
+export function validateReceivingHours(
+  opensAt: string,
+  closesAt: string,
+): string | undefined {
+  if (!opensAt || !closesAt) return 'Tell us the hours your dock accepts goods.';
+  if (opensAt >= closesAt)
+    return 'The closing time has to be after the opening time. For an overnight dock, tell us the daytime window somebody can sign for a delivery.';
+  return undefined;
+}
+
+/** "Monday to Saturday, 09:30-18:00" — what `AddressCard` prints for a rider. */
+export const receivingHoursLabel = (
+  daysLabel: string,
+  opensAt: string,
+  closesAt: string,
+): string => `${daysLabel}, ${opensAt}–${closesAt}`;

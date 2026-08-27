@@ -46,21 +46,29 @@ async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
 
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
 
-  if (!res.ok) {
-    const err = (body as { error?: { code?: string; message?: string; fields?: unknown } } | null)
-      ?.error;
-    return {
-      ok: false,
-      status: res.status,
-      code: err?.code ?? 'UNKNOWN',
-      message:
-        err?.message ??
-        `That did not go through (${res.status}). Nothing you typed has been lost.`,
-      fields: (err?.fields as Record<string, string> | undefined) ?? {},
-    };
-  }
+  if (!res.ok) return failureFrom(res.status, body);
 
   return { ok: true, data: body as T };
+}
+
+/**
+ * `DomainExceptionFilter`'s envelope, unwrapped.
+ *
+ * Shared with the XHR upload below rather than written twice: an upload refusal
+ * carries the only wording that says *which* file was refused and why, and a
+ * second copy of this unwrapping is how that message becomes "(422)".
+ */
+function failureFrom(status: number, body: unknown): ApiFailure {
+  const err = (body as { error?: { code?: string; message?: string; fields?: unknown } } | null)
+    ?.error;
+  return {
+    ok: false,
+    status,
+    code: err?.code ?? 'UNKNOWN',
+    message:
+      err?.message ?? `That did not go through (${status}). Nothing you typed has been lost.`,
+    fields: (err?.fields as Record<string, string> | undefined) ?? {},
+  };
 }
 
 const post = <T>(path: string, body?: unknown): Promise<ApiResult<T>> =>
@@ -167,7 +175,12 @@ export interface StepProgress extends StepDefinition {
 
 export interface ResumableOnboarding {
   orgId: string;
+  /** `org_status`: REGISTERED → KYC_SUBMITTED → UNDER_REVIEW → VERIFIED / REJECTED. */
   status: string;
+  /** Set by `POST /submit`. The promise made to the applicant, in working hours. */
+  slaDueAt: string | null;
+  /** The server's own answer, not a clock comparison done here. */
+  slaBreached: boolean;
   progress: {
     /** `constitution_type`, the org's own. Survives step 2's draft being cleared. */
     constitution: string | null;
@@ -280,3 +293,129 @@ export interface VerificationAttempt {
 
 export const getVerifications = (): Promise<ApiResult<VerificationAttempt[]>> =>
   get<VerificationAttempt[]>('/api/onboarding/verifications');
+
+/* ==========================================================================
+ * Submission — POST /api/onboarding/submit
+ * ======================================================================== */
+
+/**
+ * Starts the review SLA clock and returns the date it is due.
+ *
+ * A 409 comes back naming the steps that are not finished, in `message`. That
+ * refusal is the same list the review screen already renders, so it is shown as
+ * written rather than replaced with "please complete all steps".
+ */
+export const submitForReview = (): Promise<ApiResult<{ slaDueAt: string }>> =>
+  post<{ slaDueAt: string }>('/api/onboarding/submit');
+
+/* ==========================================================================
+ * Documents — GET/POST/DELETE /api/onboarding/documents
+ * ======================================================================== */
+
+/**
+ * One row of `kyc.document_type_rule`. **Data, not a constant.**
+ *
+ * The label, the age rule, how many files of this type are allowed and the size
+ * cap are all the server's, so ops can add a document type or change a rule
+ * without a release — and so the screen never asks for a document we stopped
+ * needing, or promises a cap that has moved.
+ */
+export interface DocumentTypeRule {
+  docType: string;
+  label: string;
+  /** NULL means the document does not go stale. A GST certificate never does. */
+  maxAgeDays: number | null;
+  requiresExpiry: boolean;
+  maxFiles: number;
+  maxBytes: number;
+  acceptedMime: string[];
+}
+
+export type DocumentStatus = 'UPLOADED' | 'UNDER_REVIEW' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+
+export interface KycDocument {
+  id: string;
+  docType: string;
+  label: string;
+  originalFilename: string | null;
+  mime: string;
+  sizeBytes: number;
+  status: DocumentStatus;
+  documentDate: string | null;
+  /** NULL for a PDF, which has no EXIF. Never rendered as a tick when NULL. */
+  exifStrippedAt: string | null;
+  /** NULL until a scanner exists — "not scanned", never "clean". */
+  avVerdict: string | null;
+  /** The reviewer's own words. Rendered verbatim. */
+  rejectionReason: string | null;
+  reviewNote: string | null;
+  expiresOn: string | null;
+  uploadedAt: string;
+}
+
+export const getDocumentTypes = (): Promise<ApiResult<DocumentTypeRule[]>> =>
+  get<DocumentTypeRule[]>('/api/onboarding/documents/types');
+
+export const getDocuments = (): Promise<ApiResult<KycDocument[]>> =>
+  get<KycDocument[]>('/api/onboarding/documents');
+
+export const deleteDocument = (documentId: string): Promise<ApiResult<null>> =>
+  call<null>(`/api/onboarding/documents/${documentId}`, { method: 'DELETE' });
+
+/**
+ * Upload one file, with progress.
+ *
+ * `XMLHttpRequest` rather than `fetch` for one reason: fetch has no upload
+ * progress event, and the step promises a per-file percentage. One request per
+ * file, so each file carries its own progress and its own refusal — a batch
+ * endpoint would have to invent a partial-success shape.
+ *
+ * **Nothing here decides whether the bytes are acceptable.** The magic-byte
+ * sniff, the size cap, the EXIF strip, the active-content check and the age rule
+ * all live in `DocumentService`, and its message is what the applicant reads.
+ */
+export function uploadDocument(input: {
+  docType: string;
+  file: File;
+  /** `YYYY-MM-DD`, only for a type the rule table gives a `maxAgeDays`. */
+  documentDate?: string;
+  onProgress?: (pct: number) => void;
+}): Promise<ApiResult<KycDocument>> {
+  return new Promise((resolve) => {
+    const form = new FormData();
+    form.append('docType', input.docType);
+    if (input.documentDate) form.append('documentDate', input.documentDate);
+    // Last, and named `file`: `FileInterceptor('file')` reads this field.
+    form.append('file', input.file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/onboarding/documents');
+    xhr.withCredentials = true;
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || !input.onProgress) return;
+      input.onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+
+    xhr.onload = () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText) as unknown;
+      } catch {
+        body = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve({ ok: true, data: body as KycDocument });
+        return;
+      }
+      resolve(failureFrom(xhr.status, body));
+    };
+
+    // A dropped connection is not a refusal of the file — it says so, and the
+    // file stays in the list so it can be retried without picking it again.
+    xhr.onerror = () => resolve({ ok: false, ...NETWORK_FAILURE });
+    xhr.onabort = () => resolve({ ok: false, ...NETWORK_FAILURE });
+
+    xhr.send(form);
+  });
+}
