@@ -10,7 +10,7 @@ export default function Page(): React.JSX.Element {
       <div className="authcard">
         <a className="brand" href="/">
           <span className="wm">
-            tru<em>grade</em>
+            tru<span className="g">grade</span>
           </span>
         </a>
         <h1>Sign in</h1>

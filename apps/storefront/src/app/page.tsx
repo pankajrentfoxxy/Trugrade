@@ -1,8 +1,7 @@
 import { BRAND } from '@trugrade/config/brand';
-import { ThemeToggle } from '@trugrade/ui';
 import { getBrands, getGrades, getOffers, getStats } from '../lib/api';
 import { FilterRail } from './FilterRail';
-import { SearchBar } from './SearchBar';
+import { SiteHeader } from './SiteHeader';
 
 /**
  * The homepage, built to the nine-block structure in `09_FRONTEND_LOCKED.md` §7
@@ -70,68 +69,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
 
   return (
     <>
-      {/* 1 — UTILITY BAR. The counter is real, which is why it can read zero. */}
-      <div className="util">
-        <div className="wrap">
-          <div className="l">
-            <span>
-              <i className="blip" />
-              <b className="mono">{inspected.toLocaleString('en-IN')}</b> laptops opened &amp; tested
-            </span>
-            <a href="/delivery" className="hide-sm">
-              Pan-India delivery
-            </a>
-            <a href="/gst" className="hide-sm">
-              GST invoice on every order
-            </a>
-          </div>
-          <div className="r">
-            <a href="/verify">Verify a certificate</a>
-            <a href="/track">Track order</a>
-            <a href="/help">Help</a>
-            <a href="/sell" style={{ color: 'var(--acc)', fontWeight: 600 }}>
-              Sell on {BRAND.name} &rarr;
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* 2 — HEADER. Chrome, and identical in both themes. */}
-      <div className="head">
-        <div className="wrap">
-          <a className="brand" href="/">
-            <svg className="mk" width="28" height="28" viewBox="0 0 46 46" aria-label={BRAND.name}>
-              <line className="b" x1="6" y1="23" x2="40" y2="23" />
-              <line className="b" x1="6" y1="15" x2="6" y2="31" />
-              <line className="b" x1="40" y1="15" x2="40" y2="31" />
-              <line className="d" x1="18" y1="17" x2="18" y2="29" />
-              <circle className="f" cx="30" cy="23" r="3.4" />
-            </svg>
-            <span className="wm">
-              tru<em>grade</em>
-            </span>
-          </a>
-
-          <a className="nav-browse" href="/browse">
-            Browse laptops
-          </a>
-
-          <SearchBar />
-
-          <div className="hact">
-            <ThemeToggle />
-            <a className="ghost" href="/bulk">
-              Requirement
-            </a>
-            <a className="ghost" href="/sign-in">
-              Sign in
-            </a>
-            <a className="cta" href="/register">
-              Create account
-            </a>
-          </div>
-        </div>
-      </div>
+      <SiteHeader inspected={stats ? inspected : null} />
 
       {/* 3 — CATEGORY STRIP. Laptops only; everything else is marked SOON. */}
       <div className="cats">

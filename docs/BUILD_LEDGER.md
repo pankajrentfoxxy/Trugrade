@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-26T22:56:27+00:00  
-Currently: T2 done. Next: T4 - customer registration, shell and steps 1-2
+Updated: 2026-08-27T06:20:00+00:00  
+Currently: T4 done. Next: T5 - customer registration, step 3 statutory
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -14,7 +14,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T1 | Console shell and chrome | DONE | 13ab439 | console shell, both themes, 900/600 | Dark chrome per 09_FRONTEND_LOCKED; shell/Shell.tsx + nav.ts; screenshots in .screenshots/T1-console-shell/ |
 | T2 | Console design conformance pass | DONE | 944eac9 | 126 shots: 21 routes x 2 themes x 1440/900/600 | All 25 route files; 13 hand-rolled tables to DataBoard; archetype on every route; board state in the URL; 0 stray hex. Exposed two defects, both FIXED in 944eac9: the API not booting (DocumentService unregistered) and cn() stripping text colours. |
 | T3 | packages/ui gap-fill | DONE | 13ab439 | Storybook, both themes | All 20 components exported: StepRail WhyRail OtpInput FormSection AddressCard DocumentViewer RecordHeader SidePanel KpiRow QueueList Timeline + DataBoard density-aware |
-| T4 | Customer registration - shell and steps 1-2 | DOING |  |  |  |
+| T4 | Customer registration - shell and steps 1-2 | DONE |  | 26 shots: 13 states x 2 themes, incl. 1440/900/600 | `/register` is archetype D, driven end to end against the running API: real OTPs, a real account, a real draft resumed after a cold load. Rail and "why we ask" copy come from `kyc.onboarding_step_definition`, never a client constant. Added ONE endpoint: `GET /api/onboarding/steps/definitions?orgType=` (`@Public`, on `OnboardingLeadController`) because the rail must draw before an org exists. Storefront now has a real jest harness (5 tests) in place of `--passWithNoTests`. |
 | T5 | Customer registration - step 3 statutory | TODO |  |  |  |
 | T6 | Customer registration - steps 4-5 and submission | TODO |  |  |  |
 | T7 | Vendor registration - steps 1-3 | TODO |  |  |  |
@@ -93,6 +93,58 @@ every unit test passed; only starting the process found it.
   a finished step is neither.
 - `PriceBreakup` requires `valuationMethod` and sums lines to a total — a buyer landed-price
   shape that does not fit a vendor payout preview (gross minus deductions).
+
+## Gaps reported by T4
+
+- **`ThemeToggle` cannot hydrate.** It seeds its state from `document.documentElement`,
+  which is correct in the browser and impossible on the server, so an SSR page renders
+  the moon and a light-theme client renders the sun — React threw the whole tree away and
+  re-rendered it on every light-mode page load. One line fixes it: seed the state with
+  `'dark'` and let the existing `useEffect` correct it. Worked around in
+  `apps/storefront/src/app/HeaderThemeToggle.tsx`, which deferred-mounts it; delete that
+  wrapper when the package is fixed.
+- **Still no `<select>`.** T2 kept one in `apps/console/src/lib/controls.tsx`; T4 now has a
+  second in `apps/storefront/src/lib/controls.tsx`. Two copies. Fold into `packages/ui`.
+- **`Stepper` marks a completed step with a green tick** (T3 already reported this). It is
+  visible on every screenshot of step 2: green is reserved for PASS/FAIL.
+- **`Stepper`/`StepRail` have no link-component injection point**, so a completed step in
+  the rail is an `<a href>` and a full page load. The flow re-reads its state on mount, so
+  it lands correctly — but it is a reload inside a wizard.
+
+## Contracts gaps reported by T4
+
+- **No option lists for constitution, industry, employee band, annual volume or lead
+  source.** Constitution at least exists as the `constitution_type` enum and was copied
+  from the schema verbatim; the other four have no definition anywhere, so
+  `apps/storefront/src/app/register/picklists.ts` writes them and says so in a comment.
+  They belong in `@trugrade/contracts` or `platform_config` before a second screen needs
+  the same lists.
+- **`PasswordService.COMMON_BASES` is not shared.** The client meter has to agree with the
+  server or it reads "very strong" on a password the server then refuses — which is exactly
+  what happened first time. The list is duplicated in
+  `apps/storefront/src/app/register/validation.ts`. It belongs beside
+  `PASSWORD_BLOCKLIST_WORDS`.
+- **VR-032b (`EMAIL_DISPOSABLE`) has no implementation.** Nothing refuses a temporary
+  mailbox, and there is no domain list. The registration form therefore does not claim to
+  refuse one; it notes when a free consumer mailbox is used and accepts it.
+
+## Fixed in passing by T4
+
+- The storefront header used `nav-browse` / `ghost` / `cta` class names that exist in no
+  stylesheet, so "Browse laptops", "Requirement" and "Sign in" rendered as bare text
+  against the reference's `.catbtn` and `.hbtn`/`.hbtn.solid`. The header is now
+  `apps/storefront/src/app/SiteHeader.tsx`, shared by the homepage and `/register`, and
+  matches `docs/reference/homepage.html` markup for markup.
+- The wordmark rendered `tru<em>grade</em>`. The reference is `<span class="g">`, which is
+  what `.wm .g{color:var(--acc)}` styles — so the amber half of the logo was italic and
+  grey instead. Fixed on the homepage and the sign-in page.
+- The Rule 4(2) footer in `layout.tsx` used `text-ink`/`text-ink-2` while `storefront.css`
+  paints every `footer` with `--chrome`. In light theme that was near-black text on the
+  dark chrome: the legal-name line was unreadable. Now `on-chrome` tokens, identical in
+  both themes.
+- `<html>` had no `data-density`. The storefront is `comfortable` per CLAUDE.md.
+- A short page floated the footer halfway up the window; `body` is now a min-height flex
+  column.
 
 ## Known bugs, not yet fixed
 

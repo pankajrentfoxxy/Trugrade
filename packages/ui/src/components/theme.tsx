@@ -62,29 +62,40 @@ export interface ThemeToggleProps {
   className?: string;
 }
 
+/**
+ * RENDERS THE SAME MARKUP ON THE SERVER AND ON THE CLIENT, ALWAYS.
+ *
+ * It used to seed its state from the DOM — `useState(() => readTheme())` — which
+ * looks like the careful thing to do and is the opposite. On the server
+ * `readTheme()` has no document and answers 'dark'. On the client the pre-paint
+ * script in <head> has *already* set data-t="light", so the very first client
+ * render answers 'light'. Different icon, different aria-label, different text:
+ * a hydration mismatch, and React's response to one is to throw away the server
+ * tree and re-render the whole document. Every light-theme page load was paying
+ * that, and the visible symptom was somewhere else entirely.
+ *
+ * So neither the icon nor the label is decided in JavaScript any more. Both
+ * states are always in the DOM and CSS shows exactly one, keyed off the same
+ * `data-t` attribute the pre-paint script sets. That means:
+ *   - the markup is byte-identical on both sides, so there is nothing to mismatch
+ *   - the correct icon is painted on the first frame, with no deferred mount and
+ *     no flash — the toggle can render inside a server component
+ *   - the button's accessible name comes from its visible-to-AT content rather
+ *     than an attribute, so the hidden half is hidden from a screen reader too
+ *     (`display:none`, not `sr-only`, which would announce both).
+ *
+ * The click handler reads the live DOM instead of state, because the DOM is the
+ * only thing that was ever the source of truth here.
+ */
 export function ThemeToggle({ className }: ThemeToggleProps): React.JSX.Element {
-  // Initialised from the DOM rather than from a default, so the button agrees
-  // with what the pre-paint script already put on <html>.
-  const [theme, setTheme] = React.useState<Theme>(() => readTheme());
-
-  React.useEffect(() => {
-    setTheme(readTheme());
-  }, []);
-
   const toggle = (): void => {
-    const next: Theme = theme === 'light' ? 'dark' : 'light';
-    applyTheme(next);
-    setTheme(next);
+    applyTheme(readTheme() === 'light' ? 'dark' : 'light');
   };
 
   return (
     <button
       type="button"
       onClick={toggle}
-      // The label says what the button DOES, not what the state is — a screen
-      // reader user needs the action, and the state is already on <html>.
-      aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-      title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-sm',
         'border border-chrome-line text-on-chrome-2',
@@ -92,8 +103,16 @@ export function ThemeToggle({ className }: ThemeToggleProps): React.JSX.Element 
         className,
       )}
     >
-      {theme === 'light' ? <SunIcon /> : <MoonIcon />}
-      <span className="sr-only">{theme === 'light' ? 'Light theme' : 'Dark theme'}</span>
+      {/* The label says what the button DOES, not what the state is — a screen
+          reader user needs the action; the state is already on <html>. */}
+      <span className="tg-in-dark">
+        <MoonIcon />
+        <span className="sr-only">Switch to light theme</span>
+      </span>
+      <span className="tg-in-light">
+        <SunIcon />
+        <span className="sr-only">Switch to dark theme</span>
+      </span>
     </button>
   );
 }

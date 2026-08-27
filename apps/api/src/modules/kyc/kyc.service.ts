@@ -11,7 +11,11 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../shared/errors/domain-errors';
-import { OnboardingService, type ProgressView } from './internal/onboarding.service';
+import {
+  OnboardingService,
+  type ProgressView,
+  type StepDefinitionView,
+} from './internal/onboarding.service';
 import { VerificationService, type VerificationOutcomeView } from './internal/verification.service';
 import { ConsentService, type ConsentPurpose, type ConsentState } from './internal/consent.service';
 
@@ -216,6 +220,11 @@ export class KycService implements IKycService {
   // -------------------------------------------------------------------------
   // Onboarding
   // -------------------------------------------------------------------------
+
+  /** The step list itself, for a client that has no org yet. */
+  listStepDefinitions(orgType: 'VENDOR' | 'BUYER'): Promise<StepDefinitionView[]> {
+    return this.onboarding.listDefinitions(orgType);
+  }
 
   async startOnboarding(orgId: string): Promise<void> {
     await this.onboarding.initialiseSteps(orgId);

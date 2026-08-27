@@ -243,8 +243,15 @@ export function Stepper({
                 {String(i + 1).padStart(2, '0')}
               </span>{' '}
               {step.label}
+              {/* Neutral, not `--pass`. Green and red mean PASS and FAIL and
+                  nothing else (09_FRONTEND_LOCKED, colour rule 2). A finished
+                  step is neither: it says "you filled this in", not "this
+                  machine passed inspection". Spending the verdict colour on
+                  progress is how the QC chip stops meaning anything. The tick
+                  is aria-hidden because `position` already announces the
+                  status in words to a screen reader. */}
               {step.status === 'complete' && (
-                <span aria-hidden="true" className="text-pass">
+                <span aria-hidden="true" className="text-ink-3">
                   {' '}
                   ✓
                 </span>

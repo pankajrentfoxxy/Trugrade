@@ -51,6 +51,15 @@ export interface StepView {
   fields: FieldRequirement[];
 }
 
+/** A step as defined, before any org has answered it. */
+export interface StepDefinitionView {
+  stepCode: string;
+  stepOrder: number;
+  title: string;
+  purposeNote: string | null;
+  estimatedMinutes: number | null;
+}
+
 export interface FieldRequirement {
   fieldCode: string;
   label: string;
@@ -115,6 +124,33 @@ export class OnboardingService {
     if (!appliesTo || appliesTo.length === 0) return true;
     if (!constitution) return true;
     return appliesTo.includes(constitution);
+  }
+
+  /**
+   * The step definitions for an org type, with nothing org-specific in them.
+   *
+   * `getProgress` cannot serve the first screen of registration: it needs an
+   * org, and at that moment there is not one. Without this the client would
+   * have to hold its own copy of the five step titles, which is a list that
+   * goes stale the first time a definition row is edited — and editing a row
+   * instead of shipping a release is the entire point of the generic stepper.
+   *
+   * Safe to serve anonymously: a title, a purpose note and a duration are the
+   * same for every applicant, and they are already printed on the form.
+   */
+  async listDefinitions(orgType: 'VENDOR' | 'BUYER'): Promise<StepDefinitionView[]> {
+    const definitions = await this.prisma.db.onboarding_step_definition.findMany({
+      where: { org_type: orgType, is_active: true },
+      orderBy: { step_order: 'asc' },
+    });
+
+    return definitions.map((def) => ({
+      stepCode: def.step_code,
+      stepOrder: def.step_order,
+      title: def.title,
+      purposeNote: def.purpose_note,
+      estimatedMinutes: def.estimated_minutes,
+    }));
   }
 
   async getProgress(orgId: string): Promise<ProgressView> {

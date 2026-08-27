@@ -28,6 +28,7 @@ import { ValidationError } from '../../shared/errors/domain-errors';
 import { AuditService, IdentityService, type OrganizationSummary } from '../identity';
 import { VendorService, type VendorReviewCaptures } from '../vendor';
 import { KycService, type OnboardingSummary, type ReviewQueueItem } from './kyc.service';
+import type { StepDefinitionView } from './internal/onboarding.service';
 import type { ConsentPurpose, ConsentState } from './internal/consent.service';
 import {
   VerificationService,
@@ -706,6 +707,9 @@ function parseDocumentDate(value: string | undefined): Date | null {
  */
 const LEAD_LIMIT: RateLimitRule = { name: 'kyc-lead', limit: 10, windowSeconds: 86_400 };
 
+/** INTERNAL is not self-served, so it is not a step list anyone may ask for. */
+const publicOrgTypeSchema = z.enum(['VENDOR', 'BUYER']);
+
 /**
  * Its own class purely so `@Public()` is the whole story.
  *
@@ -732,6 +736,25 @@ export class OnboardingLeadController {
    * neither — telling someone which identifier is blocked tells them which one
    * to change.
    */
+  /**
+   * The five (or seven) steps, before there is an account to hang them on.
+   *
+   * The first screen of registration has to draw the rail, and at that moment
+   * `GET /onboarding/steps` is unreachable — it reads the caller's org and the
+   * caller has none. The alternative is the client shipping its own copy of the
+   * step titles, which drifts from the definition rows the moment one is edited.
+   *
+   * Nothing here is org-specific: a title, the purpose note the applicant is
+   * about to read anyway, and how long the step takes.
+   */
+  @Get('steps/definitions')
+  @Public()
+  listStepDefinitions(
+    @Query('orgType', new ZodValidationPipe(publicOrgTypeSchema)) orgType: 'VENDOR' | 'BUYER',
+  ): Promise<StepDefinitionView[]> {
+    return this.kyc.listStepDefinitions(orgType);
+  }
+
   @Post('leads')
   @Public()
   async createLead(

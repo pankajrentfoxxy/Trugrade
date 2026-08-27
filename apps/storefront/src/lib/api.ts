@@ -83,3 +83,22 @@ export interface PublicOffer {
 /** Thirty seconds: stock moves, and a stale grid offers machines that are gone. */
 export const getOffers = (): Promise<PublicOffer[] | null> =>
   get<PublicOffer[]>('/public/offers', 30);
+
+export interface StepDefinition {
+  stepCode: string;
+  stepOrder: number;
+  title: string;
+  /** The "why we ask" copy, authored in the seed and rendered verbatim. */
+  purposeNote: string | null;
+  estimatedMinutes: number | null;
+}
+
+/**
+ * The registration step rail, server-rendered so it is drawn on first paint.
+ *
+ * Five minutes: these rows change when someone edits a step definition, which
+ * is a deliberate act and not a frequent one, and a stale rail for five minutes
+ * is cheaper than a fetch on every page view.
+ */
+export const getStepDefinitions = (orgType: 'VENDOR' | 'BUYER'): Promise<StepDefinition[] | null> =>
+  get<StepDefinition[]>(`/onboarding/steps/definitions?orgType=${orgType}`, 300);

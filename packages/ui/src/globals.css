@@ -443,3 +443,33 @@
     border-width: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Theme toggle — which half of the button is showing.
+ *
+ * Both the moon and the sun are always in the DOM. Deciding between them in
+ * JavaScript meant the server (no document, so "dark") and the client (pre-paint
+ * script already applied "light") rendered different markup, and React answers a
+ * hydration mismatch by discarding the whole server tree. Keying off the same
+ * data-t the pre-paint script sets makes the markup identical on both sides and
+ * paints the right icon on the first frame.
+ *
+ * `display:none` rather than the sr-only clip, deliberately: the hidden half
+ * must be hidden from a screen reader too, or the button announces both
+ * "Switch to light theme" and "Switch to dark theme".
+ * ------------------------------------------------------------------------- */
+.tg-in-dark,
+.tg-in-light {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tg-in-light {
+  display: none;
+}
+:root[data-t='light'] .tg-in-dark {
+  display: none;
+}
+:root[data-t='light'] .tg-in-light {
+  display: inline-flex;
+}
