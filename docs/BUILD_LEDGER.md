@@ -291,7 +291,7 @@ sign-ins, MFA, and every surrounding state. Integration is 500/500 across 27 sui
 
 Three things Wave 2 proved are MISSING and that later waves depend on:
 
-1. **No step promotion.** Reported independently by T5, T6, T8 and T9. A COMPLETE step's
+1. **No step promotion.** *(Investigated 27 Aug — design and fix now known, see below.)* Reported independently by T5, T6, T8 and T9. A COMPLETE step's
    answers live only in `onboarding_progress.draft_json`; `vendor_capability`,
    `vendor_facility`, `facility_hours`, `org_address`, `org_contact`, `gst_profile` and
    `bank_account` all stay EMPTY no matter what an applicant enters. Every screen that
@@ -300,6 +300,51 @@ Three things Wave 2 proved are MISSING and that later waves depend on:
 2. **No TOTP.** `mfa_secret_enc` exists as a column referenced only by the audit
    redaction list. Owner accounts are protected by an emailed code today.
 3. **No route sets `SUSPENDED`**, and `suspendOrganization` has no caller.
+
+## The step-promotion gap — measured, and the fix is mechanical
+
+Measured against the live dev database, not inferred:
+
+```
+onboarding_progress = 642      vendor_capability = 0    vendor_facility = 0
+vendor_profile      = 0        org_contact       = 0    gst_profile     = 0
+org_address         = 2  (demo seed, not onboarding)
+bank_account        = 5  (T9's POST /onboarding/bank-account writes explicitly)
+```
+
+642 drafts have produced zero rows in every table the rest of the product reads. Only
+`bank_account` is written, and only because T9 built a route that commits it directly.
+
+**The architecture is already right; the wiring is absent, and it is documented as absent.**
+`OnboardingService.completeStep(orgId, stepCode, promote)` calls `promote(draft)` and THEN
+clears `draft_json`. `kyc.controller.ts` currently passes a callback that writes an audit
+row and nothing else, with a comment saying plainly that no module has registered a
+promotion yet, and a `ponytail:` marker naming the upgrade: the owning module exports a
+promotion through its barrel and the handler passes it — not a bigger controller.
+
+**Consequence today, beyond Waves 5-6:** because `draft_json` is cleared on completion and
+nothing takes its place, a completed step's answers survive only in the client's memory.
+T9 had to make `RegisterFlow` MERGE server answers rather than replace them, or "the review
+screen emptied one step at a time". So a cold reload after completing steps is expected to
+lose them — worth confirming and fixing as a Wave 2 defect, not only a Wave 5 blocker.
+
+**The fix, per step code, each owned by the module that owns the table:**
+
+| Step | Promotes into | Owning module |
+|---|---|---|
+| BUSINESS_PROFILE | `organization` (constitution!), `vendor_profile` | identity / vendor |
+| STATUTORY | `gst_profile`, `pan_record` | kyc |
+| CONTACTS_ADDRESSES | `org_address`, `org_contact` | identity |
+| CAPABILITY | `vendor_capability` | vendor |
+| FACILITY_CONTACTS | `vendor_facility`, `facility_hours`, `facility_holiday` | vendor |
+| DOCUMENTS_BANK | `bank_account` (already done by its own route) | kyc |
+| AGREEMENT | `agreement_acceptance`, `vendor_payout_preference` | vendor |
+
+`organization.constitution` is the highest-value single field: T5, T7 and T9 all found rules
+that read it and are therefore inert (the CIN requirement, VR-008, the board-resolution gate).
+
+T8's draft keys already use the destination tables' own column names, so those two steps are
+a mapping rather than a redesign.
 
 ## Open questions
 
