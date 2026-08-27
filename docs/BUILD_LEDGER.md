@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T10:20:00+00:00  
-Currently: T9 - vendor registration steps 6-7 and submission
+Currently: T9 - vendor registration steps 6-7, documents/bank and agreement, then submission
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -18,8 +18,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T5 | Customer registration - step 3 statutory | DONE | 71d75ef | 34 shots, both themes, 1440/900/600 | PASS shows the returned legal name; FAIL names the reason; PROVIDER_ERROR never blames the applicant, never consumes an attempt, retries with visible backoff. Checksum + embedded-PAN conflict caught client-side. Fixed a cross-tenant rate-limit hole and the invalid GSTIN example. |
 | T6 | Customer registration - steps 4-5 and submission | DONE | fa6484b | 30 shots, both themes, 1440/900/600 | Contacts+addresses with receiving hours, document upload with real magic-byte and age refusals, review screen, submitted and NEEDS_FIX states. Fixed four missing-renders-as-achieved defects. Uploader visible progress fixed in packages/ui (10f5b9d). |
 | T7 | Vendor registration - steps 1-3 | DONE | a2da740 | 42 shots, both themes, 1440/900/600 | RegisterFlow is one shell for both flows (buyer 5 steps, vendor 7). StepAccount/StepStatutory shared so the PROVIDER_ERROR ladder and checksum guard exist once. CIN/Udyam/TAN render Captured-not-verified. Fixed: vendors could not register at all (MFA), /auth/session lying about mfaRequired, two time-bomb tests, Input mono missing tnum. |
-| T8 | Vendor registration - steps 4-5 | DONE |  | 60 shots, both themes, 1440/900/600 | `can_dropship` and `dispatch_address` are three-state questions with no default (`register/YesNo.tsx`), not checkboxes — unanswered is visible and refusable. Grade mix comes from `GET /public/grades`, totals 100 and prints its denominator per row. Every day of the week is answered or ticked closed, and ticking closed clears the window. |
-| T9 | Vendor registration - steps 6-7 and submission | TODO |  |  |  |
+| T8 | Vendor registration - steps 4-5 | DONE | 9612014 | 60 shots, both themes, 1440/900/600 | Capability + facilities. can_dropship required with 'no' a real answer; dispatch_address explicit rather than silently defaulting (it becomes Dispatch From on every e-way bill). Grade mix carries its denominator and must total 100. No defaultChecked anywhere. |
+| T9 | Vendor registration - steps 6-7 and submission | DOING |  |  |  |
 | T10 | Sign-in, both portals, surrounding states | TODO |  |  |  |
 | T11 | Search results /search | TODO |  |  |  |
 | T12 | Product detail /laptops/[slug] | TODO |  |  |  |
