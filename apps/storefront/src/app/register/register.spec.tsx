@@ -20,6 +20,8 @@ import type { StepDefinition } from './api';
 
 interface Reply {
   status: number;
+  /** Only `Retry-After` matters today; the shape is the header bag. */
+  headers?: Record<string, string>;
   body?: unknown;
 }
 
@@ -35,6 +37,10 @@ function stubFetch(routes: Record<string, Reply>): void {
     return {
       ok: reply.status >= 200 && reply.status < 300,
       status: reply.status,
+      // `api.ts` reads `Retry-After` off every refusal — it is the only place a
+      // browser can learn how long a rate limit has left, because `ErrorBody`
+      // drops `detail`. A stub without headers is not a Response.
+      headers: { get: (name: string) => reply.headers?.[name] ?? null },
       json: async () => reply.body ?? null,
     } as Response;
   }) as unknown as typeof fetch;

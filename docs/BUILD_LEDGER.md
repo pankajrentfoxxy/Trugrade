@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T11:40:00+00:00  
-Currently: T10 - sign-in, both portals, and the surrounding states
+Updated: 2026-08-27T13:10:00+00:00  
+Currently: T11 - search results /search (opens Wave 3)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -20,7 +20,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T7 | Vendor registration - steps 1-3 | DONE | a2da740 | 42 shots, both themes, 1440/900/600 | RegisterFlow is one shell for both flows (buyer 5 steps, vendor 7). StepAccount/StepStatutory shared so the PROVIDER_ERROR ladder and checksum guard exist once. CIN/Udyam/TAN render Captured-not-verified. Fixed: vendors could not register at all (MFA), /auth/session lying about mfaRequired, two time-bomb tests, Input mono missing tnum. |
 | T8 | Vendor registration - steps 4-5 | DONE | 9612014 | 60 shots, both themes, 1440/900/600 | Capability + facilities. can_dropship required with 'no' a real answer; dispatch_address explicit rather than silently defaulting (it becomes Dispatch From on every e-way bill). Grade mix carries its denominator and must total 100. No defaultChecked anywhere. |
 | T9 | Vendor registration - steps 6-7 and submission | DONE | 6ea119e | 86 shots, both themes, 1440/900/600 | Documents+bank with a real penny-drop, agreement+payout, review, submission, application status. Extracted three shared pieces rather than copying T6's: `DocumentChecklist`, `review-parts`, `verification`. Fixed a live API defect — the penny-drop hashed one value for the policy and another for the record, so the retry limit never bound and one typo paused an application. |
-| T10 | Sign-in, both portals, surrounding states | TODO |  |  |  |
+| T10 | Sign-in, both portals, surrounding states | DONE |  | 138 shots, both themes, 1440/900/600 | Archetype F. Customer OTP-first with password secondary; console password-first with the second factor after it. Rate limits render the server's sentence AND count `Retry-After` down. Four auth routes did not exist and were built (`login/otp`, `login/otp/verify`, `password/forgot`, `password/reset`) — enumeration-safe by construction, not by wording. `ApplicationStatus` now shows the reviewer's REJECT notes, which nothing had ever shown the applicant. Fixed a test-harness defect that made every private test database silently skip its migrations. |
 | T11 | Search results /search | TODO |  |  |  |
 | T12 | Product detail /laptops/[slug] | TODO |  |  |  |
 | T13 | Unit passport /unit/[serial] | TODO |  |  |  |
@@ -59,6 +59,144 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T10 — what MFA actually is today
+
+**There is no TOTP anywhere in the platform, and the backlog asks for it on owner
+accounts.** Checked rather than assumed: `grep -ri totp apps/api/src prisma/schema.prisma`
+returns nothing at all. What exists is
+`TOTP_POLICY` in `packages/contracts/src/rules.ts` — digits, step, drift, and the
+string "Enter the 6-digit code from your authenticator app" — and `otplib` sitting in
+`apps/api/package.json` dependencies, imported by no file. There is no
+`user_totp_secret` table, no enrolment route, no QR, no recovery codes.
+
+So the second factor a VENDOR_OWNER meets today is `POST /auth/mfa/otp`: a
+six-digit code emailed to `user_account.email`, the same mailbox the password
+reset goes to. **That is one factor asked twice, not two factors.** Whoever holds
+the mailbox holds the account, with or without the password.
+
+The screens say so rather than borrowing the word. `MfaChallenge` in
+`packages/ui` prints, under every challenge in both portals:
+
+> This second factor is a code to the address on the account. An authenticator
+> app is not supported yet, so it is a second code rather than a second device.
+
+Two consequences that are decisions, not code:
+
+- `POST /auth/login/otp` **refuses to send a sign-in code to any account in
+  `MFA_REQUIRED_ROLES`**. Passwordless sign-in plus an emailed second factor would
+  be mailbox-only access to an account that can change where money is paid. Those
+  accounts sign in with a password, which is at least a second secret. The refusal
+  is silent — a visible one would be the enumeration answer in a different hat.
+- `POST /auth/password/forgot` is open to them, because a reset ends in a password
+  and the factor still has to be satisfied afterwards. It does mean mailbox access
+  is enough to take an owner account today. **Real TOTP enrolment is what closes
+  that**, and it is a schema change plus a route, not a label.
+
+## Reported by T10 — four auth routes did not exist
+
+The backlog asks for "OTP-first with password secondary" and "forgot-password,
+reset". None of the four routes those need existed; `/auth/*` had register, login,
+logout, session and the MFA pair and nothing else. Built in
+`apps/api/src/modules/identity`, minimally:
+
+| Route | What it does |
+|---|---|
+| `POST /auth/login/otp` | Sign-in code to an existing account. Declines `MFA_REQUIRED_ROLES` silently. |
+| `POST /auth/login/otp/verify` | Redeems it and issues a session. |
+| `POST /auth/password/forgot` | Reset code. Open to every account. |
+| `POST /auth/password/reset` | Sets the password, 204, and revokes every session. |
+
+Three things about them are worth carrying forward:
+
+- **The enumeration defence is structural, not verbal.** `OtpService.issue` took a
+  new `deliver` flag: `false` runs the whole issue — all three rate-limit windows,
+  the supersede, the row — and skips only the send. Without it only a *known*
+  address could ever be rate-limited, so a 429 on the second request was a yes.
+  `sentTo` is a mask of what the caller typed, never of what we hold. Both verify
+  routes flatten every way a code can fail into one sentence, because "wrong, 4
+  attempts left" and "expired" are distinguishable only for an address that has an
+  account. `test/integration/sign-in.spec.ts` compares the two paths field for
+  field rather than asserting that a guard exists.
+- **`loginWithPassword`'s tail became `completeLogin`**, shared with the code path.
+  The ACTIVE check, the suspended-organisation check, the lockout reset, the token,
+  the session row and the audit line are one copy. A second copy of "is this
+  organisation suspended" is the copy that gets forgotten.
+- **A reset revokes every session and clears the lockout budget.** A reset that
+  leaves the intruder's thirty-day refresh token alive has changed a string.
+
+## Reported by T10 — fixed, and they were live defects
+
+- **`kyc_review.notes` reached nobody.** `KycService.decide` refuses to record a
+  rejection without a reason *because "the applicant sees it"* — and nothing
+  showed it to them. `GET /onboarding/steps` returned `status: 'REJECTED'` and no
+  reason, and `Review.tsx`'s own copy said "The reason is below" above a panel that
+  had nothing in it. `OnboardingSummary` now carries `decision`
+  (`decision / notes / reasonCodes / decidedAt`) and `ApplicationStatus` renders
+  the notes verbatim, on the sign-in outcome and on both registration reviews.
+  `T10-rejected-with-reason-*` is a real reviewer's sentence through the real route.
+- **`ApplicationStatus` printed a live SLA on a decided application.** A rejection
+  rendered "TIME REMAINING · 19 hours" directly under it, because the block was
+  unconditional. Now shown only while the application is with us. The API half is
+  below.
+- **`isUpToDate()` in `test/support/db.ts` hard-coded `-d trugrade_test`.** It
+  asked whether the *shared* database was migrated whatever `DATABASE_URL_TEST`
+  said — so the private-database escape hatch that `test/support/env.ts` exists to
+  provide answered "up to date" for a database that had never had a migration run,
+  and every suite failed on a missing relation. The concurrency fix and the
+  migration check now agree on which database they mean.
+- **The storefront wordmark was invisible in light theme on the auth pages.**
+  `.brand` is `--on-chrome` and `.wm .g` is raw `--acc`; both are right in the dark
+  header and wrong on a working surface. "tru" rendered near-white on the paper
+  ground, and `09_FRONTEND_LOCKED` §2 forbids raw `--acc` as a text colour on a
+  light surface. Scoped to `--ink` / `--acc-ink` inside `.authcard`.
+- **Two registration test stubs returned a `Response` with no `headers`.** Fixing
+  the stubs rather than making the client defensive: `api.ts` reads `Retry-After`
+  off every refusal, and a client that tolerates a headerless response is a client
+  that quietly stops reading the header.
+
+## Reported by T10 — not fixed, they are outside my files
+
+- **`decide()` clears `review_sla_due_at` only on APPROVE.** A REJECTED or
+  INFO_REQUESTED organisation keeps a due date that has already been met, so
+  anything reading that column believes a promise is still outstanding. The screen
+  refuses to print it; the column is what should change.
+- **Nothing exposes `IdentityService.suspendOrganization`.** No controller anywhere
+  calls it, so an organisation can only be suspended with SQL — which is what the
+  capture script had to do. The refusal it produces at sign-in is real
+  (`completeLogin` throws it); the way in is not.
+- **`GET /onboarding/steps` is `@RequireRoles(...OWNER, ...ADMIN)`**, so a plain
+  CUSTOMER_BUYER in a REJECTED organisation signs in and lands in the shop with no
+  explanation. Both sign-in screens treat a 403 there as "this person does not own
+  the application" and send them on, which is right for a pending org and wrong for
+  a refused one. A member-safe read of the org's status — even just the status —
+  would let the screen say something true to them.
+- **`RateLimiter`'s message is a fixed duration, and its comment calls a live
+  countdown "a dark pattern the CCPA guidelines name".** `auth-and-scope.spec.ts`
+  asserts the wording. The backlog asks for the opposite, and both are right about
+  different things: the guidance is about *manufactured* urgency that pushes
+  somebody to act, and this is a wait the product has already imposed. Resolved by
+  doing both — the server's sentence verbatim, and the exact remaining seconds
+  ticking beside it off `Retry-After`. The server was not changed and that test
+  still passes.
+- **The registration and OTP budgets are still keyed on IP alone** (T6 and T7
+  reported it; `auth-account-otp-ip` is the same shape). `scripts/t10-shots.mjs`
+  clears them, and now also clears all three per-target OTP windows — a full
+  capture asks one supplier owner for four codes, and `OTP_POLICY` allows five an
+  hour.
+
+## packages/ui — two components added, both because two apps needed them
+
+- **`RateLimitNotice`.** The server's sentence plus a live `mm:ss` in mono with
+  `tabular-nums`, and no timer at all when no `Retry-After` arrived — a wait we did
+  not measure must not be drawn as a number we made up. Both portals use it.
+- **`MfaChallenge`.** The second-factor exchange — six boxes, sixty-second
+  cooldown, resend, the honest note about what the factor is — with the two network
+  calls injected rather than imported, because the console cannot import from the
+  storefront. `register/MfaGate.tsx` is now a 20-line binding over it rather than a
+  second implementation; the console has the other binding. Its heading, reason and
+  factor note are props, which is how the same panel serves a registration gate, a
+  sign-in code and a second factor.
 
 ## Reported by T9 — fixed, and it is `apps/api`
 

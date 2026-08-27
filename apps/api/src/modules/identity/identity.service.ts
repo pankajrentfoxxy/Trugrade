@@ -391,13 +391,146 @@ export class IdentityService implements IIdentityService {
       throw new UnauthenticatedError(generic);
     }
 
-    if (found.status !== 'ACTIVE') {
+    return this.completeLogin(found.id, found.status, subject, input);
+  }
+
+  /**
+   * Find the account behind a typed identifier, without saying whether there is
+   * one.
+   *
+   * Returns null rather than throwing, because every caller is a `@Public()`
+   * route that must answer identically either way. The *caller* decides what not
+   * to do with a null; nothing about the response shape changes.
+   */
+  async findByIdentifier(identifier: string): Promise<{
+    userId: string;
+    status: string;
+    /** Their role needs a second factor, so a code alone must not sign them in. */
+    mfaRequired: boolean;
+    /** Lower-cased. The only address a pre-session code may be sent to. */
+    email: string | null;
+  } | null> {
+    const email = normaliseEmail(identifier);
+    const mobile = normaliseMobile(identifier);
+
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; status: string }>>`
+      SELECT id, status
+      FROM identity.user_account
+      WHERE (lower(email::text) = lower(${email ?? ''}) OR mobile = ${mobile ?? ''})
+      LIMIT 1`;
+
+    const found = rows[0];
+    if (!found) return null;
+    const user = await this.getUser(found.id);
+    return {
+      userId: found.id,
+      status: found.status,
+      mfaRequired: user.mfaRequired,
+      email: user.email?.toLowerCase() ?? null,
+    };
+  }
+
+  /**
+   * Sign in on the strength of a code that has already been verified.
+   *
+   * Everything after the password comparison is the same work — the ACTIVE
+   * check, the suspended-organisation check, the lockout reset, the token, the
+   * session row and the audit line — so it is the same code. A second copy of
+   * "is this organisation suspended" is the copy that gets forgotten.
+   *
+   * **The caller must have consumed the OTP first.** This proves nothing on its
+   * own; it is the half that happens once something else has.
+   */
+  async loginWithVerifiedCode(input: {
+    userId: string;
+    identifier: string;
+    ip?: string;
+    userAgent?: string;
+  }): Promise<{ tokens: IssuedTokens; user: AuthenticatedUser; mfaRequired: boolean }> {
+    const rows = await this.prisma.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM identity.user_account WHERE id = ${input.userId}::uuid LIMIT 1`;
+    const status = rows[0]?.status;
+    if (!status) throw new UnauthenticatedError();
+
+    const email = normaliseEmail(input.identifier);
+    const mobile = normaliseMobile(input.identifier);
+    const subject = (email ?? mobile ?? input.identifier).toLowerCase();
+
+    return this.completeLogin(input.userId, status, subject, input);
+  }
+
+  /**
+   * Set a new password against a proof that is not the old password, and end
+   * every session that was open at the time.
+   *
+   * The sign-out is the point rather than a courtesy: a reset is what somebody
+   * does when they think an account is compromised, and one that leaves the
+   * intruder's thirty-day refresh token alive has changed a string and nothing
+   * else. The account owner signs in again a moment later; whoever else was
+   * holding a session does not.
+   */
+  async resetPassword(userId: string, password: string): Promise<void> {
+    const user = await this.getUser(userId);
+
+    await this.passwords.setPassword(userId, password, {
+      email: user.email,
+      mobile: user.mobile,
+      fullName: user.fullName,
+      // VR-049, the same rule an owner account meets anywhere else: a login that
+      // can change where money goes rotates. Read off the role rather than taken
+      // as a parameter, so no caller can opt an owner out of it.
+      rotationDays: user.mfaRequired ? PASSWORD_ROTATION_DAYS : null,
+    });
+
+    await this.tokens.revokeAllForUser(userId);
+    await this.prisma.$executeRaw`
+      UPDATE identity.session SET revoked_at = now()
+      WHERE user_id = ${userId}::uuid AND revoked_at IS NULL`;
+
+    // The lockout budget goes with it. Somebody who has just proved they can
+    // read the account's mailbox should not then meet "too many attempts" left
+    // over from the guesses that sent them here.
+    for (const identifier of [user.email, user.mobile]) {
+      if (!identifier) continue;
+      await this.limiter.reset(
+        {
+          name: 'login-id',
+          limit: SESSION_POLICY.loginFailuresPerEmail,
+          windowSeconds: SESSION_POLICY.loginWindowSeconds,
+        },
+        identifier.toLowerCase(),
+      );
+    }
+
+    await this.audit.record({
+      action: 'identity.password.reset',
+      entityType: 'user_account',
+      entityId: userId,
+      actorUserId: userId,
+      actorOrgId: user.orgId,
+    });
+  }
+
+  /**
+   * The half of a sign-in that is true however the caller proved themselves.
+   *
+   * `subject` is the identifier the lockout budget is keyed on, passed in rather
+   * than re-derived: both paths normalise the same typed string, and a second
+   * normalisation here is a second chance to reset a key the consume never used.
+   */
+  private async completeLogin(
+    userId: string,
+    accountStatus: string,
+    subject: string,
+    input: { ip?: string; userAgent?: string },
+  ): Promise<{ tokens: IssuedTokens; user: AuthenticatedUser; mfaRequired: boolean }> {
+    if (accountStatus !== 'ACTIVE') {
       throw new ForbiddenError(
         'This account is not active. Contact your organisation owner, or our support team if you believe this is wrong.',
       );
     }
 
-    const user = await this.getUser(found.id);
+    const user = await this.getUser(userId);
 
     // A suspended organisation cannot transact, and saying so plainly beats a
     // permission error on every subsequent screen.
@@ -408,7 +541,7 @@ export class IdentityService implements IIdentityService {
     }
 
     await this.prisma.db.user_account.update({
-      where: { id: found.id },
+      where: { id: userId },
       data: { failed_login_count: 0, locked_until: null, last_login_at: this.clock.now() },
     });
     await this.limiter.reset(

@@ -21,6 +21,7 @@ import {
   startOnboarding,
   submitForReview,
   type ResumableOnboarding,
+  type ReviewDecision,
   type StepDefinition,
   type StepProgress,
 } from './api';
@@ -149,6 +150,8 @@ export interface ReviewContext {
   orgStatus: string;
   slaDueAt: string | null;
   slaBreached: boolean;
+  /** The reviewer's own words on the latest decision. Null while it is with us. */
+  decision: ReviewDecision | null;
   isSubmittable: boolean;
   onEdit: (stepCode: string) => void;
   onSubmit: () => Promise<string | null>;
@@ -230,6 +233,7 @@ export function RegisterFlow({
   const [orgStatus, setOrgStatus] = React.useState('REGISTERED');
   const [slaDueAt, setSlaDueAt] = React.useState<string | null>(null);
   const [slaBreached, setSlaBreached] = React.useState(false);
+  const [decision, setDecision] = React.useState<ReviewDecision | null>(null);
   const [isSubmittable, setIsSubmittable] = React.useState(false);
   /**
    * The masked address a second-factor code went to, while one is outstanding.
@@ -281,6 +285,7 @@ export function RegisterFlow({
       setOrgStatus(data.status);
       setSlaDueAt(data.slaDueAt);
       setSlaBreached(data.slaBreached);
+      setDecision(data.decision);
       setIsSubmittable(loaded.isSubmittable);
       const wanted = landOn ?? loaded.resumeAt ?? loaded.steps[0]?.stepCode;
       if (wanted) setCurrentCode(wanted);
@@ -729,6 +734,7 @@ export function RegisterFlow({
             orgStatus,
             slaDueAt,
             slaBreached,
+            decision,
             isSubmittable,
             onEdit: goTo,
             onSubmit: submit,

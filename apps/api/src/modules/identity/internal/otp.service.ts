@@ -62,6 +62,15 @@ export class OtpService {
    * `isProduction` gates whether the code comes back in the response — never in
    * production, always in dev and test, because otherwise every E2E test needs a
    * mail-server scrape.
+   *
+   * `deliver: false` runs the whole issue — every rate-limit window, the
+   * supersede, the row — and skips only the send. It exists for the routes that
+   * must not answer whether an address belongs to an account: `login/otp` and
+   * `password/forgot` are called with an address nobody has proved they can
+   * read, so the *refusals* have to be identical too. A route that only consumed
+   * the cooldown for addresses it recognised would answer "is this dealer on
+   * Trugrade" with a 429 on the second try, which is the directory the whole
+   * business is built on not having.
    */
   async issue(input: {
     target: string;
@@ -73,6 +82,8 @@ export class OtpService {
     refId?: string;
     isProduction: boolean;
     variables?: Record<string, string>;
+    /** Default true. False issues the code and sends nothing. See above. */
+    deliver?: boolean;
   }): Promise<IssueOtpResult> {
     const { target, purpose } = input;
 
@@ -120,26 +131,31 @@ export class OtpService {
       },
     });
 
-    await this.notifications.send({
-      channel: input.channel,
-      to: target,
-      templateCode: input.templateCode,
-      locale: input.locale ?? 'en',
-      variables: {
-        code,
-        minutes: String(Math.round(OTP_POLICY.ttlSeconds / 60)),
-        ...input.variables,
-      },
-      // An OTP is transactional by definition: it never respects a marketing
-      // preference, because it is not marketing.
-      isTransactional: true,
-    });
+    if (input.deliver !== false) {
+      await this.notifications.send({
+        channel: input.channel,
+        to: target,
+        templateCode: input.templateCode,
+        locale: input.locale ?? 'en',
+        variables: {
+          code,
+          minutes: String(Math.round(OTP_POLICY.ttlSeconds / 60)),
+          ...input.variables,
+        },
+        // An OTP is transactional by definition: it never respects a marketing
+        // preference, because it is not marketing.
+        isTransactional: true,
+      });
+    }
 
     return {
       otpId: row.id,
       expiresAt,
       resendAvailableAt: new Date(now.getTime() + OTP_POLICY.resendCooldownSeconds * 1000),
-      ...(input.isProduction ? {} : { devCode: code }),
+      // Withheld when nothing was sent: a dev tool that hands out a code for an
+      // address that has no account would be the enumeration oracle this flag
+      // exists to close, wearing a NODE_ENV as a disguise.
+      ...(input.isProduction || input.deliver === false ? {} : { devCode: code }),
     };
   }
 

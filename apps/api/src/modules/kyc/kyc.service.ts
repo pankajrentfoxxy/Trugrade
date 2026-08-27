@@ -30,6 +30,23 @@ export function hashIdentifier(value: string): string {
 /** 48 working hours for a vendor, 24 for a buyer. */
 const REVIEW_SLA_HOURS: Record<string, number> = { VENDOR: 48, BUYER: 24, INTERNAL: 24 };
 
+/**
+ * What a reviewer decided, in the reviewer's own words.
+ *
+ * `decide()` refuses a rejection with no notes because "the applicant sees it,
+ * and 'rejected' tells them nothing they can act on" — and until this existed
+ * nothing showed it to them. A REJECTED organisation could sign in, be told it
+ * was not approved, and have no way to learn why. Rendered verbatim, never
+ * summarised: the sentence was written to be read by this applicant.
+ */
+export interface ReviewDecision {
+  /** APPROVE / REJECT / REQUEST_INFO, as `kyc_review` stores it. */
+  decision: string;
+  notes: string | null;
+  reasonCodes: string[];
+  decidedAt: Date;
+}
+
 export interface OnboardingSummary {
   orgId: string;
   status: string;
@@ -37,6 +54,8 @@ export interface OnboardingSummary {
   consents: ConsentState[];
   slaDueAt: Date | null;
   slaBreached: boolean;
+  /** The latest decision, or null while the application is still with us. */
+  decision: ReviewDecision | null;
 }
 
 export interface ReviewQueueItem {
@@ -231,10 +250,14 @@ export class KycService implements IKycService {
   }
 
   async getOnboarding(orgId: string): Promise<OnboardingSummary> {
-    const [org, progress, consents] = await Promise.all([
+    const [org, progress, consents, review] = await Promise.all([
       this.prisma.db.organization.findUnique({ where: { id: orgId } }),
       this.onboarding.getProgress(orgId),
       this.consent.currentState(orgId),
+      this.prisma.db.kyc_review.findFirst({
+        where: { org_id: orgId },
+        orderBy: { decided_at: 'desc' },
+      }),
     ]);
     if (!org) throw new NotFoundError('organisation');
 
@@ -243,6 +266,14 @@ export class KycService implements IKycService {
       status: org.status,
       progress,
       consents,
+      decision: review
+        ? {
+            decision: review.decision,
+            notes: review.notes,
+            reasonCodes: review.reason_codes,
+            decidedAt: review.decided_at,
+          }
+        : null,
       slaDueAt: org.review_sla_due_at,
       slaBreached: Boolean(
         org.review_sla_due_at &&

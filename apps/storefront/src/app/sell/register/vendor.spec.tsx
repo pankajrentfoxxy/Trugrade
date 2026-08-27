@@ -31,8 +31,10 @@ function stubFetch(): void {
     return {
       ok: false,
       status: 401,
+      // See `register.spec.tsx`: `api.ts` reads `Retry-After` off every refusal.
+      headers: { get: () => null },
       json: async () => ({ error: { message: 'not signed in' } }),
-    } as Response;
+    } as unknown as Response;
   }) as unknown as typeof fetch;
 }
 

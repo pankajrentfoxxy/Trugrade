@@ -21,6 +21,16 @@ export interface ApiFailure {
   message: string;
   /** Field code → message, straight from Zod or from the domain error. */
   fields: Record<string, string>;
+  /**
+   * Seconds until the caller may try again, off the `Retry-After` header.
+   *
+   * The header, not the body: `ErrorBody` deliberately drops `detail`, so
+   * `RateLimitedError`'s own `retryAfterSeconds` never reaches a client any other
+   * way. Null on every refusal that is not a 429 — and null on a 429 too if the
+   * header went missing, because a wait we did not measure must not be drawn as
+   * a number we made up.
+   */
+  retryAfterSeconds: number | null;
 }
 
 export type ApiResult<T> = ({ ok: true } & { data: T }) | ApiFailure;
@@ -30,6 +40,7 @@ const NETWORK_FAILURE: Omit<ApiFailure, 'ok'> = {
   code: 'NETWORK',
   message: 'We could not reach the server. Your answers are still here — try again.',
   fields: {},
+  retryAfterSeconds: null,
 };
 
 async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
@@ -46,7 +57,7 @@ async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
 
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
 
-  if (!res.ok) return failureFrom(res.status, body);
+  if (!res.ok) return failureFrom(res.status, body, res.headers.get('Retry-After'));
 
   return { ok: true, data: body as T };
 }
@@ -58,9 +69,10 @@ async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
  * carries the only wording that says *which* file was refused and why, and a
  * second copy of this unwrapping is how that message becomes "(422)".
  */
-function failureFrom(status: number, body: unknown): ApiFailure {
+function failureFrom(status: number, body: unknown, retryAfter?: string | null): ApiFailure {
   const err = (body as { error?: { code?: string; message?: string; fields?: unknown } } | null)
     ?.error;
+  const seconds = Number(retryAfter);
   return {
     ok: false,
     status,
@@ -68,6 +80,7 @@ function failureFrom(status: number, body: unknown): ApiFailure {
     message:
       err?.message ?? `That did not go through (${status}). Nothing you typed has been lost.`,
     fields: (err?.fields as Record<string, string> | undefined) ?? {},
+    retryAfterSeconds: Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null,
   };
 }
 
@@ -156,6 +169,47 @@ export const getSession = (): Promise<ApiResult<SessionView>> =>
   get<SessionView>('/api/auth/session');
 
 /* ==========================================================================
+ * Signing in — POST /api/auth/login*, /api/auth/password/*
+ * ======================================================================== */
+
+/**
+ * Sign in with a password.
+ *
+ * The refusal is deliberately not inspected here beyond its shape. The server
+ * answers a wrong password and an address it has never seen with the identical
+ * 401 and the identical sentence, and a client that branched on the code to say
+ * something more helpful for one of them would rebuild the enumeration oracle
+ * the server went to the trouble of closing.
+ */
+export const login = (email: string, password: string): Promise<ApiResult<SessionView>> =>
+  post<SessionView>('/api/auth/login', { email, password });
+
+/**
+ * Ask for a sign-in code — the customer path, with no password at all.
+ *
+ * Answers identically whether or not the address has an account, and whether or
+ * not a code was actually sent. `sentTo` is a mask of what was typed, not of
+ * anything we hold.
+ */
+export const sendLoginCode = (email: string): Promise<ApiResult<OtpSent>> =>
+  post<OtpSent>('/api/auth/login/otp', { email });
+
+export const verifyLoginCode = (email: string, code: string): Promise<ApiResult<SessionView>> =>
+  post<SessionView>('/api/auth/login/otp/verify', { email, code });
+
+export const sendPasswordResetCode = (email: string): Promise<ApiResult<OtpSent>> =>
+  post<OtpSent>('/api/auth/password/forgot', { email });
+
+/** 204 on success. Every session open at the time is signed out, including none. */
+export const resetPassword = (input: {
+  email: string;
+  code: string;
+  password: string;
+}): Promise<ApiResult<null>> => post<null>('/api/auth/password/reset', input);
+
+export const logout = (): Promise<ApiResult<null>> => post<null>('/api/auth/logout');
+
+/* ==========================================================================
  * The second factor — POST /api/auth/mfa/*
  * ======================================================================== */
 
@@ -218,6 +272,21 @@ export interface StepProgress extends StepDefinition {
   fields: FieldRequirement[];
 }
 
+/**
+ * What a reviewer decided, in the reviewer's own words.
+ *
+ * `notes` is the sentence a rejected applicant is owed, and `KycService.decide`
+ * refuses a rejection without one precisely because "the applicant sees it". It
+ * is rendered verbatim wherever it appears.
+ */
+export interface ReviewDecision {
+  /** APPROVE / REJECT / REQUEST_INFO. */
+  decision: string;
+  notes: string | null;
+  reasonCodes: string[];
+  decidedAt: string;
+}
+
 export interface ResumableOnboarding {
   orgId: string;
   /** `org_status`: REGISTERED → KYC_SUBMITTED → UNDER_REVIEW → VERIFIED / REJECTED. */
@@ -226,6 +295,8 @@ export interface ResumableOnboarding {
   slaDueAt: string | null;
   /** The server's own answer, not a clock comparison done here. */
   slaBreached: boolean;
+  /** The latest decision, or null while the application is still with us. */
+  decision: ReviewDecision | null;
   progress: {
     /** `constitution_type`, the org's own. Survives step 2's draft being cleared. */
     constitution: string | null;
@@ -516,7 +587,7 @@ export function uploadDocument(input: {
         resolve({ ok: true, data: body as KycDocument });
         return;
       }
-      resolve(failureFrom(xhr.status, body));
+      resolve(failureFrom(xhr.status, body, xhr.getResponseHeader('Retry-After')));
     };
 
     // A dropped connection is not a refusal of the file — it says so, and the

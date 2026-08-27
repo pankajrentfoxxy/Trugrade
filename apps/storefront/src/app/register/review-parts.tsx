@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Button, FormSection, StatusPill } from '@trugrade/ui';
-import type { StepProgress } from './api';
+import type { ReviewDecision, StepProgress } from './api';
 import { labelFor } from './picklists';
 
 /**
@@ -144,10 +144,7 @@ export function StepBlock({ step, hasGap, onEdit, children }: StepBlockProps): R
 }
 
 /** A completed step whose answers the server no longer returns. Said plainly. */
-export function unreadable(
-  step: StepProgress,
-  onEdit: (code: string) => void,
-): React.JSX.Element {
+export function unreadable(step: StepProgress, onEdit: (code: string) => void): React.JSX.Element {
   return (
     <StepBlock key={step.stepCode} step={step} hasGap={false} onEdit={() => onEdit(step.stepCode)}>
       <p className="text-body-sm text-ink-4">
@@ -200,6 +197,12 @@ export interface ApplicationStatusProps {
   copy: Record<string, StatusCopy>;
   /** Per-step state, so the applicant can see where every one of them stands. */
   steps: readonly StepProgress[];
+  /**
+   * The latest review decision. Its `notes` is the sentence a rejected applicant
+   * is owed and, until `GET /onboarding/steps` started returning it, the one this
+   * screen promised ("The reason is below") and could not show.
+   */
+  decision?: ReviewDecision | null;
   /** What to offer once the account is open. Nothing, until it is. */
   approved?: React.ReactNode;
 }
@@ -224,6 +227,7 @@ export function ApplicationStatus({
   onEdit,
   copy,
   steps,
+  decision,
   approved,
 }: ApplicationStatusProps): React.JSX.Element {
   /**
@@ -258,40 +262,51 @@ export function ApplicationStatus({
         <h2 className="text-h2 text-ink">{outcome.title}</h2>
         <p className="max-w-[62ch]">{outcome.body}</p>
 
-        {/* The promise, as a measured value — which is one of the three things
-            the accent is allowed to mean. */}
-        <dl className="flex flex-col gap-3 border-t border-rule-2 pt-4 sm:flex-row sm:gap-8">
-          <div className="flex flex-col gap-1">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Decision due by
-            </dt>
-            <dd className="font-mono text-data tnum text-ink">
-              {slaDueAt ? formatWhen(slaDueAt) : <span className="text-ink-4">Not recorded</span>}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-1">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Time remaining
-            </dt>
-            <dd
-              className={
-                slaBreached
-                  ? 'font-mono text-data tnum text-fail'
-                  : 'font-mono text-data tnum text-acc-ink'
-              }
-            >
-              {hoursLeft === null ? (
-                <span className="text-ink-4">Not measured</span>
-              ) : slaBreached ? (
-                `${Math.abs(hoursLeft)} hours past due`
-              ) : (
-                `${hoursLeft} hours`
-              )}
-            </dd>
-          </div>
-        </dl>
+        {/*
+          The promise, as a measured value — which is one of the three things the
+          accent is allowed to mean.
 
-        {slaBreached && (
+          Only while the application is actually with us. A decided application
+          has no time remaining, and this block was printing "19 hours" under a
+          rejection: a live promise on a closed matter, which is the same family
+          of defect as a missing value rendering as a passing one. The server
+          leaves `review_sla_due_at` set on a REJECT — it clears it only on
+          APPROVE — so the screen is where this has to be right.
+        */}
+        {WITH_US.includes(effective) && (
+          <dl className="flex flex-col gap-3 border-t border-rule-2 pt-4 sm:flex-row sm:gap-8">
+            <div className="flex flex-col gap-1">
+              <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Decision due by
+              </dt>
+              <dd className="font-mono text-data tnum text-ink">
+                {slaDueAt ? formatWhen(slaDueAt) : <span className="text-ink-4">Not recorded</span>}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Time remaining
+              </dt>
+              <dd
+                className={
+                  slaBreached
+                    ? 'font-mono text-data tnum text-fail'
+                    : 'font-mono text-data tnum text-acc-ink'
+                }
+              >
+                {hoursLeft === null ? (
+                  <span className="text-ink-4">Not measured</span>
+                ) : slaBreached ? (
+                  `${Math.abs(hoursLeft)} hours past due`
+                ) : (
+                  `${hoursLeft} hours`
+                )}
+              </dd>
+            </div>
+          </dl>
+        )}
+
+        {slaBreached && WITH_US.includes(effective) && (
           <p role="status" className="text-body-sm text-fail">
             We are past the time we promised you a decision. That is on us — your application has
             not been forgotten, and it is at the front of the queue.
@@ -339,6 +354,56 @@ export function ApplicationStatus({
           ))}
         </ul>
       </div>
+
+      {/*
+        The decision itself, in the reviewer's own words.
+
+        Shown for a refusal and for an information request, never for an
+        approval — nobody needs the internal note behind a yes. `decide()`
+        refuses to record either refusal without a reason precisely because the
+        applicant reads it, so an empty one is an incident and says so rather
+        than rendering an empty quote.
+      */}
+      {decision && decision.decision !== 'APPROVE' && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-lg border border-fail bg-sheet p-5"
+          data-testid="review-decision"
+        >
+          <span className="font-mono text-label uppercase tracking-[0.13em] text-fail">
+            What the reviewer said
+          </span>
+          <blockquote className="text-body text-ink">
+            {decision.notes ?? (
+              <span className="text-ink-4">
+                No reason was recorded. That is our mistake — contact support and quote the date
+                below.
+              </span>
+            )}
+          </blockquote>
+          {/* Label above value and wrapping as a whole, not as words: laid out
+              in a row these two printed the date one word per line inside a
+              narrow column. */}
+          <dl className="flex flex-wrap gap-x-8 gap-y-3 border-t border-rule-2 pt-3">
+            <div className="flex flex-col gap-1">
+              <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Decided
+              </dt>
+              <dd className="whitespace-nowrap font-mono text-data tnum text-ink">
+                {formatWhen(decision.decidedAt)}
+              </dd>
+            </div>
+            {decision.reasonCodes.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                  Reason codes
+                </dt>
+                <dd className="font-mono text-data text-ink">{decision.reasonCodes.join(', ')}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
 
       {needsFix.map((step, index) => (
         <div

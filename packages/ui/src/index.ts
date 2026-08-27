@@ -17,6 +17,8 @@ export {
   SealChip,
   type SealStatus,
   EmptyState,
+  RateLimitNotice,
+  type RateLimitNoticeProps,
   Skeleton,
   RepresentativeImage,
   type RepresentativeImageProps,
@@ -71,6 +73,8 @@ export {
   OtpInput,
   type OtpInputProps,
 } from './components/forms';
+
+export { MfaChallenge, type MfaChallengeProps } from './components/mfa';
 
 /* Archetype D — flow. */
 export {

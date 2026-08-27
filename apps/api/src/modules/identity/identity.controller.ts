@@ -3,7 +3,11 @@ import type { CookieOptions, Request, Response } from 'express';
 import { uuidSchema, type Permission, type Role } from '@trugrade/contracts';
 import { Public } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
-import { UnauthenticatedError, ValidationError } from '../../shared/errors/domain-errors';
+import {
+  RateLimitedError,
+  UnauthenticatedError,
+  ValidationError,
+} from '../../shared/errors/domain-errors';
 import { RequestContextService } from '../../shared/db/org-scope';
 import { TokenService, type IssuedTokens } from '../../shared/auth/token.service';
 import { AppConfig } from '../../shared/config';
@@ -17,19 +21,25 @@ import {
   type ContactChangeView,
 } from './internal/contact-change.service';
 import {
+  accountOtpSchema,
   contactChangeCancelSchema,
   contactChangeRequestSchema,
   contactChangeVerifySchema,
+  loginOtpVerifySchema,
   loginSchema,
   mfaVerifySchema,
+  passwordResetSchema,
   registerSchema,
   registrationOtpSchema,
   registrationOtpVerifySchema,
+  type AccountOtpDto,
   type ContactChangeCancelDto,
   type ContactChangeRequestDto,
   type ContactChangeVerifyDto,
   type LoginDto,
+  type LoginOtpVerifyDto,
   type MfaVerifyDto,
+  type PasswordResetDto,
   type RegisterDto,
   type RegistrationOtpDto,
   type RegistrationOtpVerifyDto,
@@ -128,6 +138,43 @@ const ACCESS_COOKIE_SKEW_SECONDS = 30;
 
 /** Free-form per `NotificationPort`; the template body itself lives with the provider. */
 const LOGIN_OTP_TEMPLATE = 'AUTH_LOGIN_OTP';
+const PASSWORD_RESET_TEMPLATE = 'AUTH_PASSWORD_RESET';
+
+/**
+ * The per-IP budget for the two routes that send a code to an *existing*
+ * account: `login/otp` and `password/forgot`.
+ *
+ * One budget for both, because they are one attack: a caller walking a list of
+ * addresses to see which ones answer. `OtpService` already caps a single target;
+ * this is what catches somebody who never touches the same target twice. It is
+ * kept apart from the registration budget on purpose — an office signing in must
+ * not be able to lock the same office out of registering.
+ */
+const ACCOUNT_OTP_IP_LIMIT: RateLimitRule = {
+  name: 'auth-account-otp-ip',
+  limit: 20,
+  windowSeconds: 3600,
+};
+
+/** Twice the send budget: a person who mistypes a code twice is normal. */
+const ACCOUNT_OTP_VERIFY_IP_LIMIT: RateLimitRule = {
+  name: 'auth-account-otp-verify-ip',
+  limit: 40,
+  windowSeconds: 3600,
+};
+
+/**
+ * The only thing either pre-session code route says about a code that did not
+ * work.
+ *
+ * `OtpService.verify` is more helpful than this — it distinguishes expired from
+ * wrong and counts the attempts left — and every one of those distinctions is an
+ * answer to "does this address have an account", because an address with no
+ * account can only ever produce the expired one. So the wording is flattened
+ * here and only here; inside a session, where the caller has already proved who
+ * they are, `mfa/verify` still says exactly what happened.
+ */
+const CODE_REFUSED = 'That code is not right, or it has expired. Ask for a new one.';
 
 /**
  * Exactly the shape `apps/console/src/lib/auth.tsx` types as `Principal`, plus
@@ -168,11 +215,14 @@ export interface ContactChangeResponse {
  * The answer to "send a code to this address", and deliberately the SAME answer
  * whether the address is already registered or not.
  *
- * Nothing in this shape is derived from a lookup, because no lookup happens. That
- * is the point: an unauthenticated route that answers differently for a known
- * address is a directory of our vendors, and vendor anonymity is the property
- * this business is built on. A competitor who can ask "is this dealer on
- * Trugrade" one address at a time has our supplier list.
+ * Shared by all four senders — `register/otp`, `login/otp`, `password/forgot`
+ * and, in spirit, `mfa/otp`. Not one field is derived from a lookup: the two
+ * registration routes never look anything up, and the two sign-in routes look up
+ * only to decide whether an email leaves the building. That is the point. An
+ * unauthenticated route that answers differently for a known address is a
+ * directory of our vendors, and vendor anonymity is the property this business
+ * is built on. A competitor who can ask "is this dealer on Trugrade" one address
+ * at a time has our supplier list.
  */
 export interface RegistrationOtpResponse {
   channel: 'EMAIL' | 'MOBILE';
@@ -384,6 +434,208 @@ export class IdentityController {
       accessToken: tokens.accessToken,
       fullName: user.fullName,
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Signing in with a code instead of a password, and resetting a password
+  // -------------------------------------------------------------------------
+  //
+  // Three routes that all take an address nobody has yet proved they can read,
+  // which makes them the same problem as `register/otp` above with one extra
+  // twist: these ones DO look the address up. So every observable — the status,
+  // the body, the field names, the rate-limit refusals, the wording of a bad
+  // code — has to be assembled from the request and the clock, never from what
+  // the lookup found.
+  //
+  // The lookup only decides one thing: whether an email actually goes out.
+  // `OtpService.issue({ deliver: false })` runs the whole issue and skips the
+  // send, so both paths consume the identical cooldown, hour and day windows.
+  // Without that, an attacker learns "this dealer banks with Trugrade" from a
+  // 429 on the second request — and vendor anonymity is the property this
+  // business is built on.
+  //
+  // **The code goes to the account's email and nowhere else.** The target is the
+  // typed string, lower-cased, and a code is delivered only when it matches the
+  // stored address exactly. That is what lets `sentTo` be a mask of what the
+  // caller typed rather than of what we hold, which is the difference between a
+  // confirmation and a disclosure.
+
+  /**
+   * Sign in with a code. The customer path — no password at all.
+   *
+   * **Deliberately closed to accounts whose role requires a second factor.**
+   * MFA_REQUIRED_ROLES is the set that can move money or change where it goes,
+   * and for those accounts the second factor today is a code to this same
+   * mailbox (see the MFA section below). Signing them in on one code and then
+   * asking for a second code to the same address is not two factors, it is one
+   * factor asked twice — so a supplier owner signs in with a password and meets
+   * the factor after it. The refusal is silent by construction: a closed account
+   * is simply an account no code is sent to, which looks exactly like an address
+   * we have never seen.
+   */
+  @Post('login/otp')
+  @Public()
+  @HttpCode(200)
+  sendLoginCode(
+    @Body(new ZodValidationPipe(accountOtpSchema)) body: AccountOtpDto,
+  ): Promise<RegistrationOtpResponse> {
+    return this.sendAccountCode(body.email, {
+      purpose: 'LOGIN',
+      templateCode: LOGIN_OTP_TEMPLATE,
+      eligible: (account) => !account.mfaRequired,
+    });
+  }
+
+  @Post('login/otp/verify')
+  @Public()
+  @HttpCode(200)
+  async verifyLoginCode(
+    @Body(new ZodValidationPipe(loginOtpVerifySchema)) body: LoginOtpVerifyDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<SessionResponse> {
+    const ctx = this.ctx.get();
+    const target = await this.consumeAccountCode(body.email, 'LOGIN', body.code);
+
+    const account = await this.identity.findByIdentifier(target);
+    // Unreachable in practice — a consumed code implies an issued one implies an
+    // account — and it throws the code's own refusal rather than a distinctive
+    // one, because "impossible" is where oracles live.
+    if (!account) throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+
+    const { tokens, user, mfaRequired } = await this.identity.loginWithVerifiedCode({
+      userId: account.userId,
+      identifier: target,
+      ip: ctx?.ip,
+      userAgent: ctx?.userAgent,
+    });
+
+    this.setSessionCookies(res, tokens);
+    return {
+      ...principalOf(user),
+      mfaRequired,
+      accessToken: tokens.accessToken,
+      fullName: user.fullName,
+    };
+  }
+
+  /**
+   * Send a password-reset code.
+   *
+   * Open to every account, including the ones `login/otp` refuses. That is not
+   * an inconsistency: a reset ends with a password, and an owner account still
+   * has to satisfy its second factor on the next sign-in. It does mean that
+   * while the second factor is a code to the same mailbox, mailbox access is
+   * enough to take an owner account — which is an argument for real TOTP
+   * enrolment, recorded in the build ledger, and not one this route can settle.
+   */
+  @Post('password/forgot')
+  @Public()
+  @HttpCode(200)
+  sendPasswordResetCode(
+    @Body(new ZodValidationPipe(accountOtpSchema)) body: AccountOtpDto,
+  ): Promise<RegistrationOtpResponse> {
+    return this.sendAccountCode(body.email, {
+      purpose: 'PASSWORD_RESET',
+      templateCode: PASSWORD_RESET_TEMPLATE,
+      eligible: () => true,
+    });
+  }
+
+  /**
+   * Set the new password, and sign every existing session out.
+   *
+   * 204 rather than a session: whoever resets signs in again with what they just
+   * chose, which proves the password works and means the response carries no
+   * token that a half-finished reset could leave lying around.
+   */
+  @Post('password/reset')
+  @Public()
+  @HttpCode(204)
+  async resetPassword(
+    @Body(new ZodValidationPipe(passwordResetSchema)) body: PasswordResetDto,
+  ): Promise<void> {
+    const target = await this.consumeAccountCode(body.email, 'PASSWORD_RESET', body.code);
+
+    const account = await this.identity.findByIdentifier(target);
+    if (!account) throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+
+    // Composition was already enforced by `passwordResetSchema`, before the code
+    // was spent. What can still refuse here is VR-047, the last-five rule — so a
+    // reset to a password they have used before costs them the code. Worth it:
+    // the alternative is checking history against an unproven address, which
+    // answers "has this account ever used this password" to anyone who asks.
+    await this.identity.resetPassword(account.userId, body.password);
+  }
+
+  /**
+   * Issue a code to an account, or convincingly not to.
+   *
+   * One method for both senders so the two cannot drift: the moment the reset
+   * route grows a branch the sign-in route does not have, the difference between
+   * them becomes a way to tell a known address from an unknown one.
+   */
+  private async sendAccountCode(
+    identifier: string,
+    opts: {
+      purpose: 'LOGIN' | 'PASSWORD_RESET';
+      templateCode: string;
+      /** Whether an account in this state may receive this kind of code. */
+      eligible: (account: { mfaRequired: boolean }) => boolean;
+    },
+  ): Promise<RegistrationOtpResponse> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(ACCOUNT_OTP_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const target = identifier.trim().toLowerCase();
+    const account = await this.identity.findByIdentifier(target);
+    const deliver =
+      account !== null &&
+      account.status === 'ACTIVE' &&
+      account.email === target &&
+      opts.eligible(account);
+
+    const issued = await this.otp.issue({
+      target,
+      purpose: opts.purpose,
+      channel: 'EMAIL',
+      templateCode: opts.templateCode,
+      refType: deliver ? 'user_account' : undefined,
+      refId: deliver ? account.userId : undefined,
+      isProduction: this.config.isProduction,
+      deliver,
+    });
+
+    return {
+      channel: 'EMAIL',
+      // A mask of what the caller typed. Nothing here was looked up.
+      sentTo: maskValue(target),
+      expiresAt: issued.expiresAt.toISOString(),
+      resendAvailableAt: issued.resendAvailableAt.toISOString(),
+      devCode: issued.devCode,
+    };
+  }
+
+  /** Redeem a pre-session code, and say the same thing about every way it can fail. */
+  private async consumeAccountCode(
+    identifier: string,
+    purpose: 'LOGIN' | 'PASSWORD_RESET',
+    code: string,
+  ): Promise<string> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(ACCOUNT_OTP_VERIFY_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const target = identifier.trim().toLowerCase();
+    try {
+      await this.otp.verify({ target, purpose, code });
+    } catch (e) {
+      // A 429 passes through unflattened. It is keyed on the target and is
+      // consumed before the lookup either way, so it says nothing about whether
+      // the account exists — and hiding a real wait behind "wrong code" would be
+      // the dishonest half of rate limiting this whole surface exists to avoid.
+      if (e instanceof RateLimitedError) throw e;
+      throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+    }
+    return target;
   }
 
   /**

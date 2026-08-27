@@ -57,6 +57,44 @@ export const loginSchema = z.object({
 });
 export type LoginDto = z.infer<typeof loginSchema>;
 
+/**
+ * The identifier a sign-in form typed, in the one shape every pre-session route
+ * accepts.
+ *
+ * Loose for exactly the reason `loginSchema.email` is loose, and it matters more
+ * here: these routes are reached *without* a password, so a 422 saying "that is
+ * not an email" on one address and a 200 on another is a directory of who banks
+ * with us. `IdentityService.findByIdentifier` normalises it as either an email
+ * or an Indian mobile, and an unparseable string simply matches nothing.
+ */
+const identifierSchema = z.string().trim().min(3).max(320);
+
+/** Send a sign-in code. Answers the same whether the address is known or not. */
+export const accountOtpSchema = z.object({ email: identifierSchema });
+export type AccountOtpDto = z.infer<typeof accountOtpSchema>;
+
+/** Redeem a sign-in code. */
+export const loginOtpVerifySchema = z.object({
+  email: identifierSchema,
+  code: otpCodeSchema,
+});
+export type LoginOtpVerifyDto = z.infer<typeof loginOtpVerifySchema>;
+
+/**
+ * Choose a new password against a code.
+ *
+ * `passwordSchema` applies here and deliberately does not at sign-in: this is
+ * the moment the composition rule is being chosen against, exactly as it is at
+ * registration. The refusal names the rule because the person is trying to
+ * satisfy it, not to get past it.
+ */
+export const passwordResetSchema = z.object({
+  email: identifierSchema,
+  code: otpCodeSchema,
+  password: passwordSchema,
+});
+export type PasswordResetDto = z.infer<typeof passwordResetSchema>;
+
 /** The second factor. `otpCodeSchema` is the same constant the client renders against. */
 export const mfaVerifySchema = z.object({ code: otpCodeSchema });
 export type MfaVerifyDto = z.infer<typeof mfaVerifySchema>;

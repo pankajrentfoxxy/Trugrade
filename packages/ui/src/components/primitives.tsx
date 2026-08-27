@@ -424,6 +424,92 @@ export function SealChip({
 }
 
 /* ==========================================================================
+ * RateLimitNotice — a wait, said out loud
+ * ======================================================================== */
+
+export interface RateLimitNoticeProps {
+  /** The server's own sentence. Rendered verbatim; never replaced or summarised. */
+  message: string;
+  /** `Retry-After`, in seconds. Null when the server did not send one. */
+  retryAfterSeconds: number | null;
+  /** Fired once the wait reaches zero, so the caller can re-enable its form. */
+  onExpire?: () => void;
+  className?: string;
+}
+
+const mmss = (total: number): string =>
+  `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+
+/**
+ * "Too many attempts. Try again in 4 minutes." — and then the four minutes,
+ * ticking.
+ *
+ * Two halves on purpose. The **message** is the server's, word for word, because
+ * it is the only thing that knows which budget was spent and how long the window
+ * is. The **countdown** is the exact remaining time off `Retry-After`, because a
+ * rounded promise leaves somebody refreshing at three minutes fifty and being
+ * refused again.
+ *
+ * This is the opposite of the countdown pattern the CCPA dark-pattern guidance
+ * names: that one manufactures urgency to make a person act, this one measures a
+ * wait the product has already imposed on them. The dishonest version of this
+ * screen is the one that shows a spinner, or "please try again later", and lets
+ * them keep guessing. Without `Retry-After` no timer is invented — the message
+ * stands alone rather than being decorated with a number nobody sent.
+ */
+export function RateLimitNotice({
+  message,
+  retryAfterSeconds,
+  onExpire,
+  className,
+}: RateLimitNoticeProps): React.JSX.Element {
+  const [left, setLeft] = React.useState(retryAfterSeconds ?? 0);
+  const fired = React.useRef(false);
+
+  React.useEffect(() => {
+    setLeft(retryAfterSeconds ?? 0);
+    fired.current = false;
+  }, [retryAfterSeconds]);
+
+  React.useEffect(() => {
+    if (retryAfterSeconds === null || left <= 0) return undefined;
+    const id = setInterval(() => setLeft((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [retryAfterSeconds, left]);
+
+  // A ref rather than a dependency on `left === 0`, so the caller is told once
+  // per wait instead of on every render that happens to observe a zero.
+  React.useEffect(() => {
+    if (retryAfterSeconds === null || left > 0 || fired.current) return;
+    fired.current = true;
+    onExpire?.();
+  }, [retryAfterSeconds, left, onExpire]);
+
+  return (
+    <div
+      role="alert"
+      data-testid="rate-limit-notice"
+      className={cn(
+        'flex flex-col gap-3 rounded border border-warn bg-sheet-2 p-4 sm:flex-row sm:items-center sm:justify-between',
+        className,
+      )}
+    >
+      <p className="text-body-sm text-ink">{message}</p>
+      {retryAfterSeconds !== null && (
+        <span className="flex shrink-0 items-baseline gap-2">
+          <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+            {left > 0 ? 'Try again in' : 'Ready'}
+          </span>
+          <span className="font-mono text-data tnum text-ink" data-testid="rate-limit-countdown">
+            {left > 0 ? mmss(left) : 'now'}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ==========================================================================
  * EmptyState / Skeleton
  * ======================================================================== */
 

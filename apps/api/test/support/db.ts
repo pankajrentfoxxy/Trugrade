@@ -29,6 +29,9 @@ export function testDatabaseUrl(): string {
   return TEST_URL;
 }
 
+/** The database name out of the URL. Credentials and query strings differ; this does not. */
+const databaseName = (): string => TEST_URL.split('?')[0]?.split('/').pop() ?? 'trugrade_test';
+
 /**
  * Apply every migration to the test database, once per run.
  *
@@ -68,7 +71,14 @@ function isUpToDate(): boolean {
         '-U',
         'trugrade',
         '-d',
-        'trugrade_test',
+        // The database the run is ACTUALLY pointed at, not the shared default.
+        // Hard-coded, this asked "is trugrade_test migrated?" whatever
+        // DATABASE_URL_TEST said — so the private-database escape hatch
+        // `test/support/env.ts` exists to provide answered "yes, up to date"
+        // for a database that had never had a migration run against it, and
+        // every suite then failed on a missing relation. The concurrency fix
+        // and the migration check have to agree on which database they mean.
+        databaseName(),
         '-tAc',
         'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL',
       ],

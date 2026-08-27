@@ -8,6 +8,7 @@ const principal = (p: Partial<Principal>): Principal => ({
   orgType: 'PLATFORM',
   roles: [],
   permissions: [],
+  mfaRequired: false,
   ...p,
 });
 

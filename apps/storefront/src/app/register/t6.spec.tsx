@@ -190,6 +190,7 @@ describe('the review screen', () => {
         orgStatus="REGISTERED"
         slaDueAt={null}
         slaBreached={false}
+        decision={null}
         isSubmittable={false}
         onEdit={() => undefined}
         onSubmit={async () => null}
@@ -219,6 +220,7 @@ describe('the review screen', () => {
         orgStatus="REGISTERED"
         slaDueAt={null}
         slaBreached={false}
+        decision={null}
         isSubmittable={false}
         onEdit={() => undefined}
         onSubmit={async () => null}
@@ -241,6 +243,7 @@ describe('the review screen', () => {
         orgStatus="KYC_SUBMITTED"
         slaDueAt="2026-08-26T07:00:00.000Z"
         slaBreached
+        decision={null}
         isSubmittable={false}
         onEdit={() => undefined}
         onSubmit={async () => null}

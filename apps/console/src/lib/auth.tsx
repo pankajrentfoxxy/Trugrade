@@ -8,24 +8,94 @@ export interface Principal {
   orgType: 'PLATFORM' | 'VENDOR' | 'BUYER';
   roles: string[];
   permissions: string[];
+  /**
+   * This session still owes a second factor, and `AuthGuard` refuses every
+   * non-public route until it lands.
+   *
+   * It has to be on the principal because it decides what the console may
+   * render: without it, a VENDOR_OWNER signs in, is shown a full navigation
+   * rail, and every screen behind it 403s with `mfa_required`. The flag is the
+   * server's own — `GET /auth/session` reads it off the token claim — so the
+   * console never infers an outstanding factor from a symptom.
+   */
+  mfaRequired: boolean;
+}
+
+/**
+ * A refusal, unwrapped, with everything a screen needs to say what happened.
+ *
+ * An `Error` was the wrong shape here and cost the login screen three things:
+ * the server's own sentence (which is the only one that distinguishes a
+ * suspended organisation from a wrong password), the `Retry-After` seconds that
+ * make a rate limit a real wait rather than a shrug, and the status that tells
+ * the two apart at all.
+ */
+export interface AuthFailure {
+  status: number;
+  code: string;
+  message: string;
+  /** Seconds until the caller may try again. Null unless the server sent one. */
+  retryAfterSeconds: number | null;
 }
 
 interface AuthState {
   principal: Principal | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  /** Resolves to the failure, or to the principal. Never throws. */
+  signIn: (email: string, password: string) => Promise<Principal | AuthFailure>;
+  /** Requests a second-factor code for the half-finished session. */
+  requestMfaCode: () => Promise<{ sentTo: string } | AuthFailure>;
+  verifyMfa: (code: string) => Promise<Principal | AuthFailure>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthState | null>(null);
 
+/** Narrow any of the three results this module returns. */
+export const isFailure = <T,>(r: T | AuthFailure): r is AuthFailure =>
+  typeof r === 'object' && r !== null && 'code' in r && 'status' in r;
+
+/** `DomainExceptionFilter`'s envelope, plus the header that carries the wait. */
+async function call(path: string, init?: RequestInit): Promise<unknown | AuthFailure> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      ...init,
+    });
+  } catch {
+    return {
+      status: 0,
+      code: 'NETWORK',
+      message: 'We could not reach the server. Nothing you typed has been lost — try again.',
+      retryAfterSeconds: null,
+    } satisfies AuthFailure;
+  }
+
+  const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
+  if (res.ok) return body;
+
+  const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+  const seconds = Number(res.headers.get('Retry-After'));
+  return {
+    status: res.status,
+    code: err?.code ?? 'UNKNOWN',
+    // The server's words. It is the only party that knows whether this is a
+    // wrong password, a suspended organisation or a spent budget — and it is
+    // deliberately identical for the first of those and an unknown address.
+    message: err?.message ?? `That did not go through (${res.status}).`,
+    retryAfterSeconds: Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null,
+  } satisfies AuthFailure;
+}
+
 /**
  * The console's session.
  *
- * The access token is never put in `localStorage`. It lives in memory and the
- * refresh token is an httpOnly cookie the API sets — so an XSS that gets script
- * execution still cannot read a token out and replay it later. Losing the access
- * token on reload is the cost, and `restore()` pays it with one refresh call.
+ * The access token is never put in `localStorage`. It lives in the httpOnly
+ * cookie the API sets — so an XSS that gets script execution still cannot read a
+ * token out and replay it later. Losing it on reload is the cost, and the
+ * restore below pays it with one `/auth/session` call.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [principal, setPrincipal] = React.useState<Principal | null>(null);
@@ -34,16 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        const res = await fetch('/api/auth/session', { credentials: 'include' });
-        if (!cancelled) setPrincipal(res.ok ? ((await res.json()) as Principal) : null);
-      } catch {
-        // Network failure is not the same as signed out, but there is nothing
-        // useful to render either way; the login screen is the honest fallback.
-        if (!cancelled) setPrincipal(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      const result = await call('/api/auth/session');
+      if (cancelled) return;
+      setPrincipal(result && !('code' in (result as object)) ? (result as Principal) : null);
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -55,17 +119,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       principal,
       loading,
       signIn: async (email, password) => {
-        const res = await fetch('/api/auth/login', {
+        const result = await call('/api/auth/login', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ email, password }),
         });
-        if (!res.ok) throw new Error('Those details did not match an account.');
-        setPrincipal((await res.json()) as Principal);
+        if (result && 'code' in (result as object)) return result as AuthFailure;
+        const next = result as Principal;
+        // A session that still owes a factor is NOT signed in as far as the
+        // chrome is concerned: publishing it would draw a rail of sections that
+        // every guard is about to refuse. The login screen holds it instead
+        // until `verifyMfa` returns a session that opens doors.
+        if (!next.mfaRequired) setPrincipal(next);
+        return next;
+      },
+      requestMfaCode: async () => {
+        const result = await call('/api/auth/mfa/otp', { method: 'POST' });
+        if (result && 'code' in (result as object)) return result as AuthFailure;
+        return result as { sentTo: string };
+      },
+      verifyMfa: async (code) => {
+        const result = await call('/api/auth/mfa/verify', {
+          method: 'POST',
+          body: JSON.stringify({ code }),
+        });
+        if (result && 'code' in (result as object)) return result as AuthFailure;
+        const next = result as Principal;
+        setPrincipal(next);
+        return next;
       },
       signOut: async () => {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+        await call('/api/auth/logout', { method: 'POST' });
         setPrincipal(null);
       },
     }),
@@ -106,6 +189,11 @@ export function RequirePermission({
 
   if (loading) return <div className="p-6 text-ink-2">Checking your session…</div>;
   if (!principal) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  // A restored session that still owes a factor lands back on the login screen,
+  // which is the only place that can ask for one.
+  if (principal.mfaRequired) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
   if (!principal.permissions.includes(permission)) {
     return (
       <div className="mx-auto max-w-container p-6">

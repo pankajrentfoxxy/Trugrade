@@ -10,7 +10,12 @@ import {
   type Address,
   type StatusPillProps,
 } from '@trugrade/ui';
-import { getDocuments, type KycDocument, type StepProgress } from './api';
+import {
+  getDocuments,
+  type KycDocument,
+  type ReviewDecision,
+  type StepProgress,
+} from './api';
 import {
   ANNUAL_VOLUMES,
   BUYER_DOCUMENTS,
@@ -330,6 +335,8 @@ export interface ReviewProps {
   orgStatus: string;
   slaDueAt: string | null;
   slaBreached: boolean;
+  /** The reviewer's own words. `ApplicationStatus` renders them verbatim. */
+  decision: ReviewDecision | null;
   isSubmittable: boolean;
   onEdit: (stepCode: string) => void;
   onSubmit: () => Promise<string | null>;
@@ -341,6 +348,7 @@ export function Review({
   orgStatus,
   slaDueAt,
   slaBreached,
+  decision,
   isSubmittable,
   onEdit,
   onSubmit,
@@ -379,6 +387,7 @@ export function Review({
         onEdit={onEdit}
         copy={OUTCOME}
         steps={steps}
+        decision={decision}
         approved={
           <EmptyState
             title="Start with what has been inspected today"

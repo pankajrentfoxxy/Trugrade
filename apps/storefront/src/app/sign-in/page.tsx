@@ -1,26 +1,23 @@
 import type { Metadata } from 'next';
 
-import { SignInForm } from '../AuthForms';
+import { SignIn } from './SignIn';
 
-export const metadata: Metadata = { title: 'Sign in' };
+/**
+ * **ARCHETYPE F — Focus.** One task, centred, no navigation.
+ *
+ * The frame is inside `SignIn` rather than here, because the width depends on
+ * the stage: a credential form wants one narrow column beside the claim, and an
+ * application status wants the whole page.
+ */
+
+export const metadata: Metadata = {
+  title: 'Sign in',
+  description: 'Sign in to Trugrade with a code or a password.',
+  // Nothing behind this page is indexable, and a sign-in form in search results
+  // is only ever somebody else's phishing landing page.
+  robots: { index: false, follow: false },
+};
 
 export default function Page(): React.JSX.Element {
-  return (
-    <div className="authwrap">
-      <div className="authcard">
-        <a className="brand" href="/">
-          <span className="wm">
-            tru<span className="g">grade</span>
-          </span>
-        </a>
-        <h1>Sign in</h1>
-        <p className="authlede">Buyers land on the shop. Vendors and staff land in the console.</p>
-        <SignInForm />
-      </div>
-      <aside className="authside grid-bg">
-        <h2>Every machine measured, not described.</h2>
-        <p>Opened at the supplier&rsquo;s warehouse, graded on measurements, sealed until it reaches your dock.</p>
-      </aside>
-    </div>
-  );
+  return <SignIn />;
 }

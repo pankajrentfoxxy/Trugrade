@@ -97,14 +97,15 @@ function readDraft(answers: Record<string, unknown>): AccountValues {
  * and an empty field reads "Not measured" rather than an empty bar that looks
  * like a zero score.
  */
-function StrengthMeter({
+export function StrengthMeter({
   password,
   email,
-  mobile,
+  mobile = '',
 }: {
   password: string;
   email: string;
-  mobile: string;
+  /** Optional: a password reset knows the address but not the number. */
+  mobile?: string;
 }): React.JSX.Element {
   const { score, label, missing } = measurePassword(password, { email, mobile });
   const measured = password.length > 0;

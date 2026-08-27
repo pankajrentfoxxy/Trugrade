@@ -2,7 +2,12 @@
 
 import * as React from 'react';
 import { Button, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
-import { getDocuments, type KycDocument, type StepProgress } from '../../register/api';
+import {
+  getDocuments,
+  type KycDocument,
+  type ReviewDecision,
+  type StepProgress,
+} from '../../register/api';
 import {
   ACCOUNT_TYPES,
   CONSTITUTIONS,
@@ -451,6 +456,8 @@ export interface VendorReviewProps {
   orgStatus: string;
   slaDueAt: string | null;
   slaBreached: boolean;
+  /** The reviewer's own words. `ApplicationStatus` renders them verbatim. */
+  decision: ReviewDecision | null;
   isSubmittable: boolean;
   onEdit: (stepCode: string) => void;
   onSubmit: () => Promise<string | null>;
@@ -462,6 +469,7 @@ export function VendorReview({
   orgStatus,
   slaDueAt,
   slaBreached,
+  decision,
   isSubmittable,
   onEdit,
   onSubmit,
@@ -501,6 +509,7 @@ export function VendorReview({
         onEdit={onEdit}
         copy={OUTCOME}
         steps={steps}
+        decision={decision}
         approved={
           <EmptyState
             title="List your first machines"
