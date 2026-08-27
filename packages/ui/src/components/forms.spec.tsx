@@ -358,3 +358,39 @@ describe('OtpInput', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 });
+
+describe('Uploader — progress is visible, not only announced', () => {
+  /**
+   * The live region served a screen-reader user and nobody else: a sighted
+   * person watching a 5 MB scan upload saw a pill reading "Uploading" and could
+   * not tell a slow connection from a stalled one. Asserted as what a person
+   * sees, not as "a progress element exists".
+   */
+  it('shows the percentage for a file in flight', () => {
+    render(
+      <Uploader
+        label="Documents"
+        accept="application/pdf"
+        maxSizeMb={5}
+        onSelect={() => {}}
+        files={[
+          { id: '1', name: 'gst.pdf', sizeBytes: 1_000_000, status: 'uploading', progressPct: 49 },
+        ]}
+      />,
+    );
+    expect(screen.getByText('49%')).toBeInTheDocument();
+  });
+
+  it('shows no percentage once the file has settled', () => {
+    render(
+      <Uploader
+        label="Documents"
+        accept="application/pdf"
+        maxSizeMb={5}
+        onSelect={() => {}}
+        files={[{ id: '1', name: 'gst.pdf', sizeBytes: 1_000_000, status: 'accepted' }]}
+      />,
+    );
+    expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
+  });
+});

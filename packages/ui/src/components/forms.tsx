@@ -391,6 +391,31 @@ export function Uploader({
                 )}
               </span>
 
+              {/* Visible progress, not only announced.
+                  `progressAnnouncement` above puts it on an aria-live region,
+                  which serves a screen-reader user and nobody else — a sighted
+                  person watching a 5 MB scan upload had a pill reading
+                  "Uploading" and no way to tell a slow connection from a stalled
+                  one. The determinate bar and the number are the same fact the
+                  live region already carries, so it is aria-hidden rather than
+                  read twice.
+
+                  Amber is correct here under the colour rules: this is a
+                  measured value. */}
+              {file.status === 'uploading' && file.progressPct !== undefined && (
+                <span className="flex w-full items-center gap-3" aria-hidden="true">
+                  <span className="h-1 flex-1 overflow-hidden rounded-xs bg-sheet-3">
+                    <span
+                      className="block h-full bg-acc transition-[width] duration-200"
+                      style={{ width: `${Math.max(0, Math.min(100, file.progressPct))}%` }}
+                    />
+                  </span>
+                  <span className="font-mono text-label tnum text-ink-2">
+                    {Math.round(file.progressPct)}%
+                  </span>
+                </span>
+              )}
+
               {file.rejectionReason && (
                 <p role="alert" className="w-full text-body-sm text-fail">
                   {file.rejectionReason}
