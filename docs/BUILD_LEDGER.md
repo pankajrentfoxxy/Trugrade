@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T13:10:00+00:00  
-Currently: step promotion — finishing Wave 2 properly before Wave 3 continues. Then T12.
+Currently: T12 - product detail at /laptops/[slug] with the supply-point comparison board
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -22,7 +22,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T9 | Vendor registration - steps 6-7 and submission | DONE | 6ea119e | 86 shots, both themes, 1440/900/600 | Documents+bank with a real penny-drop, agreement+payout, review, submission, application status. Extracted three shared pieces rather than copying T6's: `DocumentChecklist`, `review-parts`, `verification`. Fixed a live API defect — the penny-drop hashed one value for the policy and another for the record, so the retry limit never bound and one typo paused an application. |
 | T10 | Sign-in, both portals, surrounding states | DONE | 9046aff | 138 shots, 23 states x 2 themes x 3 widths | Closes Wave 2. Rate limit shows the server's real countdown off Retry-After. MFA says out loud that it is an emailed code, not TOTP, and login/otp refuses MFA_REQUIRED_ROLES. Enumeration closed structurally (deliver:false). Fixed: reviewer's rejection reason reaching nobody, an SLA promise under a rejection, db.ts skipping migrations on any private test DB, wordmark invisible in light. |
 | T11 | Search results /search | DONE | 012086b | 50 shots, 10 states x 2 themes x 3 widths | Archetype B. Reuses the homepage rail rather than building a second. Whole board state in the URL. Zero-count facets disabled not hidden. Grade counts from unit.grade_actual. Unmeasured battery renders 'Not measured', never 0%. No supplier nameable. |
-| T12 | Product detail /laptops/[slug] | TODO |  |  |  |
+| T12 | Product detail /laptops/[slug] | DOING |  |  |  |
 | T13 | Unit passport /unit/[serial] | TODO |  |  |  |
 | T14 | Certificate verification /qc/verify/[code] | TODO |  |  |  |
 | T15 | Cart | TODO |  |  |  |
@@ -291,7 +291,9 @@ sign-ins, MFA, and every surrounding state. Integration is 500/500 across 27 sui
 
 Three things Wave 2 proved are MISSING and that later waves depend on:
 
-1. **No step promotion.** *(Investigated 27 Aug — design and fix now known, see below.)* Reported independently by T5, T6, T8 and T9. A COMPLETE step's
+1. ~~**No step promotion.**~~ **CLOSED 27 Aug, commit c04c5f5.** All six promotable steps now
+   write their owning tables inside the completion transaction. `organization.constitution` is
+   written, which armed the three rules T5/T7/T9 each found inert. Reported independently by T5, T6, T8 and T9. A COMPLETE step's
    answers live only in `onboarding_progress.draft_json`; `vendor_capability`,
    `vendor_facility`, `facility_hours`, `org_address`, `org_contact`, `gst_profile` and
    `bank_account` all stay EMPTY no matter what an applicant enters. Every screen that
