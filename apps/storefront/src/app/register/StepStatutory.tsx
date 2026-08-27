@@ -21,12 +21,7 @@ import {
   validateIncorporationDate,
   validatePan,
 } from './validation';
-import {
-  ProviderProblem,
-  RETRY_AFTER_SECONDS,
-  isProviderProblem,
-  useRetryLadder,
-} from './verification';
+import { ProviderProblem, isProviderProblem, useRetryLadder } from './verification';
 
 /**
  * Step 3 — Statutory.

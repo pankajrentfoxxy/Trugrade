@@ -161,8 +161,25 @@ export interface RegisterFlowProps {
   orgType: 'BUYER' | 'VENDOR';
   /** The rail's accessible name. "Create a buyer account", "Become a supplier". */
   railLabel: string;
+  /**
+   * Where this flow lives. The rail links a completed step back to
+   * `${basePath}?step=CODE`, and a hard-coded '/register' here sent every
+   * supplier who clicked a finished step into the *buyer* form.
+   */
+  basePath: string;
   /** Step code → its component. A code with no entry renders as not built yet. */
   renderers: Record<string, (ctx: StepContext) => React.ReactNode>;
+  /**
+   * Step code → a `purpose_note` that replaces the seeded one, everywhere it is
+   * read: the page header and the "why we ask" rail both.
+   *
+   * This exists for exactly one reason and should shrink rather than grow. A
+   * seeded note that describes something the platform does not do — step 7's
+   * says the agreements are "e-signed", and no e-sign provider is connected —
+   * is a false claim on the applicant's screen, and it is a *seed* fix. Until
+   * the seed agrees, the screen must not repeat it.
+   */
+  purposeNotes?: Record<string, string>;
   /**
    * Copy the step's own `purpose_note` has no room for, per step code. The rail
    * is otherwise the API's own text and nothing is written beside a field.
@@ -178,14 +195,18 @@ export function RegisterFlow({
   definitions,
   orgType,
   railLabel,
+  basePath,
   renderers,
+  purposeNotes,
   whyFor,
   wrongAccountBody,
   review,
 }: RegisterFlowProps): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>(definitions ? 'checking' : 'unreachable');
   const [steps, setSteps] = React.useState<StepProgress[]>(() =>
-    (definitions ?? []).map(asProgress),
+    (definitions ?? []).map(asProgress).map((s) =>
+      purposeNotes?.[s.stepCode] ? { ...s, purposeNote: purposeNotes[s.stepCode]! } : s,
+    ),
   );
   const [currentCode, setCurrentCode] = React.useState<string>(
     () => definitions?.[0]?.stepCode ?? 'ACCOUNT',
@@ -238,10 +259,20 @@ export function RegisterFlow({
     return () => query.removeEventListener('change', sync);
   }, []);
 
+  const reword = React.useCallback(
+    (list: StepProgress[]): StepProgress[] =>
+      purposeNotes
+        ? list.map((s) =>
+            purposeNotes[s.stepCode] ? { ...s, purposeNote: purposeNotes[s.stepCode]! } : s,
+          )
+        : list,
+    [purposeNotes],
+  );
+
   const applyOnboarding = React.useCallback(
     (data: ResumableOnboarding, landOn?: string): void => {
       const loaded = data.progress;
-      setSteps(loaded.steps);
+      setSteps(reword(loaded.steps));
       // **Merged, not replaced.** `completeStep` clears a step's draft, so the
       // server stops returning the answers to a step the moment it is finished.
       // Dropping them here would empty the review screen one step at a time.
@@ -257,7 +288,7 @@ export function RegisterFlow({
       const saves = loaded.steps.map((s) => s.lastSavedAt).filter((v): v is string => Boolean(v));
       setSavedAt([...saves].sort().pop() ?? null);
     },
-    [],
+    [reword],
   );
 
   const reload = React.useCallback(
@@ -514,7 +545,7 @@ export function RegisterFlow({
     // Only a completed step is a link back, and only once there is an account
     // to load it against. `Stepper` renders a real anchor, so this is a page
     // load — correct here, since the flow re-reads its state on mount anyway.
-    href: registered && s.status === 'COMPLETE' ? `/register?step=${s.stepCode}` : undefined,
+    href: registered && s.status === 'COMPLETE' ? `${basePath}?step=${s.stepCode}` : undefined,
     blockers: s.blockingReason ? [s.blockingReason] : undefined,
   }));
 

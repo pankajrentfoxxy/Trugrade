@@ -146,13 +146,17 @@ export function DocumentChecklist({
    */
   const [dates, setDates] = React.useState<Record<string, string>>({});
 
-  const publish = React.useCallback(
-    (next: KycDocument[]): void => {
-      setDocs(next);
-      onDocsChange(next);
-    },
-    [onDocsChange],
-  );
+  /**
+   * The parent is told through an effect rather than from inside `send`.
+   *
+   * Two files chosen in one gesture upload concurrently, and each callback
+   * closed over the `docs` of the render that started it — so building the next
+   * list from that captured value drops whichever finished first. Every write
+   * below is a functional update, and this effect is what publishes the result.
+   */
+  React.useEffect(() => {
+    onDocsChange(docs);
+  }, [docs, onDocsChange]);
 
   const load = React.useCallback(async (): Promise<void> => {
     const [types, existing] = await Promise.all([getDocumentTypes(), getDocuments()]);
@@ -162,8 +166,8 @@ export function DocumentChecklist({
     }
     setLoadFailure(null);
     setRules(types.data);
-    if (existing.ok) publish(existing.data);
-  }, [publish]);
+    if (existing.ok) setDocs(existing.data);
+  }, []);
 
   React.useEffect(() => {
     void load();
@@ -211,7 +215,7 @@ export function DocumentChecklist({
 
     if (result.ok) {
       setPending((p) => p.filter((r) => r.id !== id));
-      publish([result.data, ...docs.filter((d) => d.id !== result.data.id)]);
+      setDocs((d) => [result.data, ...d.filter((held) => held.id !== result.data.id)]);
       onClearError(rule.docType);
       return;
     }
@@ -232,7 +236,7 @@ export function DocumentChecklist({
       return;
     }
     setRemovalFailure(({ [docType]: _dropped, ...rest }) => rest);
-    publish(docs.filter((d) => d.id !== id));
+    setDocs((d) => d.filter((held) => held.id !== id));
   };
 
   if (loadFailure) {

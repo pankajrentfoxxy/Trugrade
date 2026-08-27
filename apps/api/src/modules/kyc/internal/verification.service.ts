@@ -447,9 +447,20 @@ export class VerificationService {
     subject: VerificationSubject,
     triggeredBy?: string | null,
   ): Promise<VerificationOutcomeView> {
+    // The SAME value `record` below hashes.
+    //
+    // This used to hash `${accountNumber}:${ifsc}` while `record` hashed the
+    // account number alone, so the two never agreed and both controls that read
+    // `input_hash` were quietly wrong: the five-a-day retry limit filtered on a
+    // hash that matched no stored row and therefore never bound at all, and
+    // `checkForValueShopping` saw the pending hash as a value it had never seen —
+    // so a supplier who mistyped an account number once, corrected it, and
+    // pressed save had their application paused for suspected fraud on the
+    // second attempt. Found by T9 driving the real screen; the fix is that the
+    // policy and the record hash the same thing.
     const { attemptNo, attemptsRemaining } = await this.assertRetryAllowed(
       'BANK_PENNY_DROP',
-      this.hashInput(`${accountNumber}:${ifsc}`),
+      this.hashInput(accountNumber),
       subject,
     );
 

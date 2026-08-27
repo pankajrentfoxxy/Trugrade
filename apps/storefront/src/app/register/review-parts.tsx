@@ -226,7 +226,21 @@ export function ApplicationStatus({
   steps,
   approved,
 }: ApplicationStatusProps): React.JSX.Element {
-  const outcome = copy[orgStatus] ?? copy.KYC_SUBMITTED!;
+  /**
+   * A step sent back is the applicant's turn, whatever `organization.status`
+   * says.
+   *
+   * `requestFix` writes `onboarding_progress.status = NEEDS_FIX` and never
+   * touches the org, so an application with a step sent back is still
+   * KYC_SUBMITTED — and the headline would read "nothing more is needed from you
+   * right now" directly above a panel asking for a document. Reported as an API
+   * gap; the screen refuses to say it in the meantime.
+   */
+  const effective =
+    needsFix.length > 0 && orgStatus !== 'REJECTED' && orgStatus !== 'VERIFIED'
+      ? 'INFO_REQUESTED'
+      : orgStatus;
+  const outcome = copy[effective] ?? copy.KYC_SUBMITTED!;
   const hoursLeft =
     slaDueAt === null
       ? null
@@ -238,7 +252,7 @@ export function ApplicationStatus({
         <div className="flex flex-wrap items-center gap-3">
           <StatusPill
             tone={outcome.tone}
-            label={ORG_STATUS_LABEL[orgStatus] ?? orgStatus.replace(/_/g, ' ')}
+            label={ORG_STATUS_LABEL[effective] ?? effective.replace(/_/g, ' ')}
           />
         </div>
         <h2 className="text-h2 text-ink">{outcome.title}</h2>

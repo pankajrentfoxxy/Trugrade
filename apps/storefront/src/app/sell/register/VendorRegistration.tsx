@@ -5,19 +5,21 @@ import type { WhyRailItem } from '@trugrade/ui';
 import type { FieldRequirement, StepDefinition } from '../../register/api';
 import { RegisterFlow, type StepContext } from '../../register/RegisterFlow';
 import { StepStatutory, type StatutoryCopy } from '../../register/StepStatutory';
+import { StepAgreement, WHY_AGREEMENT } from './StepAgreement';
 import { StepCapability } from './StepCapability';
+import { StepDocumentsBank, WHY_DOCUMENTS_BANK } from './StepDocumentsBank';
 import { StepFacility } from './StepFacility';
 import { StepVendorBusiness } from './StepVendorBusiness';
 import { StepVendorContact } from './StepVendorContact';
+import { VendorReview } from './VendorReview';
 
 /**
  * The vendor half of registration: which component renders which of the seven
  * seeded step codes, and the copy the seed has no room for.
  *
- * Steps 6 and 7 — DOCUMENTS_BANK and AGREEMENT — have no entry here yet and are
- * T9. They still appear in the rail, because the rail is the API's step list
- * rather than this map, and the shell renders "not built yet" for a code it has
- * no renderer for. Adding one is a line in `renderers`.
+ * All seven seeded codes have a renderer. The rail is still the API's step list
+ * rather than this map, so a step added to `onboarding_step_definition` appears
+ * without a release and renders "not built yet" until a line is added here.
  */
 
 /**
@@ -54,6 +56,24 @@ const TAN_FIELD: FieldRequirement = {
  * step 2. Reported: the seeded rule and the step that actually asks should agree.
  */
 const ASKED_EARLIER = ['incorporation_date'];
+
+/**
+ * A seeded `purpose_note` that promises something the platform does not do.
+ *
+ * `onboarding_step_definition` describes step 7 as "The vendor agreement, the
+ * grading policy and the data-wipe undertaking, e-signed." There is no e-sign
+ * provider connected anywhere in the API — `AADHAAR_ESIGN` is a string in a
+ * union with nothing behind it — so the step itself says, in as many words,
+ * that an acceptance is recorded rather than signed. Leaving the seeded note in
+ * place would put "e-signed" at the top of the same screen, and the rail would
+ * repeat it.
+ *
+ * The seed is what should change. Until it does, this is the honest sentence.
+ */
+const CORRECTED_PURPOSE_NOTES: Record<string, string> = {
+  AGREEMENT:
+    'The vendor agreement, the grading policy, the data-wipe undertaking and the returns policy. Your acceptance is recorded against the version you were shown.',
+};
 
 const VENDOR_STATUTORY_COPY: StatutoryCopy = {
   panDescription:
@@ -163,6 +183,24 @@ const WHY_FACILITY: readonly WhyRailItem[] = [
   },
 ];
 
+/**
+ * Who is accepting the agreements, as a default they can change.
+ *
+ * The owner contact named on step 5 first — that is the person a board
+ * resolution authorises — then whoever opened the account on step 1.
+ */
+const signatoryFor = (ctx: StepContext): string => {
+  const contacts = ctx.allAnswers.FACILITY_CONTACTS?.contacts as
+    | Record<string, { fullName?: string }>
+    | undefined;
+  return (
+    contacts?.OWNER?.fullName ??
+    (typeof ctx.allAnswers.ACCOUNT?.fullName === 'string'
+      ? (ctx.allAnswers.ACCOUNT.fullName as string)
+      : '')
+  );
+};
+
 /** Step 1's company name, then step 2's legal name, then nothing. */
 const legalNameFor = (ctx: StepContext): string =>
   (typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
@@ -269,6 +307,32 @@ export function VendorRegistration({
           onFieldFocus={ctx.onFieldFocus}
         />
       ),
+      DOCUMENTS_BANK: (ctx) => (
+        <StepDocumentsBank
+          answers={ctx.answers}
+          // The penny-drop is scored against this. Step 2's legal name is what
+          // the bank has to agree with, not the trading name from step 1.
+          legalName={legalNameFor(ctx)}
+          fields={ctx.step?.fields ?? []}
+          constitution={ctx.constitution}
+          busy={ctx.busy}
+          blockingReason={ctx.step?.blockingReason}
+          onSaveDraft={ctx.saveDraft}
+          onContinue={ctx.continueFrom}
+          onFieldFocus={ctx.onFieldFocus}
+        />
+      ),
+      AGREEMENT: (ctx) => (
+        <StepAgreement
+          answers={ctx.answers}
+          fallbackSignatory={signatoryFor(ctx)}
+          busy={ctx.busy}
+          blockingReason={ctx.step?.blockingReason}
+          onSaveDraft={ctx.saveDraft}
+          onContinue={ctx.continueFrom}
+          onFieldFocus={ctx.onFieldFocus}
+        />
+      ),
     }),
     [brands, grades],
   );
@@ -277,6 +341,8 @@ export function VendorRegistration({
     if (code === 'STATUTORY') return WHY_VENDOR_STATUTORY;
     if (code === 'CAPABILITY') return WHY_CAPABILITY;
     if (code === 'FACILITY_CONTACTS') return WHY_FACILITY;
+    if (code === 'DOCUMENTS_BANK') return WHY_DOCUMENTS_BANK;
+    if (code === 'AGREEMENT') return WHY_AGREEMENT;
     return [];
   };
 
@@ -284,10 +350,13 @@ export function VendorRegistration({
     <RegisterFlow
       definitions={definitions}
       orgType="VENDOR"
+      basePath="/sell/register"
+      purposeNotes={CORRECTED_PURPOSE_NOTES}
       railLabel="Become a Trugrade supplier"
       renderers={renderers}
       whyFor={whyFor}
       wrongAccountBody="This form registers a supplier. You are signed in on a buyer account — sign out here if you also want to sell to us, and register the selling entity separately."
+      review={(ctx) => <VendorReview {...ctx} />}
     />
   );
 }

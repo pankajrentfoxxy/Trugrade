@@ -123,6 +123,7 @@ export function BuyerRegistration({
     <RegisterFlow
       definitions={definitions}
       orgType="BUYER"
+      basePath="/register"
       railLabel="Create a buyer account"
       renderers={RENDERERS}
       whyFor={(code) => WHY[code] ?? []}

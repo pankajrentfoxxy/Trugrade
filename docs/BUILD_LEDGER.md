@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T10:20:00+00:00  
-Currently: T9 - vendor registration steps 6-7, documents/bank and agreement, then submission
+Updated: 2026-08-27T11:40:00+00:00  
+Currently: T10 - sign-in, both portals, and the surrounding states
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -19,7 +19,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T6 | Customer registration - steps 4-5 and submission | DONE | fa6484b | 30 shots, both themes, 1440/900/600 | Contacts+addresses with receiving hours, document upload with real magic-byte and age refusals, review screen, submitted and NEEDS_FIX states. Fixed four missing-renders-as-achieved defects. Uploader visible progress fixed in packages/ui (10f5b9d). |
 | T7 | Vendor registration - steps 1-3 | DONE | a2da740 | 42 shots, both themes, 1440/900/600 | RegisterFlow is one shell for both flows (buyer 5 steps, vendor 7). StepAccount/StepStatutory shared so the PROVIDER_ERROR ladder and checksum guard exist once. CIN/Udyam/TAN render Captured-not-verified. Fixed: vendors could not register at all (MFA), /auth/session lying about mfaRequired, two time-bomb tests, Input mono missing tnum. |
 | T8 | Vendor registration - steps 4-5 | DONE | 9612014 | 60 shots, both themes, 1440/900/600 | Capability + facilities. can_dropship required with 'no' a real answer; dispatch_address explicit rather than silently defaulting (it becomes Dispatch From on every e-way bill). Grade mix carries its denominator and must total 100. No defaultChecked anywhere. |
-| T9 | Vendor registration - steps 6-7 and submission | DOING |  |  |  |
+| T9 | Vendor registration - steps 6-7 and submission | DONE |  | 86 shots, both themes, 1440/900/600 | Documents+bank with a real penny-drop, agreement+payout, review, submission, application status. Extracted three shared pieces rather than copying T6's: `DocumentChecklist`, `review-parts`, `verification`. Fixed a live API defect — the penny-drop hashed one value for the policy and another for the record, so the retry limit never bound and one typo paused an application. |
 | T10 | Sign-in, both portals, surrounding states | TODO |  |  |  |
 | T11 | Search results /search | TODO |  |  |  |
 | T12 | Product detail /laptops/[slug] | TODO |  |  |  |
@@ -59,6 +59,92 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T9 — fixed, and it is `apps/api`
+
+- **The penny-drop's retry policy and its audit row hashed different values, so
+  both controls that read `input_hash` were wrong.** `pennyDrop` called
+  `assertRetryAllowed` with `hash(accountNumber + ':' + ifsc)` while `record`
+  stored `hash(accountNumber)`. Two consequences, both live:
+  - the five-a-day limit filtered `verification_check` on a hash that matched no
+    stored row, so **it never bound at all** — a payout account could be probed
+    without limit;
+  - `checkForValueShopping` never saw the pending hash among the stored ones, so
+    it counted every attempt as a new distinct value. A supplier who mistyped an
+    account number once, corrected it and pressed save had their application
+    **paused for suspected fraud on the second attempt**.
+
+  Found by driving the real screen: the capture run could not get past step 6.
+  Fixed by hashing the account number in both places. Value-shopping on a payout
+  account is still two distinct values a day, which is right — one company, one
+  payout account, so a third is a pattern — and `T9-pennydrop-paused-*` shows it
+  rendered as an application-level pause rather than a field error.
+
+## Reported by T9 — not fixed, they are outside `apps/storefront`
+
+- **`requestFix` never moves `organization.status`.** It writes
+  `onboarding_progress.status = NEEDS_FIX` and a `blocking_reason` and stops, so
+  an application with a step sent back is still `KYC_SUBMITTED` — and the status
+  screen would read "nothing more is needed from you right now" directly above a
+  panel asking for a document. `ApplicationStatus` derives `INFO_REQUESTED` from
+  `needsFix.length > 0` instead. The org status is the thing that should change.
+
+- **The step 7 seed promises something the platform does not do.**
+  `onboarding_step_definition` describes AGREEMENT as "The vendor agreement, the
+  grading policy and the data-wipe undertaking, **e-signed**." There is no e-sign
+  adapter anywhere in `apps/api/src/shared/adapters` — `AADHAAR_ESIGN` is a
+  string in `CheckType` with nothing behind it — so the step says out loud that
+  an acceptance is *recorded*, not signed. `RegisterFlow` now takes
+  `purposeNotes` so the flow can replace a seeded note that is not true; the seed
+  is what should change, and that prop should shrink rather than grow.
+
+- **`agreement_acceptance` has no route.** The table has `agreement_code`,
+  `version`, `doc_hash`, `ip`, `user_agent` and `esign_ref`, and nothing writes
+  it. Step 7's four acceptances therefore live in the AGREEMENT step draft, in
+  that table's own column names so a promotion is a mapping. There is also no
+  seeded catalogue of agreements, so the four codes, their versions and their
+  summaries are in `picklists.ts` with the usual note.
+
+- **`document_type_rule.requires_expiry` is data with nowhere to put an answer.**
+  CPCB and ISO certificates carry `requires_expiry = TRUE`, and
+  `POST /onboarding/documents` accepts only `documentDate`. The step says who
+  reads the validity date instead of showing a field that goes nowhere.
+
+- **`vendor_payout_preference` has no route either**, so `pricing_mode`, the
+  cycle and the threshold are the AGREEMENT draft, again in the column names.
+  The three lists behind them — `PRICING_MODES`, `PAYOUT_CYCLES` and the
+  ₹1,000 floor — are in `picklists.ts`; two of the three exist as CHECK
+  constraints and were copied verbatim, and the floor is
+  `platform_config.procurement.min_payout_threshold_inr`, which no route exposes
+  to a browser.
+
+- **Nothing tells a client an org's tier**, so "cycle earned by tier" (Q6) cannot
+  be evaluated on screen. Every applicant here is new, so the step records
+  `T_PLUS_2` as a *request* and says plainly that the weekly run applies until it
+  is granted — rather than granting a cycle we would not honour or refusing one
+  silently. A tier on the session or on `GET /onboarding/steps` would let the
+  screen say which.
+
+- **The promotion gap bites a sixth time.** `organization.constitution` is null,
+  so the constitution gate on `board_resolution` returns "optional" for a private
+  limited company that plainly needs one. Step 6 falls back to step 2's own
+  answer, exactly as step 3 does for VR-008; the fallback deletes itself the day
+  a BUSINESS_PROFILE promotion lands.
+
+- **`RegisterFlow` linked every completed step back to `/register`**, hard-coded,
+  so a supplier who clicked a finished step in the rail landed in the *buyer*
+  form. Fixed storefront-side with a `basePath` prop.
+
+## packages/ui gaps reported by T9 — fix when a task needs them
+
+- **`Input` has no prefix/suffix affix.** A rupee amount and a percentage both
+  need their unit beside the field; the two on step 7 carry it in the label
+  ("Smallest amount worth paying you, in rupees") because inventing an affix in
+  the app would be the second table all over again.
+- **No radio-group component.** `register/Choice.tsx` is a null-default single
+  select, and `register/YesNo.tsx` is the same shape with two fixed options.
+  `YesNo` should fold into `Choice`, and both belong in `packages/ui` beside
+  `Checkbox` — a form system with a `Checkbox` and no radio is half a system.
 
 ## Open questions
 
