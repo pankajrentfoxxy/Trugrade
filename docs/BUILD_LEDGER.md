@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T09:10:00+00:00  
-Currently: T8 - vendor registration steps 4-5
+Currently: T8 - vendor registration steps 4-5 (capability, facility and contacts)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -17,8 +17,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T4 | Customer registration - shell and steps 1-2 | DONE | b0acc96 | 26 shots, both themes, 1440/900/600 | Archetype D. Rail drawn from seeded step definitions, purpose_note is the why-rail copy. Save-and-resume verified with a cold reload. Added GET /api/onboarding/steps/definitions (@Public). Fixed: header classes that existed in no stylesheet, footer unreadable in light, ThemeToggle hydration failure, Stepper green tick. |
 | T5 | Customer registration - step 3 statutory | DONE | 71d75ef | 34 shots, both themes, 1440/900/600 | PASS shows the returned legal name; FAIL names the reason; PROVIDER_ERROR never blames the applicant, never consumes an attempt, retries with visible backoff. Checksum + embedded-PAN conflict caught client-side. Fixed a cross-tenant rate-limit hole and the invalid GSTIN example. |
 | T6 | Customer registration - steps 4-5 and submission | DONE | fa6484b | 30 shots, both themes, 1440/900/600 | Contacts+addresses with receiving hours, document upload with real magic-byte and age refusals, review screen, submitted and NEEDS_FIX states. Fixed four missing-renders-as-achieved defects. Uploader visible progress fixed in packages/ui (10f5b9d). |
-| T7 | Vendor registration - steps 1-3 | DONE | (uncommitted) | 40 shots, both themes, 1440/900/600 | Route `/sell/register`. **One shell, two flows**: `RegisterFlow` now takes `orgType`, a rail label and a step-code -> renderer map; the buyer and the vendor each supply their own. `StepAccount` and `StepStatutory` are shared with a copy object and a slot; vendor step 2 is its own file. Found and fixed the blocker that made the flow impossible: a VENDOR_OWNER is created with MFA outstanding and every onboarding call 403s until a code lands - `MfaGate` is now part of registration. CIN/LLPIN/Udyam/TAN render as captured, never verified: no route exists for any of them. |
-| T8 | Vendor registration - steps 4-5 | TODO |  |  |  |
+| T7 | Vendor registration - steps 1-3 | DONE | a2da740 | 42 shots, both themes, 1440/900/600 | RegisterFlow is one shell for both flows (buyer 5 steps, vendor 7). StepAccount/StepStatutory shared so the PROVIDER_ERROR ladder and checksum guard exist once. CIN/Udyam/TAN render Captured-not-verified. Fixed: vendors could not register at all (MFA), /auth/session lying about mfaRequired, two time-bomb tests, Input mono missing tnum. |
+| T8 | Vendor registration - steps 4-5 | DOING |  |  |  |
 | T9 | Vendor registration - steps 6-7 and submission | TODO |  |  |  |
 | T10 | Sign-in, both portals, surrounding states | TODO |  |  |  |
 | T11 | Search results /search | TODO |  |  |  |
@@ -336,6 +336,19 @@ every unit test passed; only starting the process found it.
 - `postJson` in `apps/console/src/routes/vendor/api.ts` reads `message` off the body root,
   but `DomainExceptionFilter` nests it under `error` — so every actionable refusal renders
   as "that did not go through (422)". Behaviour fix, deliberately not done inside a restyle.
+
+## Operational traps that have each cost real time
+
+- **`pkill -f "dist/main.js"` does not match the API on Windows.** A stale process kept
+  port 4000 for hours and every curl silently hit the OLD build — I nearly diagnosed a
+  second, deeper bug that did not exist. Kill by port instead:
+  `Get-NetTCPConnection -LocalPort 4000 -State Listen | %{ Stop-Process -Id $_.OwningProcess -Force }`
+  Same for 3000 (Next) and 5173 (Vite).
+- **Next dev caches CSS from `packages/ui`.** Appending to globals.css and reloading shows
+  nothing; restart the dev server. This cost one session an hour chasing a phantom.
+- **Date-pinned tests are time bombs.** Two suites passed only while the real date matched
+  a literal in the file. If a test needs a fixed instant, fix the TIME and let the DATE
+  track today, or seed and assert from the same clock.
 
 ## Notes carried forward
 
