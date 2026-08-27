@@ -1,10 +1,17 @@
 import { randomUUID, randomBytes } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { AppConfig } from '../../src/shared/config';
+import { SystemClock } from '../../src/shared/clock';
+import { PrismaService } from '../../src/shared/db/prisma.service';
+import { RequestContextService } from '../../src/shared/db/org-scope';
+import { EventBus } from '../../src/shared/events/event-bus';
+import { QcRepository } from '../../src/modules/qc/internal/qc.repository';
+import { VendorQualityService } from '../../src/modules/qc/internal/vendor-quality.service';
 
 /**
- * A walkable demo: real accounts, a verified vendor, inspected stock, and a
- * customer order.
+ * A walkable demo: real accounts, verified vendors, inspected stock, and enough
+ * of it that the supply-point comparison grid has something to compare.
  *
  * Why this exists. The platform was unusable end to end for a reason that
  * looked like a dozen separate bugs: `identity.user_account` held ONE row. No
@@ -12,15 +19,25 @@ import * as argon2 from 'argon2';
  * storefront had nothing to render and its filter rail collapsed to an empty
  * column. Reference data alone does not make a system you can walk through.
  *
+ * Why it has ten vendors rather than one. PHASE_05 Task 4 — the most load-bearing
+ * screen in the product — compares every supply point offering one SKU on landed
+ * price, average QC score, grade accuracy and total warranty. With a single
+ * vendor that screen is a one-row table, and every bug in it (a bad sort, a
+ * headline that should have been suppressed, a leaked identity) is invisible.
+ * The differences below are therefore deliberate, not decorative: scores that
+ * genuinely differ, one supply point under the sample threshold, batteries that
+ * were never measured, QC that lapsed, a seal found broken, and both GST
+ * valuation methods.
+ *
  * **Explicitly NOT for production.** It writes known passwords. `seedDemo`
  * refuses to run against a database whose name is not clearly a development or
  * test one, because a seed that can reach production is a seed that eventually
  * does.
  *
  * The chain it builds is the real one, in the real order, through the real
- * constraints — a listing goes to AWAITING_QC and only becomes sellable once a
- * QC report and a photographed seal exist, because `listing.unit_is_sellable`
- * says so and no seed can talk its way past a trigger.
+ * constraints — a unit only becomes sellable once a QC report and a photographed
+ * seal exist, because `listing.unit_is_sellable` says so and no seed can talk its
+ * way past a trigger.
  */
 
 /** One password for every demo account. Printed at the end, never guessed. */
@@ -58,6 +75,162 @@ const BUYER_PEOPLE: Person[] = [
   { email: 'buyer@acme.example', name: 'Farah Khan', role: 'CUSTOMER_BUYER' },
   { email: 'approver@acme.example', name: 'Suresh Pillai', role: 'CUSTOMER_APPROVER' },
 ];
+
+type Grade = 'A_PLUS' | 'A' | 'B';
+type Valuation = 'REGULAR' | 'MARGIN';
+
+/**
+ * A vendor and the one NCR city it supplies from.
+ *
+ * `scoreBase` and `batteryBase` are the centre of the band its machines come
+ * back from inspection in. They differ per vendor because the comparison grid
+ * exists to show that difference; a demo where every supply point scores 88 is a
+ * demo in which a broken quality column looks correct.
+ */
+interface VendorSpec {
+  legalName: string;
+  city: string;
+  state: string;
+  /** GST state code — the same two digits the invoice carries. */
+  stateCode: string;
+  pincode: string;
+  /**
+   * MARGIN means the vendor is unregistered and we resell under GST Rule 32(5),
+   * which leaves the buyer thinner input credit. PHASE_05 Task 5 requires that
+   * to be labelled on the offer, so the demo has to contain some.
+   */
+  valuation: Valuation;
+  /** Vendor-funded months. We top it up; the buyer is shown only the total. */
+  warrantyMonths: number;
+  scoreBase: number;
+  batteryBase: number;
+}
+
+const NORTHGATE = 'Northgate IT Assets Pvt. Ltd.';
+const UDYOG = 'Udyog Vihar Endpoint Services Pvt. Ltd.';
+const SECTOR62 = 'Sector 62 Refurb Works Pvt. Ltd.';
+const PHASE2 = 'Noida Phase II Recommerce Pvt. Ltd.';
+const OKHLA = 'Okhla Asset Recovery LLP';
+const MAYAPURI = 'Mayapuri IT Exchange Pvt. Ltd.';
+const FARIDABAD = 'Faridabad TechCycle Pvt. Ltd.';
+const GHAZIABAD = 'Ghaziabad Device Renew Pvt. Ltd.';
+const SONIPAT = 'Sonipat Green Assets Pvt. Ltd.';
+const PALWAL = 'Palwal Asset Traders Pvt. Ltd.';
+
+const VENDORS: readonly VendorSpec[] = [
+  // Two vendors each in Gurugram, Noida and Delhi. `listing.supply_point` is
+  // unique on (city, code), so this is what proves "Supply Point A" names a
+  // different vendor in a different city rather than the same one twice.
+  { legalName: NORTHGATE, city: 'Gurugram', state: 'Haryana', stateCode: '06', pincode: '122001', valuation: 'REGULAR', warrantyMonths: 3, scoreBase: 88, batteryBase: 89 },
+  { legalName: UDYOG, city: 'Gurugram', state: 'Haryana', stateCode: '06', pincode: '122015', valuation: 'REGULAR', warrantyMonths: 3, scoreBase: 79, batteryBase: 83 },
+  { legalName: SECTOR62, city: 'Noida', state: 'Uttar Pradesh', stateCode: '09', pincode: '201309', valuation: 'REGULAR', warrantyMonths: 6, scoreBase: 93, batteryBase: 92 },
+  { legalName: PHASE2, city: 'Noida', state: 'Uttar Pradesh', stateCode: '09', pincode: '201310', valuation: 'REGULAR', warrantyMonths: 3, scoreBase: 91, batteryBase: 90 },
+  { legalName: OKHLA, city: 'New Delhi', state: 'Delhi', stateCode: '07', pincode: '110020', valuation: 'MARGIN', warrantyMonths: 0, scoreBase: 85, batteryBase: 87 },
+  { legalName: MAYAPURI, city: 'New Delhi', state: 'Delhi', stateCode: '07', pincode: '110092', valuation: 'REGULAR', warrantyMonths: 3, scoreBase: 74, batteryBase: 78 },
+  { legalName: FARIDABAD, city: 'Faridabad', state: 'Haryana', stateCode: '06', pincode: '121001', valuation: 'REGULAR', warrantyMonths: 6, scoreBase: 90, batteryBase: 91 },
+  { legalName: GHAZIABAD, city: 'Ghaziabad', state: 'Uttar Pradesh', stateCode: '09', pincode: '201001', valuation: 'REGULAR', warrantyMonths: 0, scoreBase: 82, batteryBase: 85 },
+  { legalName: SONIPAT, city: 'Sonipat', state: 'Haryana', stateCode: '06', pincode: '131001', valuation: 'MARGIN', warrantyMonths: 3, scoreBase: 87, batteryBase: 88 },
+  // Palwal is an ODA lane, so it also gives the freight quote a surcharged origin.
+  { legalName: PALWAL, city: 'Palwal', state: 'Haryana', stateCode: '06', pincode: '121102', valuation: 'REGULAR', warrantyMonths: 0, scoreBase: 86, batteryBase: 86 },
+];
+
+/**
+ * The SKU every supply point stocks. PHASE_05's exit criterion names a Dell
+ * Latitude; the catalog carries the 5420 rather than the 5320, and what the
+ * criterion is really about is the shape — ten supply points, one SKU, one grade.
+ */
+const HERO_SKU = 'DEL-LAT5420-I51135G7-16-512';
+
+/** Stocked by three supply points, so the grid is exercised at a second width. */
+const SECOND_SKU = 'DEL-LAT7420-I51145G7-16-256';
+
+/**
+ * One offer: a listing, its units, and the ways this particular batch is
+ * imperfect. Every optional field exists because some state of the storefront is
+ * otherwise unreachable, and an unreachable state is an untested one.
+ */
+interface OfferSpec {
+  vendor: string;
+  skuCode: string;
+  grade: Grade;
+  units: number;
+  /** Our retail price. Vendors deliberately do not rank the same on price and on quality. */
+  price: number;
+  /**
+   * Units this vendor declared one grade higher that inspection marked down.
+   * These are what make `grade_accuracy_pct` less than 100 for the bucket.
+   */
+  corrections?: number;
+  /**
+   * Units whose battery the agent could not read. A missing measurement must
+   * render as "Not measured", never as a zero and never as a pass, so at least
+   * one has to exist.
+   */
+  unmeasured?: number;
+  /** Units whose QC lapsed yesterday. They stay LISTED; the predicate drops them. */
+  expired?: number;
+  /** A unit whose tamper seal was found broken. Also LISTED, also dropped. */
+  brokenSeal?: number;
+}
+
+/**
+ * The hero SKU at grade A, from all ten supply points.
+ *
+ * Unit counts straddle `qc.min_sample_for_headline` (seeded at 10) on purpose:
+ * Palwal's three inspected machines must render as "New supplier · 3 units
+ * inspected". Publishing an average computed on three machines is OUR
+ * misrepresentation under CP e-Comm r.7(2), so the suppressed state is a
+ * compliance path and needs a fixture like any other.
+ */
+const HERO_OFFERS: readonly OfferSpec[] = [
+  { vendor: NORTHGATE, skuCode: HERO_SKU, grade: 'A', units: 12, price: 47_500, corrections: 1 },
+  { vendor: UDYOG, skuCode: HERO_SKU, grade: 'A', units: 11, price: 44_900, corrections: 3 },
+  { vendor: SECTOR62, skuCode: HERO_SKU, grade: 'A', units: 14, price: 52_000 },
+  { vendor: PHASE2, skuCode: HERO_SKU, grade: 'A', units: 12, price: 51_000, unmeasured: 2 },
+  { vendor: OKHLA, skuCode: HERO_SKU, grade: 'A', units: 10, price: 43_500, corrections: 1 },
+  { vendor: MAYAPURI, skuCode: HERO_SKU, grade: 'A', units: 12, price: 41_900, corrections: 2, expired: 2 },
+  { vendor: FARIDABAD, skuCode: HERO_SKU, grade: 'A', units: 13, price: 53_500 },
+  { vendor: GHAZIABAD, skuCode: HERO_SKU, grade: 'A', units: 10, price: 46_000, corrections: 1, brokenSeal: 1 },
+  { vendor: SONIPAT, skuCode: HERO_SKU, grade: 'A', units: 11, price: 45_200, corrections: 1, unmeasured: 1 },
+  { vendor: PALWAL, skuCode: HERO_SKU, grade: 'A', units: 3, price: 48_000 },
+];
+
+/** The same SKU at other inspected grades, and a second multi-vendor SKU. */
+const OVERLAP_OFFERS: readonly OfferSpec[] = [
+  { vendor: NORTHGATE, skuCode: HERO_SKU, grade: 'A_PLUS', units: 4, price: 60_000 },
+  { vendor: SECTOR62, skuCode: HERO_SKU, grade: 'A_PLUS', units: 5, price: 61_000 },
+  { vendor: FARIDABAD, skuCode: HERO_SKU, grade: 'A_PLUS', units: 4, price: 62_500 },
+
+  { vendor: MAYAPURI, skuCode: HERO_SKU, grade: 'B', units: 6, price: 35_900 },
+  { vendor: GHAZIABAD, skuCode: HERO_SKU, grade: 'B', units: 5, price: 36_500 },
+  { vendor: OKHLA, skuCode: HERO_SKU, grade: 'B', units: 5, price: 36_900 },
+
+  { vendor: NORTHGATE, skuCode: SECOND_SKU, grade: 'A', units: 5, price: 68_000 },
+  { vendor: SECTOR62, skuCode: SECOND_SKU, grade: 'A', units: 5, price: 71_000 },
+  { vendor: FARIDABAD, skuCode: SECOND_SKU, grade: 'A', units: 4, price: 69_500 },
+];
+
+/**
+ * One SKU each, stocked by exactly one supply point.
+ *
+ * Two jobs: the filter rail needs more than three models behind it, and the grid
+ * has to be right at width one as well as at width ten — a "comparison" of a
+ * single supply point is the commonest real case and the easiest to get wrong.
+ */
+const SOLO_OFFERS: readonly OfferSpec[] = [
+  { vendor: NORTHGATE, skuCode: 'LEN-T14G2-I51135G7-16-256', grade: 'A', units: 4, price: 38_500 },
+  { vendor: UDYOG, skuCode: 'LEN-X1C9-I51135G7-16-1024', grade: 'A', units: 4, price: 74_000 },
+  { vendor: SECTOR62, skuCode: 'HP-EB840G8-I51135G7-16-256', grade: 'A', units: 4, price: 49_500 },
+  { vendor: PHASE2, skuCode: 'APL-MBAM1-M1-16-256', grade: 'A_PLUS', units: 4, price: 62_000 },
+  { vendor: OKHLA, skuCode: 'DEL-XPS139310-I51135G7-16-512', grade: 'A', units: 4, price: 58_000 },
+  { vendor: MAYAPURI, skuCode: 'ACR-SF314511-I51135G7-16-512', grade: 'B', units: 4, price: 27_500 },
+  { vendor: FARIDABAD, skuCode: 'HP-ZBFF14G8-I51145G7-16-512', grade: 'A', units: 4, price: 81_000 },
+  { vendor: GHAZIABAD, skuCode: 'ASU-UX425EA-I51135G7-16-1024', grade: 'A', units: 4, price: 43_000 },
+  { vendor: SONIPAT, skuCode: 'LEN-E14G3-RYZEN55500U-16-512', grade: 'B', units: 4, price: 31_500 },
+  { vendor: PALWAL, skuCode: 'MSF-SL4135-I51135G7-16-512', grade: 'A', units: 4, price: 46_500 },
+];
+
+const OFFERS: readonly OfferSpec[] = [...HERO_OFFERS, ...OVERLAP_OFFERS, ...SOLO_OFFERS];
 
 function guardDatabase(url: string | undefined): void {
   const name = (url ?? '').split('/').pop()?.split('?')[0] ?? '';
@@ -121,6 +294,211 @@ async function orgByName(
   return id;
 }
 
+async function addr(
+  prisma: PrismaClient,
+  orgId: string,
+  city: string,
+  state: string,
+  stateCode: string,
+  pin: string,
+): Promise<string> {
+  const found = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM identity.org_address WHERE org_id = ${orgId}::uuid AND pincode = ${pin} LIMIT 1`;
+  if (found[0]) return found[0].id;
+  const id = randomUUID();
+  await prisma.$executeRaw`
+    INSERT INTO identity.org_address
+      (id, org_id, type, label, line1, city, state, state_code, pincode,
+       contact_name, contact_mobile, is_default, is_pickup_enabled, is_billing_enabled, is_active)
+    VALUES (${id}::uuid, ${orgId}::uuid, 'PICKUP'::address_type, 'Primary',
+            ${'Plot 14, ' + city + ' Industrial Area'},
+            ${city}, ${state}, ${stateCode}, ${pin}, 'Operations desk', '+919810000000',
+            TRUE, TRUE, TRUE, TRUE)`;
+  return id;
+}
+
+/** A vendor as the stock loop needs it: identity resolved, label assigned. */
+interface ResolvedVendor {
+  spec: VendorSpec;
+  orgId: string;
+  addressId: string;
+  supplyCode: string;
+}
+
+/** The band the listing advertises, from the band its units actually come back in. */
+function batteryBand(pct: number): string {
+  if (pct >= 90) return 'EXCELLENT_90_PLUS';
+  if (pct >= 80) return 'GOOD_80_89';
+  if (pct >= 70) return 'FAIR_70_79';
+  return 'LOW_BELOW_70';
+}
+
+/** The grade a vendor claimed before inspection marked the unit down. */
+function declaredAbove(grade: Grade): Grade {
+  return grade === 'B' ? 'A' : 'A_PLUS';
+}
+
+/**
+ * One listing, its units, their reports and their seals.
+ *
+ * Returns 0 without writing anything if this vendor already lists this SKU at
+ * this grade. Idempotency is keyed on the offer rather than on "does this vendor
+ * have any stock at all", so a new supply point can be grown onto a database
+ * that has already been seeded — which is the situation every developer with a
+ * running dev database is actually in.
+ */
+async function seedOffer(
+  prisma: PrismaClient,
+  vendor: ResolvedVendor,
+  techId: string,
+  offer: OfferSpec,
+): Promise<number> {
+  const sku = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM catalog.sku WHERE sku_code = ${offer.skuCode}`;
+  if (!sku[0]) {
+    throw new Error(`The demo seed wants SKU ${offer.skuCode}, which the catalog has not got.`);
+  }
+  const skuId = sku[0].id;
+
+  const existing = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM listing.listing
+     WHERE vendor_org_id = ${vendor.orgId}::uuid
+       AND sku_id = ${skuId}::uuid
+       AND grade = ${offer.grade}::grade_type`;
+  if (existing[0]) return 0;
+
+  const listingId = randomUUID();
+  await prisma.$executeRaw`
+    INSERT INTO listing.listing
+      (id, vendor_org_id, sku_id, pickup_location_id, grade, condition_type,
+       battery_health_band, parts_status, unit_price, qty_total, status,
+       vendor_warranty_months)
+    VALUES (${listingId}::uuid, ${vendor.orgId}::uuid, ${skuId}::uuid, ${vendor.addressId}::uuid,
+            ${offer.grade}::grade_type, 'REFURBISHED'::condition_type,
+            ${batteryBand(vendor.spec.batteryBase)}::battery_band,
+            'ALL_ORIGINAL'::parts_status_type, ${offer.price}, ${offer.units},
+            'ACTIVE'::listing_status, ${vendor.spec.warrantyMonths})`;
+
+  for (let u = 0; u < offer.units; u++) {
+    const corrected = u < (offer.corrections ?? 0);
+    const unmeasured = u >= offer.units - (offer.unmeasured ?? 0);
+    const lapsed = u < (offer.expired ?? 0);
+    const broken = u === offer.units - 1 && (offer.brokenSeal ?? 0) > 0;
+
+    const unitId = randomUUID();
+    const serial = `TGD${randomBytes(4).toString('hex').toUpperCase()}`;
+    const battery = unmeasured ? null : vendor.spec.batteryBase - 3 + ((u * 5) % 8);
+    const score = Math.min(100, Math.max(0, vendor.spec.scoreBase - 4 + ((u * 3) % 9)));
+    const declared: Grade = corrected ? declaredAbove(offer.grade) : offer.grade;
+    // chk_override_reason: a report that proposes one grade and finalises another
+    // must say why. The correction row below repeats it because that is the row
+    // the vendor is notified from and the one grade accuracy is counted off.
+    const overrideReason = corrected
+      ? 'Chassis wear beyond the declared grade on inspection.'
+      : null;
+    // Yesterday, not "a while ago". PHASE_05's exit criterion is a unit whose QC
+    // expired *yesterday*, which is the boundary the predicate is likeliest to
+    // be wrong on.
+    const validUntil = lapsed ? -1 : 87;
+
+    await prisma.$executeRaw`
+      INSERT INTO listing.unit
+        (id, listing_id, vendor_org_id, sku_id, serial_number, grade_declared, grade_actual,
+         status, location, qc_passed_at, qc_valid_until, qc_score, battery_health_pct,
+         vendor_ask_price, retail_price, supply_point_code, valuation_method, itc_eligible)
+      VALUES (${unitId}::uuid, ${listingId}::uuid, ${vendor.orgId}::uuid, ${skuId}::uuid, ${serial},
+              ${declared}::grade_type, ${offer.grade}::grade_type, 'QC_PASSED'::unit_status, 'VENDOR',
+              now() - interval '3 days', CURRENT_DATE + ${validUntil}::int, ${score}, ${battery},
+              ${Math.round(offer.price * 0.86)}, ${offer.price}, ${vendor.supplyCode},
+              ${vendor.spec.valuation}, ${vendor.spec.valuation === 'REGULAR'})`;
+
+    // A report and a photographed seal, because is_sellable is a trigger and
+    // will not take our word for it.
+    const reportId = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO qc.qc_report
+        (id, unit_id, technician_id, device_cert_id, agent_version, started_at, completed_at,
+         signature, nonce, qc_score, verdict, grade_proposed, grade_final,
+         grade_override_reason, verification_code, valid_until, is_current, rules_version)
+      VALUES (${reportId}::uuid, ${unitId}::uuid, ${techId}::uuid, ${'CERT-' + serial}, '0.1.0',
+              now() - interval '3 days', now() - interval '3 days', 'demo-sig', ${randomUUID()},
+              ${score}, 'PASS'::qc_verdict, ${declared}::grade_type, ${offer.grade}::grade_type,
+              ${overrideReason},
+              ${randomBytes(9).toString('base64url')}, CURRENT_DATE + ${validUntil}::int, TRUE, '2026.08')`;
+
+    // VendorQualityService averages battery health from HERE, not from the copy
+    // denormalised onto the unit — so a machine whose battery was never read has
+    // to be absent here too, or the aggregate quietly invents a measurement.
+    await prisma.$executeRaw`
+      INSERT INTO qc.qc_hardware_detected
+        (qc_report_id, hw_serial, hw_model, ram_detected_gb, battery_health_pct, smart_status)
+      VALUES (${reportId}::uuid, ${serial}, ${offer.skuCode}, 16, ${battery}, 'OK')`;
+
+    const sealId = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO qc.qc_seal
+        (id, seal_code, unit_id, qc_report_id, applied_by, applied_at, applied_photo_key, status)
+      VALUES (${sealId}::uuid, ${'TG-' + serial}, ${unitId}::uuid, ${reportId}::uuid,
+              ${techId}::uuid, now() - interval '3 days',
+              ${'qc/seals/' + serial + '.jpg'},
+              ${broken ? 'BROKEN' : 'APPLIED'}::seal_status)`;
+
+    // seal_id and the report first, then LISTED: every one of these writes fires
+    // recompute_is_sellable, and only once the seal exists can the predicate come
+    // out true. qc_report_id is what VendorQualityService counts an inspected
+    // unit by, so a unit missing it has been inspected and still has no quality
+    // record — which is why the grid's quality columns were blank.
+    await prisma.$executeRaw`
+      UPDATE listing.unit SET seal_id = ${sealId}::uuid, qc_report_id = ${reportId}::uuid
+       WHERE id = ${unitId}::uuid`;
+    // LISTED even for the lapsed and the broken-sealed ones. Parking those in
+    // QC_EXPIRED or SEAL_BROKEN would hide them behind the status check and prove
+    // nothing about the expiry date or the seal — which is the half of the
+    // predicate that actually decides whether they reach a buyer.
+    await prisma.$executeRaw`
+      UPDATE listing.unit SET status = 'LISTED'::unit_status WHERE id = ${unitId}::uuid`;
+
+    if (corrected) {
+      await prisma.$executeRaw`
+        INSERT INTO listing.grade_correction
+          (unit_id, listing_id, qc_report_id, grade_declared, grade_corrected, reason)
+        VALUES (${unitId}::uuid, ${listingId}::uuid, ${reportId}::uuid,
+                ${declared}::grade_type, ${offer.grade}::grade_type, ${overrideReason})`;
+    }
+  }
+
+  return offer.units;
+}
+
+/**
+ * Populate `qc.vendor_sku_quality` and `qc.vendor_quality`.
+ *
+ * Those are base tables, not views: nothing fills them but the `qc.report.completed`
+ * handler and a 4 AM cron, so on a freshly seeded database every quality column
+ * on the comparison grid is blank until this runs. The service is called rather
+ * than the aggregation restated in SQL — a second implementation of "what counts
+ * as an inspected unit" is a second answer waiting to disagree with the first.
+ *
+ * It gets its own PrismaService because that is what the service takes; the seed
+ * script's own client is a bare PrismaClient. `refreshAll` is a full recompute
+ * per vendor, so running it twice leaves the same rows behind.
+ */
+async function refreshVendorQuality(): Promise<number> {
+  const prisma = new PrismaService(new AppConfig());
+  const clock = new SystemClock();
+  const quality = new VendorQualityService(
+    prisma,
+    new QcRepository(prisma, clock),
+    new EventBus(prisma, clock, new RequestContextService()),
+  );
+  try {
+    const results = await quality.refreshAll();
+    return results.reduce((n, r) => n + r.skuRows, 0);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 export async function seedDemo(
   prisma: PrismaClient,
   log: (m: string) => void = () => undefined,
@@ -137,44 +515,39 @@ export async function seedDemo(
   // --- organisations -------------------------------------------------------
   const platformOrg = await prisma.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM identity.organization WHERE org_type = 'INTERNAL' LIMIT 1`;
-  const platformId = platformOrg[0]?.id ?? (await orgByName(prisma, 'TrueTech Services Pvt. Ltd.', 'INTERNAL', 'VERIFIED'));
+  const platformId =
+    platformOrg[0]?.id ??
+    (await orgByName(prisma, 'TrueTech Services Pvt. Ltd.', 'INTERNAL', 'VERIFIED'));
 
-  const vendorId = await orgByName(prisma, 'Northgate IT Assets Pvt. Ltd.', 'VENDOR', 'VERIFIED');
   const buyerId = await orgByName(prisma, 'Acme Industries Pvt. Ltd.', 'BUYER', 'VERIFIED');
 
   for (const p of PLATFORM_PEOPLE) await upsertPerson(prisma, platformId, p, hash);
-  for (const p of VENDOR_PEOPLE) await upsertPerson(prisma, vendorId, p, hash);
   for (const p of BUYER_PEOPLE) await upsertPerson(prisma, buyerId, p, hash);
+  await addr(prisma, buyerId, 'Bengaluru', 'Karnataka', '29', '560001');
+
+  // --- vendors, their pickup points, and the anonymised labels -------------
+  const vendors = new Map<string, ResolvedVendor>();
+  for (const spec of VENDORS) {
+    const orgId = await orgByName(prisma, spec.legalName, 'VENDOR', 'VERIFIED');
+    const addressId = await addr(prisma, orgId, spec.city, spec.state, spec.stateCode, spec.pincode);
+    // Assigned centrally so the label is stable and not derivable from the org
+    // id. The letter is drawn at random from those free in that city, which is
+    // what stops the labels publishing either the join order or the vendor count.
+    const rows = await prisma.$queryRaw<Array<{ assign_supply_point: string }>>`
+      SELECT listing.assign_supply_point(${orgId}::uuid, ${spec.city})`;
+    vendors.set(spec.legalName, {
+      spec,
+      orgId,
+      addressId,
+      supplyCode: rows[0]!.assign_supply_point,
+    });
+  }
+  for (const p of VENDOR_PEOPLE) await upsertPerson(prisma, vendors.get(NORTHGATE)!.orgId, p, hash);
+
   log(
     `  accounts: ${PLATFORM_PEOPLE.length} platform, ${VENDOR_PEOPLE.length} vendor, ${BUYER_PEOPLE.length} buyer`,
   );
-
-  // --- addresses -----------------------------------------------------------
-  const addr = async (orgId: string, city: string, state: string, pin: string): Promise<string> => {
-    const found = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM identity.org_address WHERE org_id = ${orgId}::uuid AND pincode = ${pin} LIMIT 1`;
-    if (found[0]) return found[0].id;
-    const id = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO identity.org_address
-        (id, org_id, type, label, line1, city, state, state_code, pincode,
-         contact_name, contact_mobile, is_default, is_pickup_enabled, is_billing_enabled, is_active)
-      VALUES (${id}::uuid, ${orgId}::uuid, 'PICKUP'::address_type, 'Primary',
-              ${'Plot 14, ' + city + ' Industrial Area'},
-              ${city}, ${state}, '06', ${pin}, 'Operations desk', '+919810000000',
-              TRUE, TRUE, TRUE, TRUE)`;
-    return id;
-  };
-
-  const vendorAddr = await addr(vendorId, 'Gurugram', 'Haryana', '122001');
-  await addr(buyerId, 'Bengaluru', 'Karnataka', '560001');
-
-  // --- the supply point ----------------------------------------------------
-  // Assigned centrally so the label is stable and not derivable from the org id.
-  const spRows = await prisma.$queryRaw<Array<{ assign_supply_point: string }>>`
-    SELECT listing.assign_supply_point(${vendorId}::uuid, 'Gurugram')`;
-  const supplyCode = spRows[0]!.assign_supply_point;
-  log(`  supply point: ${supplyCode} - Gurugram`);
+  log(`  supply points: ${VENDORS.length} across ${new Set(VENDORS.map((v) => v.city)).size} NCR cities`);
 
   // --- a technician --------------------------------------------------------
   const techUser = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -190,98 +563,22 @@ export async function seedDemo(
   const techId = tech[0]!.id;
 
   // --- listings, units, and the QC that makes them sellable ----------------
-  const skus = await prisma.$queryRaw<Array<{ id: string; model: string; grade_hint: string }>>`
-    SELECT s.id, m.name AS model, 'A' AS grade_hint
-      FROM catalog.sku s
-      JOIN catalog.model m ON m.id = s.model_id
-     WHERE s.is_active
-     ORDER BY m.name
-     LIMIT 6`;
-
-  const provider = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM qc.qc_tool_provider WHERE code = 'DEVICESURE'`;
-
-  // Idempotent on stock, not just on accounts. Without this a second run doubles
-  // the inventory, and "48 units" quietly becomes "96 sellable" — a seed that
-  // cannot be re-run is a seed nobody dares re-run.
-  const already = await prisma.$queryRaw<Array<{ n: bigint }>>`
-    SELECT count(*)::bigint AS n FROM listing.listing WHERE vendor_org_id = ${vendorId}::uuid`;
-  if (Number(already[0]!.n) > 0) {
-    const have = await prisma.$queryRaw<Array<{ n: bigint }>>`
-      SELECT count(*)::bigint AS n FROM listing.v_sellable_unit`;
-    log(`  stock: already seeded (${Number(have[0]!.n)} sellable) — left alone`);
-    log(`  password for every demo account: ${DEMO_PASSWORD}`);
-    return;
-  }
-
   let unitsMade = 0;
   let listingsMade = 0;
-
-  for (const [i, sku] of skus.entries()) {
-    const grade = (['A_PLUS', 'A', 'A', 'B', 'A', 'B'] as const)[i] ?? 'A';
-    const unitPrice = 28_000 + i * 4_500;
-
-    const listingId = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO listing.listing
-        (id, vendor_org_id, sku_id, pickup_location_id, grade, condition_type,
-         battery_health_band, parts_status, unit_price, qty_total, status,
-         vendor_warranty_months)
-      VALUES (${listingId}::uuid, ${vendorId}::uuid, ${sku.id}::uuid, ${vendorAddr}::uuid,
-              ${grade}::grade_type, 'REFURBISHED'::condition_type, 'GOOD_80_89'::battery_band,
-              'ALL_ORIGINAL'::parts_status_type, ${unitPrice}, 8, 'ACTIVE'::listing_status, 3)`;
-    listingsMade += 1;
-
-    for (let u = 0; u < 8; u++) {
-      const unitId = randomUUID();
-      const serial = `TGD${String(i)}${String(u).padStart(2, '0')}${randomBytes(2).toString('hex').toUpperCase()}`;
-      const battery = 82 + ((i * 3 + u) % 16);
-      const score = 78 + ((i * 5 + u * 3) % 21);
-
-      await prisma.$executeRaw`
-        INSERT INTO listing.unit
-          (id, listing_id, vendor_org_id, sku_id, serial_number, grade_declared, grade_actual,
-           status, location, qc_passed_at, qc_valid_until, qc_score, battery_health_pct,
-           vendor_ask_price, retail_price, supply_point_code, valuation_method, itc_eligible)
-        VALUES (${unitId}::uuid, ${listingId}::uuid, ${vendorId}::uuid, ${sku.id}::uuid, ${serial},
-                ${grade}::grade_type, ${grade}::grade_type, 'QC_PASSED'::unit_status, 'VENDOR',
-                now() - interval '3 days', CURRENT_DATE + 87, ${score}, ${battery},
-                ${Math.round(unitPrice * 0.86)}, ${unitPrice}, ${supplyCode}, 'REGULAR', TRUE)`;
-
-      // A report and a photographed seal, because is_sellable is a trigger and
-      // will not take our word for it.
-      const reportId = randomUUID();
-      await prisma.$executeRaw`
-        INSERT INTO qc.qc_report
-          (id, unit_id, technician_id, device_cert_id, agent_version, started_at, completed_at,
-           signature, nonce, qc_score, verdict, grade_proposed, grade_final,
-           verification_code, valid_until, is_current, rules_version)
-        VALUES (${reportId}::uuid, ${unitId}::uuid, ${techId}::uuid, ${'CERT-' + serial}, '0.1.0',
-                now() - interval '3 days', now() - interval '3 days', 'demo-sig', ${randomUUID()},
-                ${score}, 'PASS'::qc_verdict, ${grade}::grade_type, ${grade}::grade_type,
-                ${randomBytes(9).toString('base64url')}, CURRENT_DATE + 87, TRUE, '2026.08')`;
-
-      const sealId = randomUUID();
-      await prisma.$executeRaw`
-        INSERT INTO qc.qc_seal
-          (id, seal_code, unit_id, qc_report_id, applied_by, applied_at, applied_photo_key, status)
-        VALUES (${sealId}::uuid, ${'TG-' + serial}, ${unitId}::uuid, ${reportId}::uuid,
-                ${techId}::uuid, now() - interval '3 days',
-                ${'qc/seals/' + serial + '.jpg'}, 'APPLIED'::seal_status)`;
-
-      // seal_id then LISTED: both writes fire recompute_is_sellable, and only
-      // after the seal exists can the predicate come out true.
-      await prisma.$executeRaw`
-        UPDATE listing.unit SET seal_id = ${sealId}::uuid WHERE id = ${unitId}::uuid`;
-      await prisma.$executeRaw`
-        UPDATE listing.unit SET status = 'LISTED'::unit_status WHERE id = ${unitId}::uuid`;
-      unitsMade += 1;
-    }
+  for (const offer of OFFERS) {
+    const vendor = vendors.get(offer.vendor);
+    if (!vendor) throw new Error(`An offer names ${offer.vendor}, which is not in VENDORS.`);
+    const made = await seedOffer(prisma, vendor, techId, offer);
+    if (made > 0) listingsMade += 1;
+    unitsMade += made;
   }
 
   const sellable = await prisma.$queryRaw<Array<{ n: bigint }>>`
     SELECT count(*)::bigint AS n FROM listing.v_sellable_unit`;
-  log(`  stock: ${listingsMade} listings, ${unitsMade} units, ${Number(sellable[0]!.n)} sellable`);
+  log(
+    `  stock: ${listingsMade} new listing(s), ${unitsMade} new unit(s), ` +
+      `${Number(sellable[0]!.n)} sellable in total`,
+  );
 
   const drift = await prisma.$queryRaw<Array<{ n: bigint }>>`
     SELECT count(*)::bigint AS n FROM listing.v_sellability_drift`;
@@ -292,6 +589,17 @@ export async function seedDemo(
     );
   }
 
-  void provider;
+  const labelDrift = await prisma.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*)::bigint AS n FROM listing.v_supply_point_drift`;
+  if (Number(labelDrift[0]!.n) > 0) {
+    throw new Error(
+      `${Number(labelDrift[0]!.n)} unit(s) carry a supply-point label that is not the one assigned to ` +
+        `their vendor in that city. A vendor appearing under two labels has had their unit count leaked.`,
+    );
+  }
+
+  const skuRows = await refreshVendorQuality();
+  log(`  vendor quality: ${skuRows} (vendor, sku, grade) row(s) computed`);
+
   log(`  password for every demo account: ${DEMO_PASSWORD}`);
 }
