@@ -487,3 +487,90 @@ export function validateCount(
 export function validateWhatsapp(value: string): string | undefined {
   return value.trim().length === 0 ? undefined : validateMobile(value);
 }
+
+/* ==========================================================================
+ * Banking — vendor step 6
+ * ========================================================================
+ *
+ * The three patterns are VR-021, VR-023 and VR-025 in `@trugrade/contracts`,
+ * and they are enforced server-side regardless. What is here is the *wording*:
+ * the contract's messages are written for a developer reading a Zod error, and
+ * this form has room to say which character is wrong and why. Where the rule
+ * itself changes, the schema is what changes — these only restate it.
+ */
+
+/** Digits, spaces and hyphens stripped: what the server's schema does too. */
+export const toAccountNumber = (value: string): string => value.replace(/[\s-]/g, '');
+
+export const toIfsc = (value: string): string => value.trim().toUpperCase();
+
+export function validateAccountNumber(value: string): string | undefined {
+  const cleaned = toAccountNumber(value);
+  if (!cleaned) return 'Enter the account number we should pay into.';
+  if (/\D/.test(cleaned))
+    return 'An account number is digits only. Take out any letters or symbols.';
+  if (cleaned.length < 9)
+    return `That is ${cleaned.length} digits. An Indian account number is between 9 and 18.`;
+  if (cleaned.length > 18)
+    return `That is ${cleaned.length} digits, which is longer than any Indian account number. The most is 18.`;
+  return undefined;
+}
+
+export function validateIfsc(value: string): string | undefined {
+  const cleaned = toIfsc(value);
+  if (!cleaned) return 'Enter the IFSC of the branch. It is printed on your cheque.';
+  if (cleaned.length !== 11)
+    return `An IFSC is exactly 11 characters and this one is ${cleaned.length}.`;
+  if (!/^[A-Z]{4}/.test(cleaned)) return 'The first four characters of an IFSC are letters.';
+  // The single most common IFSC typo, and worth its own sentence.
+  if (cleaned[4] !== '0')
+    return 'The fifth character of an IFSC is the digit zero, not the letter O.';
+  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleaned))
+    return 'Enter a valid 11-character IFSC, for example HDFC0001234.';
+  return undefined;
+}
+
+/**
+ * VR-025. Deliberately does NOT insist it matches the legal name — that is what
+ * the penny-drop is for, and a client-side name comparison would refuse a
+ * legitimate trade name the bank happens to hold.
+ */
+export function validateAccountHolderName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Enter the name exactly as the bank holds it.';
+  if (trimmed.length < 3) return 'That is too short to be an account holder name.';
+  if (trimmed.length > 120) return 'That is longer than 120 characters, which no bank will hold.';
+  if (!/^[A-Za-z0-9 .,&'()\-/]+$/.test(trimmed))
+    return 'Use letters, numbers and . , & ’ ( ) - / only. A bank name has nothing else in it.';
+  return undefined;
+}
+
+/**
+ * The vendor's own minimum payout, against the platform floor.
+ *
+ * Below the floor the balance rolls forward anyway, so a smaller number here is
+ * a promise we would not keep — it is refused with the floor named rather than
+ * silently raised.
+ */
+export function validatePayoutThreshold(value: string, floorInr: number): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Enter the smallest amount worth paying you.';
+  if (!/^\d+$/.test(trimmed)) return 'Whole rupees only — no paise, no commas.';
+  const amount = Number(trimmed);
+  if (amount < floorInr)
+    return `Our own floor is Rs ${floorInr.toLocaleString('en-IN')}. Below that the balance rolls into the next run, so a smaller figure here would not be honoured.`;
+  if (amount > 10_00_000)
+    return 'That is above Rs 10,00,000. A threshold that high means most runs would pay you nothing.';
+  return undefined;
+}
+
+/** A commission rate a vendor names for themselves, in percent. */
+export function validateCommissionRate(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Enter the rate you expect us to work to.';
+  if (!/^\d{1,2}(\.\d{1,2})?$/.test(trimmed)) return 'A percentage, up to two decimal places.';
+  const rate = Number(trimmed);
+  if (rate <= 0) return 'A rate of zero leaves us nothing to sell against. Enter a real figure.';
+  if (rate > 40) return 'Above 40% we would not be competitive on the shelf. Talk to us first.';
+  return undefined;
+}

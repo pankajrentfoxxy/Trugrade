@@ -85,7 +85,9 @@ export function YesNo({
             className={`flex min-h-11 flex-1 cursor-pointer items-center gap-3 rounded border-l-2 border-y border-r border-y-rule border-r-rule px-4 py-2 text-body-sm ${
               // The amber marker is an active state, which is one of the three
               // things the accent is allowed to mean.
-              value === option.answer ? 'border-l-acc bg-sheet-2 text-ink' : 'border-l-rule bg-sheet text-ink-2'
+              value === option.answer
+                ? 'border-l-acc bg-sheet-2 text-ink'
+                : 'border-l-rule bg-sheet text-ink-2'
             }`}
           >
             <input
@@ -103,9 +105,7 @@ export function YesNo({
 
       {/* Never a tick and never a blank: until somebody presses one of the two,
           the screen says out loud that nothing has been answered. */}
-      {value === null && !error && (
-        <p className="text-body-sm text-ink-4">Not answered yet.</p>
-      )}
+      {value === null && !error && <p className="text-body-sm text-ink-4">Not answered yet.</p>}
       {consequence && <p className="text-body-sm text-ink-2">{consequence}</p>}
       {error && (
         <p id={`${name}-error`} role="alert" className="text-body-sm text-fail">

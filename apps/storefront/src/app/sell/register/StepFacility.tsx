@@ -201,7 +201,9 @@ const dayAnswered = (hours: DayHours): boolean =>
   hours.closed || validateReceivingHours(hours.opensAt, hours.closesAt) === undefined;
 
 const hoursAnswered = (facility: Facility): boolean =>
-  WEEK_DAYS.every((d) => dayAnswered(facility.hours[String(d.day)] ?? { closed: false, opensAt: '', closesAt: '' }));
+  WEEK_DAYS.every((d) =>
+    dayAnswered(facility.hours[String(d.day)] ?? { closed: false, opensAt: '', closesAt: '' }),
+  );
 
 export const facilityDone = (facility: Facility): boolean =>
   facility.label.trim().length > 0 &&
@@ -219,7 +221,9 @@ const contactDone = (c: VendorContact): boolean =>
 
 const checksOf = (values: FacilityValues): boolean[] => [
   ...values.facilities.map(facilityDone),
-  ...VENDOR_CONTACT_ROLES.filter((r) => r.required).map((r) => contactDone(values.contacts[r.code]!)),
+  ...VENDOR_CONTACT_ROLES.filter((r) => r.required).map((r) =>
+    contactDone(values.contacts[r.code]!),
+  ),
 ];
 
 export const completionOf = (values: FacilityValues): number => {
@@ -357,7 +361,8 @@ export function StepFacility({
       if (!facility.label.trim())
         found[at('label')] = 'Name this site — "Sector 37 warehouse", "Okhla refurb unit".';
       if (!facility.facilityType)
-        found[at('facilityType')] = 'Tell us what this site is. It decides whether we send a QC technician here.';
+        found[at('facilityType')] =
+          'Tell us what this site is. It decides whether we send a QC technician here.';
       for (const [field, message] of Object.entries(postalErrors(facility.address)))
         found[at(`address.${field}`)] = message;
       if (!facility.vehicleAccess)
@@ -450,7 +455,10 @@ export function StepFacility({
   return (
     <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)} noValidate>
       {blockingReason && (
-        <p role="alert" className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-fail">
+        <p
+          role="alert"
+          className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-fail"
+        >
           {blockingReason}
         </p>
       )}
@@ -484,7 +492,11 @@ export function StepFacility({
                   Site <span className="tnum">{index + 1}</span>
                 </span>
                 {values.facilities.length > 1 && (
-                  <Button type="button" variant="ghost" onClick={() => removeFacility(facility.key)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => removeFacility(facility.key)}
+                  >
                     Remove this site
                   </Button>
                 )}
@@ -670,9 +682,7 @@ export function StepFacility({
                 value={facility.specialInstructions}
                 onFocus={() => onFieldFocus('Facilities')}
                 onBlur={saveOnBlur}
-                onChange={(e) =>
-                  setFacility(facility.key, { specialInstructions: e.target.value })
-                }
+                onChange={(e) => setFacility(facility.key, { specialInstructions: e.target.value })}
               />
 
               {/* ------------------------------------------ operating hours */}
@@ -685,15 +695,17 @@ export function StepFacility({
                   <span className="text-body-sm font-medium text-ink">Operating hours</span>
                   <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
                     <span className="tnum">
-                      {WEEK_DAYS.filter((d) =>
-                        dayAnswered(
-                          facility.hours[String(d.day)] ?? {
-                            closed: false,
-                            opensAt: '',
-                            closesAt: '',
-                          },
-                        ),
-                      ).length}
+                      {
+                        WEEK_DAYS.filter((d) =>
+                          dayAnswered(
+                            facility.hours[String(d.day)] ?? {
+                              closed: false,
+                              opensAt: '',
+                              closesAt: '',
+                            },
+                          ),
+                        ).length
+                      }
                     </span>{' '}
                     of <span className="tnum">{WEEK_DAYS.length}</span> days answered
                   </span>

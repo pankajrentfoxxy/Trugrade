@@ -324,6 +324,69 @@ export const verifyPan = (input: {
 }): Promise<ApiResult<VerificationOutcomeView>> =>
   post<VerificationOutcomeView>('/api/onboarding/verify/pan', input);
 
+/** What the bank returned about the account, as far as this screen reads it. */
+export interface BankAccountHolder {
+  accountNumber?: string;
+  ifsc?: string;
+  /** The name the bank holds. The whole reason a penny-drop is worth doing. */
+  beneficiaryName?: string;
+  bankName?: string;
+  branch?: string;
+  creditReference?: string;
+}
+
+/**
+ * The penny-drop. One rupee into the account, and the bank tells us whose it is.
+ *
+ * Called as the applicant fills the form, and it **does not commit anything** —
+ * see `commitBankAccount` below. Same five outcomes as the GSTIN check, and the
+ * same rule about the last two: a bank that did not answer is our problem, costs
+ * them no attempt, and is never coloured as a refusal.
+ */
+export const pennyDrop = (input: {
+  accountNumber: string;
+  ifsc: string;
+  /** The name the bank's answer is scored against, fuzzily. VR-026. */
+  expectedName: string;
+}): Promise<ApiResult<VerificationOutcomeView>> =>
+  post<VerificationOutcomeView>('/api/onboarding/verify/bank', input);
+
+/** What committing an account did, in the order the server did it. */
+export interface BankAccountChangeResult {
+  /** The penny-drop the server ran itself. A non-PASS means nothing below happened. */
+  verification: VerificationOutcomeView;
+  accountId: string | null;
+  /**
+   * Payouts to this account are refused by the database until this instant.
+   * An anti-takeover control, not a processing delay — the screen says so.
+   */
+  frozenUntil: string | null;
+  /** Channels the owner alert actually left by. Empty is an incident, not a state. */
+  alertedVia: string[];
+}
+
+/**
+ * Commit the payout account. **Deliberately not the same call as the check
+ * above**, and not a flag on it.
+ *
+ * `verify/bank` answers "does this account exist and is it mine" and is meant to
+ * be called from a form as somebody types. This one writes the account, starts a
+ * payout freeze and alerts the org's owner on every channel they hold — because
+ * the threat it defends against is not a typo, it is somebody with a session
+ * redirecting the payout account to their own. Folding the two together would
+ * mean a mistyped-then-corrected account number freezes a vendor's payouts.
+ *
+ * It runs its own penny-drop before writing anything, so committing costs a
+ * second attempt against the five-a-day limit.
+ */
+export const commitBankAccount = (input: {
+  accountNumber: string;
+  ifsc: string;
+  accountHolderName: string;
+  accountType: 'CURRENT' | 'SAVINGS' | 'CC' | 'OD';
+}): Promise<ApiResult<BankAccountChangeResult>> =>
+  post<BankAccountChangeResult>('/api/onboarding/bank-account', input);
+
 /** One row of this org's own attempt history, masked exactly as a reviewer sees it. */
 export interface VerificationAttempt {
   id: string;

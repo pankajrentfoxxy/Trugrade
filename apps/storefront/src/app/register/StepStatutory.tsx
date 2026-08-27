@@ -21,6 +21,12 @@ import {
   validateIncorporationDate,
   validatePan,
 } from './validation';
+import {
+  ProviderProblem,
+  RETRY_AFTER_SECONDS,
+  isProviderProblem,
+  useRetryLadder,
+} from './verification';
 
 /**
  * Step 3 — Statutory.
@@ -45,28 +51,6 @@ import {
  * input credit can be claimed. It is never pre-selected — see `WHY_STATUTORY`
  * for the paragraph the right rail carries.
  */
-
-/* ==========================================================================
- * The retry schedule
- * ======================================================================== */
-
-/**
- * Client-side backoff for a provider that did not answer, in seconds.
- *
- * Deliberately shorter than `PROVIDER_RETRY_SCHEDULE_SECONDS` in
- * `verification.service.ts` (30s / 2m / 10m / 1h): that is the server retrying a
- * provider out of band, this is a person sitting in front of a form. Waiting
- * thirty seconds before the *first* retry, with a countdown on screen, is how a
- * form gets abandoned.
- *
- * ponytail: three tries then hand it to a reviewer. There is nothing to gain
- * from a fourth — if the portal is down it is down, and the "continue anyway"
- * path below is the real answer.
- */
-const RETRY_AFTER_SECONDS = [5, 15, 45] as const;
-
-const isProviderProblem = (view: VerificationOutcomeView): boolean =>
-  view.willRetryAutomatically || view.outcome === 'PROVIDER_ERROR' || view.outcome === 'TIMEOUT';
 
 /* ==========================================================================
  * The "why we ask" copy this step contributes
@@ -438,47 +422,15 @@ function CheckOutcome({
   /* ------------------------------------------------- our problem, not theirs */
   if (isProviderProblem(view)) {
     return (
-      <div className="flex flex-col gap-3 rounded border border-warn bg-sheet-2 p-4">
-        <StatusPill className="self-start" tone="warn" label={`${provider} did not answer`} />
-        <p className="text-body-sm text-ink-2" role="status" aria-live="polite">
-          {view.message}
-        </p>
-        {/* Said in as many words, because the fear this screen creates is
-            "have I just burnt one of my tries on their outage". */}
-        <p className="text-body-sm text-ink-2">
-          This has not used any of your checks. You still have{' '}
-          <span className="tnum text-ink">{view.attemptsRemaining}</span> of{' '}
-          <span className="tnum text-ink">5</span> today.
-        </p>
-        {exhausted ? (
-          <>
-            <p className="text-body-sm text-ink-2">
-              We tried <span className="tnum text-ink">{RETRY_AFTER_SECONDS.length}</span> more
-              times and it is still not answering. That is not something you can fix from here.
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" variant="secondary" onClick={onRetryNow}>
-                Try once more
-              </Button>
-              <Button type="button" variant="ghost" onClick={onDefer}>
-                Continue — let a reviewer verify it
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-body-sm text-ink-2">
-              Retrying automatically in <span className="tnum text-ink">{retryIn ?? 0}</span>{' '}
-              {retryIn === 1 ? 'second' : 'seconds'} — attempt{' '}
-              <span className="tnum text-ink">{retryAttempt ?? 1}</span> of{' '}
-              <span className="tnum text-ink">{RETRY_AFTER_SECONDS.length}</span>.
-            </p>
-            <Button type="button" variant="ghost" onClick={onRetryNow}>
-              Retry now
-            </Button>
-          </div>
-        )}
-      </div>
+      <ProviderProblem
+        view={view}
+        provider={provider}
+        {...(retryIn === undefined ? {} : { retryIn })}
+        {...(retryAttempt === undefined ? {} : { retryAttempt })}
+        exhausted={exhausted ?? false}
+        onRetryNow={onRetryNow ?? (() => {})}
+        {...(onDefer ? { onDefer } : {})}
+      />
     );
   }
 
@@ -590,17 +542,17 @@ export function StepStatutory({
    * hold and a human is going to call them.
    */
   const [refusal, setRefusal] = React.useState<string | null>(null);
-  /** Key → the pending automatic retry. One interval drives all of them. */
-  const [retries, setRetries] = React.useState<
-    Record<string, { attempt: number; secondsLeft: number }>
-  >({});
   /**
-   * How many automatic retries each key has already had. A ref, not state: the
-   * interval removes the key from `retries` at the moment it fires, so the
-   * count cannot be read back out of it — and a counter that resets on every
-   * retry is a retry loop that never ends.
+   * The visible backoff, shared with step 6's penny-drop. One interval drives
+   * every key — `pan` and one per GSTIN row.
    */
-  const retriesUsed = React.useRef<Record<string, number>>({});
+  /**
+   * The latest `runCheck`, callable from the retry timer. Seeded empty and
+   * assigned below on every render: the ladder is declared before the function
+   * it fires, because the panel it drives is rendered before it too.
+   */
+  const runCheckRef = React.useRef<(key: string) => Promise<void>>(async () => {});
+  const retry = useRetryLadder((key) => void runCheckRef.current(key));
 
   // Read once and passed in, so the date rule can be tested at a year boundary
   // rather than against whatever the clock says at the moment it runs.
@@ -687,69 +639,10 @@ export function StepStatutory({
     setValues(next);
     persist(next);
 
-    const used = retriesUsed.current[key] ?? 0;
-    const wait = isProviderProblem(view) ? RETRY_AFTER_SECONDS[used] : undefined;
-    // Out of retries: the panel switches to "continue anyway" rather than
-    // looping forever against a portal that is plainly down.
-    if (wait !== undefined) retriesUsed.current[key] = used + 1;
-    setRetries((r) => {
-      const { [key]: _pending, ...rest } = r;
-      return wait === undefined
-        ? rest
-        : { ...rest, [key]: { attempt: used + 1, secondsLeft: wait } };
-    });
+    retry.note(key, view);
   };
 
-  const runCheckRef = React.useRef(runCheck);
   runCheckRef.current = runCheck;
-
-  /**
-   * The countdown, and the retry it ends in.
-   *
-   * One effect with two arms rather than an interval that fires checks from
-   * inside a state updater: a `setState` updater has to be pure, and calling a
-   * verification from one is how a retry ends up running twice or not at all.
-   * Each pass either dispatches the checks that have reached zero or schedules
-   * one more second — and it counts down **on screen**, because an automatic
-   * retry the applicant cannot see is indistinguishable from nothing happening,
-   * which is what makes people re-submit and burn their own attempts.
-   */
-  React.useEffect(() => {
-    const due = Object.entries(retries)
-      .filter(([, pending]) => pending.secondsLeft <= 0)
-      .map(([key]) => key);
-
-    if (due.length > 0) {
-      setRetries((current) => {
-        const next = { ...current };
-        for (const key of due) delete next[key];
-        return next;
-      });
-      // Re-added by `runCheck` if the portal is still down, which is what
-      // advances the attempt counter towards the "continue anyway" arm.
-      for (const key of due) void runCheckRef.current(key);
-      return undefined;
-    }
-
-    if (Object.keys(retries).length === 0) return undefined;
-    const id = setTimeout(
-      () =>
-        setRetries((current) =>
-          Object.fromEntries(
-            Object.entries(current).map(([key, pending]) => [
-              key,
-              { ...pending, secondsLeft: pending.secondsLeft - 1 },
-            ]),
-          ),
-        ),
-      1000,
-    );
-    return () => clearTimeout(id);
-  }, [retries]);
-
-  /** Whether this key has spent its automatic retries and is still unreachable. */
-  const exhausted = (key: string, view: VerificationOutcomeView | null): boolean =>
-    Boolean(view && isProviderProblem(view)) && !retries[key] && !isChecking(key);
 
   /* ---------------------------------------------------------------- editing */
 
@@ -765,11 +658,7 @@ export function StepStatutory({
     setError(key, undefined);
     // Editing the number throws away the answer that belonged to the old one.
     setRow(key, { gstin: raw.toUpperCase(), outcome: null, confirmed: false, deferred: false });
-    retriesUsed.current[key] = 0;
-    setRetries((r) => {
-      const { [key]: _dropped, ...rest } = r;
-      return rest;
-    });
+    retry.clear(key);
   };
 
   const addGstin = (): void =>
@@ -914,7 +803,7 @@ export function StepStatutory({
               onBlur={() => saveOnBlur()}
               onChange={(e) => {
                 setError('pan', undefined);
-                retriesUsed.current.pan = 0;
+                retry.clear('pan');
                 setValues((v) => ({
                   ...v,
                   pan: e.target.value.toUpperCase(),
@@ -949,9 +838,9 @@ export function StepStatutory({
           checking={isChecking('pan')}
           provider="the income-tax PAN service"
           deferred={values.panDeferred}
-          retryIn={retries.pan?.secondsLeft}
-          retryAttempt={retries.pan?.attempt}
-          exhausted={exhausted('pan', values.panOutcome)}
+          retryIn={retry.pending.pan?.secondsLeft}
+          retryAttempt={retry.pending.pan?.attempt}
+          exhausted={retry.exhausted('pan', values.panOutcome, isChecking('pan'))}
           onRetryNow={() => void runCheck('pan')}
           onDefer={() => {
             const next = { ...values, panDeferred: true };
@@ -1045,9 +934,9 @@ export function StepStatutory({
                 checking={isChecking(row.key)}
                 provider="the GST portal"
                 deferred={row.deferred}
-                retryIn={retries[row.key]?.secondsLeft}
-                retryAttempt={retries[row.key]?.attempt}
-                exhausted={exhausted(row.key, row.outcome)}
+                retryIn={retry.pending[row.key]?.secondsLeft}
+                retryAttempt={retry.pending[row.key]?.attempt}
+                exhausted={retry.exhausted(row.key, row.outcome, isChecking(row.key))}
                 onRetryNow={() => void runCheck(row.key)}
                 onDefer={() => {
                   const next = {
@@ -1058,10 +947,7 @@ export function StepStatutory({
                   };
                   setValues(next);
                   persist(next);
-                  setRetries((r) => {
-                    const { [row.key]: _dropped, ...rest } = r;
-                    return rest;
-                  });
+                  retry.clear(row.key);
                 }}
                 claimedName={values.legalName}
               >

@@ -386,6 +386,29 @@ every unit test passed; only starting the process found it.
 - A short page floated the footer halfway up the window; `body` is now a min-height flex
   column.
 
+## Schema defects found by T8 — fix as one focused change after T9
+
+Verified against the live database, not inferred:
+
+- **`vendor.can_dropship` and `can_provide_serials_upfront` are `NOT NULL DEFAULT TRUE`.**
+  Any writer that does not set them asserts the commercially convenient answer, so the
+  database claims a capability the vendor never stated — and `can_dropship` drives whether
+  we route goods vendor-to-customer direct. Same family as every other defect this run has
+  found: a missing value rendering as a passing one, this time at the schema layer. They
+  should be nullable with no default so "never asked" is distinguishable from "no".
+  T8's screen already refuses to continue until it is answered; the hole is for every
+  other writer.
+- **`vendor_facility.dispatch_address_id` nullable means "use the facility address"**, so
+  nothing distinguishes "same address, confirmed" from "never asked". It becomes Dispatch
+  From on every e-way bill.
+- **`sourcing_channels` is a bare `TEXT[]`** — no CHECK, no enum, no contract, while
+  category, facility type and vehicle access all have CHECK constraints.
+- **`facility_hours.day_of_week` is `0..6` with no comment saying which end is Sunday.**
+  Confirmed: the column has no COMMENT at all.
+- **`org_address.contact_name` is NOT NULL but is never asked per facility** — the person
+  it wants is the warehouse contact captured on the same screen. Asking twice would put two
+  answers to one question in the database.
+
 ## Known bugs, not yet fixed
 
 - `postJson` in `apps/console/src/routes/vendor/api.ts` reads `message` off the body root,

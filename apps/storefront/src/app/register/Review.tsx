@@ -5,7 +5,6 @@ import {
   AddressCard,
   Button,
   EmptyState,
-  FormSection,
   Skeleton,
   StatusPill,
   type Address,
@@ -26,6 +25,17 @@ import {
   labelFor,
   stateName,
 } from './picklists';
+import {
+  ApplicationStatus,
+  Rows,
+  StepBlock,
+  WITH_US,
+  labelOrBlank,
+  str,
+  unreadable,
+  type Row,
+  type StatusCopy,
+} from './review-parts';
 import type { BillingAddress, DeliveryAddress, Person } from './StepContacts';
 import { receivingHoursLabel } from './validation';
 
@@ -53,50 +63,6 @@ import { receivingHoursLabel } from './validation';
  * completed step says it is complete and says plainly that its answers are not
  * shown here — which is true, rather than a screen of false gaps.
  */
-
-/* ==========================================================================
- * Rows
- * ======================================================================== */
-
-interface Row {
-  label: string;
-  /** Empty or undefined renders as "Not provided", never as blank. */
-  value?: string;
-  required?: boolean;
-  /** Rendered in IBM Plex Mono: a GSTIN, a PAN, a number, a code. */
-  mono?: boolean;
-}
-
-const str = (source: Record<string, unknown>, key: string): string =>
-  typeof source[key] === 'string' ? (source[key] as string).trim() : '';
-
-function Value({ row }: { row: Row }): React.JSX.Element {
-  if (!row.value) {
-    return (
-      <dd className="text-body-sm text-ink-4">
-        Not provided{row.required ? ' — this step still needs it' : ''}
-      </dd>
-    );
-  }
-  return (
-    <dd className={row.mono ? 'font-mono text-data tnum text-ink' : 'text-body-sm text-ink'}>
-      {row.value}
-    </dd>
-  );
-}
-
-function Rows({ rows }: { rows: readonly Row[] }): React.JSX.Element {
-  return (
-    <dl className="flex flex-col gap-3">
-      {rows.map((row) => (
-        <div key={row.label} className="flex flex-col gap-1 sm:flex-row sm:gap-4">
-          <dt className="text-body-sm text-ink-3 sm:w-[18ch] sm:shrink-0">{row.label}</dt>
-          <Value row={row} />
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 /* ==========================================================================
  * One step's answers → rows
@@ -171,11 +137,6 @@ const documentsRows = (a: Record<string, unknown>): Row[] => {
     },
   ];
 };
-
-const labelOrBlank = (
-  options: readonly { value: string; label: string }[],
-  value: string,
-): string => (value ? labelFor(options, value) : '');
 
 /* ==========================================================================
  * Addresses and contacts — the step-4 half, which is not a row list
@@ -360,87 +321,8 @@ function DocumentList({ docs }: { docs: readonly KycDocument[] }): React.JSX.Ele
 }
 
 /* ==========================================================================
- * One step's block
- * ======================================================================== */
-
-const STEP_STATUS_LABEL: Record<string, string> = {
-  COMPLETE: 'Complete',
-  IN_PROGRESS: 'In progress',
-  NOT_STARTED: 'Not started',
-  NEEDS_FIX: 'Send this again',
-  SUBMITTED: 'Submitted',
-};
-
-interface StepBlockProps {
-  step: StepProgress;
-  /** True when a required row on this step is empty. */
-  hasGap: boolean;
-  onEdit: () => void;
-  children: React.ReactNode;
-}
-
-/**
- * One step, as it will reach the reviewer.
- *
- * The link back exists only while the step can actually be changed. A COMPLETE
- * step is locked server-side — `saveDraft` refuses it — so a link into one would
- * be a trip to a form that rejects every save, and the block says what it takes
- * to change it instead.
- */
-function StepBlock({ step, hasGap, onEdit, children }: StepBlockProps): React.JSX.Element {
-  const complete = step.status === 'COMPLETE' && !hasGap;
-  // A COMPLETE step is locked server-side — `saveDraft` refuses it — so a link
-  // into one would be a trip to a form that rejects every save.
-  const editable = step.status !== 'COMPLETE';
-  return (
-    <FormSection
-      title={step.title}
-      status={
-        <span className="flex flex-wrap items-center gap-3">
-          {/* Neutral for complete: green is reserved for a PASS verdict, and a
-              finished form step is not one. Red stays for a step sent back,
-              which is a refusal. */}
-          <StatusPill
-            tone={step.status === 'NEEDS_FIX' ? 'fail' : complete ? 'neutral' : 'warn'}
-            label={
-              hasGap && step.status === 'COMPLETE'
-                ? 'Answers missing'
-                : (STEP_STATUS_LABEL[step.status] ?? step.status)
-            }
-          />
-          {!complete && <span className="tnum text-ink-3">{step.completionPct}% answered</span>}
-        </span>
-      }
-    >
-      {step.blockingReason && (
-        <div role="alert" className="flex flex-col gap-2 rounded border border-fail bg-sheet-2 p-4">
-          <span className="font-mono text-label uppercase tracking-[0.13em] text-fail">
-            What the reviewer asked for
-          </span>
-          {/* Verbatim. A reviewer's sentence is the only one that says what to
-              change, and summarising it is how an applicant sends the same
-              document back a second time. */}
-          <blockquote className="text-body-sm text-ink">{step.blockingReason}</blockquote>
-        </div>
-      )}
-      {children}
-      {editable && (
-        <div className="border-t border-rule-2 pt-3">
-          <Button type="button" variant="ghost" onClick={onEdit}>
-            Change {step.title.toLowerCase()}
-          </Button>
-        </div>
-      )}
-    </FormSection>
-  );
-}
-
-/* ==========================================================================
  * The screen
  * ======================================================================== */
-
-/** Every status in which the application is with us rather than with them. */
-const WITH_US = ['KYC_SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED'];
 
 export interface ReviewProps {
   steps: readonly StepProgress[];
@@ -489,12 +371,25 @@ export function Review({
 
   if (submitted) {
     return (
-      <Pending
+      <ApplicationStatus
         orgStatus={orgStatus}
         slaDueAt={slaDueAt}
         slaBreached={slaBreached}
         needsFix={needsFix}
         onEdit={onEdit}
+        copy={OUTCOME}
+        steps={steps}
+        approved={
+          <EmptyState
+            title="Start with what has been inspected today"
+            body="Every laptop on the shop has been opened, graded and photographed. Filters for battery health and inspection score are the ones nobody else can offer."
+            action={
+              <Button variant="secondary" onClick={() => window.location.assign('/')}>
+                Browse laptops
+              </Button>
+            }
+          />
+        }
       />
     );
   }
@@ -603,37 +498,7 @@ export function Review({
   );
 }
 
-/** A completed step whose answers the server no longer returns. Said plainly. */
-function unreadable(step: StepProgress, onEdit: (code: string) => void): React.JSX.Element {
-  return (
-    <StepBlock
-      key={step.stepCode}
-      step={step}
-      hasGap={false}
-      onEdit={() => onEdit(step.stepCode)}
-    >
-      <p className="text-body-sm text-ink-4">
-        Completed{step.lastSavedAt ? ` on ${formatWhen(step.lastSavedAt)}` : ''}. These answers are
-        held with your application and are not shown again here.
-      </p>
-    </StepBlock>
-  );
-}
-
-/* ==========================================================================
- * After submission
- * ======================================================================== */
-
-/** The org status, as a person would say it. Never the raw enum. */
-const ORG_STATUS_LABEL: Record<string, string> = {
-  KYC_SUBMITTED: 'Submitted',
-  UNDER_REVIEW: 'Being reviewed',
-  INFO_REQUESTED: 'Waiting on you',
-  VERIFIED: 'Approved',
-  REJECTED: 'Not approved',
-};
-
-const OUTCOME: Record<string, { title: string; body: string; tone: 'pass' | 'fail' | 'info' }> = {
+const OUTCOME: Record<string, StatusCopy> = {
   KYC_SUBMITTED: {
     title: 'Your application is with our team',
     body: 'Nothing more is needed from you right now. We will email the contacts you gave us the moment there is a decision.',
@@ -660,122 +525,3 @@ const OUTCOME: Record<string, { title: string; body: string; tone: 'pass' | 'fai
     tone: 'fail',
   },
 };
-
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function Pending({
-  orgStatus,
-  slaDueAt,
-  slaBreached,
-  needsFix,
-  onEdit,
-}: {
-  orgStatus: string;
-  slaDueAt: string | null;
-  slaBreached: boolean;
-  needsFix: readonly StepProgress[];
-  onEdit: (code: string) => void;
-}): React.JSX.Element {
-  const outcome = OUTCOME[orgStatus] ?? OUTCOME.KYC_SUBMITTED!;
-  const hoursLeft =
-    slaDueAt === null
-      ? null
-      : Math.round(((new Date(slaDueAt).getTime() - new Date().getTime()) / 3_600_000) * 10) / 10;
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-lg border border-rule bg-sheet p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <StatusPill tone={outcome.tone} label={ORG_STATUS_LABEL[orgStatus] ?? orgStatus.replace(/_/g, ' ')} />
-        </div>
-        <h2 className="text-h2 text-ink">{outcome.title}</h2>
-        <p className="max-w-[62ch]">{outcome.body}</p>
-
-        {/* The promise, as a measured value — which is one of the three things
-            the accent is allowed to mean. */}
-        <dl className="flex flex-col gap-3 border-t border-rule-2 pt-4 sm:flex-row sm:gap-8">
-          <div className="flex flex-col gap-1">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Decision due by
-            </dt>
-            <dd className="font-mono text-data tnum text-ink">
-              {slaDueAt ? formatWhen(slaDueAt) : <span className="text-ink-4">Not recorded</span>}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-1">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Time remaining
-            </dt>
-            <dd
-              className={
-                slaBreached ? 'font-mono text-data tnum text-fail' : 'font-mono text-data tnum text-acc-ink'
-              }
-            >
-              {hoursLeft === null ? (
-                <span className="text-ink-4">Not measured</span>
-              ) : slaBreached ? (
-                `${Math.abs(hoursLeft)} hours past due`
-              ) : (
-                `${hoursLeft} hours`
-              )}
-            </dd>
-          </div>
-        </dl>
-
-        {slaBreached && (
-          <p role="status" className="text-body-sm text-fail">
-            We are past the time we promised you a decision. That is on us — your application has not
-            been forgotten, and it is at the front of the queue.
-          </p>
-        )}
-      </div>
-
-      {needsFix.map((step, index) => (
-        <div
-          key={step.stepCode}
-          role="alert"
-          className="flex flex-col gap-3 rounded-lg border border-fail bg-sheet p-5"
-        >
-          <span className="font-mono text-label uppercase tracking-[0.13em] text-fail">
-            {step.title} — sent back
-          </span>
-          {/* Verbatim, and it is the whole point of this panel. */}
-          <blockquote className="text-body text-ink">
-            {step.blockingReason ?? 'No reason was recorded. Please contact us before resending.'}
-          </blockquote>
-          <div>
-            {/* One primary action per screen: the first step sent back is the
-                one to open, the rest wait their turn. */}
-            <Button
-              type="button"
-              variant={index === 0 ? 'primary' : 'secondary'}
-              onClick={() => onEdit(step.stepCode)}
-            >
-              Open {step.title}
-            </Button>
-          </div>
-        </div>
-      ))}
-
-      {needsFix.length === 0 && orgStatus === 'VERIFIED' && (
-        <EmptyState
-          title="Start with what has been inspected today"
-          body="Every laptop on the shop has been opened, graded and photographed. Filters for battery health and inspection score are the ones nobody else can offer."
-          action={
-            <Button variant="secondary" onClick={() => window.location.assign('/')}>
-              Browse laptops
-            </Button>
-          }
-        />
-      )}
-    </div>
-  );
-}

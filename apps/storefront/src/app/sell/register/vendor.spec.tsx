@@ -85,7 +85,9 @@ beforeEach(() => {
 
 describe('the step rail', () => {
   it('draws seven steps for a vendor and five for a buyer, from one component', async () => {
-    const vendor = render(<VendorRegistration definitions={VENDOR_STEPS} brands={['Dell']} grades={GRADES} />);
+    const vendor = render(
+      <VendorRegistration definitions={VENDOR_STEPS} brands={['Dell']} grades={GRADES} />,
+    );
     const vendorRail = await screen.findByTestId('step-rail');
     expect(vendorRail).toHaveTextContent('0 of 7 done');
     // The last three exist only in the vendor seed. If the shell held its own
@@ -173,9 +175,7 @@ describe('CIN, Udyam and TAN', () => {
 
     // Three values entered, three rows that say what we actually know about
     // them — the shape, and nothing else.
-    await waitFor(() =>
-      expect(screen.getAllByText('Captured — not verified')).toHaveLength(3),
-    );
+    await waitFor(() => expect(screen.getAllByText('Captured — not verified')).toHaveLength(3));
     expect(screen.queryByText(/^Verified$/)).not.toBeInTheDocument();
 
     // The forbidden thing, attempted: nothing was sent anywhere to check them.

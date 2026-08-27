@@ -469,3 +469,221 @@ export const WEEK_DAYS = [
   { day: 6, label: 'Saturday', short: 'Sat' },
   { day: 0, label: 'Sunday', short: 'Sun' },
 ] as const;
+
+/* ==========================================================================
+ * Vendor registration — steps 6 and 7
+ * ======================================================================== */
+
+/**
+ * The nine documents a supplier is asked for, and why each one is wanted.
+ *
+ * Same report as `BUYER_DOCUMENTS`: `document_type_rule` has no `org_type` and
+ * no `step_code`, so all fourteen rows apply to everyone and nothing in the API
+ * can say which nine a *vendor* is asked for. The codes are here; every rule
+ * about each of them — the label, the size cap, the accepted types, how many we
+ * take, whether it goes stale — comes from `GET /onboarding/documents/types`.
+ *
+ * `BOARD_RESOLUTION` is marked required here as the default for the two
+ * constitutions that need one, and step 6 overrides it from the seeded
+ * `onboarding_field_requirement` row for `board_resolution` whenever the server
+ * returns one.
+ */
+export const VENDOR_DOCUMENTS = [
+  {
+    docType: 'GST_CERTIFICATE',
+    required: true,
+    purpose: 'The registration certificate for the GSTIN we raise purchase orders against.',
+  },
+  {
+    docType: 'PAN_CARD',
+    required: true,
+    purpose: 'The PAN of the entity we pay. TDS on every payout is deducted against it.',
+  },
+  {
+    docType: 'CANCELLED_CHEQUE',
+    required: true,
+    purpose:
+      'It has to show the account number, the IFSC and the account holder name printed on it — the same account you enter below.',
+  },
+  {
+    docType: 'ADDRESS_PROOF',
+    required: true,
+    purpose:
+      'For the registered office. A utility bill, a rent agreement or a property tax receipt.',
+  },
+  {
+    docType: 'INCORPORATION',
+    required: true,
+    purpose:
+      'Certificate of incorporation, partnership deed or the registration certificate for whatever the entity is.',
+  },
+  {
+    docType: 'SIGNATORY_ID',
+    required: true,
+    purpose:
+      'Photo ID of the person signing on this account. Aadhaar, passport or driving licence.',
+  },
+  {
+    docType: 'BOARD_RESOLUTION',
+    required: true,
+    purpose: 'Authorising the signatory to contract on the company’s behalf.',
+  },
+  {
+    docType: 'CPCB_EWASTE',
+    required: false,
+    purpose:
+      'Optional. If you hold a CPCB e-waste authorisation, buyers with an ESG policy can filter for it.',
+  },
+  {
+    docType: 'ISO_CERTIFICATE',
+    required: false,
+    purpose: 'Optional. ISO 9001, 14001 or 27001. It shows on your supplier profile.',
+  },
+] as const;
+
+/** `bank_account.account_type`, from the baseline migration’s CHECK. */
+export const ACCOUNT_TYPES: readonly Option[] = [
+  { value: 'CURRENT', label: 'Current account' },
+  { value: 'SAVINGS', label: 'Savings account' },
+  { value: 'CC', label: 'Cash credit' },
+  { value: 'OD', label: 'Overdraft' },
+];
+
+/**
+ * `vendor_payout_preference.pricing_mode`. The two values its CHECK allows.
+ *
+ * Both converge on the same stored rupee figure — COMMISSION is a presentation
+ * layer over the same contract, because vendors think in percentages. The
+ * consequence text is the migration’s own column comment, said to a supplier.
+ */
+export const PRICING_MODES = [
+  {
+    value: 'NET_PAYOUT',
+    label: 'I name the amount I want',
+    consequence:
+      'You give us a rupee figure per machine. We add our margin on top and that becomes the shelf price — so a discount we run never comes out of your number.',
+  },
+  {
+    value: 'COMMISSION',
+    label: 'I name the sale price and a rate',
+    consequence:
+      'You give us an expected sale price and a commission rate. We work out your payout from those two and freeze it the moment the purchase order is raised — nothing that happens to the shelf price afterwards changes it.',
+  },
+] as const;
+
+/**
+ * `vendor_payout_preference.preferred_cycle`, and which of them a new supplier
+ * can actually have.
+ *
+ * Q6 in `DECISIONS_OPEN.md`: `T_PLUS_2` is the platform default *once a supplier
+ * has earned it*, and the cycle is granted by tier. A brand-new application has
+ * no supply history, so T+2 is a **request** here rather than a setting. Saying
+ * that out loud is the point: silently granting a cycle we will not honour, and
+ * silently refusing one they asked for, are both worse than telling them.
+ */
+export const PAYOUT_CYCLES = [
+  {
+    value: 'T_PLUS_2',
+    label: 'Two working days after delivery',
+    earned: true,
+    consequence:
+      'This one is earned rather than chosen. We record the request and grant it once your first consignments have been delivered and inspected without a claim — until then you are paid weekly, and we write to you on the day it changes.',
+  },
+  {
+    value: 'WEEKLY',
+    label: 'Weekly',
+    earned: false,
+    consequence:
+      'Everything delivered and past its inspection window by the cut-off is paid in that week’s run. This is what every new supplier starts on.',
+  },
+  {
+    value: 'MONTHLY',
+    label: 'Monthly',
+    earned: false,
+    consequence:
+      'One run a month. Slower than we would pay you, so choose it only if it suits your own book-keeping.',
+  },
+] as const;
+
+/** The cycle every supplier starts on, whatever they request. */
+export const CYCLE_UNTIL_EARNED = 'WEEKLY';
+
+/**
+ * `platform_config.procurement.min_payout_threshold_inr`, in rupees.
+ *
+ * A constant here because no route exposes `platform_config` to a browser. It is
+ * the floor a vendor’s own threshold may not go below — under it the balance
+ * rolls forward, because nobody wants a Rs 400 NEFT. Reported: it belongs behind
+ * a public config endpoint beside the option lists above.
+ */
+export const MIN_PAYOUT_THRESHOLD_INR = 1000;
+
+/**
+ * The four documents step 7 asks a supplier to accept.
+ *
+ * **None of them is e-signed, and the screen says so.** There is no e-sign
+ * adapter in `apps/api/src/shared/adapters` — `AADHAAR_ESIGN` exists as a
+ * `CheckType` string and nothing implements it — so what actually happens is
+ * that an acceptance is recorded against the named person, with the version and
+ * the time. That is a real record and it is not a signature, and rendering a
+ * tick that claims otherwise is the exact thing this system refuses to do.
+ *
+ * The versions are the ones a reviewer will see on the acceptance; they are
+ * declared here because `agreement_acceptance` has no route and no seeded
+ * catalogue of agreements to read them from. Reported.
+ */
+export const VENDOR_AGREEMENTS = [
+  {
+    code: 'VENDOR_AGREEMENT',
+    version: '1.0',
+    label: 'Supplier agreement',
+    summary:
+      'How we buy from you: we are the seller of record and buy each serial back-to-back when a customer orders it. Covers title, the purchase order, pricing and how either of us ends the arrangement.',
+  },
+  {
+    code: 'GRADING_POLICY',
+    version: '1.0',
+    label: 'Grading policy',
+    summary:
+      'What A+, A and B mean, who inspects, and what happens when our grade and yours disagree. A grade correction is a conversation with evidence on both sides, not a unilateral downgrade.',
+  },
+  {
+    code: 'DATA_WIPE_UNDERTAKING',
+    version: '1.0',
+    label: 'Data-wipe undertaking',
+    summary:
+      'You confirm every machine is wiped to a recognised standard before it leaves you, and that you can produce the erasure report for any serial we ask about.',
+  },
+  {
+    code: 'RETURNS_POLICY',
+    version: '1.0',
+    label: 'Returns and claims',
+    summary:
+      'The 48-hour inspection window a buyer gets, what a valid claim looks like, and how a returned machine is settled against your payout.',
+  },
+] as const;
+
+/**
+ * How we reach a supplier. Same shape as the buyer’s list, different events —
+ * a purchase order and a payout advice are not an order confirmation.
+ *
+ * **Nothing here is ticked by default**, for the same reason.
+ */
+export const VENDOR_NOTIFICATION_CHANNELS = [
+  {
+    code: 'EMAIL',
+    label: 'Email',
+    consequence:
+      'Purchase orders, pick lists, payout advice and TDS certificates go to the contacts on step 5.',
+  },
+  {
+    code: 'WHATSAPP',
+    label: 'WhatsApp',
+    consequence: 'Pick-up windows and dispatch reminders on the warehouse mobile number.',
+  },
+  {
+    code: 'SMS',
+    label: 'SMS',
+    consequence: 'A purchase order raised and a payout released. Nothing else.',
+  },
+] as const;

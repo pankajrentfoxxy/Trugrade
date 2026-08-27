@@ -25,10 +25,8 @@ const GRADES = [
 
 const noop = (): void => {};
 /** Typed with the arguments the step passes, so `mock.calls[0]` has a shape. */
-const accept = async (
-  _values: Record<string, unknown>,
-  _completionPct: number,
-): Promise<null> => null;
+const accept = async (_values: Record<string, unknown>, _completionPct: number): Promise<null> =>
+  null;
 
 function renderCapability(overrides: Partial<React.ComponentProps<typeof StepCapability>> = {}) {
   return render(
@@ -185,7 +183,9 @@ describe('the dispatch address', () => {
     renderFacility({ answers: draft });
 
     const resumedDispatch = screen.getByTestId('dispatch');
-    expect(within(resumedDispatch).getByLabelText(/goods leave from somewhere else/i)).toBeChecked();
+    expect(
+      within(resumedDispatch).getByLabelText(/goods leave from somewhere else/i),
+    ).toBeChecked();
     expect(within(resumedDispatch).getByLabelText(/Dispatch building and street/)).toHaveValue(
       'Plot 61, Sector 37 Industrial Estate',
     );
@@ -203,9 +203,7 @@ describe('the dispatch address', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
 
     expect(onContinue).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/printed as “Dispatch From” on the e-way bill/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/printed as “Dispatch From” on the e-way bill/)).toBeInTheDocument();
     expect(screen.getByText('Not answered — no address will be printed.')).toBeInTheDocument();
   });
 });

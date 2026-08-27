@@ -133,14 +133,37 @@ const toDraft = (values: CapabilityValues): Record<string, unknown> => ({ ...val
 const asNumber = (value: string): number | null =>
   /^\d+$/.test(value.trim()) ? Number(value.trim()) : null;
 
-export const gradeMixTotal = (mix: Record<string, string>): number =>
-  Object.values(mix).reduce((sum, v) => sum + (asNumber(v) ?? 0), 0);
+const CAPACITY_RULE = {
+  required: true,
+  min: 1,
+  max: 100000,
+  unit: 'laptops',
+  missing:
+    'Tell us how many laptops a month you can actually supply. An honest number sizes the enquiries we send you — it is not a commitment.',
+};
+
+const LEAD_TIME_RULE = {
+  required: true,
+  min: 0,
+  max: 60,
+  unit: 'days',
+  missing:
+    'Tell us how many days from a purchase order to the machine leaving your dock. Zero is a real answer if you ship same day.',
+};
+
+/**
+ * Summed over the grades the catalogue currently defines, not over every key in
+ * the draft: a grade that was retired after a draft was saved would otherwise
+ * keep contributing to a total nobody can see a row for.
+ */
+export const gradeMixTotal = (mix: Record<string, string>, grades: readonly string[]): number =>
+  grades.reduce((sum, grade) => sum + (asNumber(mix[grade] ?? '') ?? 0), 0);
 
 /** Answered at all, and adding to exactly 100. Both, or the split says nothing. */
 const gradeMixDone = (mix: Record<string, string>, grades: readonly string[]): boolean =>
   grades.length > 0 &&
   grades.some((g) => (asNumber(mix[g] ?? '') ?? 0) > 0) &&
-  gradeMixTotal(mix) === 100;
+  gradeMixTotal(mix, grades) === 100;
 
 const checksOf = (values: CapabilityValues, grades: readonly string[]): boolean[] => [
   values.categories.length > 0,
@@ -158,24 +181,6 @@ const checksOf = (values: CapabilityValues, grades: readonly string[]): boolean[
 export const completionOf = (values: CapabilityValues, grades: readonly string[]): number => {
   const checks = checksOf(values, grades);
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-};
-
-const CAPACITY_RULE = {
-  required: true,
-  min: 1,
-  max: 100000,
-  unit: 'laptops',
-  missing:
-    'Tell us how many laptops a month you can actually supply. An honest number sizes the enquiries we send you — it is not a commitment.',
-};
-
-const LEAD_TIME_RULE = {
-  required: true,
-  min: 0,
-  max: 60,
-  unit: 'days',
-  missing:
-    'Tell us how many days from a purchase order to the machine leaving your dock. Zero is a real answer if you ship same day.',
 };
 
 /* ==========================================================================
@@ -271,7 +276,7 @@ export function StepCapability({
     if (capacity) found.monthlyCapacity = capacity;
 
     if (gradeCodes.length > 0) {
-      const total = gradeMixTotal(v.gradeMix);
+      const total = gradeMixTotal(v.gradeMix, gradeCodes);
       const bad = gradeCodes.find((g) => {
         const raw = (v.gradeMix[g] ?? '').trim();
         return raw.length > 0 && asNumber(raw) === null;
@@ -338,7 +343,7 @@ export function StepCapability({
   /* ----------------------------------------------------------------- view */
 
   const capacity = asNumber(values.monthlyCapacity);
-  const mixTotal = gradeMixTotal(values.gradeMix);
+  const mixTotal = gradeMixTotal(values.gradeMix, gradeCodes);
   const namedBrands = values.brands.length + (values.otherBrands.trim().length > 0 ? 1 : 0);
 
   /**
@@ -371,7 +376,10 @@ export function StepCapability({
   return (
     <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)} noValidate>
       {blockingReason && (
-        <p role="alert" className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-fail">
+        <p
+          role="alert"
+          className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-fail"
+        >
           {blockingReason}
         </p>
       )}
@@ -523,7 +531,8 @@ export function StepCapability({
               {capacity !== null && (
                 <>
                   {' '}
-                  — <span className="font-mono tnum text-ink">
+                  —{' '}
+                  <span className="font-mono tnum text-ink">
                     {Math.round((capacity * mixTotal) / 100)}
                   </span>{' '}
                   of <span className="font-mono tnum text-ink">{capacity}</span> laptops a month
