@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T13:10:00+00:00  
-Currently: T11 - search results /search (opens Wave 3)
+Currently: T11 - search results at /search (Wave 3 begins: the buying path)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -20,8 +20,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T7 | Vendor registration - steps 1-3 | DONE | a2da740 | 42 shots, both themes, 1440/900/600 | RegisterFlow is one shell for both flows (buyer 5 steps, vendor 7). StepAccount/StepStatutory shared so the PROVIDER_ERROR ladder and checksum guard exist once. CIN/Udyam/TAN render Captured-not-verified. Fixed: vendors could not register at all (MFA), /auth/session lying about mfaRequired, two time-bomb tests, Input mono missing tnum. |
 | T8 | Vendor registration - steps 4-5 | DONE | 9612014 | 60 shots, both themes, 1440/900/600 | Capability + facilities. can_dropship required with 'no' a real answer; dispatch_address explicit rather than silently defaulting (it becomes Dispatch From on every e-way bill). Grade mix carries its denominator and must total 100. No defaultChecked anywhere. |
 | T9 | Vendor registration - steps 6-7 and submission | DONE | 6ea119e | 86 shots, both themes, 1440/900/600 | Documents+bank with a real penny-drop, agreement+payout, review, submission, application status. Extracted three shared pieces rather than copying T6's: `DocumentChecklist`, `review-parts`, `verification`. Fixed a live API defect — the penny-drop hashed one value for the policy and another for the record, so the retry limit never bound and one typo paused an application. |
-| T10 | Sign-in, both portals, surrounding states | DONE |  | 138 shots, both themes, 1440/900/600 | Archetype F. Customer OTP-first with password secondary; console password-first with the second factor after it. Rate limits render the server's sentence AND count `Retry-After` down. Four auth routes did not exist and were built (`login/otp`, `login/otp/verify`, `password/forgot`, `password/reset`) — enumeration-safe by construction, not by wording. `ApplicationStatus` now shows the reviewer's REJECT notes, which nothing had ever shown the applicant. Fixed a test-harness defect that made every private test database silently skip its migrations. |
-| T11 | Search results /search | TODO |  |  |  |
+| T10 | Sign-in, both portals, surrounding states | DONE | 9046aff | 138 shots, 23 states x 2 themes x 3 widths | Closes Wave 2. Rate limit shows the server's real countdown off Retry-After. MFA says out loud that it is an emailed code, not TOTP, and login/otp refuses MFA_REQUIRED_ROLES. Enumeration closed structurally (deliver:false). Fixed: reviewer's rejection reason reaching nobody, an SLA promise under a rejection, db.ts skipping migrations on any private test DB, wordmark invisible in light. |
+| T11 | Search results /search | DOING |  |  |  |
 | T12 | Product detail /laptops/[slug] | TODO |  |  |  |
 | T13 | Unit passport /unit/[serial] | TODO |  |  |  |
 | T14 | Certificate verification /qc/verify/[code] | TODO |  |  |  |
@@ -283,6 +283,23 @@ Three things about them are worth carrying forward:
   select, and `register/YesNo.tsx` is the same shape with two fixed options.
   `YesNo` should fold into `Choice`, and both belong in `packages/ui` beside
   `Checkbox` — a form system with a `Checkbox` and no radio is half a system.
+
+## Wave 2 closed — what it left behind
+
+Registration and auth are complete for both portals: buyer 5 steps, vendor 7, both
+sign-ins, MFA, and every surrounding state. Integration is 500/500 across 27 suites.
+
+Three things Wave 2 proved are MISSING and that later waves depend on:
+
+1. **No step promotion.** Reported independently by T5, T6, T8 and T9. A COMPLETE step's
+   answers live only in `onboarding_progress.draft_json`; `vendor_capability`,
+   `vendor_facility`, `facility_hours`, `org_address`, `org_contact`, `gst_profile` and
+   `bank_account` all stay EMPTY no matter what an applicant enters. Every screen that
+   reads a promoted table — the whole vendor portal in Wave 5 — has nothing to read.
+   **This is the single largest blocker for Waves 5 and 6.**
+2. **No TOTP.** `mfa_secret_enc` exists as a column referenced only by the audit
+   redaction list. Owner accounts are protected by an emailed code today.
+3. **No route sets `SUSPENDED`**, and `suspendOrganization` has no caller.
 
 ## Open questions
 
