@@ -22,8 +22,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T9 | Vendor registration - steps 6-7 and submission | DONE | 6ea119e | 86 shots, both themes, 1440/900/600 | Documents+bank with a real penny-drop, agreement+payout, review, submission, application status. Extracted three shared pieces rather than copying T6's: `DocumentChecklist`, `review-parts`, `verification`. Fixed a live API defect — the penny-drop hashed one value for the policy and another for the record, so the retry limit never bound and one typo paused an application. |
 | T10 | Sign-in, both portals, surrounding states | DONE | 9046aff | 138 shots, 23 states x 2 themes x 3 widths | Closes Wave 2. Rate limit shows the server's real countdown off Retry-After. MFA says out loud that it is an emailed code, not TOTP, and login/otp refuses MFA_REQUIRED_ROLES. Enumeration closed structurally (deliver:false). Fixed: reviewer's rejection reason reaching nobody, an SLA promise under a rejection, db.ts skipping migrations on any private test DB, wordmark invisible in light. |
 | T11 | Search results /search | DONE | 012086b | 50 shots, 10 states x 2 themes x 3 widths | Archetype B. Reuses the homepage rail rather than building a second. Whole board state in the URL. Zero-count facets disabled not hidden. Grade counts from unit.grade_actual. Unmeasured battery renders 'Not measured', never 0%. No supplier nameable. |
-| T12 | Product detail /laptops/[slug] | DONE |  | 66 shots, 20 states x 2 themes, 1440 + 900/600 | Archetype C. Built `GET /api/public/skus/:skuId/offers` — the per-SKU board, which did not exist. Ten supply points on the hero SKU, grouped on (code, city) so the two `F`s stay distinct. Landed price = our price + freight + GST, whole break-up behind one disclosure. Below the sample threshold: "New supplier · N units", never a percentage. MARGIN runs as its own pool with `MARGIN_ITC_LABEL`. p95 190 ms at 10 supply points / 105 units. |
-| T13 | Unit passport /unit/[serial] | TODO |  |  |  |
+| T12 | Product detail /laptops/[slug] | DONE | 07b6c03 | 66 shots, both themes, 1440/900/600 | Archetype C. Board endpoint built. Ten supply points, both F's distinct, cheapest scores worst, Palwal renders New supplier. p95 190ms vs 500ms budget. Anonymity swept over 140KB of live payloads: zero hits. OfferRow gained `emphasis` so one row carries the amber, not ten. |
+| T13 | Unit passport /unit/[serial] | DOING |  |  |  |
 | T14 | Certificate verification /qc/verify/[code] | TODO |  |  |  |
 | T15 | Cart | TODO |  |  |  |
 | T16 | Checkout | TODO |  |  |  |
@@ -805,6 +805,14 @@ Verified against the live database, not inferred:
 - `postJson` in `apps/console/src/routes/vendor/api.ts` reads `message` off the body root,
   but `DomainExceptionFilter` nests it under `error` — so every actionable refusal renders
   as "that did not go through (422)". Behaviour fix, deliberately not done inside a restyle.
+
+## Prerequisites built outside the numbered backlog
+
+| What | Commit | Why it could not wait |
+|---|---|---|
+| Step promotion | c04c5f5 | 642 drafts wrote zero rows to the tables the product reads |
+| Multi-supply-point demo data | e4c177f | The comparison board had one row to compare |
+| Image pipeline + QC evidence | (this) | No image could render anywhere; 3 of the passport's 5 evidence panels were empty |
 
 ## Operational traps that have each cost real time
 

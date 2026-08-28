@@ -6,8 +6,9 @@ import { SystemClock } from '../../src/shared/clock';
 import { PrismaService } from '../../src/shared/db/prisma.service';
 import { RequestContextService } from '../../src/shared/db/org-scope';
 import { EventBus } from '../../src/shared/events/event-bus';
-import { QcRepository } from '../../src/modules/qc/internal/qc.repository';
+import { QcRepository, generateVerificationCode } from '../../src/modules/qc/internal/qc.repository';
 import { VendorQualityService } from '../../src/modules/qc/internal/vendor-quality.service';
+import { seedQcEvidence } from './qc-evidence';
 
 /**
  * A walkable demo: real accounts, verified vendors, inspected stock, and enough
@@ -63,6 +64,25 @@ const PLATFORM_PEOPLE: Person[] = [
   { email: 'finance@trugrade.in', name: 'Priya Nair', role: 'FINANCE' },
   { email: 'logistics@trugrade.in', name: 'Sameer Bose', role: 'LOGISTICS_MANAGER' },
 ];
+
+/**
+ * When the demo says a unit was inspected.
+ *
+ * Three days ago, but never BEFORE the tolerance rules came into force. The
+ * report route refuses to print a grade it cannot defend — "no QC tolerance
+ * rules were in force on this date" is a 412 — and it is right to: a grade is
+ * our claim under CP e-Comm r.7(5), and one derived from rules that did not
+ * exist yet is a claim we could not stand behind.
+ *
+ * The rules are seeded effective from the migration day, so a flat "three days
+ * ago" put every demo report before them and made /unit/:serial/report.pdf
+ * return 412 for every unit on the platform. The refusal was correct; the seed
+ * was wrong. This clamps the story to the rules rather than loosening the rule
+ * to fit the story.
+ */
+const INSPECTED_AT =
+  "GREATEST(now() - interval '3 days', " +
+  '(SELECT min(effective_from)::timestamptz FROM qc.qc_tolerance_rule))';
 
 const VENDOR_PEOPLE: Person[] = [
   { email: 'owner@northgate.example', name: 'Harpreet Singh', role: 'VENDOR_OWNER', owner: true },
@@ -408,7 +428,7 @@ async function seedOffer(
          vendor_ask_price, retail_price, supply_point_code, valuation_method, itc_eligible)
       VALUES (${unitId}::uuid, ${listingId}::uuid, ${vendor.orgId}::uuid, ${skuId}::uuid, ${serial},
               ${declared}::grade_type, ${offer.grade}::grade_type, 'QC_PASSED'::unit_status, 'VENDOR',
-              now() - interval '3 days', CURRENT_DATE + ${validUntil}::int, ${score}, ${battery},
+              ${INSPECTED_AT}, CURRENT_DATE + ${validUntil}::int, ${score}, ${battery},
               ${Math.round(offer.price * 0.86)}, ${offer.price}, ${vendor.supplyCode},
               ${vendor.spec.valuation}, ${vendor.spec.valuation === 'REGULAR'})`;
 
@@ -421,10 +441,10 @@ async function seedOffer(
          signature, nonce, qc_score, verdict, grade_proposed, grade_final,
          grade_override_reason, verification_code, valid_until, is_current, rules_version)
       VALUES (${reportId}::uuid, ${unitId}::uuid, ${techId}::uuid, ${'CERT-' + serial}, '0.1.0',
-              now() - interval '3 days', now() - interval '3 days', 'demo-sig', ${randomUUID()},
+              ${INSPECTED_AT}, ${INSPECTED_AT}, 'demo-sig', ${randomUUID()},
               ${score}, 'PASS'::qc_verdict, ${declared}::grade_type, ${offer.grade}::grade_type,
               ${overrideReason},
-              ${randomBytes(9).toString('base64url')}, CURRENT_DATE + ${validUntil}::int, TRUE, '2026.08')`;
+              ${generateVerificationCode()}, CURRENT_DATE + ${validUntil}::int, TRUE, '2026.08')`;
 
     // VendorQualityService averages battery health from HERE, not from the copy
     // denormalised onto the unit — so a machine whose battery was never read has
@@ -439,8 +459,8 @@ async function seedOffer(
       INSERT INTO qc.qc_seal
         (id, seal_code, unit_id, qc_report_id, applied_by, applied_at, applied_photo_key, status)
       VALUES (${sealId}::uuid, ${'TG-' + serial}, ${unitId}::uuid, ${reportId}::uuid,
-              ${techId}::uuid, now() - interval '3 days',
-              ${'qc/seals/' + serial + '.jpg'},
+              ${techId}::uuid, ${INSPECTED_AT},
+              ${'qc/seals/' + serial + '.svg'},
               ${broken ? 'BROKEN' : 'APPLIED'}::seal_status)`;
 
     // seal_id and the report first, then LISTED: every one of these writes fires
@@ -597,6 +617,11 @@ export async function seedDemo(
         `their vendor in that city. A vendor appearing under two labels has had their unit count leaked.`,
     );
   }
+
+  // Over every current report, not only the ones written above: seedOffer
+  // returns early for a listing it has already made, so a developer with a
+  // seeded database would otherwise never get the evidence.
+  await seedQcEvidence(prisma, log);
 
   const skuRows = await refreshVendorQuality();
   log(`  vendor quality: ${skuRows} (vendor, sku, grade) row(s) computed`);

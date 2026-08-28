@@ -1,5 +1,6 @@
 import { Global, Logger, Module, type Provider } from '@nestjs/common';
 import { AppConfig, ConfigModule } from '../config';
+import { ClockModule } from '../clock';
 import {
   BankVerificationPort,
   type CarrierPort,
@@ -13,6 +14,7 @@ import {
   QcPlatformPort,
   VirtualAccountPort,
 } from './ports';
+import { ObjectUrlSigner } from './object-url';
 import {
   FakeBankVerification,
   FakeGstinVerification,
@@ -54,6 +56,9 @@ export type CarrierRegistry = ReadonlyMap<string, CarrierPort>;
  */
 const fakeProviders: Provider[] = [
   NotificationOutbox,
+  // Not a fake. Every adapter that hands a browser a URL mints it here, so the
+  // route that resolves one and the store that issued it share a key.
+  ObjectUrlSigner,
   { provide: GstinVerificationPort, useClass: FakeGstinVerification },
   { provide: PanVerificationPort, useClass: FakePanVerification },
   { provide: BankVerificationPort, useClass: FakeBankVerification },
@@ -80,7 +85,12 @@ const fakeProviders: Provider[] = [
 
 @Global()
 @Module({
-  imports: [ConfigModule],
+  // ClockModule is @Global in the running app, so this import is redundant
+  // there — and load-bearing in a test that builds a module out of
+  // AdaptersModule alone. ObjectUrlSigner reads the clock to stamp an expiry;
+  // a provider inside an imported module cannot see the importing module's
+  // own providers, so without this a dozen suites fail to compile at all.
+  imports: [ConfigModule, ClockModule],
   providers: [
     ...fakeProviders,
     {
@@ -98,6 +108,7 @@ const fakeProviders: Provider[] = [
     },
   ],
   exports: [
+    ObjectUrlSigner,
     GstinVerificationPort,
     PanVerificationPort,
     BankVerificationPort,

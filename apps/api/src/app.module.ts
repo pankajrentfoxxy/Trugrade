@@ -14,6 +14,7 @@ import { DomainExceptionFilter, HttpModule, RequestContextInterceptor } from './
 
 import { HealthModule } from './platform/health/health.service';
 import { JobsModule } from './platform/jobs/integrity.jobs';
+import { ObjectsModule } from './platform/objects/objects.controller';
 
 import { IdentityModule } from './modules/identity';
 import { KycModule } from './modules/kyc';
@@ -44,6 +45,7 @@ import { PlatformModule } from './modules/platform';
     // Platform plumbing
     HealthModule,
     JobsModule,
+    ObjectsModule,
 
     // The twelve business modules, one per Postgres schema.
     IdentityModule,

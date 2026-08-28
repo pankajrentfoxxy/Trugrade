@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Money } from '@trugrade/contracts';
+import { AppConfig } from '../../config';
+import { ObjectUrlSigner } from '../object-url';
 import {
   EInvoicePort,
   EwayBillPort,
@@ -216,10 +220,42 @@ export class FakeEInvoice extends EInvoicePort {
   async cancelIrn(_irn: string, _reason: string): Promise<void> {}
 }
 
-/** In-memory S3. `poison/*` returns a file whose magic bytes contradict its MIME. */
+/**
+ * S3 on the local disk. `poison/*` returns a file whose magic bytes contradict
+ * its MIME.
+ *
+ * WHY DISK AND NOT A MAP. `pnpm db:seed` and the API are two processes. An
+ * image the seed writes has to still be there when the API serves it minutes
+ * later, and a Map dies with the process that made it — which is why 608
+ * catalogued condition images stood against zero objects and no photograph in
+ * the product could render.
+ *
+ * The layout is deliberately not the key path: a key is hashed to a filename so
+ * a key containing `..`, a drive letter or a 300-character prefix cannot decide
+ * where a byte lands. The content type rides in a sidecar because it is the
+ * store's answer, not the file extension's guess.
+ */
 @Injectable()
 export class FakeObjectStore extends ObjectStorePort {
-  private readonly objects = new Map<string, { body: Buffer; contentType: string }>();
+  private readonly root: string;
+
+  /**
+   * Required, not optional. It was optional for one call site's convenience and
+   * that turned a missing constructor argument into a `ProviderError` thrown
+   * from inside a passport request — a dependency that is optional to construct
+   * and mandatory to use is the worst of both.
+   */
+  constructor(
+    private readonly signer: ObjectUrlSigner,
+    config: AppConfig,
+  ) {
+    super();
+    this.root = config.get('OBJECT_STORE_DIR');
+  }
+
+  private path(key: string): string {
+    return join(this.root, createHash('sha256').update(key).digest('hex'));
+  }
 
   async presignUpload(
     key: string,
@@ -232,25 +268,35 @@ export class FakeObjectStore extends ObjectStorePort {
     };
   }
   async presignDownload(key: string, ttlSeconds: number): Promise<string> {
-    return `memory://download/${key}?exp=${ttlSeconds}`;
+    return this.signer.sign(key, ttlSeconds);
   }
   async put(key: string, body: Buffer, contentType: string): Promise<void> {
-    this.objects.set(key, { body, contentType });
+    mkdirSync(this.root, { recursive: true });
+    const path = this.path(key);
+    writeFileSync(path, body);
+    writeFileSync(`${path}.type`, contentType, 'utf8');
   }
   async get(key: string): Promise<Buffer> {
     if (key.startsWith('poison/')) {
       // Declared PDF, actually a PNG. The magic-byte check must catch it (VR-063).
       return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     }
-    const found = this.objects.get(key);
-    if (!found) throw new ProviderError('s3', { key, reason: 'NoSuchKey' });
-    return found.body;
+    const path = this.path(key);
+    if (!existsSync(path)) throw new ProviderError('s3', { key, reason: 'NoSuchKey' });
+    return readFileSync(path);
+  }
+  /** The type `put` was given. Not inferred from the key — a key is not a promise. */
+  async contentType(key: string): Promise<string> {
+    const sidecar = `${this.path(key)}.type`;
+    return existsSync(sidecar) ? readFileSync(sidecar, 'utf8') : 'application/octet-stream';
   }
   async delete(key: string): Promise<void> {
-    this.objects.delete(key);
+    const path = this.path(key);
+    rmSync(path, { force: true });
+    rmSync(`${path}.type`, { force: true });
   }
   async exists(key: string): Promise<boolean> {
-    return this.objects.has(key);
+    return existsSync(this.path(key));
   }
 }
 

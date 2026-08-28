@@ -10,6 +10,7 @@ import { PrismaService } from '../../shared/db/prisma.service';
 import { ClockPort } from '../../shared/clock';
 import { QcRepository, type QcReportRow } from './internal/qc.repository';
 import { ReportPdfService } from './internal/report-pdf.service';
+import { QC_AREA_CODES } from './dto/qc.dto';
 import type { QcAreaCode, QcAreaStatus, QcPhotoAngle, QcVerdictValue } from './dto/qc.dto';
 
 /**
@@ -69,11 +70,23 @@ export interface PassportPhoto {
   url: string;
 }
 
+/**
+ * One of the twelve areas — including the ones nobody looked at.
+ *
+ * `qc_area_result.status` has a CHECK of PASS/WARN/FAIL and no NOT_MEASURED, so
+ * an unmeasured area is stored as an **absent row** (`qc.dto.ts` says so at
+ * length, and the verdict engine reads that absence). An absent row is the right
+ * storage and the wrong payload: a screen iterating eleven rows renders eleven
+ * ticks and a twelfth area that simply is not mentioned, which is a missing
+ * value rendering as a passing one — the failure CLAUDE.md names. So the
+ * passport states the absence rather than omitting it: always twelve entries,
+ * `NOT_MEASURED` with null scores for the ones we did not measure.
+ */
 export interface PassportArea {
   area: QcAreaCode;
-  score: number;
-  maxScore: number;
-  status: QcAreaStatus;
+  score: number | null;
+  maxScore: number | null;
+  status: QcAreaStatus | 'NOT_MEASURED';
 }
 
 export interface PassportHardware {
@@ -241,16 +254,24 @@ export class QcPassportService {
             // could vet.
           }
         : null,
-      areas: areas.map((a) => ({
-        area: a.area,
-        score: a.score,
-        maxScore: a.maxScore,
-        status: a.status,
-      })),
+      // Driven by the twelve codes, not by the rows: a code with no row is
+      // reported as NOT_MEASURED rather than dropped. Ordered by the code list
+      // so two passports for the same machine read identically.
+      areas: QC_AREA_CODES.map((code) => {
+        const measured = areas.find((a) => a.area === code);
+        return measured
+          ? {
+              area: code,
+              score: measured.score,
+              maxScore: measured.maxScore,
+              status: measured.status,
+            }
+          : { area: code, score: null, maxScore: null, status: 'NOT_MEASURED' as const };
+      }),
       photos: await Promise.all(
         photos.map(async (p) => ({
           angle: p.angle,
-          // Signed, short-lived, and the key never appears in the response —
+          // Short-lived, opaque, and the key never appears in the response —
           // object keys are a place vendor identifiers have leaked before.
           url: await this.store.presignDownload(p.fileKey, PHOTO_URL_TTL_SECONDS),
         })),

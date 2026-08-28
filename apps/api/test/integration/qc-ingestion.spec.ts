@@ -24,6 +24,7 @@ import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
 import { ObjectStorePort, QcPlatformPort } from '../../src/shared/adapters/ports';
 import { FakeObjectStore } from '../../src/shared/adapters/fakes/infra.fakes';
+import { ObjectUrlSigner } from '../../src/shared/adapters/object-url';
 import { NonceReplayError, QcRepository } from '../../src/modules/qc/internal/qc.repository';
 import { DeviceSureClient } from '../../src/modules/qc/internal/devicesure.client';
 import { IngestionService } from '../../src/modules/qc/internal/ingestion.service';
@@ -97,6 +98,10 @@ beforeAll(async () => {
         },
         inject: [AppConfig],
       },
+      // FakeObjectStore mints browser-fetchable URLs, so it needs the signer
+      // the app wires in. Named here rather than importing AdaptersModule,
+      // which would drag in every other fake this suite does not use.
+      ObjectUrlSigner,
       { provide: ObjectStorePort, useClass: FakeObjectStore },
       {
         // Only `fetchPublicKey` is exercised here. The other three methods are

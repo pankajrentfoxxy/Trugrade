@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 
 /**
@@ -38,6 +40,17 @@ export const envSchema = z
     S3_ACCESS_KEY_ID: z.string().optional(),
     S3_SECRET_ACCESS_KEY: z.string().optional(),
     S3_FORCE_PATH_STYLE: boolish.default(false),
+
+    /**
+     * Where `FakeObjectStore` keeps its bytes.
+     *
+     * Dev and test only — a real store has a bucket. It is a DIRECTORY rather
+     * than a Map because `pnpm db:seed` and the API are two processes and an
+     * image seeded by one has to be readable by the other. The test harness
+     * overrides it per database so a suite asserting an object is ABSENT is not
+     * answered by a developer's own seed.
+     */
+    OBJECT_STORE_DIR: z.string().default(join(tmpdir(), 'trugrade-object-store')),
 
     SMTP_HOST: z.string().default('localhost'),
     SMTP_PORT: z.coerce.number().int().default(1026),

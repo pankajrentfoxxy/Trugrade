@@ -26,6 +26,7 @@
  * an overwrite hides both the mistake and the intent.
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const file = join(__dirname, '..', '..', '.env.test');
@@ -66,3 +67,14 @@ if (testDb && !/^trugrade_(test|verify)/.test(testDb)) {
 if (process.env.DATABASE_URL_TEST && process.env.DATABASE_URL !== process.env.DATABASE_URL_TEST) {
   process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 }
+
+// The object store is durable now — `FakeObjectStore` writes to disk so the
+// seed and the API, two processes, can see the same bytes. That makes it shared
+// state in exactly the way the test database is, and for exactly the same
+// reason: a suite that asserts an object is ABSENT would otherwise be answered
+// by whatever an earlier run left behind, including the developer's own seed.
+// Keyed on the database name so a private database gets a private bucket.
+process.env.OBJECT_STORE_DIR ??= join(
+  tmpdir(),
+  `trugrade-object-store-${testDb || 'test'}`,
+);

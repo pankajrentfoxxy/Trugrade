@@ -349,9 +349,20 @@ export abstract class ObjectStorePort {
     contentType: string,
     maxBytes: number,
   ): Promise<{ url: string; fields?: Record<string, string> }>;
+  /**
+   * A URL a browser can fetch. It is not required to be a provider presign, and
+   * for this platform it deliberately is not: a presigned URL publishes the
+   * object key, and our keys carry vendor identifiers. See `ObjectUrlSigner`.
+   */
   abstract presignDownload(key: string, ttlSeconds: number): Promise<string>;
   abstract put(key: string, body: Buffer, contentType: string): Promise<void>;
   abstract get(key: string): Promise<Buffer>;
+  /**
+   * The type the object was stored with — S3's `Content-Type`, not a guess from
+   * the key. Whatever serves these bytes to a browser has to state it, and a
+   * key is a path, not a promise about its contents.
+   */
+  abstract contentType(key: string): Promise<string>;
   abstract delete(key: string): Promise<void>;
   abstract exists(key: string): Promise<boolean>;
 }

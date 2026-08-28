@@ -570,3 +570,101 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   .gal{grid-template-columns:1fr}
   .gal.one{grid-template-columns:1fr}
 }
+
+/* ==========================================================================
+ * T13 — the unit passport, `/unit/[serial]`. Archetype C.
+ *
+ * Everything here is scoped under `.passport` so it cannot leak into the
+ * product record beside it. Not one literal colour: every value is a token from
+ * `packages/ui/src/globals.css`, which is the only file allowed to hold one.
+ * ======================================================================== */
+
+/* The record's identity IS a serial, and every serial is mono with tabular
+   figures. `RecordHeader` takes `title` as a string, so the face is set here
+   rather than by wrapping the title in a span the component would not render. */
+.passport [data-testid='record-header'] h1{
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  letter-spacing:.01em}
+
+/* An expired certificate. `--warn`, not `--fail`: the machine did not fail, our
+   claim about it went stale, and those must not look the same. */
+.passport .expired{margin-top:16px;padding:12px 14px;border:1px solid var(--warn);
+  border-radius:5px;background:var(--sheet-2);font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.passport .expired b{color:var(--ink)}
+
+/* --- the photographs ---------------------------------------------------- */
+.passport .shots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.passport .shot{display:flex;flex-direction:column;gap:3px}
+/* `ViewfinderFrame` is the <figure>; the brackets are absolutely positioned
+   against it, so it has to be the box the picture fills exactly. */
+.passport .shot figure{margin:0;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:5px;overflow:hidden}
+.passport .shot img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;
+  background:var(--sheet-3)}
+/* The serial sits ON the photograph, bottom-left, exactly as
+   `docs/reference/homepage.html` places `.pc .sn` — and taken out of the flow so
+   the figure's height is the picture's. The four brackets are positioned against
+   the figure, and a caption row inside it would push the bottom pair off the
+   image they are framing. The chip is built like the reference's `.gr` because
+   `--ink-4` alone is unreadable over a photograph. */
+.passport .shot figcaption{position:absolute;bottom:7px;left:7px;margin:0;
+  background:var(--sheet);border:1px solid var(--rule);border-radius:3px;padding:2px 6px;
+  font-size:9px;color:var(--ink-2);letter-spacing:.06em}
+.passport .shot .ang{font-size:11.5px;color:var(--ink-3)}
+
+/* --- the twelve areas --------------------------------------------------- */
+.passport .areas table{min-width:640px}
+.passport .areaname{color:var(--ink)}
+/* The bar is a measurement, so it is the accent — and there is no track drawn
+   at all for an area with no score, because an empty track reads as a zero. */
+.passport .ameter{display:block;width:100%;min-width:96px;height:4px;border-radius:2px;
+  background:var(--rule);overflow:hidden}
+.passport .ameter b{display:block;height:100%;background:var(--acc)}
+.passport .ameter b[data-status='WARN']{background:var(--warn)}
+.passport .ameter b[data-status='FAIL']{background:var(--fail)}
+/* PASS and FAIL are the only green and red on this page and both carry their
+   word beside the colour, per 09_FRONTEND_LOCKED §9. */
+.passport .astat{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase}
+.passport .astat[data-status='PASS']{color:var(--pass)}
+.passport .astat[data-status='WARN']{color:var(--warn)}
+.passport .astat[data-status='FAIL']{color:var(--fail)}
+.passport .astat[data-status='NOT_MEASURED']{color:var(--ink-4);font-weight:400;
+  letter-spacing:normal;text-transform:none}
+
+/* --- detected hardware -------------------------------------------------- */
+/* One column: half these rows read "Not measured" and a two-column grid puts a
+   measured value beside an absent one where they scan as a pair. */
+.passport .specs.hw{grid-template-columns:1fr}
+.passport .specs.hw dd{min-width:180px}
+
+/* --- the seal ----------------------------------------------------------- */
+.passport .sealbody{display:flex;align-items:center;gap:16px;padding:16px;flex-wrap:wrap}
+/* The strip sits beside the code it encodes. On its own it would be decoration,
+   which is the one thing 09_FRONTEND_LOCKED §4 forbids a motif to be. */
+.passport .sealbody .barcode{flex:1;min-width:180px}
+/* `.barcode i` is `--on-chrome-2`, which is a CHROME token: it is correct in the
+   reference, where the strip lives in the dark hero, and it is a 2.9:1 grey on
+   the light sheet this card sits on. Rescoped to working-surface tokens, the
+   same fix T10 made to the wordmark on the auth pages. */
+.passport .sealbody .barcode i{background:var(--ink-2)}
+.passport .sealbody .barcode i.a{background:var(--acc-ink)}
+.passport .sealcode{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:.04em}
+
+/* --- the side panel ----------------------------------------------------- */
+.passport .ringrow{display:flex;align-items:center;gap:14px}
+.passport .ringtext{display:flex;flex-direction:column;gap:2px;min-width:0}
+.passport .ringtext b{font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.passport .ringtext span{font-size:11.5px;line-height:1.5;color:var(--ink-3)}
+
+/* --- the refusals ------------------------------------------------------- */
+.passport .refusal{margin-top:28px}
+.passport .refusal p{max-width:60ch;margin:0 auto 10px}
+
+@media(max-width:1000px){
+  .passport .shots{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .passport .shots{grid-template-columns:1fr}
+  .passport .sealbody{gap:10px}
+}

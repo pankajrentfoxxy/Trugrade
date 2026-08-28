@@ -103,6 +103,14 @@ import {
  */
 const SEARCH_LIMIT: RateLimitRule = { name: 'catalog-search', limit: 120, windowSeconds: 60 };
 
+/**
+ * Long enough for a buyer to read the page and open a lightbox, short enough
+ * that a URL pasted into a chat has stopped working by the time it is read.
+ * The SKU response itself is cached for 60 s, so this is the ceiling on how
+ * stale a link in a cached page can be.
+ */
+const IMAGE_URL_TTL_SECONDS = 900;
+
 const PHOTO_EXTENSION: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -189,7 +197,34 @@ export interface SkuDetailView {
    * machine, and showing it unlabelled is the Rule 7(2) misrepresentation the
    * resolver exists to make visible rather than convenient.
    */
-  images: ResolvedImages | null;
+  images: PublicResolvedImages | null;
+}
+
+/**
+ * A condition image as a buyer may see it.
+ *
+ * `s3Key` is the field this exists to remove. It is an internal path — the same
+ * shape of value `qc-report-pdf.spec.ts` plants a GSTIN inside — and it was
+ * being returned verbatim on a `@Public()` route. What the browser needs is a
+ * URL, and `url` is a short-lived opaque one that names no key.
+ */
+export interface PublicConditionImage {
+  id: string;
+  grade: Grade;
+  viewCode: ConditionViewCode;
+  altText: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  blurDataUri?: string | null;
+  /** Expires. A page that holds it for an hour re-reads the SKU. */
+  url: string;
+}
+
+export interface PublicResolvedImages {
+  images: PublicConditionImage[];
+  match: ResolvedImages['match'];
+  isGeneric: boolean;
+  placeholderReason?: string;
 }
 
 /**
@@ -455,7 +490,29 @@ export class CatalogController {
       // `modelId` and `normalizedKey` are deliberately absent. The key is the
       // dedupe guarantee, not a public identifier, and publishing it invites a
       // client to compute one and find us disagreeing about the same machine.
-      images: query.grade ? await this.images.resolve(sku.id, query.grade as Grade) : null,
+      images: query.grade ? await this.publicImages(sku.id, query.grade as Grade) : null,
+    };
+  }
+
+  /** The resolver's answer with the object keys taken out and URLs put in. */
+  private async publicImages(skuId: string, grade: Grade): Promise<PublicResolvedImages> {
+    const resolved = await this.images.resolve(skuId, grade);
+    return {
+      match: resolved.match,
+      isGeneric: resolved.isGeneric,
+      placeholderReason: resolved.placeholderReason,
+      images: await Promise.all(
+        resolved.images.map(async (i) => ({
+          id: i.id,
+          grade: i.grade,
+          viewCode: i.viewCode,
+          altText: i.altText,
+          isPrimary: i.isPrimary,
+          sortOrder: i.sortOrder,
+          blurDataUri: i.blurDataUri,
+          url: await this.store.presignDownload(i.s3Key, IMAGE_URL_TTL_SECONDS),
+        })),
+      ),
     };
   }
 

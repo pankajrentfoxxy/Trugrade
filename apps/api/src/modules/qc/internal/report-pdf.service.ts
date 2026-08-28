@@ -11,6 +11,7 @@ import { ObjectStorePort } from '../../../shared/adapters/ports';
 import { PreconditionFailedError } from '../../../shared/errors/domain-errors';
 import { QcRepository, type QcPhotoRow, type QcReportRow } from './qc.repository';
 import { ToleranceService } from './tolerance.service';
+import { QC_AREA_CODES } from '../dto/qc.dto';
 
 /**
  * The printed QC report: one page of what we found, plus the photographs, with a
@@ -331,16 +332,25 @@ export class ReportPdfService {
       return;
     }
 
-    // Two columns; the twelve areas are a fixed set, so this never wraps oddly.
-    const half = Math.ceil(areas.length / 2);
+    // Driven by the twelve codes rather than by the rows on file. An unmeasured
+    // area is an ABSENT row (`qc_area_result.status` has no NOT_MEASURED), and a
+    // printed sheet listing nine of twelve without saying so lets a receiving
+    // clerk read the silence as a pass. Every one of the twelve is named, and
+    // the ones nobody measured say so.
+    const byArea = new Map(areas.map((a) => [a.area, a]));
+    const half = Math.ceil(QC_AREA_CODES.length / 2);
     const top = sheet.y;
     let lowest = top;
-    areas.forEach((a, i) => {
+    QC_AREA_CODES.forEach((code, i) => {
+      const a = byArea.get(code);
       const column = i < half ? 0 : 1;
       const x = MARGIN + column * 250;
       const y = top - (i - column * half) * LEAD;
-      sheet.at(x, y, a.area.replace(/_/g, ' '), { size: BODY, font: 'bold' });
-      sheet.at(x + 130, y, `${a.score}/${a.maxScore}   ${a.status}`, { size: BODY });
+      sheet.at(x, y, code.replace(/_/g, ' '), { size: BODY, font: 'bold' });
+      sheet.at(x + 130, y, a ? `${a.score}/${a.maxScore}   ${a.status}` : 'not measured', {
+        size: BODY,
+        ...(a ? {} : { colour: MUTED }),
+      });
       lowest = Math.min(lowest, y);
     });
     sheet.y = lowest - LEAD - 6;

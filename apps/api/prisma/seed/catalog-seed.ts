@@ -1,4 +1,15 @@
 import type { PrismaClient } from '@prisma/client';
+import { FakeObjectStore } from '../../src/shared/adapters/fakes/infra.fakes';
+import { ObjectUrlSigner } from '../../src/shared/adapters/object-url';
+import { AppConfig } from '../../src/shared/config';
+import { SystemClock } from '../../src/shared/clock';
+
+/** The object store the API resolves, built by hand because a seed has no container. */
+function newObjectStore(): FakeObjectStore {
+  const config = new AppConfig();
+  return new FakeObjectStore(new ObjectUrlSigner(config, new SystemClock()), config);
+}
+import { standInImage } from './stand-in-image';
 import {
   CONDITION_VIEW_CODES,
   GRADES,
@@ -1057,7 +1068,10 @@ export function imageSet(model: ModelRow): ImageSpec[] {
       specs.push({
         grade,
         viewCode,
-        s3Key: `catalog/${modelSlug}/${grade.toLowerCase()}/${viewCode.toLowerCase()}.avif`,
+        // .svg because that is what the seed actually puts in the bucket. A key
+        // claiming .avif over SVG bytes is a lie the browser then has to be told
+        // to ignore.
+        s3Key: `catalog/${modelSlug}/${grade.toLowerCase()}/${viewCode.toLowerCase()}.svg`,
         altText:
           `Grade ${GRADE_LABEL[grade]} ${model.brand} ${model.name}: ` +
           `${VIEW_PHRASE[viewCode]}, ` +
@@ -1172,6 +1186,11 @@ export async function seedCatalog(
   const seriesIds = new Map<string, string>();
   const modelIds = new Map<string, string>();
   let images = 0;
+  // The adapter the API resolves too, constructed directly because a seed script
+  // has no Nest container. They agree today because AdaptersModule provides only
+  // fakes; the day a real S3 adapter is selected by INTEGRATION_MODE, this has
+  // to be selected the same way or the seed writes somewhere nobody reads.
+  const store = newObjectStore();
 
   for (const raw of MODELS) {
     const m = withDefaults(raw);
@@ -1237,6 +1256,17 @@ export async function seedCatalog(
                       is_primary  = EXCLUDED.is_primary,
                       defect_type = EXCLUDED.defect_type,
                       severity    = EXCLUDED.severity`;
+
+      // The row and the object in the same loop. 608 catalogued images against
+      // an empty bucket is what T12 met, and it is indistinguishable from a
+      // broken renderer until somebody opens the bucket.
+      const stand = standInImage({
+        heading: s.viewCode.replace(/_/g, ' '),
+        // The object key is NOT drawn on the image. A picture is a payload too,
+        // and the sweep that catches a leaked key in JSON cannot read pixels.
+        detail: [`${m.brand} ${m.name}`, `GRADE ${GRADE_LABEL[s.grade]}`, 'CONDITION LIBRARY'],
+      });
+      await store.put(s.s3Key, stand.bytes, stand.contentType);
       images++;
     }
   }

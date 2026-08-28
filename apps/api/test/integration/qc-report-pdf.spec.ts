@@ -39,6 +39,7 @@ import { PrismaService } from '../../src/shared/db/prisma.service';
 import { ContextModule } from '../../src/shared/db/org-scope';
 import { ObjectStorePort } from '../../src/shared/adapters/ports';
 import { FakeObjectStore } from '../../src/shared/adapters/fakes/infra.fakes';
+import { ObjectUrlSigner } from '../../src/shared/adapters/object-url';
 import { PreconditionFailedError } from '../../src/shared/errors/domain-errors';
 import {
   QcRepository,
@@ -113,7 +114,10 @@ beforeAll(async () => {
   // stated — which this service treats, correctly, as a reason not to print.
   const [today] = await raw.$queryRaw<Array<{ d: string }>>`SELECT CURRENT_DATE::text AS d`;
   clock = new FixedClock(new Date(`${today!.d}T06:00:00.000Z`));
-  store = new FakeObjectStore();
+  // The store mints photo URLs for the passport, so it needs the same signer
+  // the app wires in — on the pinned clock, so a token expiry is testable.
+  const storeConfig = new AppConfig();
+  store = new FakeObjectStore(new ObjectUrlSigner(storeConfig, clock), storeConfig);
 
   moduleRef = await Test.createTestingModule({
     imports: [ConfigModule, ContextModule],

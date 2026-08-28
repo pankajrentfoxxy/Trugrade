@@ -183,12 +183,29 @@ export async function getSearch(qs: string): Promise<SearchResponse | null> {
  * Product detail — `/laptops/[slug]`
  * ======================================================================== */
 
-/** One condition photograph, as `catalog.condition_image` holds it. */
+/**
+ * One condition photograph, as the PUBLIC payload carries it.
+ *
+ * `s3Key` used to be here and is gone on purpose. An S3 key is an internal path
+ * and PHASE_05 Task 1 lists "an S3 key path revealing a vendor slug" as a leak
+ * to test for, so the API now serves images through an opaque encrypted token
+ * and sends a ready-to-use `url` instead.
+ *
+ * This type is hand-written over `fetch`, so it compiled happily against a field
+ * the server had stopped sending — every image would simply have been
+ * `undefined`. Nothing would have failed; the pictures would just never appear.
+ *
+ * `url` EXPIRES (15 minutes). A page cached longer than that has to re-read the
+ * SKU rather than reuse the link.
+ */
 export interface ConditionImage {
   id: string;
   grade: string;
   viewCode: string;
-  s3Key: string;
+  /** Absolute, time-limited. Never a bucket key. */
+  url: string;
+  /** A tiny inline placeholder so the slot does not jump while the image loads. */
+  blurDataUri?: string;
   altText: string;
   isPrimary: boolean;
   sortOrder: number;
@@ -324,4 +341,143 @@ export async function getOfferBoard(
   } catch {
     return null;
   }
+}
+
+/* ==========================================================================
+ * Unit passport — `/unit/[serial]`
+ * ======================================================================== */
+
+/** `qc_area_result.status` has no NOT_MEASURED; the passport adds it. */
+export type PassportAreaStatus = 'PASS' | 'WARN' | 'FAIL' | 'NOT_MEASURED';
+
+/**
+ * One of the twelve. `score` and `maxScore` are BOTH null when the area was not
+ * measured — that pair is the only honest way to say "we did not look", and the
+ * screen must render it as such rather than as a zero.
+ */
+export interface PassportArea {
+  area: string;
+  score: number | null;
+  maxScore: number | null;
+  status: PassportAreaStatus;
+}
+
+/**
+ * What the tool read off the machine.
+ *
+ * Every field is nullable and most of them are null on real rows: the seeded
+ * inspections report a model, a RAM size, a SMART status and a battery figure,
+ * and nothing else. Ten "Not measured" cells is what the inspection actually
+ * produced, and printing ten zeroes instead would be ten fabricated readings.
+ */
+export interface PassportHardware {
+  model: string | null;
+  cpu: string | null;
+  ramDetectedGb: number;
+  ramModules: number | null;
+  ramType: string | null;
+  storageType: string | null;
+  storageDetectedGb: number | null;
+  gpu: string | null;
+  screenSizeIn: number | null;
+  smartStatus: string | null;
+  batteryHealthPct: number | null;
+  cycleCount: number | null;
+  tpmVersion: string | null;
+  secureBoot: boolean | null;
+}
+
+/**
+ * The passport, exactly as `GET /api/unit/:serial` builds it.
+ *
+ * `photos[].url` is absolute, opaque and **expires after 900 seconds**, which is
+ * why the route that reads this is `force-dynamic`: a page held longer than the
+ * signature would render six broken images under six viewfinder brackets, and a
+ * viewfinder bracket over a broken image is the motif asserting something that
+ * is not on screen.
+ */
+export interface UnitPassport {
+  serialNumber: string;
+  verdict: 'PASS' | 'PASS_WITH_NOTE' | 'MISMATCH' | 'FAIL' | null;
+  grade: string | null;
+  qcScore: number | null;
+  inspectedOn: string | null;
+  validUntil: string | null;
+  expired: boolean;
+  rulesVersion: string | null;
+  seal: { code: string; status: string; appliedOn: string } | null;
+  hardware: PassportHardware | null;
+  /** Always twelve, in `QC_AREA_CODES` order. Never filtered. */
+  areas: PassportArea[];
+  photos: Array<{ angle: string; url: string }>;
+  wipeCertificate: {
+    standard: string;
+    method: string;
+    passes: number;
+    verificationStatus: string;
+    issuedAt: string;
+  } | null;
+  deviceSure: { certificateId: string } | null;
+}
+
+/**
+ * Four outcomes, because the screen has four different things to say.
+ *
+ * `get()` above collapses every failure into `null`, which is right for a
+ * counter in a footer and wrong here: "no such machine", "that is not a serial",
+ * "you have asked too often" and "we could not reach our own API" produce four
+ * different sentences, and rendering the fourth as the first tells a buyer
+ * holding a real laptop that their machine does not exist.
+ */
+export type PassportResult =
+  | { kind: 'FOUND'; passport: UnitPassport }
+  | { kind: 'NOT_FOUND' }
+  | { kind: 'MALFORMED'; message: string }
+  | { kind: 'RATE_LIMITED'; message: string; retryAfterSeconds: number | null }
+  | { kind: 'ERROR' };
+
+interface ApiError {
+  error?: { code?: string; message?: string; fields?: Record<string, string> };
+}
+
+/**
+ * Never cached, and not only because stock moves.
+ *
+ * The photograph links inside carry a 900-second signature. A cached passport
+ * outlives its own pictures, so this reads through on every request and the
+ * route above it is `force-dynamic`.
+ */
+export async function getUnitPassport(serial: string): Promise<PassportResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/unit/${encodeURIComponent(serial)}`, { cache: 'no-store' });
+  } catch {
+    return { kind: 'ERROR' };
+  }
+
+  if (res.ok) return { kind: 'FOUND', passport: (await res.json()) as UnitPassport };
+
+  const body = (await res.json().catch(() => ({}))) as ApiError;
+  const message = body.error?.message ?? '';
+
+  if (res.status === 404) return { kind: 'NOT_FOUND' };
+  if (res.status === 429) {
+    const header = res.headers.get('Retry-After');
+    const seconds = header === null ? null : Number(header);
+    return {
+      // The server's sentence, verbatim — it is the only party that knows which
+      // budget was spent and how long the window is.
+      kind: 'RATE_LIMITED',
+      message: message || 'Too many attempts. Try again shortly.',
+      retryAfterSeconds: Number.isFinite(seconds) ? (seconds as number) : null,
+    };
+  }
+  if (res.status === 422) {
+    // The field message is the useful one — "That looks like a firmware
+    // placeholder, not a serial" — and the envelope's headline is generic.
+    const fields = body.error?.fields;
+    const first = fields ? Object.values(fields)[0] : undefined;
+    return { kind: 'MALFORMED', message: first ?? message };
+  }
+  return { kind: 'ERROR' };
 }
