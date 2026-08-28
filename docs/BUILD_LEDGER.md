@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T20:10:00+00:00  
-Currently: T13 - unit passport at /unit/[serial]
+Currently: T14 - public certificate verification at /qc/verify/[code]
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -23,8 +23,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T10 | Sign-in, both portals, surrounding states | DONE | 9046aff | 138 shots, 23 states x 2 themes x 3 widths | Closes Wave 2. Rate limit shows the server's real countdown off Retry-After. MFA says out loud that it is an emailed code, not TOTP, and login/otp refuses MFA_REQUIRED_ROLES. Enumeration closed structurally (deliver:false). Fixed: reviewer's rejection reason reaching nobody, an SLA promise under a rejection, db.ts skipping migrations on any private test DB, wordmark invisible in light. |
 | T11 | Search results /search | DONE | 012086b | 50 shots, 10 states x 2 themes x 3 widths | Archetype B. Reuses the homepage rail rather than building a second. Whole board state in the URL. Zero-count facets disabled not hidden. Grade counts from unit.grade_actual. Unmeasured battery renders 'Not measured', never 0%. No supplier nameable. |
 | T12 | Product detail /laptops/[slug] | DONE | 07b6c03 | 66 shots, both themes, 1440/900/600 | Archetype C. Board endpoint built. Ten supply points, both F's distinct, cheapest scores worst, Palwal renders New supplier. p95 190ms vs 500ms budget. Anonymity swept over 140KB of live payloads: zero hits. OfferRow gained `emphasis` so one row carries the amber, not ten. |
-| T13 | Unit passport /unit/[serial] | DOING |  |  |  |
-| T14 | Certificate verification /qc/verify/[code] | TODO |  |  |  |
+| T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
+| T14 | Certificate verification /qc/verify/[code] | DOING |  |  |  |
 | T15 | Cart | TODO |  |  |  |
 | T16 | Checkout | TODO |  |  |  |
 | T17 | Order confirmation and approval-required | TODO |  |  |  |
