@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-29T18:20:00+00:00  
-Currently: T16 - checkout
+Currently: T16 - checkout, the order-confirmation transaction (the heaviest task in the backlog)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -25,8 +25,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T12 | Product detail /laptops/[slug] | DONE | 07b6c03 | 66 shots, both themes, 1440/900/600 | Archetype C. Board endpoint built. Ten supply points, both F's distinct, cheapest scores worst, Palwal renders New supplier. p95 190ms vs 500ms budget. Anonymity swept over 140KB of live payloads: zero hits. OfferRow gained `emphasis` so one row carries the amber, not ten. |
 | T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
 | T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
-| T15 | Cart | DONE |  | 54 shots, 13 states x 2 themes x 1440/900/600 | Archetype C. Lines grouped by dispatch point, never called a sub-order; one seller, one invoice, said on the screen. Availability re-read on every open, with the shortfall sentence and a one-click fix; checkout held shut while a line is short. **No 20-minute timer: the hold is checkout's and the cart says so** rather than counting down against nothing. Multiple named carts, `?cart=` in the URL. Found and closed a silent-sign-out: no `/auth/refresh` exists, so a 15-minute-old tab claimed the buyer was signed out. |
-| T16 | Checkout | TODO |  |  |  |
+| T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
+| T16 | Checkout | DOING |  |  |  |
 | T17 | Order confirmation and approval-required | TODO |  |  |  |
 | T18 | Bulk requirement upload | TODO |  |  |  |
 | T19 | Customer dashboard | TODO |  |  |  |
