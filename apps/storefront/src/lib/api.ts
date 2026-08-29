@@ -445,12 +445,19 @@ interface ApiError {
  *
  * The photograph links inside carry a 900-second signature. A cached passport
  * outlives its own pictures, so this reads through on every request and the
- * route above it is `force-dynamic`.
+ * routes above it are `force-dynamic`.
+ *
+ * `/unit/:serial` and `/qc/verify/:code` return the SAME document — the
+ * controller assembles one passport and two routes reach it — so they share one
+ * reader. Two copies of this function would be two places for the 422 handling
+ * to drift, and the 422 is the exact thing that broke: the seed minted codes the
+ * schema refused, and every verification answered "malformed" while the screen
+ * would have said "unknown" if the two paths had disagreed.
  */
-export async function getUnitPassport(serial: string): Promise<PassportResult> {
+async function readPassport(path: string): Promise<PassportResult> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/unit/${encodeURIComponent(serial)}`, { cache: 'no-store' });
+    res = await fetch(`${API_BASE}${path}`, { cache: 'no-store' });
   } catch {
     return { kind: 'ERROR' };
   }
@@ -481,3 +488,17 @@ export async function getUnitPassport(serial: string): Promise<PassportResult> {
   }
   return { kind: 'ERROR' };
 }
+
+export const getUnitPassport = (serial: string): Promise<PassportResult> =>
+  readPassport(`/unit/${encodeURIComponent(serial)}`);
+
+/**
+ * What the QR code on a printed QC report resolves to — `/qc/verify/:code`.
+ *
+ * The code is 14 characters of Crockford base32 and the API's schema upper-cases
+ * and trims before it matches, so a code typed in lower case off a sticker is a
+ * hit rather than a 422. Nothing is normalised here: one validator, at the
+ * boundary that owns the column.
+ */
+export const getVerification = (code: string): Promise<PassportResult> =>
+  readPassport(`/qc/verify/${encodeURIComponent(code)}`);

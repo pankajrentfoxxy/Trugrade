@@ -668,3 +668,156 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   .passport .shots{grid-template-columns:1fr}
   .passport .sealbody{gap:10px}
 }
+
+/* ==========================================================================
+ * T14 — public certificate verification, `/qc/verify/[code]`. Archetype F.
+ *
+ * **Phone first.** Every rule below is written for a 600px viewport held at
+ * arm's length in a warehouse; the media query at the bottom is what the desktop
+ * rendering adapts INTO, not the other way round. This is the one screen in the
+ * product whose primary viewport is not 1440.
+ *
+ * Scoped under `.verify` so nothing leaks into the auth screens that share the
+ * `AuthShell` frame. Not one literal colour: every value is a token from
+ * `packages/ui/src/globals.css`, which is the only file allowed to hold one.
+ * ======================================================================== */
+
+/* `AuthShell` centres its card vertically, which is right for a 300px sign-in
+   form and wrong here: a short refusal would float halfway down the window with
+   the answer below the middle of the screen. The answer to "is this real" goes
+   at the top of the viewport, always. */
+.authwrap.solo:has(.verify) .authcard{align-self:start}
+.verify{display:flex;flex-direction:column;gap:26px}
+.verify h2{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.verify h2 .sub{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-4)}
+
+/* ---- the answer, and it is the largest thing on the page ---------------- */
+.vdict{border:1px solid var(--rule);border-left-width:4px;border-radius:7px;
+  background:var(--sheet);padding:20px 18px}
+/* PASS and FAIL are the only green and red on this screen, and the headline
+   always carries the WORD as well as the colour (09_FRONTEND_LOCKED section 9). */
+.vdict.pass{border-left-color:var(--pass)}
+.vdict.fail{border-left-color:var(--fail)}
+.vdict.none{border-left-color:var(--rule)}
+/* Expired is `--warn` and never `--fail`. The machine did not fail; our claim
+   about it went stale, and the two must not look the same. */
+.vdict.stale{border-left-color:var(--warn)}
+.vkick{display:block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.vkick.warn{color:var(--warn)}
+/* 44px on a phone. This is the word that has to be readable across a receiving
+   bay with the phone at arm's length. */
+.vbig{display:block;margin:6px 0 0;font-size:44px;line-height:1.02;font-weight:700;
+  letter-spacing:-.03em;color:var(--ink)}
+.vbig.pass{color:var(--pass)}
+.vbig.fail{color:var(--fail)}
+/* A sentence is not a word: the four refusal headlines wrap, so they are set at
+   a size that reads as a heading rather than as a shout. */
+.vbig.sentence{font-size:25px;line-height:1.16;letter-spacing:-.022em}
+.vsub{margin:10px 0 0;font-size:13px;line-height:1.55;color:var(--ink-2)}
+.vpills{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.verify .expired{margin-top:16px;padding:12px 14px;border:1px solid var(--warn);
+  border-radius:5px;background:var(--sheet-2);font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.verify .expired b{color:var(--ink)}
+/* A seal that is broken, missing or replaced. `--fail`, because a seal status is
+   itself a pass/fail signal — `SealChip` maps BROKEN to the fail tone — and it
+   is the one thing on this screen that should stop a signature. */
+.voidseal{margin-top:16px;padding:12px 14px;border:1px solid var(--fail);border-radius:5px;
+  background:var(--sheet-2);font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.voidseal b{color:var(--fail)}
+
+/* ---- the seal code, read against a sticker on a lid --------------------- */
+/* Prominent because that is the comparison being made: eyes go from the screen
+   to the physical seal and back, and a 13px code makes that a squint. */
+.vsealcode{display:block;font-size:26px;font-weight:600;letter-spacing:.05em;color:var(--ink);
+  word-break:break-all;line-height:1.15}
+.vsealrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}
+.vsealrow .barcode{flex:1;min-width:170px}
+/* `.barcode i` is `--on-chrome-2`, a CHROME token: correct in the reference where
+   the strip lives in the dark hero, and a 2.9:1 grey on this sheet. Rescoped to
+   working-surface tokens, exactly as the passport does it. */
+.vsealrow .barcode i{background:var(--ink-2)}
+.vsealrow .barcode i.a{background:var(--acc-ink)}
+/* Not a footnote. This is the instruction the screen exists to deliver — read
+   the code against the lid before signing — so it is body copy at `--ink-2`,
+   not the `--ink-4` an aside is set in. */
+.vsealnote{margin:12px 0 0;font-size:12.5px;line-height:1.6;color:var(--ink-2);max-width:62ch}
+.vsealnote b{color:var(--ink)}
+
+/* ---- what we measured --------------------------------------------------- */
+/* One column on a phone: a two-column grid puts a measured value beside an
+   absent one where the pair scans as a single row. */
+.vfacts dl{margin:0;border:1px solid var(--rule);border-radius:7px;background:var(--sheet);
+  overflow:hidden}
+.vfacts dl>div{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:11px 14px;border-top:1px solid var(--rule-2)}
+.vfacts dl>div:first-child{border-top:0}
+.vfacts dt{font-size:12.5px;color:var(--ink-3);flex:0 0 auto}
+/* `dd` takes the slack rather than shrinking to its text: `BatteryBar` draws a
+   `flex-1` track, and in a `0 1 auto` cell that track collapses to nothing and
+   the one measurement a competitor cannot print renders as a bare number. */
+.vfacts dd{margin:0;flex:1 1 auto;font-size:13.5px;font-weight:500;color:var(--ink);
+  text-align:right;min-width:0;word-break:break-all}
+.vfacts dd [data-testid="battery-bar"]{justify-content:flex-end}
+
+/* ---- the photographs ---------------------------------------------------- */
+.vshots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.vshot{display:flex;flex-direction:column;gap:3px;text-align:left;padding:0}
+.vshot figure{margin:0;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:5px;overflow:hidden}
+.vshot img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--sheet-3)}
+.vshot figcaption{position:absolute;bottom:7px;left:7px;margin:0;background:var(--sheet);
+  border:1px solid var(--rule);border-radius:3px;padding:2px 6px;font-size:9px;color:var(--ink-2);
+  letter-spacing:.06em}
+.vshot .ang{font-size:11.5px;color:var(--ink-3)}
+.vshot:hover figure{border-color:var(--acc)}
+
+/* The zoom. `<dialog>` gives Escape, the focus trap and the inert background
+   for nothing; only the paint is ours. */
+.vzoom{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:12px;
+  border:0;background:var(--sheet);color:var(--ink-2);flex-direction:column;gap:10px}
+.vzoom[open]{display:flex}
+/* `--chrome` rather than a literal: it is the one dark that does not flip. */
+.vzoom::backdrop{background:var(--chrome);opacity:.92}
+.vzoomhead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.vzoomhead .l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.vzoomhead b{font-size:13px;color:var(--ink)}
+.vzoomhead .mono{font-size:11px;color:var(--ink-3)}
+.vzoombody{flex:1;min-height:0;overflow:auto;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:5px;display:flex;align-items:center;justify-content:center}
+.vzoombody img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
+/* 1:1 — the frame scrolls under the picture rather than shrinking it. */
+.vzoombody.z{display:block}
+.vzoombody.z img{max-width:none;max-height:none;width:auto;height:auto;cursor:zoom-out}
+.vzoom .fnote{flex:0 0 auto;margin:0}
+
+/* ---- next, and handing the phone over ---------------------------------- */
+.vbtns{display:flex;gap:10px;flex-wrap:wrap}
+.vbtns .sel{padding:11px 18px;font-size:13px}
+.vshare{display:flex;gap:16px;align-items:flex-start;padding:16px;border:1px solid var(--rule);
+  border-radius:7px;background:var(--sheet-2)}
+.vshare h2{margin-bottom:6px}
+.vshare p{margin:0;font-size:12.5px;line-height:1.55;color:var(--ink-3);max-width:44ch}
+/* Fixed polarity in both themes: `--chrome` on `--on-chrome` are the two tokens
+   that do not flip, and a scanner will not read an inverted symbol. */
+.vqr{flex:0 0 auto;border-radius:4px;border:1px solid var(--rule)}
+.vcode{display:inline-block;margin-top:9px;font-size:13px;font-weight:600;letter-spacing:.06em;
+  color:var(--ink)}
+
+/* ---- the refusals ------------------------------------------------------- */
+.vadvice p{margin:0 0 10px;font-size:13px;line-height:1.6;color:var(--ink-2);max-width:62ch}
+.vadvice p:last-child{margin-bottom:0}
+.vadvice b{color:var(--ink)}
+.vadvice [data-testid="rate-limit-notice"]{margin-bottom:12px}
+.vskel{padding:16px;border:1px solid var(--rule);border-radius:7px;background:var(--sheet)}
+
+@media(min-width:700px){
+  .vshots{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .vbig{font-size:56px}
+  .vbig.sentence{font-size:30px}
+  .vsealcode{font-size:32px;word-break:normal}
+  .vdict{padding:24px 22px}
+  .vzoom{padding:18px}
+}

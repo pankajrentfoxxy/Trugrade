@@ -223,6 +223,9 @@ importers:
       next:
         specifier: 15.5.4
         version: 15.5.4(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      qrcode-generator:
+        specifier: 2.0.4
+        version: 2.0.4
       react:
         specifier: 19.2.0
         version: 19.2.0

@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T20:10:00+00:00  
-Currently: T14 - public certificate verification at /qc/verify/[code]
+Currently: T15 - cart
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -24,7 +24,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T11 | Search results /search | DONE | 012086b | 50 shots, 10 states x 2 themes x 3 widths | Archetype B. Reuses the homepage rail rather than building a second. Whole board state in the URL. Zero-count facets disabled not hidden. Grade counts from unit.grade_actual. Unmeasured battery renders 'Not measured', never 0%. No supplier nameable. |
 | T12 | Product detail /laptops/[slug] | DONE | 07b6c03 | 66 shots, both themes, 1440/900/600 | Archetype C. Board endpoint built. Ten supply points, both F's distinct, cheapest scores worst, Palwal renders New supplier. p95 190ms vs 500ms budget. Anonymity swept over 140KB of live payloads: zero hits. OfferRow gained `emphasis` so one row carries the amber, not ten. |
 | T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
-| T14 | Certificate verification /qc/verify/[code] | DOING |  |  |  |
+| T14 | Certificate verification /qc/verify/[code] | DONE |  | 60 shots, both themes, 600/900/1440 | Archetype F, phone-first. Reuses AuthShell and the T13 passport reader rather than a second one. Real QR (qrcode-generator), zoomable `<dialog>`, expiry as --warn not --fail, unknown and malformed as different answers, rate limit off the server's own Retry-After. Live anonymity sweep over 25 verify payloads: zero hits. |
 | T15 | Cart | TODO |  |  |  |
 | T16 | Checkout | TODO |  |  |  |
 | T17 | Order confirmation and approval-required | TODO |  |  |  |
@@ -59,6 +59,83 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T14 — decisions, not code
+
+- **This screen is not a second passport, and that is the whole design.** The
+  API assembles ONE document and serves it at `/unit/:serial` and
+  `/qc/verify/:code`; the storefront now reads it through one function,
+  `readPassport()`, with two thin callers. Restating the twelve areas, the
+  detected hardware and the wipe certificate here would have put two renderings
+  of one document in the product and made a phone scroll for a minute before
+  answering the only question being asked of it. `/unit/[serial]` is one tap
+  away and carries the rest.
+- **Expiry is `--warn` and never `--fail`.** The verdict headline keeps its own
+  colour — a machine that passed did pass — and the staleness gets its own band
+  saying, in words, that it is not a failure. The kicker above the headline is
+  what changes: `CERTIFICATE EXPIRED` in `--warn`. A green PASS with an amber
+  band above and below it is the honest arrangement; a red PASS is a lie.
+- **A broken seal outranks the verdict, so it is said inside the verdict block.**
+  The seed has exactly one BROKEN seal and it rendered a large green PASS with
+  the bad news 400px further down. That is a true page arranged into a
+  misleading one. `.voidseal` now sits directly under the verdict pills in
+  `--fail` and says "do not sign for this machine". `--fail` rather than
+  `--warn` because a seal status IS a pass/fail signal — `SealChip` maps BROKEN
+  and MISSING to the fail tone for the same reason.
+- **MALFORMED does not render the API's own sentence.** `VERIFICATION_CODE.message`
+  is *"That verification code was not recognised."*, which describes an UNKNOWN
+  code, not a malformed one — rendering it verbatim under a heading that says
+  "that is not the shape of one of our codes" contradicts itself, and the two
+  states have to read differently. The screen writes its own copy and names the
+  shape (14 characters, no I/L/O/U). **The rule message is worth fixing**; it
+  lives in `packages/contracts`, which is the other session's.
+- **Nothing re-validates the code shape in the storefront.** That is the
+  temptation this route has already been burned by: two validators on one column
+  disagreeing silently is what made every unit answer 422. One validator, at the
+  boundary that owns the column; the screen renders the answer.
+- **The ERROR state claims nothing.** It used to be worded like T13's ("the
+  certificate and the machine exist") — but if we could not reach our own
+  records we do not know that the code is one of ours, and asserting it is
+  asserting the very thing the check failed to establish. It now says it is
+  neither a yes nor a no.
+
+**Live anonymity sweep:** 25 `GET /api/qc/verify/:code` payloads against the
+seeded database, checked for every `identity.organization` id, legal name and
+trade name, for any UUID at all, and for `gstin` / `org_id` / `vendor` /
+`address` / `phone` / `supplyPoint` / `s3Key` / the four NCR city names. **Zero
+hits, and zero UUIDs.** The unit suite repeats it over the rendered HTML with
+`findVendorIdentityLeaks`, on the found screen and on all four refusals.
+
+## Reported by T14 — not fixed, they are outside my files
+
+- **`QrBlock` in `packages/ui` is a conic-gradient checkerboard**, and
+  `09_FRONTEND_LOCKED.md` §4 says of the QR motif specifically: *real QR in
+  production, never decorative*. A checkerboard on the one page whose entire job
+  is to be scanned is the one thing §4 forbids a motif to be. This route
+  therefore draws its own SVG with `qrcode-generator` — the same library the API
+  already uses for the printed report's QR, so paper and screen encode the same
+  URL through the same encoder. **The fix belongs in `QrBlock`**: take the
+  library, keep the polarity fixed with `--chrome` on `--on-chrome` (the two
+  tokens that do not flip between themes — a scanner will not read an inverted
+  symbol, so `--ink` on `--sheet` is wrong by construction), and keep four
+  modules of quiet zone.
+- **`Barcode` does not encode anything.** Its bars are derived from
+  `charCodeAt` arithmetic, which is stable per code and is not Code 128. §4 says
+  the strip *encodes the seal code*. It is beside the code it stands for, which
+  is the half that carries information; the other half is a real symbology.
+- **Every inspection photograph in the dev bucket is a generated stand-in** that
+  prints "STAND-IN — NOT A PHOTOGRAPH" across itself. The zoom, the brackets and
+  the serial caption are all real and exercised; the pictures are not. Worth
+  knowing before anyone reviews these captures for photographic quality.
+- **The seed contains no FAIL, no PASS_WITH_NOTE and no MISMATCH** — all 239
+  reports are PASS — so the `--fail` verdict path is covered by the unit suite
+  and by nothing on screen. A single seeded FAIL would make that state
+  photographable.
+- **`AuthShell` centres its card vertically**, which is right for a 300px
+  credential form and wrong for a short refusal: the answer floated halfway down
+  the window. Worked around here with `.authwrap.solo:has(.verify) .authcard`.
+  An `align` prop on the shell would say it better than a `:has()` in a
+  stylesheet.
 
 ## Reported by T12 — the endpoint that did not exist, and what it cost
 
