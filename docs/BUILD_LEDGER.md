@@ -950,6 +950,27 @@ Verified against the live database, not inferred:
   it wants is the warehouse contact captured on the same screen. Asking twice would put two
   answers to one question in the database.
 
+## Motifs that do not carry information — 09_FRONTEND_LOCKED §4 violations
+
+§4's governing rule is "a motif must carry information", and two components break it.
+Both are printed beside the real value they claim to encode, on screens a warehouse or a
+buyer uses, so they read as scannable and are not.
+
+- **`Barcode` (packages/ui/src/components/measure.tsx) encodes nothing.** It is
+  `charCodeAt` arithmetic producing decorative bars. §4 says it "encodes the seal code,
+  shown beside it". Used on `/qc/verify/[code]`, `/unit/[serial]` and the console's
+  `VisitDetail`, always next to a genuine seal code — so a technician will try to scan it.
+  **Fix = real Code 128 Set B.** I attempted this and abandoned it: the 107-row pattern
+  table has to be transcribed from an authoritative source, and I could only recall ~101
+  rows. A barcode that encodes the WRONG value is worse than one that encodes nothing,
+  which is the whole argument for fixing it — so it needs the real table, plus a
+  round-trip decode test (encode, then read the widths back as a scanner would; a
+  transposed row survives a length check and fails a round trip).
+- **`QrBlock` is placeholder geometry**, while §4 says the QR must be real in production.
+  T14 worked around this by drawing its own real QR with `qrcode-generator`, which the
+  API's PDF already depends on — so the library is present and the fix is to move T14's
+  implementation into the package and delete the placeholder.
+
 ## Known bugs, not yet fixed
 
 - `postJson` in `apps/console/src/routes/vendor/api.ts` reads `message` off the body root,
