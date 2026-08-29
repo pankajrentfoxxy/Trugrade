@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-27T20:10:00+00:00  
-Currently: T15 - cart
+Currently: T15 - cart (multi-supply-point, live stock re-check, 20-minute hold)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -24,8 +24,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T11 | Search results /search | DONE | 012086b | 50 shots, 10 states x 2 themes x 3 widths | Archetype B. Reuses the homepage rail rather than building a second. Whole board state in the URL. Zero-count facets disabled not hidden. Grade counts from unit.grade_actual. Unmeasured battery renders 'Not measured', never 0%. No supplier nameable. |
 | T12 | Product detail /laptops/[slug] | DONE | 07b6c03 | 66 shots, both themes, 1440/900/600 | Archetype C. Board endpoint built. Ten supply points, both F's distinct, cheapest scores worst, Palwal renders New supplier. p95 190ms vs 500ms budget. Anonymity swept over 140KB of live payloads: zero hits. OfferRow gained `emphasis` so one row carries the amber, not ten. |
 | T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
-| T14 | Certificate verification /qc/verify/[code] | DONE |  | 60 shots, both themes, 600/900/1440 | Archetype F, phone-first. Reuses AuthShell and the T13 passport reader rather than a second one. Real QR (qrcode-generator), zoomable `<dialog>`, expiry as --warn not --fail, unknown and malformed as different answers, rate limit off the server's own Retry-After. Live anonymity sweep over 25 verify payloads: zero hits. |
-| T15 | Cart | TODO |  |  |  |
+| T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
+| T15 | Cart | DOING |  |  |  |
 | T16 | Checkout | TODO |  |  |  |
 | T17 | Order confirmation and approval-required | TODO |  |  |  |
 | T18 | Bulk requirement upload | TODO |  |  |  |
