@@ -62,7 +62,33 @@ import { ApplicationStatus, type StatusCopy } from '../register/review-parts';
  */
 const CONSOLE_URL = process.env.NEXT_PUBLIC_CONSOLE_URL ?? 'http://localhost:5173/';
 
-const destinationFor = (orgType: string): string => (orgType === 'BUYER' ? '/' : CONSOLE_URL);
+/**
+ * Where a buyer sent here mid-task goes back to, off `?next=`.
+ *
+ * **Resolved against this origin and refused unless it stays here.** A sign-in
+ * page that forwards to whatever a query string names is an open redirect — the
+ * classic way a phishing link borrows a real domain's credibility. The check is
+ * the URL parser rather than a string prefix on purpose: `//evil.example` and
+ * `/\evil.example` are both absolute to a browser and both pass a naive
+ * "starts with a slash" test.
+ */
+function safeNext(): string | null {
+  if (typeof window === 'undefined') return null;
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (!next) return null;
+  try {
+    const url = new URL(next, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    // Coming back to the sign-in page from the sign-in page is a loop.
+    if (url.pathname.startsWith('/sign-in')) return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+const destinationFor = (orgType: string): string =>
+  orgType === 'BUYER' ? (safeNext() ?? '/') : CONSOLE_URL;
 
 /** Where an unfinished application is picked up again. */
 const applicationFor = (orgType: string): string =>

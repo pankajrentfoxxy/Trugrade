@@ -43,7 +43,55 @@ const NETWORK_FAILURE: Omit<ApiFailure, 'ok'> = {
   retryAfterSeconds: null,
 };
 
-async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
+/**
+ * Exported because it is the storefront's one browser API client, not registration's.
+ * `/sign-in` (T10) and `/cart` (T15) both go through it: one place unwraps
+ * `DomainExceptionFilter`'s envelope and one place reads `Retry-After`, so a
+ * second copy cannot render an actionable refusal as "(422)".
+ */
+/**
+ * Paths that must NEVER be retried after a session restore.
+ *
+ * Authentication routes are rate limited per identifier AND per IP, and a
+ * silently replayed POST /auth/login spends two of the buyer's attempts for one
+ * thing they did once — which is how somebody gets locked out for fifteen
+ * minutes by a single click. A 401 from an auth route is also the answer, not a
+ * symptom: "those details did not match" does not become true on a second ask.
+ */
+const NEVER_RETRY = ['/api/auth/'];
+
+/**
+ * The access cookie is short-lived on purpose (15 minutes) and `GET
+ * /auth/session` is what rotates it — there is no separate /auth/refresh route.
+ *
+ * Nothing called it, so ANY authenticated screen open longer than fifteen
+ * minutes told a signed-in buyer to sign in again. The cart found it first, but
+ * registration is where it hurts most: seven steps that the seeded definitions
+ * themselves estimate at about forty minutes, against a fifteen-minute cookie.
+ * A vendor filling in facility hours would simply be thrown out mid-form.
+ *
+ * So the restore lives HERE, in the one client every screen already uses, rather
+ * than in each screen that remembers. One restore, then replay; a second 401
+ * means there is genuinely no session and the signed-out path is the right
+ * answer rather than a loop.
+ */
+async function withSessionRestore<T>(
+  path: string,
+  init: RequestInit,
+  first: ApiResult<T>,
+): Promise<ApiResult<T>> {
+  if (first.ok || first.status !== 401) return first;
+  if (NEVER_RETRY.some((p) => path.startsWith(p))) return first;
+
+  const restored = await rawCall<{ userId: string }>('/api/auth/session', { method: 'GET' });
+  return restored.ok ? rawCall<T>(path, init) : first;
+}
+
+export async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
+  return withSessionRestore(path, init, await rawCall<T>(path, init));
+}
+
+async function rawCall<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {
   let res: Response;
   try {
     res = await fetch(path, {

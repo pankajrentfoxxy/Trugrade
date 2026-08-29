@@ -821,3 +821,83 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   .vdict{padding:24px 22px}
   .vzoom{padding:18px}
 }
+
+/* ==========================================================================
+ * T15 — the cart, `/cart`. Archetype C.
+ * The record chrome (.rec/.evid/.sidep/.facts/.tbl) is T12's and is reused
+ * unchanged; only what a cart has and a product page does not is below.
+ * ========================================================================== */
+.cartpage>[data-testid="record-header"]{margin-top:20px}
+/* The named carts. `.gsel` is the grade selector's row; a cart chip carries a
+   line count in the same slot the grade chips carry a unit count. */
+.cartsw{margin-top:16px;align-items:center}
+.cartsw .chipf{display:flex;flex-direction:column;gap:2px;padding:8px 12px;line-height:1.3;
+  text-align:left;cursor:pointer}
+.cartsw .chipf .c{font-size:10px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.cartsw .chipf.on .c{color:var(--acc-on)}
+.cartsw .chipf:disabled{cursor:default;opacity:.6}
+.cartname{display:flex;gap:6px;align-items:center}
+.cartname input{height:38px;min-width:200px;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:5px;padding:0 10px;font-size:13px;color:var(--ink)}
+.cartname input::placeholder{color:var(--ink-4)}
+.cartname input:focus{border-color:var(--acc);outline:none}
+/* A refusal from one action. Neutral ground with a rule the colour of the
+   verdict — a filled red panel over a cart reads as "your cart is broken". */
+.cartnotice{margin:14px 0 0;padding:11px 14px;border:1px solid var(--rule);border-left-width:3px;
+  border-radius:5px;background:var(--sheet);font-size:13px;line-height:1.55;color:var(--ink-2)}
+.cartnotice.fail{border-left-color:var(--fail)}
+/* ---- the lines ---------------------------------------------------------- */
+.cartlines{padding:0 16px}
+.cartlines table{min-width:860px}
+/* Six columns of a comfortable-density table do not fit beside the actions
+   panel: 20px of inset per cell is 240px of padding, and the last column falls
+   off the right edge. Tightened to the same 12px T12's board uses, for the same
+   reason. The row height is untouched, so the density is still comfortable. */
+.cartlines td,.cartlines th{padding-left:12px;padding-right:12px}
+.lgrade{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
+.lgrade .lmeta{font-size:10.5px;color:var(--ink-4)}
+.lavail{display:flex;flex-direction:column;gap:4px;min-width:210px;max-width:34ch;
+  white-space:normal}
+.avail{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+/* A shortfall is a fact, not an alarm: --warn outlines it, nothing flashes and
+   nothing counts down. */
+.avail.short{color:var(--warn)}
+.lavail .lmeta{font-size:11px;color:var(--ink-4);line-height:1.45;white-space:normal}
+.lavail .ulink{align-self:flex-start;font-size:11.5px;background:none;border:0;padding:0;
+  cursor:pointer;text-align:left}
+.lavail .ulink:disabled{opacity:.5;cursor:default}
+/* The Update button stacks under the field rather than beside it: appearing
+   beside it widens the column the moment a digit is typed, and the table starts
+   scrolling sideways under the cursor. */
+.qtycell{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.qtycell input{width:72px;height:38px;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:5px;padding:0 8px;font-size:13.5px;color:var(--ink);text-align:right;
+  font-variant-numeric:tabular-nums}
+.qtycell input:focus{border-color:var(--acc);outline:none}
+.cartlines .money small{color:var(--ink-4);font-variant-numeric:tabular-nums}
+/* The action column takes its own width and keeps it: the machine column will
+   otherwise eat the table and clip "Remove" to three letters. */
+.cartlines table th:last-child,.cartlines table td:last-child{width:1%;white-space:nowrap}
+.cartlines table td:last-child button{white-space:nowrap}
+/* ---- the panel ---------------------------------------------------------- */
+.cartgo{width:100%;justify-content:center;margin-top:4px}
+.checked{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.checked .ulink{background:none;border:0;padding:0;cursor:pointer;font-size:11px}
+.checked .ulink:disabled{opacity:.5;cursor:default}
+.sidep .facts .notmeasured{font-size:12px}
+/* 940 rather than a phone breakpoint: `.rec` goes single-column at 1000px, and
+   between there and a phone the six-column table is still wider than the page. */
+@media(max-width:940px){
+  /* The per-unit price column is dropped, not hidden information: the line
+     total already carries "5 × ₹52,000.00" underneath it, so the same figure is
+     on screen either way and the table stops overflowing by 400px. */
+  .cartlines{padding:0}
+  .cartlines table{min-width:600px}
+  .cartlines td,.cartlines th{padding-left:9px;padding-right:9px}
+  .cartlines th:nth-child(4),.cartlines td:nth-child(4){display:none}
+  .lavail{min-width:150px}
+}
+@media(max-width:640px){
+  .cartsw{gap:6px}
+  .cartname input{min-width:150px}
+}

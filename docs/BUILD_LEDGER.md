@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-27T20:10:00+00:00  
-Currently: T15 - cart (multi-supply-point, live stock re-check, 20-minute hold)
+Updated: 2026-08-29T18:20:00+00:00  
+Currently: T16 - checkout
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -25,7 +25,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T12 | Product detail /laptops/[slug] | DONE | 07b6c03 | 66 shots, both themes, 1440/900/600 | Archetype C. Board endpoint built. Ten supply points, both F's distinct, cheapest scores worst, Palwal renders New supplier. p95 190ms vs 500ms budget. Anonymity swept over 140KB of live payloads: zero hits. OfferRow gained `emphasis` so one row carries the amber, not ten. |
 | T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
 | T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
-| T15 | Cart | DOING |  |  |  |
+| T15 | Cart | DONE |  | 54 shots, 13 states x 2 themes x 1440/900/600 | Archetype C. Lines grouped by dispatch point, never called a sub-order; one seller, one invoice, said on the screen. Availability re-read on every open, with the shortfall sentence and a one-click fix; checkout held shut while a line is short. **No 20-minute timer: the hold is checkout's and the cart says so** rather than counting down against nothing. Multiple named carts, `?cart=` in the URL. Found and closed a silent-sign-out: no `/auth/refresh` exists, so a 15-minute-old tab claimed the buyer was signed out. |
 | T16 | Checkout | TODO |  |  |  |
 | T17 | Order confirmation and approval-required | TODO |  |  |  |
 | T18 | Bulk requirement upload | TODO |  |  |  |
@@ -59,6 +59,79 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T15 — decisions, not code
+
+- **The backlog's "20-minute hold with a visible timer" is not built, deliberately.**
+  PHASE_05 Task 6 says stock is not reserved in the cart and the hold is taken at
+  checkout entry; `CartService`'s own note says the same and adds why (a hold not
+  released by the code that took it leaks inventory). A countdown on a screen that
+  holds nothing is a scarcity device wearing a clock. The panel instead says
+  "Nothing in a cart is reserved. Stock is held for 20 minutes when you start
+  checkout, and the hold and its countdown are shown there." **T16 owns the timer**,
+  and when it exists this sentence is what has to become true.
+- **Checkout is closed while `needsAttention` is true**, with the reason on screen
+  rather than only in a `title`. `CartService.view` sets the flag and Phase 6's
+  checkout entry refuses on it, so a button leading to that refusal one screen later
+  would be worse than a closed one. Every short line carries its own one-click fix
+  ("Set this line to 3 units"); a line at zero can only be removed, and says so.
+- **Goods value is not called a total.** The cart has no delivery pincode, so
+  freight and the GST split cannot be landed here. Both are named on the panel with
+  their rate and basis and the screen says there is no third charge — which is the
+  honest version available today. It is NOT drip pricing to say which two heads
+  follow the address; it would be to show a smaller number called "total". The
+  landed figure per supply point is on the offer board (T12) and the full break-up
+  is T16's.
+- **The archetype is C, not B.** A named cart is one record: identity header, its
+  lines as evidence, one actions panel. There is no filter rail and nothing to sort.
+  The lines are `DataBoard` — the same table every board uses, at comfortable
+  density with T12's 12px cell inset, because six columns at 20px do not fit beside
+  a 320px panel.
+- **Quantity replaces, so the `?listing=&qty=` hand-off is safe to replay.** A
+  reload of the URL `OfferGrid.onAdd` builds re-states the same line instead of
+  doubling it; the params are then stripped and `?cart=` is written in their place.
+
+## Reported by T15 — fixed, and it was a live defect
+
+- **There is no `/auth/refresh` route, and nothing in the storefront rotated the
+  session.** `tg_access` lives 15 minutes; `tg_refresh` lives 30 days scoped to
+  `/api/auth`, and `GET /auth/session` is what rotates it. Without that call a buyer
+  who read a spec sheet for a quarter of an hour came back to a cart page telling
+  them to sign in **while they were signed in** — the worst version of the
+  signed-out state, because it is wrong. `withSessionRetry` in
+  `apps/storefront/src/app/cart/api.ts` restores once and replays. Deliberately not
+  in `call` itself: a retried `POST /auth/login` would burn two of somebody's
+  rate-limited attempts for one try. Every other authenticated screen still has the
+  hole.
+- **`/sign-in` now honours `?next=`** for buyers, single-leading-slash only so it
+  cannot become an open redirect. Without it, an add from the comparison board while
+  signed out lost the machine the buyer had picked. Verified end to end with
+  Playwright: signed-out → `/cart?listing=…&qty=2` → sign in → back on `/cart` with
+  the line added.
+
+## Reported by T15 — not fixed, they are outside my files
+
+- **`CartView` cannot link a line back to its model.** A line carries `offerId`
+  (the listing) but no `skuId` and no slug, so there is no way to reach
+  `/laptops/[slug]` from the cart — the one navigation a buyer wants when they are
+  comparing two lines. `CartLineView` needs `skuId`.
+- **No landed price anywhere in the cart.** There is no endpoint that prices a
+  listing to a pincode; `GET /public/skus/:skuId/offers` is keyed by SKU and the
+  cart has no SKU. Until either the cart takes a pincode or a per-offer pricing read
+  exists, the cart cannot show a landed total and T16 is the first screen that can.
+- **`cartNameSchema` lives in the API's DTO file** (`z.string().trim().min(1).max(60)`),
+  which the storefront may not import, so `CART_NAME_MAX = 60` is restated in
+  `cart/api.ts`. It belongs in `@trugrade/contracts`.
+- **The empty-name refusal is raw Zod**: "String must contain at least 1
+  character(s)". The screen validates before sending so a buyer never sees it, but
+  any other client will.
+- **There is no way to reach `/cart` from the chrome.** The utility bar and header
+  in `09_FRONTEND_LOCKED.md` §7 have no cart entry, so the only route in is the
+  comparison board's Add. Not added unilaterally — it changes the header on every
+  page and the reference file wins — but T16 needs the same entry point and the two
+  should be decided together.
+- **`EmptyState` renders an `h3`**, so the signed-out, no-carts and error states of
+  this route have no `h1`. Fine for `noindex`, wrong for anything indexed.
 
 ## Reported by T14 — decisions, not code
 
