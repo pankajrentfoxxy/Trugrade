@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { uuidSchema } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
@@ -10,7 +10,20 @@ import {
   type CreateCartDto,
   type RequirementIntakeDto,
 } from './dto/ordering.dto';
+import {
+  checkoutQuerySchema,
+  confirmCheckoutSchema,
+  startCheckoutSchema,
+  type CheckoutQueryDto,
+  type ConfirmCheckoutDto,
+  type StartCheckoutDto,
+} from './dto/checkout.dto';
 import { CartService, type CartSummary, type CartView } from './internal/cart.service';
+import {
+  CheckoutService,
+  type CheckoutSessionView,
+  type OrderConfirmationView,
+} from './internal/checkout.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
 
 /**
@@ -41,6 +54,7 @@ import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-i
 export class OrderingController {
   constructor(
     private readonly carts: CartService,
+    private readonly checkout: CheckoutService,
     private readonly requirements: RfqIntakeService,
   ) {}
 
@@ -105,6 +119,77 @@ export class OrderingController {
     @Param('itemId', new ZodValidationPipe(uuidSchema)) itemId: string,
   ): Promise<CartView> {
     return this.carts.removeLine(cartId, itemId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Checkout
+  // -------------------------------------------------------------------------
+
+  /**
+   * Enter checkout. Validates, takes the twenty-minute hold, and quotes.
+   *
+   * 200 rather than 201 and no `Location`: what this creates is a hold, not a
+   * resource the client will fetch again by id — the cart id addresses it. The
+   * body is the whole session, so the screen renders every step from one call.
+   *
+   * The hold is the promise the cart screen makes ("stock is held for 20
+   * minutes when you start checkout"), and `holdExpiresAt` is a real deadline we
+   * imposed, read straight off `ordering.checkout_hold`. It is not a scarcity
+   * device: nothing about it is invented, and it releases on its own.
+   */
+  @Post('checkout')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  startCheckout(
+    @Body(new ZodValidationPipe(startCheckoutSchema)) body: StartCheckoutDto,
+  ): Promise<CheckoutSessionView> {
+    return this.checkout.begin(body.cartId);
+  }
+
+  /**
+   * Re-quote after a step, without touching the hold.
+   *
+   * The selection is in the query string rather than a POST body on purpose: it
+   * is board state, and a buyer sending a colleague their half-finished
+   * checkout link should land on the same GSTIN and the same delivery site.
+   * Re-reading does not renew the deadline.
+   */
+  @Get('checkout/:cartId')
+  @RequirePermissions('ordering.own.read')
+  quoteCheckout(
+    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
+    @Query(new ZodValidationPipe(checkoutQuerySchema)) query: CheckoutQueryDto,
+  ): Promise<CheckoutSessionView> {
+    return this.checkout.quote(cartId, query);
+  }
+
+  /**
+   * Place the order. This is the sixteen-step transaction (PHASE_06 Task 3).
+   *
+   * Exactly one of three things happens: the order is confirmed with specific
+   * serial numbers allocated and a purchase order raised per supply point; it is
+   * parked for approval with the stock still held and NO purchase order; or
+   * nothing at all happened and the buyer gets a specific reason. There is no
+   * fourth outcome, and no partial one.
+   */
+  @Post('checkout/:cartId/confirm')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  confirmCheckout(
+    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
+    @Body(new ZodValidationPipe(confirmCheckoutSchema)) body: ConfirmCheckoutDto,
+  ): Promise<OrderConfirmationView> {
+    return this.checkout.confirm({ cartId, ...body });
+  }
+
+  /** The buyer left checkout. Put the machines back on sale now, not in 20 minutes. */
+  @Delete('checkout/:cartId')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  abandonCheckout(
+    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
+  ): Promise<{ released: number }> {
+    return this.checkout.abandon(cartId);
   }
 
   // -------------------------------------------------------------------------

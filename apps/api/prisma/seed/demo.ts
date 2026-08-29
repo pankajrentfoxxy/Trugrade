@@ -519,6 +519,142 @@ async function refreshVendorQuality(): Promise<number> {
   }
 }
 
+/**
+ * What a buyer needs before they can check out at all (PHASE_06 Task 1).
+ *
+ * The demo buyer had a login and a cart and nothing else: no GSTIN, so there was
+ * no entity to invoice; no SHIPPING address, so there was no place of supply and
+ * therefore no tax split; no `org_preference`, so nothing said whether a PO
+ * reference is required; and no `buyer_profile`, so no payment method was
+ * permitted. Checkout refused at the first step, correctly, and there was no way
+ * to see the rest of the flow.
+ *
+ * Two delivery sites on purpose, because ONE of them proves nothing: Gurugram is
+ * in Haryana, where we are registered, and gives CGST + SGST; Bengaluru is
+ * Karnataka and gives IGST. Switching between them on the delivery step is the
+ * whole s.10(1)(a) rule, visible.
+ */
+async function seedBuyerCheckoutSetup(prisma: PrismaClient, buyerOrgId: string): Promise<void> {
+  await prisma.$executeRaw`
+    INSERT INTO kyc.gst_profile (org_id, gstin, legal_name_as_per_gst, trade_name, state_code,
+                                 registration_type, status, api_verified_at, is_primary)
+    VALUES (${buyerOrgId}::uuid, '06AABCA1429B1Z8', 'Acme Industries Pvt. Ltd.', 'Acme',
+            '06', 'REGULAR', 'ACTIVE', now(), TRUE)
+    ON CONFLICT (org_id, gstin) DO NOTHING`;
+
+  const site = async (
+    label: string,
+    line1: string,
+    city: string,
+    state: string,
+    stateCode: string,
+    pin: string,
+    contact: string,
+    mobile: string,
+    landmark: string,
+    gate: string,
+    isDefault: boolean,
+  ): Promise<string> => {
+    const found = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM identity.org_address
+       WHERE org_id = ${buyerOrgId}::uuid AND type = 'SHIPPING'::address_type AND pincode = ${pin}
+       LIMIT 1`;
+    if (found[0]) return found[0].id;
+    const id = randomUUID();
+    await prisma.$executeRaw`
+      INSERT INTO identity.org_address
+        (id, org_id, type, label, line1, city, state, state_code, pincode, contact_name,
+         contact_mobile, landmark, delivery_instructions, is_default, is_billing_enabled, is_active)
+      VALUES (${id}::uuid, ${buyerOrgId}::uuid, 'SHIPPING'::address_type, ${label}, ${line1},
+              ${city}, ${state}, ${stateCode}, ${pin}, ${contact}, ${mobile}, ${landmark},
+              ${gate}, ${isDefault}, TRUE, TRUE)`;
+    return id;
+  };
+
+  const gurugram = await site(
+    'Gurugram IT campus',
+    'Tower C, 6th floor, DLF Cyber City',
+    'Gurugram',
+    'Haryana',
+    '06',
+    '122001',
+    'Ravi Menon',
+    '+919810045512',
+    'Opposite the Cyber Hub gate',
+    'Goods entry is gate 3 at the rear. Ask for the IT store on level B1.',
+    true,
+  );
+  await site(
+    'New Delhi head office',
+    '11th floor, Barakhamba Road, Connaught Place',
+    'New Delhi',
+    'Delhi',
+    '07',
+    '110001',
+    'Suresh Pillai',
+    '+919811223344',
+    'Behind the Statesman House',
+    'Deliveries to the basement dock only. Building pass from the front desk.',
+    false,
+  );
+  // Genuinely outside the NCR pilot, and that is the point: choosing it shows
+  // the honest "we cannot price this lane" state rather than a zero freight.
+  await site(
+    'Bengaluru office',
+    'Prestige Tech Park, Outer Ring Road',
+    'Bengaluru',
+    'Karnataka',
+    '29',
+    '560001',
+    'Anitha Rajan',
+    '+919845012233',
+    'Next to the Marathahalli bridge',
+    'Loading bay is on the service road side; security desk 2 holds the pass.',
+    false,
+  );
+
+  const gst = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM kyc.gst_profile WHERE org_id = ${buyerOrgId}::uuid AND is_primary`;
+
+  await prisma.$executeRaw`
+    INSERT INTO customer.org_preference (org_id, po_required, default_shipping_address_id,
+                                         default_billing_gst_profile_id)
+    VALUES (${buyerOrgId}::uuid, FALSE, ${gurugram}::uuid, ${gst[0]!.id}::uuid)
+    ON CONFLICT (org_id) DO UPDATE
+      SET default_shipping_address_id = EXCLUDED.default_shipping_address_id,
+          default_billing_gst_profile_id = EXCLUDED.default_billing_gst_profile_id`;
+
+  // Prepaid and credit both permitted at the organisation, with a real limit —
+  // so the payment step has something to offer and the credit arm is reachable.
+  await prisma.$executeRaw`
+    INSERT INTO customer.buyer_profile (org_id, credit_limit, credit_terms_days, credit_used,
+                                        payment_mode_allowed, onboarding_status, verified_at)
+    VALUES (${buyerOrgId}::uuid, 2000000, 30, 0,
+            ARRAY['PREPAID','CREDIT']::public.payment_mode[], 'VERIFIED'::org_status, now())
+    ON CONFLICT (org_id) DO UPDATE
+      SET credit_limit = EXCLUDED.credit_limit,
+          payment_mode_allowed = EXCLUDED.payment_mode_allowed`;
+
+  // A policy on the ordinary buyer, not on the owner: Farah may spend up to
+  // Rs 2 lakh alone and needs Suresh above that, and she may not draw on the
+  // credit line. That is the B2B differentiator PHASE_06 Task 2 asks for, and
+  // without a seeded policy the approval path has no way to be seen.
+  const farah = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM identity.user_account WHERE email = 'buyer@acme.example'`;
+  const suresh = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM identity.user_account WHERE email = 'approver@acme.example'`;
+  if (farah[0] && suresh[0]) {
+    await prisma.$executeRaw`
+      INSERT INTO customer.buyer_approval_policy
+        (org_id, user_id, requires_approval_above, allowed_payment_modes, approver_user_id, is_active)
+      SELECT ${buyerOrgId}::uuid, ${farah[0].id}::uuid, 200000,
+             ARRAY['PREPAID']::public.payment_mode[], ${suresh[0].id}::uuid, TRUE
+       WHERE NOT EXISTS (
+         SELECT 1 FROM customer.buyer_approval_policy
+          WHERE org_id = ${buyerOrgId}::uuid AND user_id = ${farah[0].id}::uuid)`;
+  }
+}
+
 export async function seedDemo(
   prisma: PrismaClient,
   log: (m: string) => void = () => undefined,
@@ -543,7 +679,16 @@ export async function seedDemo(
 
   for (const p of PLATFORM_PEOPLE) await upsertPerson(prisma, platformId, p, hash);
   for (const p of BUYER_PEOPLE) await upsertPerson(prisma, buyerId, p, hash);
-  await addr(prisma, buyerId, 'Bengaluru', 'Karnataka', '29', '560001');
+  // No `addr()` for the buyer. It writes a PICKUP address — a vendor's shape —
+  // labelled "Primary", `is_default` AND `is_billing_enabled`. On checkout that
+  // made it the pre-selected billing address of an organisation that has never
+  // shipped anything, put a second row reading DEFAULT into a radio group that
+  // already had one, and (because `addr` matches on pincode alone, so an early
+  // run's row survives a later correction) carried state "Karnataka" under state
+  // code 06, which is Haryana. A wrong state code on a billing address is a
+  // wrong GSTIN jurisdiction on an invoice. `seedBuyerCheckoutSetup` gives the
+  // buyer three real SHIPPING sites, all billing-enabled, one default.
+  await seedBuyerCheckoutSetup(prisma, buyerId);
 
   // --- vendors, their pickup points, and the anonymised labels -------------
   const vendors = new Map<string, ResolvedVendor>();

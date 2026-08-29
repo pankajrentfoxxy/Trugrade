@@ -2,10 +2,14 @@ import { Module } from '@nestjs/common';
 import { ClockModule } from '../../shared/clock';
 import { PrismaModule } from '../../shared/db/prisma.service';
 import { ListingModule } from '../listing';
+import { LogisticsModule } from '../logistics';
 import { PlatformModule } from '../platform';
 import { OrderingController } from './ordering.controller';
 import { OrderingService } from './ordering.service';
 import { CartService } from './internal/cart.service';
+import { CheckoutService } from './internal/checkout.service';
+import { HoldService } from './internal/hold.service';
+import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
 import { RfqIntakeService } from './internal/rfq-intake.service';
 
@@ -30,14 +34,28 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
  * this module does not own. `CatalogLookup` resolves `CatalogService` from the
  * container on first use instead; the reasoning lives there, in one place.
  *
+ * `LogisticsModule` is imported for one number: freight, priced per supply
+ * point against the buyer's real delivery pincode. Checkout cannot show a
+ * complete break-up without it, and a break-up missing a charge that appears
+ * later is drip pricing. The unserviceable arm of `FreightQuote` is why the
+ * quote can say "we could not price this lane" instead of charging zero.
+ *
  * `OrderingService` stays the only export, because the barrel is this module's
  * whole public surface and a cart service leaking out of it is how the seam is
  * lost.
  */
 @Module({
-  imports: [PrismaModule, ClockModule, ListingModule, PlatformModule],
+  imports: [PrismaModule, ClockModule, ListingModule, LogisticsModule, PlatformModule],
   controllers: [OrderingController],
-  providers: [OrderingService, CartService, CatalogLookup, RfqIntakeService],
+  providers: [
+    OrderingService,
+    CartService,
+    CheckoutService,
+    HoldService,
+    OrderTransactionService,
+    CatalogLookup,
+    RfqIntakeService,
+  ],
   exports: [OrderingService],
 })
 export class OrderingModule {}

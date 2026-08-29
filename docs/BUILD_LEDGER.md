@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-29T18:20:00+00:00  
-Currently: T16 - checkout, the order-confirmation transaction (the heaviest task in the backlog)
+Updated: 2026-08-30T00:40:00+00:00  
+Currently: T17 - order confirmation and approval-required
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -26,7 +26,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
 | T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
 | T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
-| T16 | Checkout | DOING |  |  |  |
+| T16 | Checkout | DONE |  | 130 shots, both themes, 1440/900/600 | Archetype D, six steps against the live stack. Real order with allocated serials and one PO per supply point; an order over the seeded Rs 2,00,000 policy holds six units, raises ZERO POs and sits AWAITING_APPROVAL with a 24h expiry. Tax split resolved and shown changing CGST+SGST to IGST on the delivery step, before confirmation. Six defects found by loading the screen, one of them a Rs 0.00 split drawn as resolved. |
 | T17 | Order confirmation and approval-required | TODO |  |  |  |
 | T18 | Bulk requirement upload | TODO |  |  |  |
 | T19 | Customer dashboard | TODO |  |  |  |
@@ -59,6 +59,132 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T16 — what loading the screen found
+
+The flow was 1,700 lines that had never been rendered in a browser. Everything
+below was found by opening it, and most of it is the same family of defect the
+rest of this run keeps finding: **a value we did not have, drawn as one we did.**
+
+- **The confirm step drew an unresolved tax split as a settled one, at ₹0.00.**
+  With the Bengaluru site chosen — Karnataka 29, outside the NCR lane, so no
+  freight and no taxable value — the panel headed *"The tax split on this order"*
+  printed **"CGST at 9% — ₹0.00 · SGST at 9% — ₹0.00"**. Two things wrong at
+  once: there was no split to show, and 06 against 29 is inter-state, so CGST +
+  SGST is not merely unresolved but **the wrong pair of heads**. This is the one
+  panel PHASE_06 Task 1 exists to put in front of a finance team *before* an
+  invoice exists, and it was showing them something `payment.invoice`'s own CHECK
+  constraint would refuse to store. It now says the split is not resolved, names
+  what it would be (IGST), and prints "Not resolved" in `--ink-4`.
+- **The primary action's refusal lived only in a `title` tooltip, and the button
+  still fired.** `Button.disabledReason` sets `title` and `aria-disabled` but
+  deliberately leaves the element enabled so a screen reader can reach it — which
+  also leaves `onClick` live. So "Place this order" on an unpriced lane was a
+  control the screen called unavailable, gave no on-screen reason for, and would
+  have POSTed anyway. The reason is now printed under the button — the same
+  failure the payment step's own comment refuses one file over — and `place()`
+  guards on it. `t16.spec.tsx` presses the button and asserts `confirmCheckout`
+  is never called: it attempts the forbidden thing rather than asserting a guard.
+- **The step rail promised a draft this flow never writes.** `StepRail` always
+  closes with a save state, and with no `savedAt` that state reads *"Nothing
+  saved yet. Finish a step to save a draft."* True in registration, which writes
+  `onboarding_progress.draft_json` after every step. False here, and false in the
+  dangerous direction: checkout saves nothing, and what actually holds a buyer's
+  place is a twenty-minute hold that releases whether or not the tab is open.
+  Hidden with one scoped rule and replaced with the true sentence under the rail.
+- **The confirmation ran the full 1400 px of `.wrap`**, so a serial number and
+  its dispatch point sat a thousand pixels apart — and it called a
+  `PAYMENT_PENDING` order **"What you were charged"** under a green `pass` pill.
+  Nothing had been charged, and an order is not a PASS/FAIL verdict. Now `74ch`
+  like every step before it, a neutral pill reading "Order placed · payment
+  pending", and "What this order comes to · Nothing has been charged yet."
+- **The approval arm called held machines "yours" and printed a raw instant.**
+  `OrderConfirmation.next` is product copy — it is the only thing a buyer is told
+  after the transaction commits — and it interpolates
+  `2026-08-30T21:28:25.288Z`. Milliseconds and a Z suffix are a log line, not a
+  deadline a person can act on. Formatted to IST at the render; the heading now
+  reads "The machines held for you" while an approver still has to say yes.
+- **Two hand-rolled `<input>`s where `Input` exists**, so the PO reference had no
+  error wiring, no required marking and none of the system's focus ring. Replaced
+  — the required-PO refusal on screen is `Input`'s own error state.
+
+## Reported by T16 — the seed, and it was writing a wrong state code
+
+- **The buyer org held a PICKUP address that checkout pre-selected for billing.**
+  `seedDemo` called the generic `addr()` helper for the buyer. That helper writes
+  a **PICKUP** row — a vendor's shape — labelled "Primary", `is_default` AND
+  `is_billing_enabled`, and it matches an existing row **on pincode alone**, so
+  an early run's row survives every later correction. Three consequences, all
+  visible on step 2: an organisation that has never shipped anything had a pickup
+  point; **two rows read DEFAULT in one radio group**; and the pre-selected
+  billing address carried `state = 'Karnataka'` under `state_code = '06'`, which
+  is Haryana. A wrong state code on a billing address is a wrong GSTIN
+  jurisdiction on an invoice. The call is removed and the stale row deleted;
+  `seedBuyerCheckoutSetup` already gives the buyer three real SHIPPING sites, all
+  billing-enabled, exactly one default.
+
+## Reported by T16 — decisions, not code
+
+- **The IGST screenshot is New Delhi, not Bengaluru.** The brief named Bengaluru
+  as the inter-state case, and Bengaluru cannot be priced at all —
+  `logistics.carrier_rate_card` covers Delhi NCR, so 560001 returns
+  `freight: null, grandTotal: null` and there is no split to show. **New Delhi
+  (07) is the reachable inter-state lane**: same goods, same ₹298 freight, and
+  the whole tax lands as IGST ₹23,219.64 instead of CGST ₹11,609.82 + SGST
+  ₹11,609.82. `T16-breakup-cgst-sgst-gurugram-*` against
+  `T16-breakup-igst-newdelhi-*` is that pair, and it is the same cart both times.
+  Bengaluru is captured as the third arm it really is — the lane we cannot price.
+- **`deliverySites` is three rows, not fourteen.** Only `SHIPPING`, `is_active`
+  rows reach the delivery step. Three is the right number here because they are
+  three different answers: Gurugram 06 (our own state), New Delhi 07 (another
+  state, priced), Bengaluru 29 (another state, unpriced).
+- **The countdown is the only clock on the screen, and there is no second one.**
+  No "N left", no viewer count, no expiry on anything but the hold. It reads
+  `checkout_hold.expires_at` and nothing else, and it does not reset on F5 —
+  `HoldService.take` joins an existing live hold rather than extending it, which
+  this run verified by reloading. `T16-hold-expired-*` is the browser watching it
+  reach 00:00 with the every-minute cron putting the machines back on sale behind
+  it, both confirmed against the table.
+- **PREPAID arrives selected on the payment step, and that is the server's stored
+  preference rather than a UI default.** It is also the only mode this buyer is
+  permitted; the other two are disabled with their reason on screen. Worth
+  knowing it is a defaulted *answer*, not a defaulted *consent* — there is no
+  pre-ticked checkbox anywhere in the flow, and placing the order is the
+  agreement.
+
+## Reported by T16 — not fixed, they are outside my files
+
+- **Deleting a cart leaks reserved stock, permanently.** `checkout_hold.cart_id`
+  is `ON DELETE CASCADE` and `checkout_hold_unit.hold_id` cascades from that, so
+  `DELETE FROM ordering.cart` destroys a live hold **without any of the code that
+  took it ever running**. `HoldService.release` is what moves units back to
+  AVAILABLE and increments `qty_available`; a cascade skips it, and the machines
+  stay reserved to a hold that no longer exists. Found because a crashed capture
+  run leaked units exactly that way and the next run was refused on screen. The
+  service's own note says a hold must be released by the code that took it, and
+  names three paths — the cascade is a fourth it does not know about. **A
+  `BEFORE DELETE` trigger on `ordering.cart`, or `ON DELETE RESTRICT` plus an
+  explicit release, closes it.** Worked around in `scripts/t16-shots.mjs`, which
+  expires holds and waits for the cron before deleting any cart.
+- **`OrderConfirmation` does not carry the buyer's own PO reference or cost
+  centre**, though both are stored correctly — `order.buyer_po_number` and
+  `order.cost_centre`, checked in the database after a real placement. The buyer
+  types a reference on step 4 and never sees it echoed on the confirmation, which
+  is the one screen where they would catch it before it reaches an invoice.
+- **`OrderConfirmation.next` interpolates a raw ISO 8601 instant.** Formatted at
+  the render, but it belongs in the service that writes the sentence — every
+  other client of that field will print the same log line at a buyer.
+- **`TaxSplit.interState` is `false` on an unpriced lane whose two state codes
+  differ.** 06 against 29 is inter-state under s.10(1)(a) whatever the freight
+  situation is. The screen no longer trusts the flag when `grandTotal` is null
+  and compares the two codes itself, but the field says something untrue and any
+  other reader will believe it.
+- **Every authenticated screen still shows "Sign in / Create account" in the
+  header.** `SiteHeader` is server-rendered and never reads the session, so a
+  buyer four steps into checkout is invited to sign in. T15 shipped with it and
+  it is chrome-wide rather than this route's — but it is on all 130 captures.
+- **There is still no way to reach `/cart` or `/checkout` from the chrome**
+  (T15 reported it). Both are reachable only from the comparison board.
 
 ## Reported by T15 — decisions, not code
 
