@@ -205,13 +205,23 @@ describe('a vendor purchase order is unreachable from the buyer’s screen', () 
     expect(hrefs.filter((h) => h.startsWith('/unit/'))).toHaveLength(3);
   });
 
-  it('names the documents that ARE the buyer’s, and does not fake the ones that do not exist', async () => {
+  it('names the documents that ARE the buyer’s, and sends them to the rest', async () => {
     await shown(CONFIRMED);
+    // The two that belong to the buyer and are on this page: their own PO
+    // reference and our confirmation, which is this screen.
     expect(screen.getByText('Our order confirmation')).toBeInTheDocument();
-    expect(screen.getByText('Proforma invoice')).toBeInTheDocument();
-    // No download, no disabled button suggesting a file: the words say it is
-    // not issued, because it is not.
-    expect(screen.getAllByText('Not issued yet').length).toBeGreaterThan(0);
+    expect(screen.getByText('Your PO reference')).toBeInTheDocument();
+
+    // The proforma and the tax invoice were hard-coded here as "Not issued yet"
+    // while nothing could issue one. T22 built the issuance, so restating them
+    // here would be a second copy that goes stale the first time an invoice is
+    // raised. This panel points at the screen that reads their real state.
+    expect(screen.queryByText('Not issued yet')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /documents on this order/i }),
+    ).toHaveAttribute('href', '/account/orders/TT-26-00002/documents');
+
+    // Still no download and still no disabled button pretending at a file.
     expect(document.querySelector('a[download]')).toBeNull();
   });
 });

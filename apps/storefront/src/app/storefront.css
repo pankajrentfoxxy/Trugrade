@@ -1321,3 +1321,109 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 @media(max-width:1000px){
   .apprrec .sidep{order:0}
 }
+
+/* ============================================================================
+   T22 — the tax documents on one order
+   ========================================================================= */
+
+.dochead{margin-bottom:14px}
+.dochead h1 .mono{font-size:.86em}
+
+/* Two figures, each with its denominator. Same slab as T21's five, because it
+   is the same kind of statement — a count and what it is out of — and a second
+   treatment for it would be a second thing to keep in step. */
+.dockpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:0 0 12px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:7px;overflow:hidden}
+.dockpi>div{padding:12px 16px;border-right:1px solid var(--rule)}
+.dockpi>div:last-child{border-right:0}
+.dockpi dt{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-4);margin-bottom:5px}
+.dockpi dd{margin:0;font-size:12px;color:var(--ink-3)}
+/* Amber, because a measured value is one of the three things amber means. */
+.docfig{font-size:19px;font-weight:600;color:var(--acc-ink);
+  font-variant-numeric:tabular-nums;margin-right:5px}
+
+.doctable{margin-bottom:0}
+/* Comfortable density: the storefront's rows are 60px, and these rows carry
+   three lines of prose in the first cell, so they are taller still. */
+.doctable td{padding:14px 16px;vertical-align:top}
+.doctable tbody tr:hover td{background:var(--sheet-2)}
+
+.docid{display:flex;flex-direction:column;gap:3px;min-width:0;max-width:52ch}
+.doctitle{font-size:13.5px;font-weight:500;color:var(--ink)}
+.docdesc{font-size:11.5px;line-height:1.5;color:var(--ink-3)}
+/* The sentence the whole screen exists for: WHEN a document that does not exist
+   yet will exist. --ink-4 is the same ink "Not measured" uses one screen over,
+   because it is the same statement one document up: this is absent, and here is
+   what that means. Never a dash, never a blank, never a tick. */
+.docwhen{font-size:11.5px;line-height:1.5;color:var(--ink-4);
+  border-left:2px solid var(--rule);padding-left:9px;margin-top:3px}
+
+.docnum{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+.doctable .mono{font-variant-numeric:tabular-nums}
+
+.docamt{display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.docsum{font-size:13.5px;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Rule 32(5). Not a warning colour: a margin-scheme invoice is perfectly valid,
+   it just carries thinner input credit, and colouring it red would say the
+   machine or the document is wrong. */
+.docmargin{font-size:10.5px;line-height:1.35;color:var(--ink-4);
+  text-align:right;max-width:22ch}
+
+.docopen{min-height:34px;padding:0 16px;white-space:nowrap}
+/* A document that lives on another screen gets a link, not a button: it is
+   navigation, and dressing it as a download would promise a file. */
+.docelsewhere{font-size:12.5px;color:var(--ink-2);white-space:nowrap;
+  text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px}
+.docelsewhere:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+
+.docfoot{margin-top:12px;max-width:96ch}
+.docfoot a{text-decoration:underline;text-decoration-color:var(--rule);
+  text-underline-offset:3px;color:var(--ink-2)}
+.docfoot a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+
+.docperm{display:block;margin-bottom:8px;color:var(--ink-2)}
+
+/* The order record's pointer at this screen. A line, not a table: the table
+   used to restate every document and it now lives one tab across, where it is
+   read from real state instead of hard-coded. */
+.odocsnote{display:flex;flex-wrap:wrap;align-items:center;gap:12px;
+  padding:var(--s4) var(--s5);border:1px solid var(--rule);border-radius:var(--r-lg);
+  background:var(--sheet)}
+.odocsnote p{margin:0;font-size:13px;line-height:1.6;color:var(--ink-2);max-width:74ch}
+.odocsnote .pill{margin-left:auto}
+
+@media(max-width:900px){
+  .dockpi{grid-template-columns:minmax(0,1fr)}
+  .dockpi>div{border-right:0;border-bottom:1px solid var(--rule)}
+  .dockpi>div:last-child{border-bottom:0}
+  .docid{max-width:none}
+  .docamt{align-items:flex-start}
+  .docmargin{text-align:left}
+  .odocsnote .pill{margin-left:0;width:100%;justify-content:center}
+}
+
+/* A link inside an EmptyState body. The 403 state names a route the reader can
+   actually take — their team settings — and an unstyled anchor in a paragraph
+   of prose reads as prose. `EmptyState` does not style what it is handed. */
+.ostate .empty a{color:var(--ink);text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:3px}
+.ostate .empty a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+.ostate .empty a.pill{text-decoration:none}
+
+/* `.pill.wire` is a CHROME control: `--on-chrome` ink on a `--chrome-line-2`
+   border. That is right on the dark header and on the landing hero, which are
+   dark in both themes — and it is white-on-white on a light working surface.
+   T21's "Show all machines" has the same problem and is not this task's file to
+   change; reported as a system gap. Scoped here rather than globally, because
+   the two dark uses are correct as they are. */
+.doctable .pill.wire,
+.odocsnote .pill.wire,
+.ostate .empty .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
+.doctable .pill.wire:hover,
+.odocsnote .pill.wire:hover,
+.ostate .empty .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc);
+  color:var(--acc-ink)}

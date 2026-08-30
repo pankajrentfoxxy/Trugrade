@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-30T15:00:00+00:00  
-Currently: Wave 4 - T22 documents (invoice, proforma, e-way bill); T25 done
+Updated: 2026-08-30T18:40:00+00:00  
+Currently: Wave 4 - T22 done (payment has its first internals); T23 warranty next
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -32,16 +32,16 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T19 | Customer dashboard | DONE |  | 28 shots, 6 states x 2 themes, 1440/900/600 | Archetype E at `/account` — the header's Account button led to a 404 until now. Four KPI tiles and ONE queue, because the approval expiry is the only SLA a buyer is on the receiving end of. `approvalSlaHours` is measured off the row (`expires_at - requested_at`), never the column's 24h default. No approve/reject control, because no endpoint can decide one. Empty-account state reached by parking all 13 orders on another buyer org through the real column, then putting them back. |
 | T20 | Order list | DONE |  | 56 shots, 14 states x 2 themes, 1440/900/600 | Archetype B at `/account/orders`. Built `GET /api/buyer/orders` — the list endpoint did not exist. One search box over three numbers (ours, the buyer's PO reference, a serial) and the matched serial is shown on the row. Whole board state in the URL; the capture script reaches every filtered state by address, not by clicking. Facet counts live, zero-count options disabled not hidden. Found and fixed two page-level horizontal-scroll defects that affected EVERY storefront board. |
 | T21 | Order detail - serial level | DONE |  | 48 shots, 14 states x 2 themes, 1440/900/600 | Archetype B at `/account/orders/[orderNumber]/units`, the first sub-route of the record — the tab strip lives in the record's LAYOUT so T22/T23/T24 inherit it. Built `GET /api/buyer/orders/:orderNumber/units` and `IQcService.inspectionsByReport`, so ordering reads QC through qc's own allow-list rather than joining three of its tables. Reads neither `procurement.purchase_order` nor `listing.unit`. Foreign order 404 not 403, matching T17. **Fixed the QC seed monoculture**: 239 reports were all PASS/A/APPLIED — `prisma/seed/qc-spread.ts` now derives PASS_WITH_NOTE from the WARN areas already seeded and puts a FAIL, a MISMATCH, a broken seal and three grade corrections on allocated units only (a FAIL on a LISTED unit would put a failed laptop on the storefront, because `unit_is_sellable` does not look at the verdict). Three defects found by loading the screen: the order record had been rendering the site header TWICE since it moved under `/account`; `battery_health_pct` is NUMERIC so `$queryRaw` returned it as a STRING and an average would have concatenated it; and a descending sort flipped nulls-last to nulls-first, putting the unmeasured machine at the top as if it were the best battery. |
-| T22 | Documents - invoice, proforma, e-way bill | TODO |  |  |  |
+| T22 | Documents - invoice, proforma, e-way bill | DONE |  | 44 shots, 11 states x 2 themes, 1440/900/600, plus 3 rendered PDFs opened and read | Archetype B at `/account/orders/[orderNumber]/documents`, and the first task in the `payment` module — it had 12 empty tables and no writer anywhere in `src`, so 13 orders existed and not one invoice did. **Built the issuance, not just the screen.** `InvoiceIssueService` prices a consignment through `platformToBuyer`, `resolveTaxSplit` and `marginTaxableValue` from `@trugrade/contracts` — it does no arithmetic of its own — and `InvoicePdfService` renders with pdf-lib the way `qc/internal/report-pdf.service.ts` does, no second library and no headless browser. The first real invoice (`TT/2026-27/00001`, Rs 99,059.82) totals to the ORDER's stored `grand_total` to the paisa, which is the cross-check that says the invoice and the order are one calculation rather than two that agree today. **Three moments, not one.** A proforma exists on confirmation; a tax invoice at REMOVAL of the goods (s.31(1)(a) CGST Act — not at payment, which is what T17's screen already said in words); an e-way bill at pickup. One invoice per CONSIGNMENT rather than per order, because Rule 138 binds an e-way bill to a consignment and `payment.eway_bill.invoice_id` is UNIQUE — one invoice per order would leave two of three dispatches with nothing they could legally travel under. **The proforma is not stored, deliberately.** It is not statutory, it consumes no number from the GST series, and it is derived entirely from the order — so it is rendered on demand and numbered `PRO/<order>`. Storing it would need a writer inside the checkout transaction and would produce a document that goes stale the moment the order changes. **Gapless numbering proved by a real race**, not by asserting the lock exists: eight concurrent transactions through `payment.next_invoice_number` come back 00001…00008, no gap, no duplicate, counter at 8. The function and its `FOR UPDATE` were already in the Phase 7 migration; nothing had ever called them. **The seller did not exist.** `kyc.gst_profile` carried a GSTIN for every buyer and vendor and none for us, and `payment.invoice_series` was empty — so issuance refused, correctly, and the whole path was unreachable. `prisma/seed/invoicing.ts` adds our registration (synthetic, check-digit valid, Haryana 06), the series for this financial year AND the next, and moves TT-26-00001 to DISPATCHED so the screen has both halves of its story on one database. The invoice itself is raised through the real path, `POST /api/ops/orders/:orderNumber/invoices`, so it goes through the numbering it exists to prove. **The empty state IS the screen.** Every document is a row on every order, and one that does not exist carries the moment that brings it — no blank, no dead download, no disabled button. A cancelled order says "never", not "later". A MARGIN order is flagged on the PROFORMA, before the money moves, rather than at invoice time. **The seam runs one way.** `ordering` owns the order and hands `payment` an `OrderBillingBasis` — a value, not a handle — so `payment` has no path back into `ordering."order"` and therefore none to a vendor org id. Anonymity swept in the PDF BYTES, not just the JSON: inflate every stream, hex-decode the text, and grep that plus the filename and the document metadata for the vendor's legal name, trade name, GSTIN, org id and our own purchase price, with positive assertions on the serial and the invoice number so the sweep cannot pass on an empty haystack. Four defects found by loading the screen: "Not numbered yet" on rows that will never carry a number; a blank amount on the proforma, which is the one figure a finance team pays against; an e-way bill promising "at pickup" on a CANCELLED order; and `.pill.wire` being a CHROME control (`--on-chrome` on `--chrome-line-2`) that renders white-on-white on a light working surface — T21's "Show all machines" has it too. |
 | T23 | Warranty and claims | TODO |  |  |  |
 | T24 | Returns inside the 48-hour window | TODO |  |  |  |
 | T25 | Account - addresses, team, approvals | DONE |  | 116 shots, 29 states x 2 themes, 1440/900/600 | **Closes the build's oldest reachability gap.** `APPROVED` and `REJECTED` were states the schema allowed and the product could not reach: PHASE_06 Task 2 built the policy, the `order_approval` row and the 24-hour deadline, the transaction wrote the row, and nothing could decide one. Built `POST /api/buyer/approvals/:id/decision` plus `GET /api/buyer/approvals` and `/:id`; the four stranded orders now have a way forward and two were decided through the real endpoint (`TT-26-00004` approved, two POs raised; `TT-26-00011` declined, six units back to LISTED). **VR-123 did not exist anywhere and now does** - `roles.ts` said "enforced in the service" and no service enforced it. Four screens: `/account/approvals` (B), `/account/approvals/[id]` (C), `/account/addresses` (C), `/account/team` (B), plus `AccountNav` in the layout because three of them were reachable from nowhere. Addresses and team live in `identity` where their tables already are; the `customer` module is still empty. 22 integration tests (10 approval, 12 account), 8 storefront unit tests, every one attempting the forbidden thing. Also fixed: `order_approval.requested_at` came from the DATABASE clock while `expires_at` came from `ClockPort`, so the measured SLA drifted with any skew. |
 | T26 | Vendor dashboard | DONE |  | 30 shots, 5 states x 2 themes, 1440/900/600 | Archetype E at `/vendor` — it was a KPI row and nothing else, which is B's furniture under E's name. Added the two queues, sorted by breach: grade corrections (real SLA, `qc.grade_correction_auto_days` x 24 = 48h) and awaiting inspection (**no SLA, and none invented** — `slaHours` and `breachedCount` come back `null`, and the route drops the fields rather than defaulting them). Cut three tiles that linked nowhere real: `/vendor/payables` and `/vendor/qc/corrections` are routes that do not exist, and `?expiring=14` is a parameter the listings board silently ignores. Kept the numbers, dropped the hrefs. Dropped the awaiting-inspection tile because the queue says the same thing with the wait attached. `unitsEverListed` added to the payload: first-run was inferred from `live + awaiting + sold`, which told a vendor whose whole first batch failed inspection to list their first stock. Added `?corrected=1` to the listings board so the corrections queue lands somewhere — predicate is the correction row, NOT `grade_corrected_from`, which is only written once a correction is APPLIED and therefore matched nothing for every correction still open. Nav lied: the single vendor entry said 'My listings' and pointed at the dashboard. Now two entries, 'Today' and 'My listings'. 6 integration tests, org scoping proven by seeding a neighbour with strictly more of everything and mutation-checked (removing one `vendor_org_id =` fails the suite). 6 console tests, one of which demands the ABSENCE of an SLA clause. |
 | T27 | Listing wizard design pass + commission readout | DONE |  | 84 shots, 14 states x 2 themes, 1440/900/600 | Archetype D at `/vendor/listings/new`, and it had been shipping **two columns of a three-column archetype** — `WhyRail` was in `@trugrade/ui`, built for vendor registration, and used by nothing. Added, one list per step, every entry a consequence rather than a definition. **Two live defects found by driving the screen rather than reading it.** (1) Answering the batch-size question ran create -> attach -> submit a SECOND time, so `POST /:id/units` was handed serials the vendor's own draft was already holding; the API correctly refused them and the vendor was left with two drafts, an error calling their own machines duplicates, and no inspection. `listingId` is now remembered and the answer re-submits the listing that exists. Regression test attempts the second create and counts the POSTs. (2) **The wizard's success state was unreachable for every vendor in the database**: `vendor.vendor_facility` had 0 rows, `SubmitService.facilityAt` refuses a pickup address with no facility behind it, and `POST /api/vendor/facilities` wrote only `identity.org_address` — so the picker offered a location that submit then rejected, telling the vendor to add it as a facility on a screen that does not exist. Both the route and `prisma/seed/demo.ts` now write the facility row in the same transaction; a real visit (QCV-20260830-073FFC1F) was raised to prove it. Commission readout: `totalDeductions` was computed by the server and shown nowhere, so a list of charges had no total; `expectedPayoutDate` is absent from the server type and rendered 'Set by your payout cycle' in the value slot, a sentence dressed as an answer — now 'Not calculated' in `--ink-4`; the percentage carries its denominator in words, because the rupee denominator IS the selling price and that is the one figure this screen may not show. Grade definitions now carry their measured floors (battery %, cosmetic score, cycle cap) beside the prose, from `catalog.v_current_grade_definition` — the fields were already on the wire and the console type dropped them — and a declared band whose CEILING cannot clear the chosen grade's floor warns, never blocks (UNKNOWN has no ceiling and is compared to nothing, because a missing measurement must not render as passing OR failing). One primary action per screen: the selected SKU row stopped being an amber button, and the footer's submit is suppressed while the batch-size question is open. Every 'MISSING route' comment in `vendor/api.ts` was stale — all nine exist. |
 | T28 | Listing management and repricing | DONE |  | 81 shots, 13 states x 2 themes, 1440/900/600 | Archetype B at `/vendor/listings` and a new archetype C at `/vendor/listings/[id]/reprice`. **The logged `STATUS_TONE` bug is fixed and the sweep found seven more of it.** ACTIVE was green and REJECTED/SUSPENDED red; ACTIVE/PARTIALLY_ACTIVE are now `info` (the amber wash, which is rule 1's third meaning — an active state), the in-flight ones are `processing`, and everything terminal is neutral with its meaning in its own label. Also fixed, same mistake, listed because a colour that means a verdict in one place and a status in another has stopped meaning either: `vendor/Units.tsx` (a sellable unit painted green two columns from the grade badge that carries the real verdict), `qc/VisitBoard.tsx` (COMPLETED green, NO_SHOW red), `qc/VisitDetail.tsx` (**UNTESTABLE was red — "we could not measure it" is not "it failed", and that distinction is what a vendor's appeal turns on**), `qc/AuditRecheck.tsx` and `qc/ToolProviders.tsx` ("Active" green), `qc/GradeCorrections.tsx` (an elapsed response window red), `ReviewQueue.tsx` (an SLA we breached rendered as a verdict on the applicant), `VendorReview.tsx` (a declared capability green). Deliberately left: real PASS/FAIL verdicts, form error text, and `ConditionImageCoverage`'s publish gate, which is a genuine binary. Row-action links dropped from `--acc-ink` to `--ink`: fifty rows x two links is a hundred amber controls beside the one chip that now means something. **`?corrected=1` was answering a different question from the queue that links to it** — the dashboard counts corrections with `vendor_responded_at IS NULL AND auto_applied_at IS NULL`, the board matched every correction ever raised. They agree today only because no vendor can answer one (T31) and the auto-apply job has never run; the moment either changes a queue saying "3 need you" lands on a board of nine. One predicate now, an integration test that seeds an answered correction and demands its absence, and the capture script reads both numbers live and refuses to run if they disagree. The board caption printed `rows.length` (a page) where it meant `total` (a match count). **Reprice is a route, not the row-expanding panel it was** — that panel's open/closed state lived in React and not the URL. It names, by serial, the machines that will NOT move: `unit.purchase_price` is frozen by `trg_lock_purchase_price` and the handler updates `WHERE purchase_price IS NULL`, so committed machines were being skipped in silence and a vendor who repriced forty and found nine unchanged would conclude it half-failed. `VendorUnitView` gained `payoutLocked` (the boolean, never the amount) to make that sayable. Six integration tests: two attempt the forbidden `UPDATE` on `purchase_price` and `valuation_method` directly against the table and demand the refusal (`pg_trigger` is consulted nowhere), one proves the partial skip, one proves the all-committed refusal is the vendor-readable 412 and not a trigger exception, one aims the reprice at a neighbour's listing, one is the corrections filter. Mutation-checked: removing either predicate fails the right tests. **Two more defects found on the way.** (1) `qc.visit_fee_waived_above` and `qc.visit_fee_waiver_units` are one number under two names — the baseline migration writes the first and `PricingService` reads it; the seed wrote the second and only `SubmitService` read it. So a database built from the seed alone could not price a listing and one built from migrations alone could not request an inspection. One name now, and `price.guardrail_lower_multiple` added to the seed for the same reason. (2) **Nine of the ten seeded vendors had no user account**, and they are exactly the nine whose stock the demo orders were placed against — so every unit in the database carrying a `purchase_price` belonged to a vendor who could not sign in, and the whole committed-machines behaviour was unreachable through the product. One VENDOR_OPS per supply point in `demo.ts`. |
-| T29 | Bulk serial upload with dry-run | TODO |  |  |  |
+| T29 | Bulk serial upload with dry-run | DONE |  | 57 shots, 10 states x 2 themes, 1440/900/600 (the commit is captured once, in dark) | Archetype F at `/vendor/listings/[id]/bulk-upload`, rebuilt around one rule: **the counts the dry run promises are the counts the commit produces.** Three divergences existed and each rejected the ENTIRE file at commit time while the report announced a page of happy rows. (1) **`willAdd` counted only clean rows** while `onAccepted` handed the commit clean + warned, so a file with 28 warnings said "412 of 440 will be added" above a button reading "Add 440 machines". `willAdd` now means what the commit inserts and `warnings` is documented and rendered as a SUBSET of it — a warned row is an accepted row, which is the entire point of it being a warning. (2) **The dry run did not know the listing.** `ListingService.addUnits` refuses a listing that is not a DRAFT, and this screen is reachable from any listing row. (3) **Nor its capacity** — `addUnits` refuses the whole batch over `LISTING_QTY.max`, so a big file onto a nearly-full listing promised 5,000 and delivered nothing. New `POST /api/vendor/listings/:id/serials/validate-csv` reads both; the wizard keeps the unscoped route because at step 3 there genuinely is no listing, and a nullable field would make "we did not check" and "we checked and it is fine" the same response. Over-capacity rows become ERRORs naming the line to delete rather than a whole-file refusal after the fact. **A bug the screenshots caught that no test would have**: `validateSerialBatch` writes "Duplicate of line N" where N is the BATCH index, and `dryRunCsv` remapped the row's `lineNumber` to the vendor's file but never the number inside the prose — a file with a blank third line reported "Duplicate of line 1", which is the header. Same defect as misnumbering a row, arriving by a different door. XLSX/OLE/PDF/PNG/gzip/RAR/ELF refused by **magic bytes in the browser before a byte is decoded**, and refused again server-side (NULs and a U+FFFD ratio) because the API is the trust boundary and a client that is not our screen gets the same answer. Row cap and 10 MB cap named as sentences rather than met as a zod error at the commit. Template download added — `SERIAL_CSV_COLUMN` claimed to BE the download and nothing served it. The commit now **reconciles against the promise** and says so either way, including "exactly what the dry run said", because printing it only on a mismatch teaches people that silence means nothing happened. Eight integration tests, every one shaped as promise-then-commit-then-compare over the same bytes; four console tests including a renamed XLSX asserted to reach no API call. **Not built, deliberately:** §3B.2's cross-SKU importer (a row carrying SKU code, grade, battery and payout, at `/vendor/listings/bulk-upload` with no id). That needs an endpoint that creates listings from a file, and a grade column on THIS route would be actively wrong — a listing carries one declared grade and is priced at it, so a B machine under an A listing sells at the A price. "Map columns" is likewise not built: the header matcher already accepts serial/serials/serial_no/serial number, and a mapping UI for a one-column file is furniture. |
 | T30 | QC visit request, scheduling, results | TODO |  |  |  |
-| T31 | Grade-correction response | TODO |  |  |  |
+| T31 | Grade-correction response | DONE |  | 72 shots, 12 states x 2 themes, 1440/900/600 | **Closes the reachability gap this ledger logged: `GradeCorrectionService.respond()` was exposed by no controller**, so `listing.grade_correction.respond` was granted to three vendor roles and guarded nothing and every correction reached its deadline and auto-applied. New archetype B at `/vendor/corrections` and archetype C at `/vendor/corrections/[id]`, over a new **org-scoped** route pair — `GET/POST /api/vendor/grade-corrections[/:id][/respond]` in a `VendorCorrectionsController` that lives in the `qc` module (the service is internal to it; exporting it through the barrel to reach a controller would make the correction lifecycle another module's to call) and reads through a new `VendorCorrectionRepository` where the caller's org is a predicate, not a parameter. **No new permission.** The task offered `qc.report.read_own`; it was not needed and would have been wrong — reading corrections on your own machines is `listing.own.read`, answering one is `listing.grade_correction.respond`, and `qc-console-is-not-vendor-reachable.spec.ts` requires a vendor token to carry no `qc.` permission at all. The console's cross-vendor `correctionQueue()` is untouched and still unreachable by any vendor. **Ownership is `listing.unit.vendor_org_id`, not `listing.listing`** — `grade_correction.listing_id` is nullable, and an owner derived from a nullable column leaves rows with no owner. **Disputing is exactly as easy as accepting**: four peer radio options in the domain's own order, each printing its consequence, nothing pre-selected, one primary action. An elapsed window is `warn` and says "you can still answer", which is the truth — `respond()` refuses only a SETTLED correction, and all nine seeded corrections are ~77 hours into a 48-hour window because the auto-apply job has never run here. The dashboard queue now links to `/vendor/corrections` instead of `/vendor/listings?corrected=1`: that board is real and stays, but nothing on it could answer anything, so a queue headed "awaiting your answer" landed you where you could not give one. **All three surfaces read one predicate** and the capture script asserts it live, before and after two real answers made through the product (dashboard count = corrections board = `?corrected=1` listings). Eight integration tests: four prove each answer lands with its consequence (grade written, ask written, `qc_reverification` opened on a dispute, second answer refused), three attempt the forbidden thing — answering, then reading, a neighbour's correction, then calling it with no org — and read the neighbour's row back to prove nothing moved, plus the control case that the owner and the neighbour can each still answer their own. Mutation-checked: replacing the org predicate with `TRUE OR ...` fails two of them. **Not done:** `price_suggested` is on the table, is never written by anything, and is therefore not on the wire — no seeded correction carries a `price_before` either, so every capture shows the honest "No amount" rather than a rupee figure. The vendor listings board still has no per-row link into a correction (the listing payload carries no correction id); the corrections board and the nav entry are the way in. **Follow-up, done in the T29 pass:** `Corrections.spec.tsx`, seven tests for the four claims an integration test cannot see — nothing pre-selected and the four answers peers, an elapsed window rendered `warn` and never as expired or failed, "No amount" where `price_before` is null, and a neighbour's correction rendered as a refusal rather than a spinner. |
 | T32 | Purchase orders - serials, seal codes, pick list | TODO |  |  |  |
 | T33 | Payables and payout statement | TODO |  |  |  |
 | T34 | Ops dashboard | TODO |  |  |  |
@@ -59,6 +59,93 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T22 — not fixed, they are outside my files
+
+- **`CUSTOMER_BUYER` cannot read its own organisation's tax documents.**
+  `03_UX_SPEC.md` §3A.3 lists `/account/orders/[id]/documents` for BUYER_FINANCE,
+  BUYER_ADMIN, BUYER_OWNER **and BUYER_PROCURER**. Of those four,
+  `packages/contracts/src/roles.ts` gives `payment.invoice.read_own` to
+  CUSTOMER_OWNER, CUSTOMER_ADMIN and CUSTOMER_FINANCE and **not** to
+  CUSTOMER_BUYER — so Farah, who places the orders, gets a 403 on the documents
+  for an order she raised. The route is guarded with the correct permission
+  rather than a weaker one, and the screen renders the refusal as a real state
+  naming who in the organisation can open it. The one-line fix is adding
+  `'payment.invoice.read_own'` to `CUSTOMER_BUYER`; `packages/contracts` is not
+  this task's to change. The 403 capture (`T22-no-permission-*`) is that state,
+  produced by a real sign-in as `buyer@acme.example`, not by a stub.
+
+- **`.pill.wire` is a chrome control used on working surfaces.**
+  `storefront.css` defines it as `--on-chrome` ink on a `--chrome-line-2` border,
+  which is right on the dark header and on the landing hero and is white-on-white
+  on a light sheet. T21's "Show all machines" in the units board's empty state has
+  it, and so does the "browse in bulk" link on the home page. Pinned for T22's
+  three uses with a scoped override and reported rather than changed globally,
+  because the two dark uses are correct as they are. The real fix is a
+  `.pill.sheet` variant, or making `wire` surface-aware.
+
+- **`prisma/seed/index.ts` with `SEED_DEMO=1` fails before it reaches the new
+  step.** `seedDemo` raises *"15 unit(s) carry a supply-point label that is not
+  the one assigned to their vendor in that city"* on the current dev database.
+  Pre-existing and unrelated to invoicing — `seedInvoicing` runs clean when
+  invoked on its own — but it means a fresh `pnpm db:seed` does not reach the
+  seller registration today.
+
+## Reported by T22 — decisions, not code
+
+- **A tax invoice is issued at REMOVAL, not at payment.** s.31(1)(a) CGST Act:
+  for a supply of goods the invoice is issued before or at the time of removal
+  for delivery. Issuing on payment would be late for a credit order and early for
+  a prepaid one nobody has picked. T17's screen already said "raised when the
+  machines are dispatched"; this makes it true. `BillingConsignment.removed` is
+  the trigger and `ordering` computes it, because `ordering` owns the status.
+
+- **One invoice per consignment, not per order.** Rule 138 binds an e-way bill to
+  a consignment and `payment.eway_bill.invoice_id` is UNIQUE, so an order
+  dispatching from three supply points needs three invoices — folding them into
+  one leaves two consignments with nothing they could legally travel under. To the
+  buyer they read as "Delivery 1 of 3 · Supply Point A · Gurugram", which is the
+  vocabulary the order screens already use.
+
+- **The proforma is derived, not stored.** No statutory number, no row, no writer
+  in the checkout transaction. It is numbered `PRO/<order number>` and rendered on
+  demand from the order, so it cannot go stale; a stored one would be wrong the
+  moment a line changed. It says on its face that it is not a tax invoice and that
+  no input credit may be claimed against it.
+
+- **Signed URL, not presigned.** `ObjectUrlSigner` encrypts `<expiry>:<key>` with
+  AES-256-GCM and `GET /api/objects/:token` resolves it, so the object key never
+  reaches the browser. A presign publishes the key path, which is the leak
+  PHASE_05 Task 1 names. The download route mints a fresh 300-second URL per
+  click and 302s to it, which is also where the `audit_log` row is written — one
+  row per download rather than one per page view.
+
+- **`sub_order.invoice_id` is left NULL.** `payment.invoice.sub_order_id` is the
+  authoritative link and `payment` writes it; the column on `ordering.sub_order`
+  is the redundant half of the pair, and writing it would be a cross-module write
+  for a denormalisation nothing reads. ponytail: set it when a query needs it.
+
+## Reported by T22 — not built, stated rather than implied
+
+- **The e-way bill has no writer.** `payment.eway_bill` is read and never written.
+  It is generated on the GST portal at pickup, and `logistics` has no pickup
+  writer, so there is nothing to fire from. The row on the screen says so in its
+  own words rather than showing a blank, and when a number does exist the row
+  renders it — there is deliberately no download, because the portal returns a
+  number and not a file we hold.
+
+- **"Email to accounts" is not built.** §3A.3 lists it as a primary action.
+  `customer.org_preference.invoice_delivery_email` exists and nothing sends mail
+  against it. Nothing on the screen suggests it does.
+
+- **Proof of delivery, credit notes and returns are not built.** Each is a row
+  that says why it does not exist. A credit note is modelled as
+  `payment.invoice` with `type = 'CREDIT_NOTE'` and `original_invoice_id` — there
+  is no `payment.credit_note` table, and there does not need to be.
+
+- **The rest of `payment` is untouched.** Settlement runs, payouts, refunds,
+  penalties, the ledger and `itc_entry` are still empty. T22 built the invoice
+  slice; T40 needs the others.
 
 ## Reported by T25 — the decision that did not exist
 
@@ -1535,7 +1622,7 @@ buyer uses, so they read as scannable and are not.
 | vendor | 2 | 3 | T26 done — `/api/vendor/dashboard` existed all along; `api.ts` had it marked MISSING |
 | logistics | 2 | **0** | T21 tracking |
 | **procurement** | **0** | **0** | T32 T33 T39 T40 |
-| **payment** | **0** | **0** | T22 T40 |
+| payment | 4 | 3 | T22 done — the INVOICE slice only. Settlement, payouts, refunds, penalties, the ledger and the e-way bill WRITER are still empty; T40 needs them. |
 | **platform** | **0** | **0** | T23 T24 T41 |
 | **customer** | **0** | **0** | T25 done WITHOUT it — addresses and team live in `identity`, approvals in `ordering`, because those are the schemas that own the tables. What genuinely belongs here is `customer.buyer_approval_policy` (03_UX_SPEC `/account/spend-limits`), which nothing outside `checkout.service.ts` reads today. |
 
@@ -1561,13 +1648,18 @@ and demands the neighbour's rows are absent.
 
 ## Reachability gaps found in T26
 
-- **`GradeCorrectionService.respond()` is exposed by no controller.** The full transactional
-  implementation exists — accept, accept-and-reprice, withdraw, dispute — and
-  `listing.grade_correction.respond` is granted to four vendor roles and **guards nothing**. A vendor
-  therefore cannot answer a correction at all; every one of them auto-applies. That is T31.
-- **The auto-apply job is not running.** All nine seeded corrections are 69 hours into a 48-hour
+- ~~**`GradeCorrectionService.respond()` is exposed by no controller.**~~ **Closed by T31.**
+  `POST /api/vendor/grade-corrections/:id/respond` guards on `listing.grade_correction.respond` —
+  the permission that existed for this and had nothing to guard — and scopes at
+  `VendorCorrectionRepository`. The entry stays so nobody re-opens it. Note the count: the grant is
+  on THREE vendor roles (OWNER, ADMIN, OPS), not four; VENDOR_FINANCE and VENDOR_VIEWER can read a
+  correction on their own stock and cannot answer it, which is correct.
+- **The auto-apply job is not running.** All nine seeded corrections are ~77 hours into a 48-hour
   window and still open, so `autoApplyDue()` has never fired against the dev database. The dashboard
-  reports them as breached, which is correct and is also the evidence.
+  reports them as breached, which is correct and is also the evidence. **T31 did not fix this and
+  deliberately did not paint it as a failure**: an elapsed window is `warn` and the screen says the
+  correction is still answerable, which is exactly what `respond()` does — it refuses a SETTLED
+  correction, not a late one. Wiring `autoApplyDue()` to a schedule is still nobody's task.
 - **`procurement.vendor_payable` is written by `ordering`, not `procurement`.** The readiness table
   reads "procurement 0/0" and the natural conclusion — that a payout figure has no source — is wrong:
   `order-transaction.service.ts` inserts the payable and the PO in the same transaction as the order.
@@ -1613,6 +1705,29 @@ and demands the neighbour's rows are absent.
 - **`GET /api/qc/grade-corrections` is still unscoped** (see the T26 finding above). T28 did not
   route anything new through it; the vendor board's `?corrected=1` reads `listing`, org-scoped at
   the repository.
+
+## Reported by T29 — not fixed, and each needs a decision
+
+- **The magic-byte signature table now exists twice.** `apps/console/src/routes/vendor/csvFile.ts`
+  is a second copy of `apps/storefront/src/app/bulk/api.ts`. The two apps cannot import from each
+  other and the shared home is `packages/contracts`, which another session owns this week — so it
+  was forked deliberately with a `ponytail:` comment rather than silently. Promote it to contracts
+  when a third caller appears, and delete both copies in the same commit or the fork becomes three.
+- **"Duplicate of line 2 in this batch" says *batch* where the vendor reads *file*.** The message
+  comes from `validateSerialBatch` in contracts, which is shared with the paste box where "batch" is
+  the right word. T29 fixed the NUMBER (it pointed at the header) and left the noun alone, because
+  changing it is a contracts edit and the word is correct on the other caller. The honest fix is a
+  caller-supplied noun, or two messages.
+- **`WILL ADD` is a green pill and `ERROR` a red one, on the dry-run table.** Left as it is, on the
+  same reasoning T28 used to leave `ConditionImageCoverage`'s publish gate alone: this is a genuine
+  binary — the row will be written or it will not — rather than a position on a scale, and the
+  colour is not standing in for a QC verdict. Flagged because it is the one place in the vendor
+  portal where green and red appear outside a PASS/FAIL, and somebody should agree with that
+  reading rather than inherit it.
+- **Nothing enforces `LISTING_QTY.max` at the database.** `ListingService.addUnits` checks it, and
+  T29's dry run now checks the same subtraction, so the two agree — but two application-layer
+  checks are not a constraint, and a third writer would not know. VR-080 claims `enforcedAt: DB`
+  and that is still not true.
 
 ## Prerequisites built outside the numbered backlog
 

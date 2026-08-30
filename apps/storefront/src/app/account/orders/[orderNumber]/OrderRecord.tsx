@@ -464,14 +464,13 @@ function DispatchBlock({
  * the way that stays true is that no buyer-reachable endpoint reads it, so there
  * is nothing on this screen to omit.
  *
- * The proforma and the tax invoice say **not issued yet** rather than showing a
- * disabled download that would suggest a file exists. Neither is generated yet
- * (the proforma is the rest of Task 6; the tax invoice is Phase 7), and a
- * missing document drawn as a present one is the same failure as a missing
- * measurement drawn as a passing one.
+ * The proforma, the tax invoice and the e-way bill are NOT restated here. They
+ * were hard-coded to "not issued yet" while nothing could issue one; T22 built
+ * the issuance and gave them a screen that reads their real state, so this panel
+ * points at it rather than keeping a second copy that would go stale the first
+ * time an invoice was raised.
  */
 function Documents({ order }: { order: Order }): React.JSX.Element {
-  const confirmed = order.approval === null || order.approval.status === 'APPROVED';
   return (
     <section aria-labelledby="documents">
       <div className="sh">
@@ -503,29 +502,23 @@ function Documents({ order }: { order: Order }): React.JSX.Element {
             </dt>
             <dd>This page</dd>
           </div>
-          <div>
-            <dt>
-              Proforma invoice
-              <span className="d">For your finance team to raise payment against.</span>
-            </dt>
-            <dd className="notmeasured">Not issued yet</dd>
-          </div>
-          <div>
-            <dt>
-              Tax invoice
-              <span className="d">
-                Raised when the machines are dispatched, not before.
-              </span>
-            </dt>
-            <dd className="notmeasured">
-              {confirmed ? 'Not issued yet' : 'Not issued — this order is not confirmed'}
-            </dd>
-          </div>
         </dl>
+        <div className="odocsnote">
+          <p>
+            The proforma, the tax invoice per delivery and the e-way bill are on their own screen,
+            each with its number and its date — or, where one has not been raised yet, the moment
+            that brings it into existence.
+          </p>
+          <a
+            className="pill wire"
+            href={`/account/orders/${encodeURIComponent(order.orderNumber)}/documents`}
+          >
+            Documents on this order
+          </a>
+        </div>
         <p className="fnote off">
           {BRAND.legalEntity} is the seller on this order, so there is one invoice and it is ours.
-          Every document that concerns you is listed above; there is no other paperwork for you to
-          chase and none of it is issued by anyone else.
+          There is no other paperwork for you to chase and none of it is issued by anyone else.
         </p>
       </div>
     </section>

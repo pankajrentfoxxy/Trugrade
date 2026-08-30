@@ -49,7 +49,14 @@ export const API = {
   listing: (id: string) => `/api/vendor/listings/${id}`,
   listingUnits: (id: string) => `/api/vendor/listings/${id}/units`,
   validateSerials: '/api/vendor/listings/serials/validate',
+  /** The wizard's dry run. No listing exists yet, so it checks neither capacity nor status. */
   validateSerialsCsv: '/api/vendor/listings/serials/validate-csv',
+  /**
+   * The bulk-upload screen's dry run. The scoped one, and the only one that can
+   * promise what the commit will do — it reads the listing's remaining capacity
+   * and its status, which are the two things `addUnits` refuses a whole file on.
+   */
+  validateSerialsCsvFor: (id: string) => `/api/vendor/listings/${id}/serials/validate-csv`,
 
   payoutPreview: '/api/vendor/listings/payout-preview',
   submit: (id: string) => `/api/vendor/listings/${id}/submit`,
@@ -265,12 +272,24 @@ export interface Page<T> {
 
 /** Mirrors `SerialCsvReport` from the listing module's serial service. */
 export interface SerialCsvRow {
+  /** The line in the VENDOR'S file, blank rows included in the count. */
   lineNumber: number;
   serial: string;
   outcome: 'WILL_ADD' | 'WARN' | 'ERROR';
   reason?: string;
 }
 
+/**
+ * What a file will do, before it does it.
+ *
+ * **`willAdd + errors === rows.length`, and `willAdd` is what the commit
+ * inserts.** `warnings` is a SUBSET of `willAdd`, not a third bucket beside it —
+ * a warned row is an accepted row, because an unrecognised brand shape is a worn
+ * label and the whole point of a warning is that it does not stop the machine
+ * going in. This screen used to print `willAdd` as the promise while handing the
+ * commit `willAdd + warnings`, so the sentence and the button disagreed by
+ * exactly the number of warnings.
+ */
 export interface SerialCsvReport {
   rows: SerialCsvRow[];
   willAdd: number;
@@ -278,6 +297,16 @@ export interface SerialCsvReport {
   errors: number;
   fileErrors: string[];
   errorReportCsv: string;
+}
+
+/** What `POST /listings/:id/units` actually did. `added` is the serials written. */
+export interface AddUnitsOutcome {
+  added: string[];
+  batch: {
+    accepted: string[];
+    errors: Array<{ line: number; serial: string; message: string }>;
+    warnings: Array<{ line: number; serial: string; message: string }>;
+  };
 }
 
 export interface PayoutDeduction {

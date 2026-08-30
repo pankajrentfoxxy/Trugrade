@@ -682,8 +682,50 @@ export class ListingService implements IListingService {
     return this.serials.validateBlock(text, brandName);
   }
 
+  /**
+   * The wizard's dry run, at step 3, where no listing exists yet.
+   *
+   * No capacity and no status to check, because there is nothing to check them
+   * against — the listing is created when the wizard is submitted. This is the
+   * only caller for which that is honest.
+   */
   dryRunSerialCsv(csv: string, brandName?: string | null): Promise<SerialCsvReport> {
-    return this.serials.dryRunCsv(csv, brandName);
+    return this.serials.dryRunCsv(csv, { brandName });
+  }
+
+  /**
+   * The bulk-upload screen's dry run, against a listing that already exists.
+   *
+   * **This is the one that has to agree with `addUnits`, and the two things it
+   * reads are exactly the two whole-file refusals `addUnits` performs.** Without
+   * them the report promised rows that the commit then rejected in their
+   * entirety: a non-DRAFT listing raises `IllegalStateTransitionError` and a
+   * batch over `LISTING_QTY.max` raises `ValidationError`, and neither is a
+   * per-row outcome the vendor could have seen coming.
+   *
+   * The status refusal is worded as the vendor's situation rather than as the
+   * state machine's: "this listing has already gone for inspection" is something
+   * they can act on; `DRAFT -> ACTIVE` is not.
+   */
+  async dryRunSerialCsvForListing(
+    listingId: string,
+    csv: string,
+    brandName?: string | null,
+  ): Promise<SerialCsvReport> {
+    const listing = await this.listings.findById(listingId);
+    if (!listing) throw new NotFoundError('listing');
+
+    const blocked =
+      listing.status === 'DRAFT'
+        ? undefined
+        : `Serial numbers can only be added while a listing is still a draft, and this one is ${listing.status.replaceAll('_', ' ').toLowerCase()}. Add these machines on a new listing instead.`;
+
+    return this.serials.dryRunCsv(csv, {
+      brandName: brandName ?? null,
+      // The same subtraction `addUnits` makes before it refuses the batch.
+      capacityLeft: Math.max(0, (LISTING_QTY.max ?? 0) - listing.qtyTotal),
+      ...(blocked ? { blocked } : {}),
+    });
   }
 
   serialErrorReportCsv(report: SerialCsvReport): string {

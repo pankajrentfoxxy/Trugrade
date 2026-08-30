@@ -346,6 +346,27 @@ export class ListingController {
     return { ...report, errorReportCsv: this.listings.serialErrorReportCsv(report) };
   }
 
+  /**
+   * The same dry run, against a listing that already exists.
+   *
+   * A separate route rather than an optional `listingId` on the one above,
+   * because the two answer different questions and only this one can be held to
+   * its promise. The unscoped route runs at wizard step 3 where there is no
+   * listing yet, so it genuinely cannot know the capacity or the status; this
+   * one always can, and a nullable field would make "we did not check" and "we
+   * checked and it is fine" the same response.
+   */
+  @Post(':id/serials/validate-csv')
+  @HttpCode(200)
+  @RequirePermissions('listing.own.write')
+  async validateSerialsCsvForListing(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(validateSerialsCsvSchema)) body: ValidateSerialsCsvDto,
+  ): Promise<SerialCsvReport & { errorReportCsv: string }> {
+    const report = await this.listings.dryRunSerialCsvForListing(id, body.csv, body.brandName);
+    return { ...report, errorReportCsv: this.listings.serialErrorReportCsv(report) };
+  }
+
   @Post(':id/units')
   @RequirePermissions('listing.own.write')
   addUnits(

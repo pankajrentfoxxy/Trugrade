@@ -11,6 +11,7 @@ import {
 import { Field } from '../../../lib/controls';
 import { normalisePastedSerial, splitSerialBlock, type SerialBatch } from '@trugrade/contracts';
 import { API, postJson, type SerialCsvReport, type SerialCsvRow } from '../api';
+import { MAX_BYTES, MAX_ROWS, readCsvFile } from '../csvFile';
 
 /** Step 3 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
 
@@ -115,16 +116,26 @@ const CSV_COLUMNS: ReadonlyArray<Column<SerialCsvRow>> = [
   },
 ];
 
+/** The template. One column, so there is nothing to map — see `serialCsvTemplate`. */
+const TEMPLATE = ['serial_number', '7XKQ1P3', '8LMR2Q4'].join(NEWLINE) + NEWLINE;
+
 /**
  * Exported because `/vendor/listings/:id/bulk-upload` is the same operation
  * against an existing listing. Two copies of a dry-run table is two places for
  * the outcome vocabulary to drift.
+ *
+ * `endpoint` is the one difference between the two callers. The wizard has no
+ * listing yet and uses the unscoped route; the bulk-upload screen passes the
+ * scoped one, which additionally knows the listing's remaining capacity and its
+ * status — the two things the commit refuses a whole file on.
  */
 export function SerialCsvPanel({
   brandName,
+  endpoint = API.validateSerialsCsv,
   onAccepted,
 }: {
   brandName?: string;
+  endpoint?: string;
   onAccepted: (serials: string[], report: SerialCsvReport) => void;
 }): React.JSX.Element {
   const [report, setReport] = React.useState<SerialCsvReport | null>(null);
@@ -134,10 +145,22 @@ export function SerialCsvPanel({
   async function onFile(file: File): Promise<void> {
     setBusy(true);
     setError(null);
+    setReport(null);
+    onAccepted([], { rows: [], willAdd: 0, warnings: 0, errors: 0, fileErrors: [], errorReportCsv: '' });
     try {
-      const csv = await file.text();
-      const r = await postJson<SerialCsvReport>(API.validateSerialsCsv, { csv, brandName });
+      // The bytes are checked before they are decoded. A renamed workbook is a
+      // zip, and a zip run through a CSV parser produces a page of nonsense
+      // rows instead of one sentence saying what the file is.
+      const read = await readCsvFile(file);
+      if ('refusal' in read) {
+        setError(read.refusal);
+        return;
+      }
+      const r = await postJson<SerialCsvReport>(endpoint, { csv: read.csv, brandName });
       setReport(r);
+      // `outcome !== 'ERROR'` is exactly `willAdd` — the report's own invariant,
+      // asserted here rather than assumed, because the two disagreeing is the
+      // defect this screen was shipped with.
       onAccepted(
         r.rows.filter((row) => row.outcome !== 'ERROR').map((row) => normalisePastedSerial(row.serial)),
         r,
@@ -167,8 +190,18 @@ export function SerialCsvPanel({
         />
       </label>
       <p className="mt-2 text-body-sm text-ink-2">
-        Nothing is written until you finish the wizard. This is a dry run: every row is checked and
-        reported back, and the file itself is never stored.
+        Nothing is written until you press the button below. This is a dry run: every row is checked
+        and reported back against its line number in your own file, and the file itself is never
+        stored. Up to <span className="font-mono tnum">{MAX_ROWS}</span> rows and{' '}
+        <span className="font-mono tnum">{MAX_BYTES / 1024 / 1024}</span> MB.{' '}
+        <a
+          className="text-ink underline underline-offset-4"
+          download="trugrade-serials-template.csv"
+          href={`data:text/csv;charset=utf-8,${encodeURIComponent(TEMPLATE)}`}
+        >
+          Download the template
+        </a>
+        .
       </p>
 
       {error && (
@@ -192,11 +225,30 @@ export function SerialCsvPanel({
           {report.rows.length > 0 && (
             <>
               {/* The sentence PHASE_03 asks for verbatim in spirit: what is about
-                  to happen to the whole file, before anything happens. */}
-              <p className="text-body text-ink">
-                {report.willAdd} of {report.rows.length} rows will be added.
-                {report.errors > 0 && ` ${report.errors} have errors and will not.`}
-                {report.warnings > 0 && ` ${report.warnings} carry a warning and still will.`}
+                  to happen to the whole file, before anything happens.
+
+                  `willAdd` is what the commit inserts, warned rows included, and
+                  the warning count is stated AS a subset of it. It used to be a
+                  third number added alongside, so this line promised 412 while
+                  the button below offered to add 440. */}
+              <p className="text-body text-ink" data-testid="dry-run-summary">
+                <span className="font-mono tnum">{report.willAdd}</span> of{' '}
+                <span className="font-mono tnum">{report.rows.length}</span> rows will be added.
+                {report.errors > 0 && (
+                  <>
+                    {' '}
+                    <span className="font-mono tnum">{report.errors}</span>{' '}
+                    {report.errors === 1 ? 'has an error' : 'have errors'} and will not.
+                  </>
+                )}
+                {report.warnings > 0 && (
+                  <>
+                    {' '}
+                    <span className="font-mono tnum">{report.warnings}</span> of the{' '}
+                    <span className="font-mono tnum">{report.willAdd}</span> carry a warning and
+                    still will.
+                  </>
+                )}
               </p>
 
               {report.errors > 0 && (
@@ -206,7 +258,7 @@ export function SerialCsvPanel({
                     download="serial-errors.csv"
                     href={`data:text/csv;charset=utf-8,${encodeURIComponent(report.errorReportCsv)}`}
                   >
-                    Download the {report.errors} failing rows
+                    Download the {report.errors} {report.errors === 1 ? 'row' : 'rows'} to fix
                   </a>{' '}
                   <span className="text-body-sm text-ink-2">
                     — line numbers match your own file.
