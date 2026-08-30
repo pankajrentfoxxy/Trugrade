@@ -4,6 +4,7 @@ import { PrismaModule } from '../../shared/db/prisma.service';
 import { ListingModule } from '../listing';
 import { LogisticsModule } from '../logistics';
 import { PlatformModule } from '../platform';
+import { QcModule } from '../qc';
 import { OrderingController } from './ordering.controller';
 import { OrderingService } from './ordering.service';
 import { CartService } from './internal/cart.service';
@@ -11,6 +12,7 @@ import { CheckoutService } from './internal/checkout.service';
 import { HoldService } from './internal/hold.service';
 import { OrderListService } from './internal/order-list.service';
 import { OrderReadService } from './internal/order-read.service';
+import { OrderUnitsService } from './internal/order-units.service';
 import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
 import { RfqIntakeService } from './internal/rfq-intake.service';
@@ -36,6 +38,12 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
  * this module does not own. `CatalogLookup` resolves `CatalogService` from the
  * container on first use instead; the reasoning lives there, in one place.
  *
+ * `QcModule` is imported for one call and it is the one that keeps this
+ * module's per-serial screen honest: `inspectionsByReport`. Ordering owns
+ * `order_line_unit.qc_report_id` but owns nothing behind it, and a query here
+ * joining `qc.qc_report`, `qc.qc_hardware_detected` and `qc.qc_seal` would put
+ * "which seal is the current one" in a module that does not own seals.
+ *
  * `LogisticsModule` is imported for one number: freight, priced per supply
  * point against the buyer's real delivery pincode. Checkout cannot show a
  * complete break-up without it, and a break-up missing a charge that appears
@@ -47,7 +55,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
  * lost.
  */
 @Module({
-  imports: [PrismaModule, ClockModule, ListingModule, LogisticsModule, PlatformModule],
+  imports: [PrismaModule, ClockModule, ListingModule, LogisticsModule, PlatformModule, QcModule],
   controllers: [OrderingController],
   providers: [
     OrderingService,
@@ -56,6 +64,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
     HoldService,
     OrderTransactionService,
     OrderReadService,
+    OrderUnitsService,
     OrderListService,
     CatalogLookup,
     RfqIntakeService,

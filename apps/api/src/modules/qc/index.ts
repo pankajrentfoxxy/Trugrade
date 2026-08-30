@@ -14,8 +14,11 @@ export { type IQcService, QcService } from './qc.service';
  * is what `qualityForSupplyPoints` returns, and a caller cannot type the answer
  * without it. The service that computes them stays private.
  */
-export {
-  type SupplyPointQuality,
-  type SupplyPointRef,
-} from './internal/vendor-quality.service';
+export { type SupplyPointQuality, type SupplyPointRef } from './internal/vendor-quality.service';
 export { QcModule } from './qc.module';
+/**
+ * `UnitInspection` is what `inspectionsByReport` returns, and a caller cannot
+ * type the answer without it. `QcVerdict` is the enum that names the four
+ * outcomes; a caller rendering one has to be able to switch on it exhaustively.
+ */
+export { type UnitInspection, type QcVerdict } from './qc.service';

@@ -33,6 +33,7 @@ import {
   type OrderListView,
 } from './internal/order-list.service';
 import { OrderReadService, type OrderRecordView } from './internal/order-read.service';
+import { OrderUnitsService, type OrderUnitsView } from './internal/order-units.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
 
 /**
@@ -65,6 +66,7 @@ export class OrderingController {
     private readonly carts: CartService,
     private readonly checkout: CheckoutService,
     private readonly orders: OrderReadService,
+    private readonly orderUnits: OrderUnitsService,
     private readonly orderBoard: OrderListService,
     private readonly requirements: RfqIntakeService,
   ) {}
@@ -272,6 +274,25 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<OrderRecordView> {
     return this.orders.byNumber(orderNumber);
+  }
+
+  /**
+   * The machines on one order, by serial, with what the inspection said (T21).
+   *
+   * A sub-resource of the order rather than a block on it: this is the buyer's
+   * asset register, it is what their IT team exports into their own CMDB, and it
+   * is addressable on its own so a link to "the serials on TT-26-00004" can be
+   * sent to somebody who has no use for the money panel.
+   *
+   * Same 404-not-403 rule as the order itself, and for the same reason. Nothing
+   * below reads `procurement.purchase_order` or `listing.unit`.
+   */
+  @Get('orders/:orderNumber/units')
+  @RequirePermissions('ordering.own.read')
+  orderUnitList(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<OrderUnitsView> {
+    return this.orderUnits.byOrderNumber(orderNumber);
   }
 
   // -------------------------------------------------------------------------

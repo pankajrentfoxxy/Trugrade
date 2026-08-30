@@ -1109,3 +1109,82 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   .war{margin-left:0;align-items:flex-start;text-align:left}
   .wanote{max-width:none}
 }
+
+/* ============================================================================
+   T21 — the order record's sub-navigation, and the per-serial machine board
+   ========================================================================= */
+
+/* The record's tabs. Links, not buttons: four addressable URLs hang off one
+   order (03_UX_SPEC §3A.3) and the router owns which is current. The 2px rule
+   under the active one carries the state as well as the ink weight, because
+   colour is never the only channel. */
+.rectabs{display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px solid var(--rule);
+  margin-top:14px}
+.rectab{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;
+  border-radius:var(--r-sm) var(--r-sm) 0 0;font-size:13.5px;color:var(--ink-2)}
+.rectab:hover{background:var(--sheet-2);color:var(--ink)}
+.rectab.on{margin-bottom:-1px;border-bottom:2px solid var(--acc-dk);
+  font-weight:600;color:var(--ink)}
+
+.ubhead{margin-bottom:14px}
+.ubhead h1 .mono{font-size:.86em}
+
+/* The figures, each with its denominator beside it. Not a KPI row in the
+   workspace sense — no thresholds, no colour, just five counts and what each
+   is out of.
+   Dividers are borders on the cells rather than a 1px grid gap over a coloured
+   ground: five figures in a three-column track leaves one cell unfilled, and a
+   gap-as-border draws that hole as a solid slab of --rule. */
+.ubkpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  margin:0 0 12px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:7px;overflow:hidden}
+.ubkpi>div{padding:12px 16px;border-right:1px solid var(--rule);
+  border-bottom:1px solid var(--rule)}
+.ubkpi>div:last-child{border-right:0;border-bottom:0}
+.ubkpi dt{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-4);margin-bottom:5px}
+.ubkpi dd{margin:0;font-size:12px;color:var(--ink-3)}
+/* Amber, because a measured value is one of the three things amber means. */
+.ubfig{font-size:19px;font-weight:600;color:var(--acc-ink);
+  font-variant-numeric:tabular-nums;margin-right:5px}
+.ubkpi .notmeasured{font-size:13px}
+
+.ubbar{gap:14px}
+.ubfilters{display:flex;gap:6px;flex-wrap:wrap}
+.ubfilters .chipf{min-height:32px;display:inline-flex;align-items:center;gap:6px}
+.ubfilters .chipf .mono{font-variant-numeric:tabular-nums}
+.ubfilters .chipf:disabled{opacity:.5;cursor:not-allowed}
+.ubexport{margin-left:auto}
+.ubexport .mono{font-variant-numeric:tabular-nums}
+.ubexport:disabled{opacity:.55;cursor:not-allowed}
+
+.ubtable{margin-bottom:0}
+/* Comfortable density: the storefront's rows are 60px, so the cells breathe. */
+.ubtable td{padding:14px 16px;vertical-align:middle}
+.ubtable tbody tr:hover td{background:var(--sheet-2)}
+
+.ubid{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ubserial{font-size:13.5px;color:var(--ink);text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:3px;
+  font-variant-numeric:tabular-nums}
+.ubserial:hover{text-decoration-color:var(--acc);color:var(--acc-ink)}
+.ubtitle{font-size:12.5px;color:var(--ink-2)}
+.ubspec{font-size:11px;color:var(--ink-4)}
+
+.ubgrade{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.ubregrade{font-size:10.5px;line-height:1.35;color:var(--ink-3);max-width:16ch}
+
+/* The bar needs a width to mean anything in a table cell; left-aligned inside a
+   right-aligned numeric column so ten of them line up. */
+.ubbatt{min-width:132px;margin-left:auto}
+
+.ubpassport{font-size:12.5px;color:var(--ink-2);white-space:nowrap;
+  text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px}
+.ubpassport:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+
+.ubfoot{margin-top:12px;max-width:88ch}
+
+@media(max-width:900px){
+  .ubexport{margin-left:0;width:100%;justify-content:center}
+  .ubkpi{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+}

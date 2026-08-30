@@ -46,6 +46,7 @@ import { CheckoutService } from '../../src/modules/ordering/internal/checkout.se
 import type { OrderListQueryDto } from '../../src/modules/ordering/dto/ordering.dto';
 import { OrderListService } from '../../src/modules/ordering/internal/order-list.service';
 import { OrderReadService } from '../../src/modules/ordering/internal/order-read.service';
+import { OrderUnitsService } from '../../src/modules/ordering/internal/order-units.service';
 import { HoldService } from '../../src/modules/ordering/internal/hold.service';
 import {
   OrderTransactionService,
@@ -85,6 +86,7 @@ const VENDOR_ASK = 30_000;
 let moduleRef: TestingModule;
 let checkout: CheckoutService;
 let readOrder: OrderReadService;
+let readUnits: OrderUnitsService;
 let orderBoard: OrderListService;
 let holds: HoldService;
 let orders: OrderTransactionService;
@@ -286,6 +288,7 @@ beforeAll(async () => {
 
   checkout = moduleRef.get(CheckoutService);
   readOrder = moduleRef.get(OrderReadService);
+  readUnits = moduleRef.get(OrderUnitsService);
   orderBoard = moduleRef.get(OrderListService);
   holds = moduleRef.get(HoldService);
   orders = moduleRef.get(OrderTransactionService);
@@ -354,7 +357,11 @@ describe('a confirmed order', () => {
   it('allocates specific serials, raises one PO per supply point, and balances', async () => {
     const alpha = await makeVendor(HARYANA);
     const beta = await makeVendor({ ...HARYANA, city: 'Noida', pincode: '201301' });
-    const a = await makeOffer({ vendorOrgId: alpha.orgId, pickupAddressId: alpha.addressId, qty: 3 });
+    const a = await makeOffer({
+      vendorOrgId: alpha.orgId,
+      pickupAddressId: alpha.addressId,
+      qty: 3,
+    });
     const b = await makeOffer({
       vendorOrgId: beta.orgId,
       pickupAddressId: beta.addressId,
@@ -382,7 +389,9 @@ describe('a confirmed order', () => {
       SELECT count(*) FROM ordering.sub_order WHERE order_id = ${order.orderId}::uuid`;
     expect(Number(subOrders)).toBe(2);
 
-    const pos = await db.$queryRaw<Array<{ po_number: string; total_net: string; vendor_org_id: string }>>`
+    const pos = await db.$queryRaw<
+      Array<{ po_number: string; total_net: string; vendor_org_id: string }>
+    >`
       SELECT po_number, total_net::text AS total_net, vendor_org_id
         FROM procurement.purchase_order WHERE order_id = ${order.orderId}::uuid
        ORDER BY po_number`;
@@ -592,7 +601,7 @@ describe('ORD-018: the DB constraint holds when the Redis lock expires mid-trans
     const real = locks.withLocks.bind(locks);
     const spy = jest
       .spyOn(locks, 'withLocks')
-      .mockImplementation(async <T,>(keys: readonly string[], fn: () => Promise<T>) =>
+      .mockImplementation(async <T>(keys: readonly string[], fn: () => Promise<T>) =>
         real(keys, async () => {
           // Gone, mid-transaction. Any other caller is now free to walk in.
           await redis.client.del(...keys);
@@ -718,9 +727,9 @@ describe('ORD-020: an injected failure after the decrement leaves nothing behind
       ),
     ).toBe(0);
     // And no movement row claiming something happened.
-    expect(await empty("SELECT count(*) FROM listing.stock_movement WHERE ref_type = 'ORDER'")).toBe(
-      0,
-    );
+    expect(
+      await empty("SELECT count(*) FROM listing.stock_movement WHERE ref_type = 'ORDER'"),
+    ).toBe(0);
   });
 });
 
@@ -1583,6 +1592,221 @@ describe('the buyer reads their orders back as a board', () => {
     expect(dashboard).not.toContain(po!.po_number);
     for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout']) {
       expect(dashboard.toLowerCase()).not.toContain(word);
+    }
+  });
+});
+
+/**
+ * T21 — the per-serial machine list, `/account/orders/[id]/units`.
+ *
+ * The screen it feeds is made entirely of measurements, so these tests are
+ * mostly about what happens when a measurement is missing or is not a pass.
+ * `makeOffer` writes a report and a seal but **no** `qc_hardware_detected` row,
+ * which means every machine it makes has genuinely never had its battery read —
+ * exactly the case a screen quietly renders as a full bar.
+ */
+describe('the buyer reads the machines on their order, by serial', () => {
+  const serialOf = async (unitId: string): Promise<string> =>
+    (
+      await db.$queryRaw<Array<{ serial_number: string }>>`
+        SELECT serial_number FROM listing.unit WHERE id = ${unitId}::uuid`
+    )[0]!.serial_number;
+
+  it('carries the verdict, grade, score, seal and date for every allocated serial', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 2,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 2 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const view = await asBuyer(() => readUnits.byOrderNumber(placed.orderNumber));
+
+    expect(view.orderNumber).toBe(placed.orderNumber);
+    expect(view.units.map((u) => u.serialNumber).sort()).toEqual([...offer.serials].sort());
+    for (const unit of view.units) {
+      expect(unit.verdict).toBe('PASS');
+      expect(unit.gradeActual).toBe('A');
+      expect(unit.gradeOrdered).toBe('A');
+      expect(unit.qcScore).toBe(92);
+      expect(unit.inspectedOn).toBe(NOW.toISOString().slice(0, 10));
+      expect(unit.seal?.status).toBe('APPLIED');
+      expect(unit.seal?.code).toMatch(/^TRG-26HR-/);
+      expect(unit.passportPath).toBe(`/unit/${unit.serialNumber}`);
+    }
+  });
+
+  /**
+   * The defect this screen is most exposed to, asserted as a value rather than
+   * as a rendering: no hardware capture exists for these machines, so the
+   * battery is NOT MEASURED. A `0` or a `100` here would both be inventions,
+   * and the second would draw as a healthy battery.
+   */
+  it('reports a battery that was never read as null, not as a number', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const [unit] = (await asBuyer(() => readUnits.byOrderNumber(placed.orderNumber))).units;
+    expect(unit?.batteryHealthPct).toBeNull();
+  });
+
+  /**
+   * `qc_hardware_detected.battery_health_pct` is NUMERIC, and `$queryRaw` hands
+   * a NUMERIC back as a STRING. A caller averaging a column of those
+   * concatenates them — 87 and 92 average to `"8792" / 2` — so `number` is a
+   * claim this asserts rather than assumes.
+   */
+  it('reports a measured battery as a number, not as a NUMERIC string', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+    });
+    await db.$executeRaw`
+      INSERT INTO qc.qc_hardware_detected (qc_report_id, hw_serial, ram_detected_gb,
+                                           battery_health_pct)
+      SELECT qc_report_id, serial_number, 16, 87.50
+        FROM listing.unit WHERE id = ${offer.unitIds[0]!}::uuid`;
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const [unit] = (await asBuyer(() => readUnits.byOrderNumber(placed.orderNumber))).units;
+    expect(typeof unit?.batteryHealthPct).toBe('number');
+    expect(unit?.batteryHealthPct).toBeCloseTo(87.5, 2);
+  });
+
+  /**
+   * The variety the seed now produces, round-tripped: a failed re-verification,
+   * a pass carrying a note, a machine re-graded after it was priced, and a seal
+   * found broken. A screen built against identical passing rows looks finished
+   * and is wrong the first time a real machine fails.
+   */
+  it('carries a FAIL, a PASS_WITH_NOTE, a re-grade and a broken seal without flattening them', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 3,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 3 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const [failed, noted, regraded] = offer.unitIds;
+    await db.$executeRaw`
+      UPDATE qc.qc_report SET verdict = 'FAIL'::qc_verdict, qc_score = 41
+       WHERE unit_id = ${failed!}::uuid`;
+    await db.$executeRaw`
+      UPDATE qc.qc_report SET verdict = 'PASS_WITH_NOTE'::qc_verdict
+       WHERE unit_id = ${noted!}::uuid`;
+    await db.$executeRaw`
+      UPDATE qc.qc_report
+         SET grade_final = 'B'::grade_type,
+             grade_override_reason = 'Chassis wear found on re-verification.'
+       WHERE unit_id = ${regraded!}::uuid`;
+    await db.$executeRaw`
+      UPDATE qc.qc_seal SET status = 'BROKEN'::seal_status, broken_at = ${NOW}
+       WHERE unit_id = ${failed!}::uuid`;
+
+    const view = await asBuyer(() => readUnits.byOrderNumber(placed.orderNumber));
+    const bySerial = new Map(view.units.map((u) => [u.serialNumber, u]));
+
+    const failedRow = bySerial.get(await serialOf(failed!));
+    expect(failedRow?.verdict).toBe('FAIL');
+    expect(failedRow?.qcScore).toBe(41);
+    expect(failedRow?.seal?.status).toBe('BROKEN');
+
+    expect(bySerial.get(await serialOf(noted!))?.verdict).toBe('PASS_WITH_NOTE');
+
+    // Both grades survive. The line was priced at A and the inspection concluded
+    // B; collapsing them into one is how a downgrade disappears from the only
+    // record the buyer keeps.
+    const regradedRow = bySerial.get(await serialOf(regraded!));
+    expect(regradedRow?.gradeOrdered).toBe('A');
+    expect(regradedRow?.gradeActual).toBe('B');
+  });
+
+  /**
+   * Not "a scope exists" — another organisation's buyer ASKS for the machines on
+   * a real order, by its real number, and is refused.
+   */
+  it('refuses another organisation order with 404, without confirming it exists', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    // It really is readable by the organisation that placed it, so this is not
+    // a case of there being nothing to refuse.
+    expect((await asBuyer(() => readUnits.byOrderNumber(placed.orderNumber))).units).toHaveLength(
+      1,
+    );
+
+    const otherOrgId = await makeOrganization(
+      { org_type: 'BUYER', legal_name: 'Kestrel Systems Pvt Ltd' },
+      db,
+    );
+    const otherUserId = await makeUser(otherOrgId, { full_name: 'Devika Menon' }, db);
+
+    const refusal = await asOtherBuyer(otherOrgId, otherUserId, () =>
+      readUnits.byOrderNumber(placed.orderNumber).then(
+        () => null,
+        (e: Error & { httpStatus?: number; code?: string }) => e,
+      ),
+    );
+
+    expect(refusal).not.toBeNull();
+    // 404, not 403 — sequential order numbers make a 403 an order-volume oracle.
+    expect(refusal?.httpStatus).toBe(404);
+    expect(refusal?.code).toBe('NOT_FOUND');
+    expect(refusal?.message).not.toContain(placed.orderNumber);
+  });
+
+  it('carries no vendor identity and no purchase order, at any depth', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 2,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 2 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    // A purchase order really was raised, so there is something to leak.
+    const [order] = await db.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM ordering."order" WHERE order_number = ${placed.orderNumber}`;
+    const [po] = await db.$queryRaw<Array<{ po_number: string }>>`
+      SELECT po_number FROM procurement.purchase_order WHERE order_id = ${order!.id}::uuid`;
+    expect(po?.po_number).toMatch(/^PO-/);
+
+    const json = JSON.stringify(await asBuyer(() => readUnits.byOrderNumber(placed.orderNumber)));
+    expect(json).not.toContain(vendor.orgId);
+    expect(json).not.toContain(po!.po_number);
+    // The agreed payout to the supply point. A retail screen must never carry it.
+    expect(json).not.toContain(String(VENDOR_ASK));
+    const [name] = await db.$queryRaw<Array<{ legal_name: string }>>`
+      SELECT legal_name FROM identity.organization WHERE id = ${vendor.orgId}::uuid`;
+    expect(json).not.toContain(name!.legal_name);
+    for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout', 'org_id']) {
+      expect(json.toLowerCase()).not.toContain(word);
     }
   });
 });

@@ -9,6 +9,7 @@ import { EventBus } from '../../src/shared/events/event-bus';
 import { QcRepository, generateVerificationCode } from '../../src/modules/qc/internal/qc.repository';
 import { VendorQualityService } from '../../src/modules/qc/internal/vendor-quality.service';
 import { seedQcEvidence } from './qc-evidence';
+import { seedQcSpread } from './qc-spread';
 
 /**
  * A walkable demo: real accounts, verified vendors, inspected stock, and enough
@@ -767,6 +768,12 @@ export async function seedDemo(
   // returns early for a listing it has already made, so a developer with a
   // seeded database would otherwise never get the evidence.
   await seedQcEvidence(prisma, log);
+
+  // After the evidence, because PASS_WITH_NOTE is derived from the area results
+  // it writes. Every seeded report was PASS / grade A / seal APPLIED before
+  // this, which is a monoculture that makes every after-sale screen look
+  // finished and be wrong the first time a machine fails.
+  await seedQcSpread(prisma, log);
 
   const skuRows = await refreshVendorQuality();
   log(`  vendor quality: ${skuRows} (vendor, sku, grade) row(s) computed`);

@@ -9,6 +9,30 @@ import {
 } from './internal/vendor-quality.service';
 import type { Grade } from '@trugrade/contracts';
 
+/** The four things a DeviceSure run can conclude. Matches `qc_verdict`. */
+export type QcVerdict = 'PASS' | 'PASS_WITH_NOTE' | 'MISMATCH' | 'FAIL';
+
+/**
+ * One inspection, reduced to what a party outside `qc` may be told about it.
+ *
+ * An allow-list, and every field is nullable for the same reason: **a missing
+ * measurement is a fact, not a zero.** A battery that was never read is `null`
+ * here and has to render as "Not measured"; a `0` would read as a dead battery
+ * and a `100` as a perfect one, and both are inventions. Nothing in this shape
+ * identifies a vendor — not the technician, not the visit, not the photo keys.
+ */
+export interface UnitInspection {
+  reportId: string;
+  verdict: QcVerdict | null;
+  /** `grade_final` — OUR claim, never `grade_proposed`, which is the tool's. */
+  grade: Grade | null;
+  qcScore: number | null;
+  /** `YYYY-MM-DD`, the day of the inspection. Null while a report is open. */
+  inspectedOn: string | null;
+  batteryHealthPct: number | null;
+  seal: { code: string; status: string } | null;
+}
+
 /**
  * The public interface of the `qc` module.
  *
@@ -65,6 +89,24 @@ export interface IQcService {
     points: readonly SupplyPointRef[],
     opts?: { skuId?: string; grade?: Grade },
   ): Promise<SupplyPointQuality[]>;
+
+  /**
+   * What we said about a set of machines, keyed on the report that was in force
+   * when each one was sold.
+   *
+   * On the interface because the buyer's per-serial order screen is a caller in
+   * another module (`ordering` holds `order_line_unit.qc_report_id`, its own
+   * column) and the alternative was `ordering` joining `qc.qc_report`,
+   * `qc.qc_hardware_detected` and `qc.qc_seal` itself — three tables and the
+   * "which seal is the current one" rule, restated in a module that does not own
+   * any of them.
+   *
+   * Addressed by REPORT id rather than by unit: the report on the order line is
+   * the inspection the machine was sold against, and a later re-inspection is a
+   * different document. A caller resolving "the current report for this unit"
+   * would show a buyer a verdict that did not exist when they bought it.
+   */
+  inspectionsByReport(reportIds: readonly string[]): Promise<UnitInspection[]>;
 }
 
 @Injectable()
@@ -118,5 +160,60 @@ export class QcService implements IQcService {
     opts: { skuId?: string; grade?: Grade } = {},
   ): Promise<SupplyPointQuality[]> {
     return this.quality.qualityForSupplyPoints(points, opts);
+  }
+
+  /**
+   * One statement per report, built field by field. Never a row.
+   *
+   * The seal comes through a `LATERAL` taking the newest one because a seal can
+   * be replaced — a machine re-sealed after a warranty repair carries two rows, and
+   * the one that matters at a buyer's door is the one currently on the lid.
+   * `LEFT JOIN` on both sides: an inspection with no hardware capture and one
+   * with no seal are both real states, and an INNER JOIN would silently drop the
+   * machine off the buyer's asset register rather than saying what is missing.
+   *
+   * **`battery_health_pct` is cast to `float8` and that cast is load bearing.**
+   * The column is `NUMERIC`, and `$queryRaw` hands a NUMERIC back as a *string*.
+   * A caller averaging a column of those concatenates them — 87 and 92 average
+   * to `"8792" / 2` — and the type on this interface would be a lie. This is the
+   * only place it can be made true.
+   */
+  async inspectionsByReport(reportIds: readonly string[]): Promise<UnitInspection[]> {
+    if (reportIds.length === 0) return [];
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        verdict: string | null;
+        grade_final: string | null;
+        qc_score: number | null;
+        completed_at: Date | null;
+        battery_health_pct: number | null;
+        seal_code: string | null;
+        seal_status: string | null;
+      }>
+    >`
+      SELECT r.id, r.verdict::text AS verdict, r.grade_final::text AS grade_final,
+             r.qc_score, r.completed_at,
+             h.battery_health_pct::float8 AS battery_health_pct,
+             s.seal_code, s.status::text AS seal_status
+        FROM qc.qc_report r
+        LEFT JOIN qc.qc_hardware_detected h ON h.qc_report_id = r.id
+        LEFT JOIN LATERAL (
+          SELECT seal_code, status FROM qc.qc_seal
+           WHERE qc_report_id = r.id
+           ORDER BY applied_at DESC
+           LIMIT 1
+        ) s ON TRUE
+       WHERE r.id = ANY(${[...reportIds]}::uuid[])`;
+
+    return rows.map((r) => ({
+      reportId: r.id,
+      verdict: (r.verdict as QcVerdict | null) ?? null,
+      grade: (r.grade_final as Grade | null) ?? null,
+      qcScore: r.qc_score,
+      inspectedOn: r.completed_at ? r.completed_at.toISOString().slice(0, 10) : null,
+      batteryHealthPct: r.battery_health_pct,
+      seal: r.seal_code && r.seal_status ? { code: r.seal_code, status: r.seal_status } : null,
+    }));
   }
 }
