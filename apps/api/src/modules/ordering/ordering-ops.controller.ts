@@ -3,6 +3,7 @@ import { RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import type { IssuedInvoice } from '../payment';
 import { orderNumberSchema } from './dto/ordering.dto';
+import { DeliveryService, type DeliveryRecorded } from './internal/delivery.service';
 import { OrderDocumentsService } from './internal/order-documents.service';
 
 /**
@@ -17,7 +18,10 @@ import { OrderDocumentsService } from './internal/order-documents.service';
  */
 @Controller('ops/orders')
 export class OrderingOpsController {
-  constructor(private readonly documents: OrderDocumentsService) {}
+  constructor(
+    private readonly documents: OrderDocumentsService,
+    private readonly delivery: DeliveryService,
+  ) {}
 
   /**
    * Issue the tax invoices this order is due — T22.
@@ -50,5 +54,40 @@ export class OrderingOpsController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<IssuedInvoice[]> {
     return this.documents.issue(orderNumber);
+  }
+
+  /**
+   * Record that this order reached the buyer — T23/T24.
+   *
+   * **The writer that did not exist.** `logistics.shipment` and
+   * `logistics.delivery_task` are both empty and neither has a writer, so
+   * nothing on the platform could say a machine had arrived — and both
+   * after-sale clocks run from that instant. A warranty starts at delivery; the
+   * 48-hour inspection window opens at delivery. Without this, the whole
+   * after-sale half of the product was unreachable rather than merely unbuilt.
+   *
+   * This is the manual path, and it is honest about being one: it records
+   * delivery in ordering's own schema and does not fabricate a carrier, an AWB
+   * or a rider's proof-of-delivery photograph. When `logistics` grows a real
+   * delivery task, that becomes the source and this endpoint becomes the
+   * exception path, exactly as `POST :orderNumber/invoices` is waiting on the
+   * same missing pickup writer.
+   *
+   * **It takes no timestamp.** The instant comes from `ClockPort` and there is
+   * no parameter to override it, because this stamp is what the 48-hour return
+   * window is measured from and a caller-supplied one would be a knob that moves
+   * a money deadline.
+   *
+   * 200 rather than 201, and idempotent: the useful answer is what changed and
+   * what was already true, and a second press of the same button must be a
+   * no-op rather than a second warranty on the same machine.
+   */
+  @Post(':orderNumber/delivery')
+  @HttpCode(200)
+  @RequirePermissions('logistics.delivery.execute')
+  deliver(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<DeliveryRecorded> {
+    return this.delivery.record(orderNumber);
   }
 }

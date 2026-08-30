@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/db/prisma.service';
+import { OwnedUnitsService, type OwnedUnit } from './internal/owned-units.service';
+
+export type { OwnedUnit };
 
 /**
  * The public interface of the `ordering` module.
@@ -28,11 +31,33 @@ export interface IOrderingService {
    * judgement outside the module that owns the state machine.
    */
   countDelivered(): Promise<number>;
+
+  /**
+   * Every machine the signed-in organisation owns, with when each arrived.
+   *
+   * On the barrel because `platform` owns warranty, claims and returns and all
+   * three start with the same question: which serials are this buyer's, and has
+   * the machine reached them? Ownership is `order_line_unit` -> `order_line` ->
+   * `sub_order` -> `order.buyer_org_id`, four tables in ordering's schema and a
+   * state machine ordering owns. A caller reconstructing that join would pin the
+   * definition of "yours" outside the module that decides it.
+   *
+   * **Org-scoped from the request context, with no org argument to get wrong.**
+   * A signature that took an `orgId` would be one careless call away from
+   * serving another company's asset register.
+   */
+  ownedUnits(): Promise<OwnedUnit[]>;
+
+  /** The same, narrowed to one order. Empty when the order is not this org's. */
+  ownedUnitsForOrder(orderNumber: string): Promise<OwnedUnit[]>;
 }
 
 @Injectable()
 export class OrderingService implements IOrderingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly owned: OwnedUnitsService,
+  ) {}
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
     return { ok: true };
@@ -40,5 +65,13 @@ export class OrderingService implements IOrderingService {
 
   async countDelivered(): Promise<number> {
     return this.prisma.db.order.count({ where: { status: 'DELIVERED' } });
+  }
+
+  ownedUnits(): Promise<OwnedUnit[]> {
+    return this.owned.forThisOrg();
+  }
+
+  ownedUnitsForOrder(orderNumber: string): Promise<OwnedUnit[]> {
+    return this.owned.forOrder(orderNumber);
   }
 }

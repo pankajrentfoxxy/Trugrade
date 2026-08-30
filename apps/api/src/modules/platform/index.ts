@@ -8,5 +8,9 @@
  * Anything added here becomes something another module may depend on, so adding
  * to this file is an architectural decision, not a convenience.
  */
-export { type IPlatformService, PlatformService } from './platform.service';
+export {
+  type IPlatformService,
+  PlatformService,
+  type OpenWarrantyUnit,
+} from './platform.service';
 export { PlatformModule } from './platform.module';

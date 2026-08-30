@@ -1,12 +1,21 @@
 /* eslint-disable no-console -- this is a CLI script; console is the output */
 import { PrismaClient } from '@prisma/client';
+import { SystemClock } from '../../src/shared/clock';
 import { seedReference } from './reference';
 import { seedLogisticsNcr } from './logistics-ncr';
 import { seedCatalog } from './catalog-seed';
 import { seedDemo } from './demo';
 import { seedInvoicing } from './invoicing';
+import { seedAfterSale } from './after-sale';
 
 const prisma = new PrismaClient();
+
+/**
+ * The same clock the API runs on, so a seeded delivery and the service that
+ * measures the window from it are reading one source. `SystemClock` is the only
+ * sanctioned caller of `Date.now()` in this codebase.
+ */
+const clock = new SystemClock();
 
 async function main(): Promise<void> {
   console.log('Seeding reference data…');
@@ -37,6 +46,12 @@ async function main(): Promise<void> {
     // synthetic GSTIN has no business on a database that is not a demo.
     console.log('Seeding the seller registration and invoice series…');
     await seedInvoicing(prisma, (m) => console.log(m));
+
+    // Orders far enough along that warranty, returns and the delivery check
+    // have something to show. Demo-gated for the same reason: it advances real
+    // order statuses, which has no business on a database that is not a demo.
+    console.log('Advancing orders so the after-sale screens are reachable…');
+    await seedAfterSale(prisma, clock.now(), (m) => console.log(m));
   }
 
   const runway = await prisma.$queryRaw<Array<{ table_name: string; runway_days: number }>>`

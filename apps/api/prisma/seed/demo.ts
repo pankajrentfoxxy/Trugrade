@@ -64,6 +64,12 @@ const PLATFORM_PEOPLE: Person[] = [
   { email: 'tech@trugrade.in', name: 'Rakesh Kumar', role: 'TECHNICIAN' },
   { email: 'finance@trugrade.in', name: 'Priya Nair', role: 'FINANCE' },
   { email: 'logistics@trugrade.in', name: 'Sameer Bose', role: 'LOGISTICS_MANAGER' },
+  // The only role carrying `logistics.delivery.execute`, which is what marks an
+  // order delivered — and delivery is what starts a warranty and opens the
+  // 48-hour inspection window (T23/T24). Without a rider on the demo database
+  // the after-sale half of the product is unreachable by anyone who is not a
+  // superadmin, and a superadmin needs MFA to get past the guard.
+  { email: 'rider@trugrade.in', name: 'Imran Qureshi', role: 'RIDER' },
 ];
 
 /**

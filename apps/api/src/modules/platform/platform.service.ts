@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/db/prisma.service';
+import { WarrantyService, type OpenWarrantyUnit } from './internal/warranty.service';
+
+export type { OpenWarrantyUnit };
 
 /**
  * The public interface of the `platform` module.
@@ -32,6 +35,28 @@ export interface IPlatformService {
    * the sales conversation, not to a thread the buyer can be shown verbatim.
    */
   openInternalLead(input: OpenInternalLeadInput): Promise<InternalLead>;
+
+  /**
+   * Open warranty cover for machines that have just been delivered — T23.
+   *
+   * **Delivery is what creates a `platform.warranty` row.** Cover starts when
+   * the buyer has the machine, not when they paid and not when it left the
+   * supply point; a term that ran while the laptop was on a lorry would be a
+   * term we sold and did not give. `ordering` owns the delivery event and calls
+   * in here, rather than writing into `platform.*` across the seam.
+   *
+   * The caller supplies the facts it owns — which unit, which supply point
+   * stands behind it, for how many months — and this module decides the term.
+   * The top-up and the platform floor are `platform_config` keys and the
+   * arithmetic is `max(vendor months + top-up, floor)`, the same the price was
+   * built from, so the buyer is covered for exactly what they were sold.
+   *
+   * **Idempotent.** `uq_warranty_unit` makes a re-run a no-op, which matters
+   * because the only caller is a button an operator can press twice.
+   */
+  openWarranties(
+    units: readonly OpenWarrantyUnit[],
+  ): Promise<{ opened: number; alreadyCovered: number }>;
 }
 
 export interface OpenInternalLeadInput {
@@ -53,7 +78,10 @@ export interface InternalLead {
 
 @Injectable()
 export class PlatformService implements IPlatformService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly warranty: WarrantyService,
+  ) {}
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
     return { ok: true };
@@ -92,5 +120,11 @@ export class PlatformService implements IPlatformService {
 
       return { id: ticket!.id, reference: ticket!.ticket_number };
     });
+  }
+
+  openWarranties(
+    units: readonly OpenWarrantyUnit[],
+  ): Promise<{ opened: number; alreadyCovered: number }> {
+    return this.warranty.openWarranties(units);
   }
 }

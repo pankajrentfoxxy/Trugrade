@@ -30,6 +30,7 @@ const TABS: ReadonlyArray<{ href: string; label: string }> = [
   { href: '/account', label: 'Today' },
   { href: '/account/orders', label: 'Orders' },
   { href: '/account/approvals', label: 'Approvals' },
+  { href: '/account/warranty', label: 'Warranty' },
   { href: '/account/addresses', label: 'Addresses' },
   { href: '/account/team', label: 'Team' },
 ];

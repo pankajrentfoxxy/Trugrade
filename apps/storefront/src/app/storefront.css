@@ -1427,3 +1427,162 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .odocsnote .pill.wire:hover,
 .ostate .empty .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc);
   color:var(--acc-ink)}
+
+/* ==========================================================================
+ * T23 — /account/warranty, /account/warranty/claims/new and .../[claimNumber].
+ *
+ * Archetype B, D and C in that order. Everything here reuses the board chrome
+ * established for the per-serial screen and the record grid `.rec` established
+ * for the product page — a fourth table or a second record layout would mean the
+ * system had already failed.
+ *
+ * The one colour decision worth writing down: a warranty running out is NOT a
+ * FAIL. Green and red belong to PASS and FAIL, and a term ending is the normal
+ * end of a normal thing. Days remaining are amber, which is the accent's second
+ * permitted meaning — a measured value. An ended term is neutral ink beside its
+ * date. Nothing on these three screens is red except a rejected claim and a
+ * refusal, both of which are things we own.
+ * ========================================================================== */
+
+.wthead{margin-bottom:14px}
+.wtkpi{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.wtbar{flex-wrap:wrap}
+.wtfilters{display:flex;flex-wrap:wrap;gap:6px}
+.wtfilters .chipf{display:inline-flex;align-items:center;gap:6px}
+.wtfilters .chipf:disabled{opacity:.5;cursor:not-allowed}
+.wtclaim{margin-left:auto;text-decoration:none}
+
+.wttable{margin-bottom:0}
+.wttable table{min-width:920px}
+.wttable td{padding:14px 16px;vertical-align:middle}
+.wttable tbody tr:hover td{background:var(--sheet-2)}
+
+.wtorder{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wtorder a{color:var(--ink-2);font-size:12.5px;text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:2px}
+.wtorder a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+
+.wtcover{display:flex;flex-direction:column;gap:2px;min-width:0}
+.wtterm{font-size:13px;color:var(--ink)}
+.wtterm b{font-weight:600}
+
+/* A measured value, so amber — one of the accent's three meanings. `.soon`
+   raises the weight rather than changing the hue: 19 days and 190 days are the
+   same KIND of fact, and a second colour would imply a verdict. */
+.wtleft{display:inline-flex;align-items:baseline;gap:5px;color:var(--acc-ink);
+  font-variant-numeric:tabular-nums}
+.wtleft b{font-size:14px;font-weight:600}
+.wtleft.soon b{font-size:15px;font-weight:700}
+.wtleft .denom{font-size:10.5px}
+
+/* Ended, not failed. Ink, never --fail. */
+.wtover{font-size:12.5px;color:var(--ink-3)}
+
+.wtclaimlink{display:flex;flex-direction:column;align-items:flex-start;gap:5px;
+  font-size:12px;color:var(--ink-2);text-decoration:none}
+.wtclaimlink .mono{text-decoration:underline;text-decoration-color:var(--rule);
+  text-underline-offset:2px}
+.wtclaimlink:hover .mono{color:var(--acc-ink);text-decoration-color:var(--acc)}
+.wtstart,.wtpaid{font-size:12.5px;white-space:nowrap;text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:3px}
+.wtstart{color:var(--ink)}
+.wtpaid{color:var(--ink-3)}
+.wtstart:hover,.wtpaid:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+
+.wtterms{margin-top:22px;padding:var(--s5) var(--s6);background:var(--sheet);
+  border:1px solid var(--rule);border-radius:var(--r-lg)}
+.wtterms h2{font-size:15px;font-weight:600;color:var(--ink);margin:0 0 14px}
+.wttermsgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.wttermsgrid h3{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin:0 0 8px}
+.wttermsgrid ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.wttermsgrid li{font-size:12.5px;line-height:1.55;color:var(--ink-2);padding-left:14px;
+  position:relative}
+.wttermsgrid li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:1px;
+  background:var(--rule)}
+.wttermsgrid ul.off li{color:var(--ink-3)}
+.wtterms .fnote{margin-top:16px}
+
+/* ---- the claim flow, archetype D ---- */
+
+.flow2{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;
+  align-items:start;margin-top:18px}
+.claimform{display:flex;flex-direction:column;gap:22px;min-width:0;max-width:78ch}
+.claimwhy{position:sticky;top:14px;max-height:none}
+
+.cfield{border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--sheet);
+  padding:var(--s5) var(--s6);display:flex;flex-direction:column;gap:12px;margin:0}
+.cfield > legend{font-size:14px;font-weight:600;color:var(--ink);padding:0 6px;margin-left:-6px}
+.cfnone{margin:0;font-size:13px;line-height:1.6;color:var(--ink-2)}
+
+.csel{display:flex;flex-direction:column;gap:6px}
+.csel .l{font-size:12.5px;font-weight:500;color:var(--ink)}
+.csel .d{font-size:11px;line-height:1.5;color:var(--ink-4)}
+.csel .d.short{color:var(--warn)}
+.csel select,.csel textarea{width:100%;padding:9px 11px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);background:var(--sheet-2);color:var(--ink);font-size:13px;
+  font-family:inherit}
+.csel textarea{line-height:1.55;resize:vertical}
+.csel select{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.csel select:focus-visible,.csel textarea:focus-visible{
+  outline:2px solid var(--acc);outline-offset:1px;border-color:var(--acc)}
+
+.careas{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.carea{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 9px;
+  border:1px solid var(--rule);border-radius:var(--r-sm);padding:9px 11px;cursor:pointer}
+.carea input{grid-row:1/span 2;margin-top:2px;accent-color:var(--acc)}
+.carea .l{font-size:12.5px;font-weight:500;color:var(--ink)}
+.carea .d{font-size:10.5px;line-height:1.45;color:var(--ink-4)}
+/* An active state, so amber — the third of the accent's three meanings. */
+.carea.on{border-color:var(--acc);background:var(--acc-wash)}
+.carea:focus-within{outline:2px solid var(--acc);outline-offset:1px}
+.cfhint{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink-3);max-width:72ch}
+
+.cblocked{margin-top:4px}
+.cblocked > summary{cursor:pointer;font-size:12px;color:var(--ink-3);padding:6px 0}
+.cblocked > summary:hover{color:var(--ink-2)}
+.cblocked ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cblocked li{font-size:11.5px;line-height:1.5;color:var(--ink-3)}
+.cblocked a{color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--rule);
+  text-underline-offset:2px}
+.cblocked a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+
+.cactions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.cactions .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
+.cactions .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc)}
+.cactions .pill.acc:disabled{opacity:.5;cursor:not-allowed}
+
+/* A refusal, not a validation buzz. --fail because it genuinely refused, and the
+   server's own sentence is what sits inside it. */
+.cfrefusal{border:1px solid var(--fail);border-radius:var(--r-lg);background:var(--sheet);
+  padding:var(--s4) var(--s5)}
+.cfrefusal h2{font-size:13.5px;font-weight:600;color:var(--fail);margin:0 0 6px}
+.cfrefusal p{margin:0;font-size:12.5px;line-height:1.6;color:var(--ink-2);max-width:72ch}
+.cfrefusal p.f{margin-top:6px;color:var(--ink-3)}
+
+/* ---- the claim record, archetype C ---- */
+
+.crhead{margin-top:4px}
+.crrec{margin-top:18px}
+.crpanel{padding:var(--s5) var(--s6);background:var(--sheet);border:1px solid var(--rule);
+  border-radius:var(--r-lg)}
+.crpanel h2{font-size:14px;font-weight:600;color:var(--ink);margin:0 0 12px}
+.crdesc{margin:0 0 16px;font-size:13.5px;line-height:1.7;color:var(--ink);max-width:74ch;
+  padding-left:12px;border-left:2px solid var(--acc)}
+.crfacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:0}
+.crfacts dt{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin-bottom:4px}
+.crfacts dd{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.crside-a{justify-content:center;width:100%;text-decoration:none}
+.crside .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
+.crside .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc)}
+
+@media(max-width:1000px){
+  .flow2{grid-template-columns:minmax(0,1fr)}
+  .claimwhy{position:static}
+}
+@media(max-width:900px){
+  .wtclaim{margin-left:0;width:100%;justify-content:center}
+  .wtfilters{width:100%}
+  .careas{grid-template-columns:minmax(0,1fr)}
+}

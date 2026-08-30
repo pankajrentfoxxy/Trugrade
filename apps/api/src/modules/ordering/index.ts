@@ -8,5 +8,5 @@
  * Anything added here becomes something another module may depend on, so adding
  * to this file is an architectural decision, not a convenience.
  */
-export { type IOrderingService, OrderingService } from './ordering.service';
+export { type IOrderingService, OrderingService, type OwnedUnit } from './ordering.service';
 export { OrderingModule } from './ordering.module';

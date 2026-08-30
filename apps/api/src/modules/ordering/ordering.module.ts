@@ -20,6 +20,8 @@ import { OrderDocumentsService } from './internal/order-documents.service';
 import { OrderUnitsService } from './internal/order-units.service';
 import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
+import { DeliveryService } from './internal/delivery.service';
+import { OwnedUnitsService } from './internal/owned-units.service';
 import { RfqIntakeService } from './internal/rfq-intake.service';
 
 /**
@@ -66,7 +68,9 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
  *
  * `OrderingService` stays the only export, because the barrel is this module's
  * whole public surface and a cart service leaking out of it is how the seam is
- * lost.
+ * lost. It grew `ownedUnits` for T23: `platform` owns warranty, claims and
+ * returns, and all three begin with "which serials are this buyer's, and has the
+ * machine reached them" — a question only this module can answer.
  */
 @Module({
   imports: [
@@ -92,6 +96,8 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
     OrderListService,
     ApprovalService,
     CatalogLookup,
+    DeliveryService,
+    OwnedUnitsService,
     RfqIntakeService,
   ],
   exports: [OrderingService],
