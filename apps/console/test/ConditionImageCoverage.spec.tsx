@@ -5,13 +5,14 @@ import { MemoryRouter } from 'react-router';
 import { REQUIRED_VIEWS, type ConditionImage, type Grade } from '@trugrade/contracts';
 import {
   ConditionImageCoverageRoute,
+  type CoverageImage,
   type ModelCoverage,
 } from '../src/routes/ConditionImageCoverage';
 
 const GRADES: Grade[] = ['A_PLUS', 'A', 'B'];
 
 let seq = 0;
-function image(grade: Grade, viewCode: ConditionImage['viewCode']): ConditionImage {
+function image(grade: Grade, viewCode: ConditionImage['viewCode']): CoverageImage {
   seq += 1;
   return {
     id: `img-${seq}`,
@@ -26,11 +27,13 @@ function image(grade: Grade, viewCode: ConditionImage['viewCode']): ConditionIma
     // the wrong reason.
     isPrimary: viewCode === 'LID_TOP',
     sortOrder: seq,
+    // An opaque object token, never the key — the same shape the API mints.
+    url: `http://api.test/api/objects/tok-${seq}`,
   };
 }
 
 /** Every required view in every grade, plus the wear frame Grade B needs. */
-function completeSet(): ConditionImage[] {
+function completeSet(): CoverageImage[] {
   return [
     ...GRADES.flatMap((g) => REQUIRED_VIEWS.map((v) => image(g, v))),
     image('B', 'CORNER_WEAR'),

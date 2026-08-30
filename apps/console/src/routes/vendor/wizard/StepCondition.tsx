@@ -1,9 +1,15 @@
 import * as React from 'react';
-import { GradeBadge, Input, Skeleton, TickRule, cn } from '@trugrade/ui';
+import { GradeBadge, Input, RepresentativeImage, Skeleton, TickRule, cn } from '@trugrade/ui';
 import { GRADES, type Grade } from '@trugrade/contracts';
 import { Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
-import { API, gradeLabel, type GradeDefinition, type VendorFacility } from '../api';
+import {
+  API,
+  gradeLabel,
+  type GradeDefinition,
+  type ResolvedGradeImages,
+  type VendorFacility,
+} from '../api';
 import type { WizardDraft } from './draft';
 
 /** Step 2 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
@@ -216,6 +222,79 @@ function GradePicker({
   );
 }
 
+/**
+ * What a buyer will actually be shown for the grade the vendor is choosing.
+ *
+ * The grading policy was words and numbers and nothing else, and the one moment
+ * a vendor needs the photographs is the moment they are declaring a grade
+ * against them. The library exists — 608 catalogued frames — and until now there
+ * was no vendor-reachable view of it at all: the only screen was the console's
+ * coverage grid, guarded by `catalog.condition_image.write`, which no vendor
+ * role holds and which carries object keys and every competitor's models.
+ *
+ * So this reads the same `@Public()` SKU route the product page reads, through
+ * the same resolver, and renders through `RepresentativeImage` — the component
+ * that bakes in the caption. The vendor is therefore looking at the literal
+ * frames a buyer will see beside their machine, which is the only version of
+ * this panel worth having: a separate "grading guide" is a second set of
+ * photographs to keep in step with the first.
+ */
+function GradeReference({ skuId, grade }: { skuId: string; grade: Grade }): React.JSX.Element {
+  const { data, error } = useResource<{ images: ResolvedGradeImages | null }>(
+    API.skuImages(skuId, grade),
+    'Reference photographs unavailable',
+  );
+
+  const resolved = data?.images ?? null;
+
+  return (
+    <section className="mt-6">
+      <h3 className="text-h3 text-ink">What a buyer sees at Grade {gradeLabel(grade)}</h3>
+      <TickRule />
+      {error ? (
+        <p className="mt-3 max-w-prose text-body-sm text-ink-2">
+          {error}. Grade from the written definitions above rather than from memory — nothing about
+          your declaration depends on these photographs loading.
+        </p>
+      ) : !data ? (
+        <Skeleton lines={3} />
+      ) : resolved === null || resolved.images.length === 0 ? (
+        <p className="mt-3 max-w-prose text-body-sm text-ink-2">
+          We have not photographed Grade {gradeLabel(grade)} for this machine yet, so a buyer sees a
+          labelled placeholder rather than a photograph. Your declaration is unaffected; the
+          inspection still measures the machine.
+        </p>
+      ) : (
+        <>
+          <p className="mt-3 max-w-prose text-body-sm text-ink-2">
+            {/* The match level matters to the person declaring: a SERIES-anchored
+                set is a different model, so "worse than this and it is a B" is a
+                looser comparison than it looks. Said in words, not inferred. */}
+            {resolved.match === 'SKU'
+              ? 'These are our photographs of this exact configuration at this grade.'
+              : resolved.match === 'MODEL'
+                ? 'These are our photographs of this model at this grade — another machine, not yours.'
+                : 'These are our photographs of this range at this grade — a different model in the same family.'}{' '}
+            Your machine should look no worse than this. Its own photographs are taken at the
+            inspection and go on its unit passport.
+          </p>
+          <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {resolved.images.map((image) => (
+              <RepresentativeImage
+                key={image.id}
+                src={image.url}
+                alt={image.altText}
+                grade={grade}
+                match={resolved.match}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function StepCondition({
   draft,
   patch,
@@ -253,6 +332,8 @@ export function StepCondition({
           onChange={(grade) => patch({ grade })}
         />
       </div>
+
+      {draft.sku && <GradeReference skuId={draft.sku.skuId} grade={draft.grade} />}
 
       <div className="mt-7 grid gap-x-7 gap-y-5 md:grid-cols-2">
         <div className="flex flex-col gap-5">

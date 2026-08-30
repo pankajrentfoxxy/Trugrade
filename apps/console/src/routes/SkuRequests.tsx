@@ -350,10 +350,45 @@ export function SkuRequestsRoute(): React.JSX.Element {
 
   if (data.length === 0) {
     return (
-      <EmptyState
-        title="No pending requests"
-        body="Every vendor request has been decided. A new one appears here the moment a vendor cannot find their machine in the catalog."
-      />
+      <div className="tg-stack">
+        <PageHeader title="SKU requests">
+          A vendor asking us to carry a machine the catalog does not have.
+        </PageHeader>
+        {/*
+          The queue is genuinely empty and has been since the table was created,
+          so this cannot say "everything has been decided" — nothing has been
+          submitted. What an operator opening an empty worklist needs is what
+          would put a row in it, and the answer is a specific place in a specific
+          screen, not a definition.
+        */}
+        <EmptyState
+          title="Nothing is waiting"
+          body={
+            <>
+              {/* `EmptyState.body` renders inside a <p>, so these are blocks
+                  rather than paragraphs — a <p> in a <p> is closed by the
+                  parser and the rest of the copy escapes the container. */}
+              <span className="block">
+                A vendor listing stock starts by searching the catalog for their machine. When the
+                search returns nothing that matches, step 1 of the listing wizard offers{' '}
+                <strong>&ldquo;Request this machine&rdquo;</strong>, and what they type there —
+                brand, model, and the configuration in their own words — arrives here.
+              </span>
+              <span className="mt-3 block">
+                Each request arrives with the SKUs we already carry that are closest to it, scored,
+                because most requests are a machine we have under a different name. Three answers:{' '}
+                <strong>merge</strong> into the SKU we carry, <strong>approve</strong> to create a
+                new one, or <strong>reject</strong> with a reason the vendor reads. Approving or
+                merging unblocks their draft listing immediately.
+              </span>
+              <span className="mt-3 block text-ink-3">
+                An empty queue means no vendor has hit a machine we do not carry — not that requests
+                are being handled elsewhere. Nothing else writes to this table.
+              </span>
+            </>
+          }
+        />
+      </div>
     );
   }
 

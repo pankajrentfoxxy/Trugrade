@@ -14,6 +14,7 @@ import {
   EmptyState,
   GradeBadge,
   Input,
+  RepresentativeImage,
   Skeleton,
   StatusPill,
   cn,
@@ -28,13 +29,25 @@ import { useUrlState } from '../lib/urlState';
  * DENSITY: compact (admin), set on the app root by the shell.
  */
 
+/**
+ * A frame, with somewhere the browser can fetch it.
+ *
+ * `url` is an opaque object token minted by the API for five minutes (§3C's
+ * admin TTL), not the `s3Key` signed — the key names a path and is never
+ * published. Everything the publish rule reads is still on `ConditionImage`,
+ * so `coverageGaps` and `isPublishable` take these unchanged.
+ */
+export interface CoverageImage extends ConditionImage {
+  url: string;
+}
+
 export interface ModelCoverage {
   modelId: string;
   brandName: string;
   seriesName: string;
   modelName: string;
   /** Every live image anchored to this model. The grid is derived here, never served. */
-  images: ConditionImage[];
+  images: CoverageImage[];
 }
 
 const VIEW_LABEL: Record<ConditionViewCode, string> = {
@@ -97,6 +110,12 @@ function gapSentence(model: ModelCoverage, grade: Grade, view: ConditionViewCode
  * A filled slot is deliberately the quiet one. Most slots are filled, and a wall
  * of green makes the handful of empty ones no easier to find than a wall of
  * grey — the gap is the only thing on this screen worth looking at.
+ *
+ * **The gap is loud without being red.** An empty slot is a photograph nobody
+ * has taken; it is not a FAIL, and green and red are reserved for verdicts. The
+ * contrast is carried by weight instead — a dashed border and full `--ink`
+ * against a quiet `--ink-3` dot — and by the glyph, which says the same thing
+ * again for anyone who cannot see either.
  */
 function Slot({
   row,
@@ -116,7 +135,7 @@ function Slot({
       className={
         filled
           ? 'flex h-5 w-5 items-center justify-center rounded-xs border border-rule-2 text-ink-3'
-          : 'flex h-5 w-5 items-center justify-center rounded-xs border border-fail bg-sheet-2 font-semibold text-fail'
+          : 'flex h-5 w-5 items-center justify-center rounded-xs border border-dashed border-ink-3 bg-sheet-2 font-semibold text-ink'
       }
     >
       {/* Never colour alone: the glyph carries the same distinction as the fill. */}
@@ -166,10 +185,16 @@ function GradeCell({ row, grade }: { row: Row; grade: Grade }): React.JSX.Elemen
   );
 }
 
-/** Zero gaps is not the same as publishable — Grade B also needs its worst-wear frame. */
+/**
+ * Zero gaps is not the same as publishable — Grade B also needs its worst-wear frame.
+ *
+ * The gap count is neutral and the blocked count is not, and that is the whole
+ * distinction: a missing photograph is work outstanding, a blocked grade is the
+ * publish gate refusing. Only the second is a verdict, so only the second is red.
+ */
 function CoverageCell({ row }: { row: Row }): React.JSX.Element {
   if (row.gapCount > 0) {
-    return <StatusPill tone="fail" label={plural(row.gapCount, 'gap', 'gaps')} />;
+    return <StatusPill tone="neutral" label={plural(row.gapCount, 'gap', 'gaps')} />;
   }
   if (row.blockedGrades > 0) {
     return (
@@ -320,16 +345,49 @@ function FileRow({
 }
 
 /**
+ * What a buyer is shown for one grade of this model, through the real component.
+ *
+ * `RepresentativeImage` is the storefront's own, and it is used here rather than
+ * a mock-up of it for the reason the whole component exists: the caption — "the
+ * photographs of your specific machine are in its unit passport" — is baked into
+ * it so no caller can drop it. A preview that reproduced the layout without the
+ * caption would be a preview of a page we do not ship.
+ *
+ * `match` is the frame's own anchor, not an assumption. A MODEL-anchored frame
+ * on a SKU's page really is a photograph of a different machine of the same
+ * model, and the component widens the caption to say so — which is the half of
+ * the liability control an operator most needs to see before publishing.
+ */
+function BuyerPreview({ frames }: { frames: CoverageImage[] }): React.JSX.Element | null {
+  // The hero, or the first by position — the same order the resolver hands the
+  // storefront, so this is the frame that actually leads the gallery.
+  const hero = frames.find((f) => f.isPrimary) ?? frames[0];
+  if (!hero) return null;
+  return (
+    <div className="mt-3 max-w-sm">
+      <RepresentativeImage
+        src={hero.url}
+        alt={hero.altText}
+        grade={hero.grade}
+        match={hero.anchor}
+      />
+    </div>
+  );
+}
+
+/**
  * The frames a model already has, and the three things that can be done to one.
  *
- * No thumbnails, and that is a missing dependency rather than a choice: there is
- * no route that turns an `s3_key` into something a browser can render, and
- * inventing one here would put a signed object URL on a screen that does not
- * need to display the photograph to reorder it. Every frame is still uniquely
- * identified by grade, view and position, which is what the controls act on.
+ * Thumbnails, at last: `GET /api/objects/:token` now serves the bytes, and the
+ * coverage route mints a five-minute token per frame. The token is the key
+ * ENCRYPTED, never the key signed, so nothing on this screen publishes an object
+ * path — the same rule the passport and the product page already follow.
  *
- * ponytail: add previews when a presigned-download route exists; nothing else on
- * this panel changes.
+ * These are `<img>` rather than `RepresentativeImage` deliberately: this list is
+ * the library being curated, each frame already labelled with its grade, view
+ * and position, and a buyer-facing caption on a reorder control would be
+ * nonsense. The buyer-facing rendering is `BuyerPreview` above, and it is the
+ * real component.
  */
 function FrameList({
   model,
@@ -394,11 +452,27 @@ function FrameList({
       )}
 
       {byGrade.map(({ grade, frames }) => (
-        <div key={grade} className="mt-3">
-          <GradeBadge grade={grade} />
-          <ul className="mt-2">
+        <div key={grade} className="mt-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <GradeBadge grade={grade} />
+            <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+              <span className="tnum">{frames.length}</span> of{' '}
+              <span className="tnum">{REQUIRED_VIEWS.length}</span> required views
+            </span>
+          </div>
+          <BuyerPreview frames={frames} />
+          <ul className="mt-3">
             {frames.map((frame, index) => (
               <li key={frame.id} className="flex flex-wrap items-center gap-2 border-b border-rule-2 py-2">
+                {/* Small, and not a link to a bigger one: this is the frame's
+                    identity beside its controls, so an operator can see they are
+                    retiring the scuffed lid and not the clean one. */}
+                <img
+                  src={frame.url}
+                  alt={frame.altText}
+                  loading="lazy"
+                  className="h-11 w-16 rounded-xs border border-rule bg-sheet-2 object-cover"
+                />
                 <span className="min-w-[12rem] text-body-sm text-ink">
                   {VIEW_LABEL[frame.viewCode]} · frame {frame.sortOrder}
                 </span>
@@ -784,11 +858,15 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
       <PageHeader title="Condition image coverage">
         {modelsWithGaps > 0 ? (
           <>
-            <span className="font-semibold text-fail">
+            {/* Neutral: a count of outstanding photographs is a measurement of
+                the work, not a judgement on it. The gate below is the verdict. */}
+            <span className="font-semibold text-ink">
               {modelsWithGaps} of {rows.length} models have gaps
             </span>{' '}
             · {plural(totalGaps, 'empty slot', 'empty slots')} ·{' '}
-            {plural(blocked, 'grade', 'grades')} cannot be published
+            <span className="text-fail">
+              {plural(blocked, 'grade', 'grades')} cannot be published
+            </span>
           </>
         ) : blocked > 0 ? (
           <>

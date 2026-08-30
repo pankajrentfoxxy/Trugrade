@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Link } from 'react-router';
 import { EmptyState, Input, Skeleton, StatusPill, TickRule } from '@trugrade/ui';
 import { PageHeader } from '../lib/controls';
 import { useResource } from '../lib/useResource';
@@ -70,7 +71,15 @@ function filterBrands(brands: CatalogBrand[], query: string): CatalogBrand[] {
 function SkuRow({ sku }: { sku: CatalogSku }): React.JSX.Element {
   return (
     <li className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-2 pl-5">
-      <code className="font-mono text-data tnum text-ink-2">{sku.skuCode}</code>
+      {/* The code is the link, not a separate "view" action: it is the
+          identifier somebody is already reading, and fifty rows x one amber
+          link is fifty amber controls on a screen entitled to one. */}
+      <Link
+        to={`/catalog/skus/${sku.id}`}
+        className="font-mono text-data tnum text-ink-2 underline underline-offset-4 hover:text-ink"
+      >
+        {sku.skuCode}
+      </Link>
       <span className="text-body-sm text-ink">{sku.label}</span>
       {/* Deprecated is a state, not a verdict: neutral, never red. */}
       {!sku.isActive && <StatusPill tone="neutral" label="Deprecated" />}
@@ -104,11 +113,24 @@ export function CatalogTreeRoute(): React.JSX.Element {
     return (
       <EmptyState
         title="The catalog is empty"
-        body="Start with a brand, then a series under it, then the models and their configurations. A vendor cannot list anything until a SKU exists to list it against."
-        action={
-          <a className="text-acc-ink underline underline-offset-4" href="/catalog/brands/new">
-            Add the first brand
-          </a>
+        body={
+          <>
+            {/* There is no brand-create route and no brand-create endpoint. The
+                importer is what writes `catalog.brand`, `series` and `model`, on
+                the way to a SKU — so the empty state points at the thing that
+                exists rather than at a screen somebody would have to build to
+                make this sentence true. */}
+            <span className="block">
+              A vendor cannot list anything until a SKU exists to list it against, and there is no
+              standalone &ldquo;add a brand&rdquo; step: brands, series and models are created by
+              the SKU importer on the way to the configurations underneath them.
+            </span>
+            <span className="mt-3 block">
+              Post a CSV to <span className="font-mono">/api/catalog/skus/import</span> — the same
+              validation a SKU request approval runs, so both paths produce the same normalised key
+              — or approve the first vendor request when one arrives.
+            </span>
+          </>
         }
       />
     );

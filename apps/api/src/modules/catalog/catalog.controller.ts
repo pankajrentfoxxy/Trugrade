@@ -15,6 +15,7 @@ import type { Request } from 'express';
 import {
   errorReportCsv,
   uuidSchema,
+  type ConditionImage,
   type ConditionViewCode,
   type Grade,
   type ResolvedImages,
@@ -110,6 +111,16 @@ const SEARCH_LIMIT: RateLimitRule = { name: 'catalog-search', limit: 120, window
  * stale a link in a cached page can be.
  */
 const IMAGE_URL_TTL_SECONDS = 900;
+
+/**
+ * Five minutes for the console, not the buyer's fifteen — `03_UX_SPEC.md` §5.
+ *
+ * The coverage grid mints one of these for every live frame in the library, so
+ * a tab left open all afternoon would otherwise hold several hundred live
+ * capabilities to object storage. Five minutes is long enough to judge a
+ * photograph and short enough that the grid is re-read before it is acted on.
+ */
+const ADMIN_IMAGE_URL_TTL_SECONDS = 300;
 
 const PHOTO_EXTENSION: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -218,6 +229,23 @@ export interface PublicConditionImage {
   blurDataUri?: string | null;
   /** Expires. A page that holds it for an hour re-reads the SKU. */
   url: string;
+}
+
+/**
+ * A frame on the coverage grid: everything the publish rule needs, plus
+ * somewhere the browser can actually fetch the photograph.
+ *
+ * `s3Key` stays — this route is `catalog.condition_image.write`-guarded, the
+ * operator's own upload produced the key, and `coverageGaps`/`isPublishable` in
+ * contracts take a whole `ConditionImage`. `url` is added rather than swapped in
+ * for that reason, and it is an opaque object token, not the key signed.
+ */
+export interface CoverageImageView extends ConditionImage {
+  url: string;
+}
+
+export interface ModelCoverageView extends Omit<ModelCoverage, 'images'> {
+  images: CoverageImageView[];
 }
 
 export interface PublicResolvedImages {
@@ -573,8 +601,19 @@ export class CatalogController {
    */
   @Get('condition-images/coverage')
   @RequirePermissions('catalog.condition_image.write')
-  coverage(): Promise<ModelCoverage[]> {
-    return this.images.coverage();
+  async coverage(): Promise<ModelCoverageView[]> {
+    const rows = await this.images.coverage();
+    return Promise.all(
+      rows.map(async (m) => ({
+        ...m,
+        images: await Promise.all(
+          m.images.map(async (i) => ({
+            ...i,
+            url: await this.store.presignDownload(i.s3Key, ADMIN_IMAGE_URL_TTL_SECONDS),
+          })),
+        ),
+      })),
+    );
   }
 
   /**

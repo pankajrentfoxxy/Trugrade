@@ -39,6 +39,19 @@ export const API = {
    */
   catalogSearch: (q: string) => `/api/catalog/search?q=${encodeURIComponent(q)}&limit=20`,
   sku: (skuId: string) => `/api/catalog/skus/${skuId}`,
+  /**
+   * The reference photographs for one grade of one SKU — the same call the
+   * product page makes, and the same resolver.
+   *
+   * No vendor role holds a `catalog.*` permission, and this route is `@Public()`
+   * for exactly that reason: the catalog is TrueTech-owned reference data a
+   * vendor reads and never writes. Note what it is NOT — the coverage grid at
+   * `/api/catalog/condition-images/coverage` is `catalog.condition_image.write`
+   * and carries object keys and every model's frames. A vendor gets the six
+   * frames they are declaring against and nothing else.
+   */
+  skuImages: (skuId: string, grade: string) =>
+    `/api/catalog/skus/${skuId}?grade=${encodeURIComponent(grade)}`,
   gradeDefinitions: '/api/catalog/grade-definitions',
   skuRequests: '/api/catalog/sku-requests',
 
@@ -187,6 +200,30 @@ export interface SkuDetail extends SkuHit {
   osSupported: string;
   /** `catalog.sku.os_licence_type` — OEM | RETAIL | VOLUME | NONE. */
   osLicenceType?: string | null;
+}
+
+/**
+ * One reference photograph, as the public SKU route hands it over.
+ *
+ * `s3Key` is absent and that is the point: the API replaces the object key with
+ * a short-lived opaque token, so nothing on a vendor screen carries a storage
+ * path. There is no type here that could hold one.
+ */
+export interface ResolvedGradeImage {
+  id: string;
+  viewCode: string;
+  altText: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  url: string;
+}
+
+/** Which level of the catalog the photographs came from, and the frames themselves. */
+export interface ResolvedGradeImages {
+  images: ResolvedGradeImage[];
+  match: 'SKU' | 'MODEL' | 'SERIES' | 'PLACEHOLDER';
+  isGeneric: boolean;
+  placeholderReason?: string;
 }
 
 /**

@@ -587,40 +587,77 @@ function Gallery({
   const resolved = sku.images;
   const held = resolved?.images ?? [];
   const label = GRADE_LABEL[grade] ?? grade;
+  const passportHref = hasUnits ? '#units' : undefined;
 
-  // The library holds S3 keys and nothing serves one to a browser: there is no
-  // public or presigned URL for a condition image on any endpoint, and the dev
-  // bucket holds zero objects. So no `src` is passed — a key rendered as a `src`
-  // is a broken-image icon with a caption under it, which reads as "this machine
-  // has no photograph" rather than "we have not published these yet".
+  // Nothing catalogued for this grade. ONE placeholder, not one per view — six
+  // copies of the same sentence is the same sentence six times, and the reader
+  // stops after the first.
+  if (held.length === 0) {
+    return (
+      <div className="gal one">
+        <RepresentativeImage
+          grade={grade as Grade}
+          match="PLACEHOLDER"
+          alt={`No photograph of Grade ${label} condition for the ${sku.brandName} ${sku.modelName}`}
+          passportHref={passportHref}
+        />
+        <p className="fnote">
+          {resolved?.placeholderReason ??
+            `No condition photographs are catalogued for Grade ${label} on this model.`}{' '}
+          {hasUnits
+            ? 'Every unit’s own inspection photographs are on its passport, below, before you buy.'
+            : 'Every unit’s own inspection photographs are on its passport, reachable before you buy.'}
+        </p>
+      </div>
+    );
+  }
+
+  // The real photographs, at last.
   //
-  // ONE placeholder, not one per view. Six copies of the same sentence is the
-  // same sentence six times, and the reader stops after the first.
+  // This block used to be unconditionally the placeholder above, on the grounds
+  // — written in a comment here — that "nothing serves an S3 key to a browser
+  // and the dev bucket holds zero objects". Both halves stopped being true when
+  // the image pipeline landed: `catalog` replaces the key with an opaque
+  // encrypted object token, `GET /api/objects/:token` serves the bytes, and the
+  // store holds an object for every catalogued frame. So the page was showing a
+  // placeholder over a library that was working.
+  //
+  // Every frame goes through `RepresentativeImage`, which is what stops any of
+  // them being presented as the machine the buyer will receive. The caption
+  // repeats, and that is the component's contract rather than an oversight — see
+  // the note on a one-caption gallery in the build ledger.
   return (
-    <div className="gal one">
-      <RepresentativeImage
-        grade={grade as Grade}
-        match="PLACEHOLDER"
-        alt={`No photograph of Grade ${label} condition for the ${sku.brandName} ${sku.modelName}`}
-        passportHref={hasUnits ? '#units' : undefined}
-      />
+    <>
+      <div className="gal">
+        {held.map((image) => (
+          <RepresentativeImage
+            key={image.id}
+            src={image.url}
+            alt={image.altText}
+            grade={grade as Grade}
+            match={resolved?.match ?? 'SKU'}
+            passportHref={passportHref}
+          />
+        ))}
+      </div>
       <p className="fnote">
-        {held.length > 0 ? (
-          <>
-            <b className="mono">{held.length}</b> condition photograph
-            {held.length === 1 ? ' is' : 's are'} catalogued for Grade {label} on this model —{' '}
-            {held.map((image) => image.viewCode.replace(/_/g, ' ').toLowerCase()).join(', ')} — and
-            none is published to the storefront yet.
-          </>
-        ) : (
-          (resolved?.placeholderReason ??
-          `No condition photographs are catalogued for Grade ${label} on this model.`)
-        )}{' '}
+        <b className="mono">{held.length}</b> condition photograph
+        {held.length === 1 ? '' : 's'} for Grade {label}
+        {/* `match`, not `isGeneric`: the two differ, and the difference is the
+            whole claim. MODEL means another machine of the same model; SERIES
+            means a different model entirely, and calling both "this range"
+            under-states the second. */}
+        {resolved?.match === 'MODEL'
+          ? ' — of this model rather than of this exact configuration'
+          : resolved?.match === 'SERIES'
+            ? ' — of this range rather than of this model'
+            : ''}
+        .{' '}
         {hasUnits
           ? 'Every unit’s own inspection photographs are on its passport, below, before you buy.'
           : 'Every unit’s own inspection photographs are on its passport, reachable before you buy.'}
       </p>
-    </div>
+    </>
   );
 }
 

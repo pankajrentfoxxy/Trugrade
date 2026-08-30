@@ -125,15 +125,28 @@ describe('the catalog tree keeps all four levels', () => {
     expect(screen.queryByText('The catalog is empty')).not.toBeInTheDocument();
   });
 
-  it('guides the first brand when there is genuinely nothing', async () => {
+  /**
+   * The empty state used to offer "Add the first brand", linking to
+   * `/catalog/brands/new` — a route with no `<Route>` behind it and no endpoint
+   * underneath it. There is no brand-create anywhere: the SKU importer writes
+   * `catalog.brand`, `series` and `model` on its way to a SKU.
+   *
+   * So this asserts the absence as well as the presence. A guidance sentence
+   * naming a screen that does not exist is worse than no guidance at all — the
+   * person following it concludes the console is broken rather than that they
+   * are looking in the wrong place.
+   */
+  it('points an empty catalog at the importer, and offers no route that does not exist', async () => {
     mockJson([]);
-    render(
+    const { container } = render(
       <MemoryRouter>
         <CatalogTreeRoute />
       </MemoryRouter>,
     );
     expect(await screen.findByText('The catalog is empty')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add the first brand/i })).toBeInTheDocument();
+    expect(screen.getByText(/api\/catalog\/skus\/import/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /add the first brand/i })).toBeNull();
+    expect(container.querySelector('a[href*="brands/new"]')).toBeNull();
   });
 
   it('says the catalog did not load, and that nothing changed', async () => {
@@ -226,13 +239,22 @@ describe('the SKU request queue is built for duplicates', () => {
     expect(screen.getByText(/genuinely new configuration/)).toBeInTheDocument();
   });
 
-  it('reads as success, not failure, when the queue is empty', async () => {
+  /**
+   * `catalog.sku_request` has never held a row, so "every request has been
+   * decided" — what this state used to say — was a sentence about a history that
+   * does not exist. An operator opening an empty worklist needs to know what
+   * would put something in it, and that it is not being handled somewhere else.
+   */
+  it('says what a request is and what makes one appear, rather than claiming a cleared queue', async () => {
     mockJson([]);
     render(
       <MemoryRouter>
         <SkuRequestsRoute />
       </MemoryRouter>,
     );
-    expect(await screen.findByText('No pending requests')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing is waiting')).toBeInTheDocument();
+    expect(screen.getByText(/Request this machine/)).toBeInTheDocument();
+    expect(screen.getByText(/no vendor has hit a machine we do not carry/)).toBeInTheDocument();
+    expect(screen.queryByText(/every vendor request has been decided/i)).toBeNull();
   });
 });
