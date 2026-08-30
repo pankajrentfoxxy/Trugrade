@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-30T00:40:00+00:00  
-Currently: T17 - order confirmation and approval-required
+Currently: T17 - order confirmation and the approval-required state
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -26,8 +26,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T13 | Unit passport /unit/[serial] | DONE | 48a15a5 | 70 shots, both themes, 1440/900/600 | Archetype C, reachable signed out, noindex. All twelve areas including NOT_MEASURED. Real photographs behind viewfinder brackets. Needed the image pipeline + QC evidence prerequisite first. |
 | T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
 | T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
-| T16 | Checkout | DONE |  | 130 shots, both themes, 1440/900/600 | Archetype D, six steps against the live stack. Real order with allocated serials and one PO per supply point; an order over the seeded Rs 2,00,000 policy holds six units, raises ZERO POs and sits AWAITING_APPROVAL with a 24h expiry. Tax split resolved and shown changing CGST+SGST to IGST on the delivery step, before confirmation. Six defects found by loading the screen, one of them a Rs 0.00 split drawn as resolved. |
-| T17 | Order confirmation and approval-required | TODO |  |  |  |
+| T16 | Checkout | DONE | 93eb028 | 130 shots, 27 states x 2 themes x 3 widths | Archetype D. 16-step order transaction, 42 integration tests covering ORD-010/014/018/020 and PRC-030. Proven in data: PAYMENT_PENDING 3 units + 2 POs; AWAITING_APPROVAL 6 units + 0 POs. Six defects found by loading the screen, incl. an unresolved tax split drawn as settled with the wrong pair of heads. Also fixed: cart deletion stranding held stock (5ddf02b), and the header never reading the session (3963e99). |
+| T17 | Order confirmation and approval-required | DOING |  |  |  |
 | T18 | Bulk requirement upload | TODO |  |  |  |
 | T19 | Customer dashboard | TODO |  |  |  |
 | T20 | Order list | TODO |  |  |  |
