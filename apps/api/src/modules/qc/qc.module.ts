@@ -20,6 +20,8 @@ import { GradeCorrectionService } from './internal/grade-correction.service';
 import { ReportPdfService } from './internal/report-pdf.service';
 import { QcPassportService, QcPublicController } from './qc-public.controller';
 import { QcConsoleService, QcController } from './qc.controller';
+import { VendorCorrectionRepository } from './internal/vendor-correction.repository';
+import { VendorCorrectionsController } from './vendor-corrections.controller';
 
 /**
  * Registers the QC core: the repository every other service in this module
@@ -50,7 +52,16 @@ import { QcConsoleService, QcController } from './qc.controller';
   // scheduler is registered once, globally, by `JobsModule`
   // (`ScheduleModule.forRoot()`), and discovers decorated methods on any
   // provider in the app — so being listed below is all those two need.
-  controllers: [QcIngestionController, QcPublicController, QcController],
+  // `VendorCorrectionsController` answers under /api/vendor, not /api/qc, and
+  // lives here rather than in the `vendor` module because `GradeCorrectionService`
+  // is internal to `qc` — exporting it through the barrel to reach a controller
+  // would make the whole correction lifecycle another module's to call.
+  controllers: [
+    QcIngestionController,
+    QcPublicController,
+    QcController,
+    VendorCorrectionsController,
+  ],
   providers: [
     QcService,
     QcRepository,
@@ -69,6 +80,7 @@ import { QcConsoleService, QcController } from './qc.controller';
     QcPassportService,
     ReportPdfService,
     QcConsoleService,
+    VendorCorrectionRepository,
   ],
   exports: [QcService],
 })

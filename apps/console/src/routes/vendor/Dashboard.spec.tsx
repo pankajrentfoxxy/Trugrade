@@ -94,7 +94,10 @@ describe('a promise nobody made is never rendered', () => {
     expect(hrefs.some((h) => h.includes('qc/corrections'))).toBe(false);
     // And the two that do exist, do exist.
     expect(hrefs).toContain('/vendor/listings?status=ACTIVE');
-    expect(hrefs).toContain('/vendor/listings?corrected=1');
+    // T31: `/vendor/corrections`, not `/vendor/listings?corrected=1`. That board
+    // exists and is honest, but nothing on it could answer a correction — a queue
+    // headed "awaiting your answer" landed you where you could not give one.
+    expect(hrefs).toContain('/vendor/corrections');
   });
 
   it('says the payout date is unknown rather than inventing one', async () => {

@@ -55,7 +55,27 @@ export const API = {
   submit: (id: string) => `/api/vendor/listings/${id}/submit`,
   bulkStatus: '/api/vendor/listings/bulk-status',
   reprice: (id: string) => `/api/vendor/listings/${id}/reprice`,
+
+  /**
+   * The vendor's own grade corrections — org-scoped, and NOT the QC console's
+   * `/api/qc/grade-corrections`, which spans every vendor and carries a resolved
+   * vendor name on every row. No vendor role holds the permission that guards
+   * that one, and none should: the two audiences are one query apart and that is
+   * exactly how a competitor's serials leaked once already.
+   */
+  corrections: '/api/vendor/grade-corrections',
+  correction: (id: string) => `/api/vendor/grade-corrections/${id}`,
+  respondToCorrection: (id: string) => `/api/vendor/grade-corrections/${id}/respond`,
 } as const;
+
+/** The four answers, exactly as `listing.grade_correction.vendor_response` allows. */
+export const VENDOR_RESPONSES = [
+  'ACCEPT_NEW_GRADE',
+  'ACCEPT_AND_REPRICE',
+  'WITHDRAW_UNIT',
+  'DISPUTE',
+] as const;
+export type VendorResponse = (typeof VENDOR_RESPONSES)[number];
 
 /* ==========================================================================
  * Wire types
@@ -192,6 +212,48 @@ export interface VendorUnit {
   qcPassedAt: IsoDate | null;
   qcValidUntil: IsoDate | null;
   createdAt: IsoDate;
+}
+
+/**
+ * One grade correction, as the vendor's own routes send it.
+ *
+ * **`hoursUntilAutoApply` and `respondByAt` are computed on the server** and are
+ * `null` when the window could not be read from config — never zero. A browser
+ * clock must not be able to move a deadline that reprices a machine, and "we
+ * cannot tell you how long you have" is a different sentence from "you have no
+ * time left".
+ *
+ * Negative hours are normal and are not an error: the window has closed and the
+ * correction has not auto-applied yet, so it is still answerable. The screen says
+ * so rather than hiding the row or painting it as failed.
+ *
+ * There is no vendor name (they are the vendor) and no retail price. `askBefore`
+ * is the vendor's own ask as it stood when the correction was raised.
+ */
+export interface GradeCorrection {
+  id: string;
+  unitId: string;
+  listingId: string | null;
+  serialNumber: string;
+  /** Empty when the SKU could not be resolved. The screen says so; it never guesses. */
+  skuCode: string;
+  gradeDeclared: string;
+  gradeCorrected: string;
+  reason: string;
+  askBefore: MoneyString | null;
+  vendorNotifiedAt: IsoDate;
+  respondByAt: IsoDate | null;
+  hoursUntilAutoApply: number | null;
+  vendorResponse: VendorResponse | null;
+  vendorRespondedAt: IsoDate | null;
+  autoAppliedAt: IsoDate | null;
+  /** Feeds the grade-accuracy figure buyers compare supply points on. */
+  countsAgainstAccuracy: boolean;
+}
+
+/** Still waiting on the vendor — the same predicate the dashboard queue counts. */
+export function needsAnswer(c: GradeCorrection): boolean {
+  return c.vendorResponse === null && c.autoAppliedAt === null;
 }
 
 export interface Page<T> {

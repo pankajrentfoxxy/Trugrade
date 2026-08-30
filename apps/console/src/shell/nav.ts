@@ -86,6 +86,17 @@ export const NAV: readonly NavEntry[] = [
     group: 'Vendor',
     orgType: 'VENDOR',
   },
+  // Its own entry rather than a tile alone: a correction is on a two-day clock
+  // and auto-applies, so it must be reachable without first noticing a queue on
+  // the dashboard. `listing.own.read` and not the respond permission — a
+  // VENDOR_VIEWER may read what was corrected on their own stock.
+  {
+    to: '/vendor/corrections',
+    label: 'Grade corrections',
+    permission: 'listing.own.read',
+    group: 'Vendor',
+    orgType: 'VENDOR',
+  },
 ];
 
 export const canSee = (n: NavEntry, p: Principal): boolean =>

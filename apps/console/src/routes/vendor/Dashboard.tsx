@@ -212,10 +212,16 @@ export function VendorDashboardRoute(): React.JSX.Element {
    * 48 from a queue that does have one.
    */
   const queues: QueueItem[] = [
+    // `/vendor/corrections`, not `/vendor/listings?corrected=1`. The board of
+    // LISTINGS with an open correction is a real board and stays, but until T31
+    // it was the only destination and nothing on it could answer anything — a
+    // queue titled "awaiting your answer" that landed you somewhere you could not
+    // give one. Both read the same predicate (`needsAnswer`), so the count here
+    // and the rows there cannot disagree.
     toQueue(
       'corrections',
       'Grade corrections awaiting your answer',
-      '/vendor/listings?corrected=1',
+      '/vendor/corrections',
       'When the window closes the corrected grade applies on its own, and reprices the listing.',
       data.queues.gradeCorrections,
     ),

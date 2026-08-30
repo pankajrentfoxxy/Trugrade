@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   gradeSchema,
+  moneySchema,
   paginationSchema,
   sealCodeSchema,
   uuidSchema,
@@ -614,6 +615,48 @@ export const disputeRulingSchema = z.object({
   note: z.string().max(1000).optional(),
 });
 export type DisputeRulingDto = z.infer<typeof disputeRulingSchema>;
+
+/**
+ * The vendor's answer to a grade correction. Four answers, and they are peers.
+ *
+ * The response is required and has no default. A body that arrives without one
+ * is not "probably an accept" — accepting re-grades a machine and changes what
+ * the vendor is paid for it, and the auto-apply job already exists to make that
+ * decision when nobody makes it deliberately.
+ *
+ * `vendorAskPrice` is refused on the three responses that do not price anything,
+ * rather than ignored. A vendor who typed an amount and picked WITHDRAW_UNIT has
+ * asked for two different things, and silently honouring one of them is how a
+ * machine goes back on the shelf at a number nobody agreed to.
+ */
+export const vendorCorrectionResponseSchema = z
+  .object({
+    response: z.enum(['ACCEPT_NEW_GRADE', 'ACCEPT_AND_REPRICE', 'WITHDRAW_UNIT', 'DISPUTE'], {
+      message: 'Choose one of the four answers to this correction.',
+    }),
+    /** `NET_PAYOUT` — what the vendor receives, never a selling price. */
+    vendorAskPrice: moneySchema.optional(),
+    /** Read by a QC manager on a dispute; kept with the record on the others. */
+    note: z.string().trim().max(1000).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.response === 'ACCEPT_AND_REPRICE' && !v.vendorAskPrice) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['vendorAskPrice'],
+        message: 'Accepting at a new price needs the amount you want for this machine.',
+      });
+    }
+    if (v.response !== 'ACCEPT_AND_REPRICE' && v.vendorAskPrice) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['vendorAskPrice'],
+        message:
+          'Only “accept at a new price” changes what you are paid. Pick that answer, or clear the amount.',
+      });
+    }
+  });
+export type VendorCorrectionResponseDto = z.infer<typeof vendorCorrectionResponseSchema>;
 
 /**
  * A photograph the technician app is about to PUT.

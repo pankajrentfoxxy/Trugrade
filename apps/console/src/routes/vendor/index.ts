@@ -4,6 +4,7 @@ import { VendorDashboardRoute } from './Dashboard';
 import { VendorListingsRoute } from './Listings';
 import { ListingUnitsRoute, UnitDetailRoute } from './Units';
 import { BulkUploadRoute } from './BulkUpload';
+import { VendorCorrectionsRoute, VendorCorrectionDetailRoute } from './Corrections';
 import { RepriceRoute } from './Reprice';
 import { SkuRequestRoute } from './SkuRequest';
 import { ListingWizardRoute } from './wizard/Wizard';
@@ -72,6 +73,20 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/listings/:id/units/:unitId',
     permission: 'listing.own.read',
     element: guarded('listing.own.read', UnitDetailRoute),
+  },
+  {
+    path: '/vendor/corrections',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorCorrectionsRoute),
+  },
+  {
+    // Reading a correction is reading your own stock; ANSWERING one needs
+    // `listing.grade_correction.respond`, which VENDOR_FINANCE and VENDOR_VIEWER
+    // do not hold. The guard here is the read, and the API refuses the write —
+    // a viewer sees the record and the panel tells them it is not theirs to send.
+    path: '/vendor/corrections/:id',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorCorrectionDetailRoute),
   },
   {
     path: '/vendor/sku-request',
