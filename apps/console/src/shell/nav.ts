@@ -97,6 +97,18 @@ export const NAV: readonly NavEntry[] = [
     group: 'Vendor',
     orgType: 'VENDOR',
   },
+  // T32. `procurement.po.read_own` and not `listing.own.read`: the two are held
+  // by the same five roles today, but the link has to be gated on the permission
+  // the API actually checks, or the day the grants diverge the rail offers a
+  // screen that 403s. The detail and the pick list are reached from this board
+  // and stay out of the rail, as the other vendor sub-screens do.
+  {
+    to: '/vendor/orders',
+    label: 'Purchase orders',
+    permission: 'procurement.po.read_own',
+    group: 'Vendor',
+    orgType: 'VENDOR',
+  },
 ];
 
 export const canSee = (n: NavEntry, p: Principal): boolean =>

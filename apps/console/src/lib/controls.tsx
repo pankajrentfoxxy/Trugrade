@@ -207,11 +207,22 @@ export function Board({
   toolbar,
   children,
   className,
+  tableMinWidth = 940,
 }: {
   /** The count and the filter chips. Rendered in the card's own header bar. */
   toolbar?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /**
+   * The floor below which the table scrolls instead of wrapping.
+   *
+   * 940 is the reference's, and it is right for a board that owns the full page
+   * width. It is wrong inside an archetype-C record, where the evidence column
+   * is roughly 700px next to a 380px side panel: the last two columns fall off
+   * the right and the vendor's payout is invisible until somebody thinks to
+   * scroll sideways. T32's purchase order was the first screen to hit that.
+   */
+  tableMinWidth?: number;
 }): React.JSX.Element {
   return (
     <div className={cn('overflow-hidden rounded-lg border border-rule bg-sheet', className)}>
@@ -220,7 +231,12 @@ export function Board({
           {toolbar}
         </div>
       )}
-      <div className="[&_table]:min-w-[940px]">{children}</div>
+      {/* An inline `min-width` rather than a Tailwind class: the value is a prop,
+          and a class built by interpolation is a class Tailwind never sees and
+          therefore never generates. */}
+      <div style={{ ['--tg-table-min' as string]: `${tableMinWidth}px` }}>
+        <div className="[&_table]:min-w-[var(--tg-table-min)]">{children}</div>
+      </div>
     </div>
   );
 }

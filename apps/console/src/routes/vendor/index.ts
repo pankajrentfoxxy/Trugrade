@@ -5,6 +5,9 @@ import { VendorListingsRoute } from './Listings';
 import { ListingUnitsRoute, UnitDetailRoute } from './Units';
 import { BulkUploadRoute } from './BulkUpload';
 import { VendorCorrectionsRoute, VendorCorrectionDetailRoute } from './Corrections';
+import { VendorPickListRoute } from './PickList';
+import { VendorPurchaseOrderRoute } from './PurchaseOrder';
+import { VendorPurchaseOrdersRoute } from './PurchaseOrders';
 import { RepriceRoute } from './Reprice';
 import { SkuRequestRoute } from './SkuRequest';
 import { ListingWizardRoute } from './wizard/Wizard';
@@ -28,7 +31,18 @@ import { ListingWizardRoute } from './wizard/Wizard';
  */
 export interface VendorRoute {
   path: string;
-  permission: 'listing.own.read' | 'listing.own.write';
+  /**
+   * `procurement.po.read_own` joins the two listing permissions with T32.
+   *
+   * It is the permission the API already gates the purchase-order routes on and
+   * every vendor role holds it, including VENDOR_VIEWER. Note what is NOT here:
+   * `procurement.po.acknowledge`. Reading a purchase order and promising the
+   * machines on it are different rights — VENDOR_FINANCE holds the first and not
+   * the second — so the route is guarded by the read and the Accept button is
+   * disabled with its reason on the record screen, the same shape T31 used for
+   * answering a grade correction.
+   */
+  permission: 'listing.own.read' | 'listing.own.write' | 'procurement.po.read_own';
   element: React.ReactNode;
 }
 
@@ -87,6 +101,21 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/corrections/:id',
     permission: 'listing.own.read',
     element: guarded('listing.own.read', VendorCorrectionDetailRoute),
+  },
+  {
+    path: '/vendor/orders',
+    permission: 'procurement.po.read_own',
+    element: guarded('procurement.po.read_own', VendorPurchaseOrdersRoute),
+  },
+  {
+    path: '/vendor/orders/:poId',
+    permission: 'procurement.po.read_own',
+    element: guarded('procurement.po.read_own', VendorPurchaseOrderRoute),
+  },
+  {
+    path: '/vendor/orders/:poId/pick-list',
+    permission: 'procurement.po.read_own',
+    element: guarded('procurement.po.read_own', VendorPickListRoute),
   },
   {
     path: '/vendor/sku-request',

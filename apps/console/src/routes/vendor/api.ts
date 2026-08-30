@@ -73,6 +73,22 @@ export const API = {
   corrections: '/api/vendor/grade-corrections',
   correction: (id: string) => `/api/vendor/grade-corrections/${id}`,
   respondToCorrection: (id: string) => `/api/vendor/grade-corrections/${id}/respond`,
+
+  /**
+   * The purchase orders WE raised to THEM (T32). Built by `procurement`, whose
+   * tables `ordering` has been filling since Phase 6 — the module owned four
+   * populated tables and no code until these routes.
+   *
+   * Note what is not here: nothing addressed by buyer, order number or delivery
+   * contact. The anonymity rule runs both ways and a PO is where the pressure on
+   * it is highest, so the server's allow-list is mirrored by there being no type
+   * in this file that could hold a buyer.
+   */
+  purchaseOrders: '/api/vendor/purchase-orders',
+  purchaseOrderStatusCounts: '/api/vendor/purchase-orders/status-counts',
+  purchaseOrder: (poId: string) => `/api/vendor/purchase-orders/${poId}`,
+  pickList: (poId: string) => `/api/vendor/purchase-orders/${poId}/pick-list`,
+  acknowledgePo: (poId: string) => `/api/vendor/purchase-orders/${poId}/acknowledge`,
 } as const;
 
 /** The four answers, exactly as `listing.grade_correction.vendor_response` allows. */
@@ -307,6 +323,129 @@ export interface AddUnitsOutcome {
     errors: Array<{ line: number; serial: string; message: string }>;
     warnings: Array<{ line: number; serial: string; message: string }>;
   };
+}
+
+/* --------------------------------------------------------------------------
+ * T32 — purchase orders
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The ten states of a purchase order, in the order they happen.
+ *
+ * Ordered rather than alphabetical because the filter is a lifecycle and reading
+ * it as one is the whole value of a list this long.
+ */
+export const PO_STATUSES = [
+  'RAISED',
+  'ACKNOWLEDGED',
+  'DISPATCH_READY',
+  'DISPATCHED',
+  'RECEIVED',
+  'INVOICED',
+  'MATCHED',
+  'PAYABLE',
+  'PAID',
+  'CANCELLED',
+  'DISPUTED',
+] as const;
+
+/** Where the machines go. City only — the street is on the pick list and nowhere else. */
+export interface DeliveryCity {
+  city: string;
+  state: string;
+}
+
+/**
+ * One purchase order, exactly as `procurement`'s allow-list sends it.
+ *
+ * **There is no buyer on this type and no retail price**, and that is structural
+ * rather than careful: the server never puts either on the wire, so there is no
+ * field here one could arrive in. The buyer's own order number is absent too —
+ * order numbers are sequential, so two of them a fortnight apart would let a
+ * vendor read the platform's order volume off the difference.
+ *
+ * `acknowledgeBy` is **always null today**, and the screen says so rather than
+ * inventing a window: no acceptance deadline exists in `platform_config` and no
+ * penalty rule stands behind one. `expectedDispatchAt` is null for the same
+ * kind of reason — nothing sets it. Neither renders as a date.
+ */
+export interface PurchaseOrder {
+  poId: string;
+  poNumber: string;
+  status: string;
+  raisedAt: IsoDate;
+  units: number;
+  /** `purchase_order.total_net` — what we agreed to pay for these machines. */
+  totalNet: MoneyString;
+  /**
+   * TDS as it was computed and stored when the PO was raised, u/s 393(1)
+   * Sl. 8(ii). Read, never recomputed — `computeTds` ran once against that day's
+   * cumulative purchases, and a second implementation is a second answer.
+   */
+  tdsRatePct: number;
+  tdsAmount: MoneyString;
+  valuationMethod: string;
+  termsDays: number;
+  acknowledgedAt: IsoDate | null;
+  expectedDispatchAt: IsoDate | null;
+  acknowledgeBy: IsoDate | null;
+  cancelledAt: IsoDate | null;
+  rejectedAt: IsoDate | null;
+  rejectionReason: string | null;
+  deliverTo: DeliveryCity | null;
+}
+
+/** One machine on the PO. The serial and the seal are what a warehouse reads. */
+export interface PurchaseOrderLine {
+  /** Their own `listing.unit` id — the row key when a serial is missing. */
+  unitId: string;
+  /** Null when the unit has been removed since. Never an invented serial. */
+  serialNumber: string | null;
+  title: string | null;
+  skuCode: string | null;
+  specSummary: string | null;
+  gradeAtPo: string;
+  agreedNetPayout: MoneyString;
+  /** Null means no seal is recorded — a real problem at handover, said as one. */
+  seal: { code: string; status: string } | null;
+}
+
+export interface PurchaseOrderDetail extends PurchaseOrder {
+  lines: PurchaseOrderLine[];
+}
+
+export interface PickListAddress {
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  landmark: string | null;
+}
+
+/**
+ * The printable list for the box.
+ *
+ * **No money, at any depth, deliberately.** Bill-To-Ship-To under s.10(1)(b)
+ * IGST means neither the vendor's invoice value nor ours travels with the goods,
+ * so a price on a packing list is a compliance defect. `PurchaseOrderLine` has
+ * `agreedNetPayout` and this type does not — two types rather than one with a
+ * flag, so the omission cannot be undone by passing `true`.
+ */
+export interface PickList {
+  poNumber: string;
+  raisedAt: IsoDate;
+  units: number;
+  shipTo: PickListAddress | null;
+  lines: Array<{
+    unitId: string;
+    serialNumber: string | null;
+    sealCode: string | null;
+    sealStatus: string | null;
+    title: string | null;
+    skuCode: string | null;
+    gradeAtPo: string;
+  }>;
 }
 
 export interface PayoutDeduction {
