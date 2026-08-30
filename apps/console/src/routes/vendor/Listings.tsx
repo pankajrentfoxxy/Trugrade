@@ -6,12 +6,11 @@ import {
   DataBoard,
   EmptyState,
   GradeBadge,
-  Input,
   StatusPill,
   type Column,
 } from '@trugrade/ui';
 import { GRADES, type Grade } from '@trugrade/contracts';
-import { Board, NotMeasured, PageHeader, Section, Select } from '../../lib/controls';
+import { Board, NotMeasured, PageHeader, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, gradeLabel, onDate, postJson, rupees, type Page, type VendorListing } from './api';
 
@@ -33,17 +32,34 @@ import { API, gradeLabel, onDate, postJson, rupees, type Page, type VendorListin
  * dashboard cannot use.
  */
 
-const STATUS_TONE: Record<string, 'neutral' | 'info' | 'pass' | 'warn' | 'fail' | 'processing'> = {
+/**
+ * **A listing status is not a verdict.**
+ *
+ * 09_FRONTEND_LOCKED §2 rule 2 reserves green and red for PASS and FAIL, and
+ * this map used to paint ACTIVE green and REJECTED/SUSPENDED red — so a board of
+ * listings read as a board of test results, and the green that means "this
+ * machine passed inspection" meant "this listing is on sale" three columns away.
+ * A colour that means a verdict in one place and a lifecycle state in another
+ * has stopped meaning either.
+ *
+ * What is left is three honest channels. `info` is the amber wash, and it is
+ * rule 1's third legitimate use — **an active state**, which is exactly what
+ * ACTIVE is. `processing` is in-flight. `warn` is outlined, never filled, and is
+ * reserved for the three states that need the vendor to do something. Everything
+ * else is neutral and carries its meaning in its own label, which is what
+ * 09 §9 requires anyway: semantic colour is never the only signal.
+ */
+const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = {
   DRAFT: 'neutral',
   AWAITING_QC: 'processing',
   QC_IN_PROGRESS: 'processing',
-  PENDING_APPROVAL: 'info',
-  ACTIVE: 'pass',
-  PARTIALLY_ACTIVE: 'warn',
+  PENDING_APPROVAL: 'processing',
+  ACTIVE: 'info',
+  PARTIALLY_ACTIVE: 'info',
   PAUSED: 'neutral',
   OUT_OF_STOCK: 'neutral',
-  REJECTED: 'fail',
-  SUSPENDED: 'fail',
+  REJECTED: 'warn',
+  SUSPENDED: 'warn',
   EXPIRED: 'warn',
   DELISTED: 'neutral',
 };
@@ -52,89 +68,6 @@ const STATUSES = Object.keys(STATUS_TONE);
 
 /** Pause and resume are the only bulk actions: everything else needs a reason per listing. */
 const PAUSABLE = new Set(['ACTIVE', 'PARTIALLY_ACTIVE']);
-
-/**
- * The reprice form, below the board rather than as a `<tr colSpan={8}>`.
- *
- * `DataBoard` is the one table component and deliberately has no expansion slot:
- * a row that opens a two-field form spanning every column is a table pretending
- * to be a page. Nothing about what it posts, or when, has changed.
- */
-function RepricePanel({
-  listing,
-  onDone,
-}: {
-  listing: VendorListing;
-  onDone: () => void;
-}): React.JSX.Element {
-  const [amount, setAmount] = React.useState('');
-  const [reason, setReason] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const valid = /^\d+(\.\d{1,2})?$/.test(amount.trim()) && Number(amount) > 0;
-
-  return (
-    <Section title="Reprice" subtitle="What you receive per machine, and why it is changing.">
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="w-52">
-          <Input
-            label="New net payout per machine"
-            mono
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-        <div className="w-72">
-          <Input
-            label="Why"
-            hint="Goes on the price history, with your name."
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
-        <Button
-          variant="primary"
-          loading={busy}
-          disabledReason={
-            !valid
-              ? 'Enter the amount you want to receive per machine.'
-              : reason.trim().length < 3
-                ? 'Say why, in a few words at least — this goes on the record.'
-                : ''
-          }
-          onClick={() => {
-            setBusy(true);
-            setError(null);
-            void postJson(API.reprice(listing.id), {
-              vendorNetPayout: amount.trim(),
-              reason: reason.trim(),
-            })
-              .then(onDone)
-              .catch((e: Error) => setError(e.message))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Reprice
-        </Button>
-        <Button variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-      </div>
-      {/* The one thing a vendor is always surprised by. Said before the click. */}
-      <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-        Machines already reserved against an order keep the price they were reserved at. A price far
-        below the trailing 30-day median is flagged for a look, not blocked.
-      </p>
-      {error && (
-        <p className="mt-3 text-body-sm text-fail" role="alert">
-          {error}
-        </p>
-      )}
-    </Section>
-  );
-}
 
 export function VendorListingsRoute(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
@@ -146,7 +79,6 @@ export function VendorListingsRoute(): React.JSX.Element {
   const corrected = params.get('corrected') === '1';
 
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set());
-  const [repricing, setRepricing] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [actionError, setActionError] = React.useState<string | null>(null);
 
@@ -281,16 +213,25 @@ export function VendorListingsRoute(): React.JSX.Element {
         headerHidden: true,
         cell: (l) => (
           <span className="flex justify-end gap-3">
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-expanded={repricing === l.id}
-              onClick={() => setRepricing(repricing === l.id ? null : l.id)}
+            {/* Not amber. Fifty rows x two row actions is a hundred amber links,
+                and the ACTIVE chip two columns left is amber because it IS the
+                active state — the one meaning rule 1 gives it here. A colour
+                spent on every link is a colour that marks nothing. Amber on
+                hover keeps the affordance without the wall.
+
+                A route, not an expanding panel: the old panel's open/closed
+                state lived in React and not in the URL, so a vendor could not
+                send a colleague the thing they were looking at — and a repricing
+                screen has to name the machines that will NOT move, which is more
+                than a row's worth of space. */}
+            <Link
+              className="text-ink underline underline-offset-4 hover:text-acc-ink"
+              to={`/vendor/listings/${l.id}/reprice`}
             >
               Reprice
-            </Button>
+            </Link>
             <Link
-              className="text-acc-ink underline underline-offset-4"
+              className="text-ink underline underline-offset-4 hover:text-acc-ink"
               to={`/vendor/listings/${l.id}`}
             >
               Units
@@ -299,7 +240,7 @@ export function VendorListingsRoute(): React.JSX.Element {
         ),
       },
     ],
-    [selected, toggle, repricing],
+    [selected, toggle],
   );
 
   if (error) {
@@ -315,7 +256,6 @@ export function VendorListingsRoute(): React.JSX.Element {
   const selectedRows = rows.filter((r) => selected.has(r.id));
   const canPause = selectedRows.some((r) => PAUSABLE.has(r.status));
   const canResume = selectedRows.some((r) => r.status === 'PAUSED');
-  const open = rows.find((r) => r.id === repricing);
 
   return (
     <div className="tg-stack">
@@ -355,7 +295,7 @@ export function VendorListingsRoute(): React.JSX.Element {
           onChange={(e) => setFilter('corrected', e.target.value)}
           options={[
             { value: '', label: 'Any outcome' },
-            { value: '1', label: 'grade corrected' },
+            { value: '1', label: 'correction awaiting you' },
           ]}
         />
 
@@ -390,7 +330,10 @@ export function VendorListingsRoute(): React.JSX.Element {
 
       <Board>
         <DataBoard
-        caption={data ? `${rows.length} listings.` : 'Loading your listings.'}
+        // `data.total` and not `rows.length`: the second is how many fit on this
+        // page, and a board that says "50 listings" under a filter matching 300
+        // is telling the vendor their stock is smaller than it is.
+        caption={data ? `${data.total} listings match.` : 'Loading your listings.'}
         columns={columns}
         rows={rows}
         rowKey={(l) => l.id}
@@ -422,16 +365,6 @@ export function VendorListingsRoute(): React.JSX.Element {
         }
         />
       </Board>
-
-      {open && (
-        <RepricePanel
-          listing={open}
-          onDone={() => {
-            setRepricing(null);
-            setReloadKey((k) => k + 1);
-          }}
-        />
-      )}
     </div>
   );
 }

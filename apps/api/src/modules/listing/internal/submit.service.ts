@@ -147,8 +147,19 @@ export class LocalQcVisitPort extends QcVisitPort {
   }
 }
 
-/** The three `platform_config` keys this flow is tuned by. */
-const CONFIG_KEYS = ['qc.min_units_per_visit', 'qc.visit_fee_inr', 'qc.visit_fee_waiver_units'];
+/**
+ * The three `platform_config` keys this flow is tuned by.
+ *
+ * `qc.visit_fee_waived_above` used to be read here as `qc.visit_fee_waiver_units`
+ * — **one number under two names**, and no database had both. The baseline
+ * migration writes `waived_above` (which `PricingService` reads); the seed wrote
+ * `waiver_units` (which only this file read). So a database built from the seed
+ * alone could not price a listing, and one built from migrations alone could not
+ * request an inspection. Both names meant "the batch size above which we stop
+ * charging the visit fee", and a value that has two keys eventually has two
+ * values.
+ */
+const CONFIG_KEYS = ['qc.min_units_per_visit', 'qc.visit_fee_inr', 'qc.visit_fee_waived_above'];
 
 interface VisitEconomics {
   minUnitsPerVisit: number;
@@ -394,7 +405,7 @@ export class SubmitService {
       // refuses anything with a third decimal place, so a fat-fingered fee is a
       // loud failure rather than a silently truncated one.
       visitFee: money(String(byKey.get('qc.visit_fee_inr'))),
-      waiverUnits: count('qc.visit_fee_waiver_units'),
+      waiverUnits: count('qc.visit_fee_waived_above'),
     };
   }
 }

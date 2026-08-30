@@ -87,7 +87,8 @@ function ProviderCard({
       title={`${provider.name} (${provider.code})`}
       aside={
         provider.isActive ? (
-          <StatusPill tone="pass" label="Active" />
+          // An active state, which is amber's third meaning — not a PASS.
+          <StatusPill tone="info" label="Active" />
         ) : (
           <StatusPill tone="neutral" label="Inactive" />
         )

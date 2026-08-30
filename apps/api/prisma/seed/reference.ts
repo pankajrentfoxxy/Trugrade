@@ -98,7 +98,13 @@ export const CONFIG: Array<[string, unknown, string]> = [
   ['qc.expiry_warning_days', QC_EXPIRY_WARNING_DAYS, 'Warn the vendor this far ahead of expiry'],
   ['qc.min_units_per_visit', 25, 'Q4 — below this a visit fee applies'],
   ['qc.visit_fee_inr', 1500, 'Q4 — the visit fee'],
-  ['qc.visit_fee_waiver_units', 50, 'Q4 — waived above this many units'],
+  // The name the baseline migration and `PricingService` both use. It was
+  // `qc.visit_fee_waiver_units` here and `qc.visit_fee_waived_above` there, so a
+  // database built from this file alone threw on every price computation.
+  ['qc.visit_fee_waived_above', 50, 'Q4 — waived above this many units'],
+  // Read by `PricingService.priceBand`. Seeded by the baseline migration and not
+  // by this file, with the same consequence.
+  ['price.guardrail_lower_multiple', 0.3, 'Below this multiple of the 30-day median, flag for review'],
   ['qc.fee_bearer', 'TRUETECH', 'Q4 — TRUETECH | VENDOR | SPLIT | WAIVED'],
   [
     'qc.geo_variance_alert_metres',

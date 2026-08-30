@@ -137,7 +137,8 @@ function divergenceColumns(alertPct: number): ReadonlyArray<Column<TechnicianDiv
       header: 'Status',
       cell: (row) =>
         row.isActive ? (
-          <StatusPill tone="pass" label="Active" />
+          // A rule being switched on is an active state, not a PASS.
+          <StatusPill tone="info" label="Active" />
         ) : (
           <StatusPill tone="neutral" label="Inactive" />
         ),

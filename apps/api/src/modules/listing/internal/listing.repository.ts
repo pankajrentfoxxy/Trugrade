@@ -163,6 +163,16 @@ export interface UnitRow {
   isSellable: boolean;
   location: string;
   vendorAskPrice: Money | null;
+  /**
+   * `purchase_price IS NOT NULL` — what we agreed to pay for THIS machine is
+   * settled and `trg_lock_purchase_price` will not let it move.
+   *
+   * The boolean and not the amount. The amount is the vendor's own ask frozen at
+   * PO time and they can read it on the purchase order; what a repricing screen
+   * needs is only whether this serial can still change, and answering that with
+   * a number invites the screen to do arithmetic the server already did.
+   */
+  payoutLocked: boolean;
   qcPassedAt: Date | null;
   qcValidUntil: Date | null;
   createdAt: Date;
@@ -212,13 +222,23 @@ export interface ListingFilter {
   skuId?: string;
   grade?: Grade;
   /**
-   * Only listings an inspection has raised a grade correction against.
+   * Only listings with a grade correction **still waiting for the vendor**.
    *
    * **The predicate is the correction, not `grade_corrected_from`.** That column
    * is written when a correction is *applied* — by the vendor accepting it or by
    * the auto-apply job — so filtering on it returned nothing at all for the
    * corrections that are still open, which are precisely the ones the vendor's
    * dashboard sends them here to answer.
+   *
+   * **And it is the OPEN ones, which is the second half of the same bug.** The
+   * dashboard's queue counts `vendor_responded_at IS NULL AND auto_applied_at IS
+   * NULL`; this filter counted every correction ever raised. They agree today
+   * only because the auto-apply job has never run and no vendor can answer one
+   * yet (`GradeCorrectionService.respond()` is exposed by no controller — T31).
+   * The moment either changes, a queue saying "3 need you" would land on a board
+   * showing nine listings, and the two predicates must be one predicate for that
+   * not to happen. If this ever needs to mean "ever corrected", that is a second
+   * value, not a second meaning for this one.
    */
   corrected?: boolean;
 }
@@ -342,6 +362,7 @@ interface RawUnit {
   is_sellable: boolean;
   location: string;
   vendor_ask_price: unknown;
+  payout_locked: boolean;
   qc_passed_at: Date | null;
   qc_valid_until: Date | null;
   created_at: Date;
@@ -360,6 +381,7 @@ function toUnit(r: RawUnit): UnitRow {
     isSellable: r.is_sellable,
     location: r.location,
     vendorAskPrice: moneyFromDb(r.vendor_ask_price as string | null),
+    payoutLocked: r.payout_locked,
     qcPassedAt: r.qc_passed_at,
     qcValidUntil: r.qc_valid_until,
     createdAt: r.created_at,
@@ -662,7 +684,10 @@ export class ListingRepository {
          AND (${skuId}::uuid  IS NULL OR l.sku_id = ${skuId}::uuid)
          AND (${grade}::text  IS NULL OR l.grade::text = ${grade})
          AND (NOT ${corrected} OR EXISTS (
-               SELECT 1 FROM listing.grade_correction gc WHERE gc.listing_id = l.id))
+               SELECT 1 FROM listing.grade_correction gc
+                WHERE gc.listing_id = l.id
+                  AND gc.vendor_responded_at IS NULL
+                  AND gc.auto_applied_at IS NULL))
        ORDER BY l.updated_at DESC
        LIMIT ${page.pageSize} OFFSET ${offset}`;
 
@@ -674,7 +699,10 @@ export class ListingRepository {
          AND (${skuId}::uuid  IS NULL OR l.sku_id = ${skuId}::uuid)
          AND (${grade}::text  IS NULL OR l.grade::text = ${grade})
          AND (NOT ${corrected} OR EXISTS (
-               SELECT 1 FROM listing.grade_correction gc WHERE gc.listing_id = l.id))`;
+               SELECT 1 FROM listing.grade_correction gc
+                WHERE gc.listing_id = l.id
+                  AND gc.vendor_responded_at IS NULL
+                  AND gc.auto_applied_at IS NULL))`;
 
     return {
       rows: rows.map(toListing),
@@ -776,7 +804,11 @@ export class ListingRepository {
     const rows = await this.prisma.$queryRaw<RawUnit[]>`
       SELECT u.id, u.serial_number, u.listing_id, u.vendor_org_id, u.sku_id,
              u.grade_declared, u.grade_actual, u.status, u.is_sellable, u.location,
-             u.vendor_ask_price, u.qc_passed_at, u.qc_valid_until, u.created_at
+             u.vendor_ask_price, u.qc_passed_at, u.qc_valid_until, u.created_at,
+             -- The same predicate the reprice handler updates on, read back so the
+             -- screen can name the machines it will not move BEFORE the vendor
+             -- commits, rather than after a trigger refuses one.
+             (u.purchase_price IS NOT NULL) AS payout_locked
         FROM listing.unit u
        WHERE u.listing_id = ${listingId}::uuid
          AND (${isPlatform} OR u.vendor_org_id = ${orgId}::uuid)

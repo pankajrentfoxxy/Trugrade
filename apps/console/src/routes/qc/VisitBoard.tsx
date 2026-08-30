@@ -48,11 +48,15 @@ const STATUS_TONE: Readonly<Record<VisitStatus, StatusPillProps['tone']>> = Obje
   TECH_ASSIGNED: 'neutral',
   EN_ROUTE: 'processing',
   IN_PROGRESS: 'processing',
-  COMPLETED: 'pass',
+  // Not green and not red. A visit that happened is not a PASS and a vendor who
+  // was out is not a FAIL — the verdicts on this board belong to the machines,
+  // and `VisitDetail` spends them there. A no-show carries a consequence, so it
+  // is `warn`, which is outlined and reads as "somebody has to do something".
+  COMPLETED: 'neutral',
   PARTIALLY_COMPLETED: 'warn',
   CANCELLED: 'neutral',
-  NO_SHOW_VENDOR: 'fail',
-  NO_SHOW_TECH: 'fail',
+  NO_SHOW_VENDOR: 'warn',
+  NO_SHOW_TECH: 'warn',
   RESCHEDULED: 'warn',
 });
 

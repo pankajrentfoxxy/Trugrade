@@ -53,7 +53,9 @@ function Deadline({ row }: { row: GradeCorrectionRow }): React.JSX.Element {
     );
   }
   if (row.hoursUntilAutoApply <= 0) {
-    return <StatusPill tone="fail" label="Window closed — auto-applies on the next run" />;
+    // An elapsed deadline, not a FAIL. Nothing about the machine failed; the
+    // vendor ran out of time to answer, and red here reads as a QC verdict.
+    return <StatusPill tone="warn" label="Window closed — auto-applies on the next run" />;
   }
   return (
     <StatusPill

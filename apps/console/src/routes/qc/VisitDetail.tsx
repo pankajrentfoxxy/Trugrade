@@ -44,7 +44,11 @@ const OUTCOME_TONE: Readonly<Record<UnitOutcome, StatusPillProps['tone']>> = Obj
   PASS_GRADE_CORRECTED: 'warn',
   PASS_WITH_NOTE: 'warn',
   FAIL: 'fail',
-  UNTESTABLE: 'fail',
+  // Not red. UNTESTABLE is "we could not measure it", which is a different claim
+  // from "it failed" and the one the vendor's appeal turns on. A missing
+  // measurement must not render as a passing one, and it must not render as a
+  // failing one either.
+  UNTESTABLE: 'warn',
   ABSENT: 'neutral',
 });
 

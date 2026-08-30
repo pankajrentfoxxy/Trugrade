@@ -207,7 +207,8 @@ export function VendorReviewRoute(): React.JSX.Element {
               {data.canDropship === null ? (
                 <NotCaptured />
               ) : data.canDropship ? (
-                <StatusPill tone="pass" label="Can dropship" />
+                // A capability the vendor declared, not a verdict we reached.
+                <StatusPill tone="info" label="Can dropship" />
               ) : (
                 <>
                   <StatusPill tone="warn" label="Hub leg required" />

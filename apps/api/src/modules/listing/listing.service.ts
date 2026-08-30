@@ -131,6 +131,11 @@ export interface VendorUnitView {
   isSellable: boolean;
   location: string;
   vendorAskPrice: Money | null;
+  /**
+   * This machine's payout is settled and cannot be repriced. `purchase_price` is
+   * frozen by `trg_lock_purchase_price` once a purchase order names the serial.
+   */
+  payoutLocked: boolean;
   qcPassedAt: Date | null;
   qcValidUntil: Date | null;
   createdAt: Date;
@@ -789,6 +794,7 @@ function toUnitView(u: UnitRow): VendorUnitView {
     isSellable: u.isSellable,
     location: u.location,
     vendorAskPrice: u.vendorAskPrice,
+    payoutLocked: u.payoutLocked,
     qcPassedAt: u.qcPassedAt,
     qcValidUntil: u.qcValidUntil,
     createdAt: u.createdAt,

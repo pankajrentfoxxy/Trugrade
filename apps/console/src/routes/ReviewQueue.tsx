@@ -32,7 +32,10 @@ function SlaCell({ item }: { item: ReviewQueueItem }): React.JSX.Element {
     return <span className="text-body-sm text-ink-4">Not submitted</span>;
   }
   if (item.slaBreached) {
-    return <StatusPill tone="fail" label={`${Math.abs(item.hoursRemaining)}h overdue`} />;
+    // A breached SLA is ours, not a verdict on the applicant. `warn` is outlined
+    // and already the tone this cell uses at 8 hours left; red made an overdue
+    // review look like a rejection.
+    return <StatusPill tone="warn" label={`${Math.abs(item.hoursRemaining)}h overdue`} />;
   }
   const tone = item.hoursRemaining <= 8 ? 'warn' : 'neutral';
   return <StatusPill tone={tone} label={`${item.hoursRemaining}h left`} />;

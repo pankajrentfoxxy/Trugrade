@@ -176,7 +176,11 @@ function unitColumns(listingId: string | undefined): ReadonlyArray<Column<Vendor
       header: 'Status',
       cell: (u) => (
         <StatusPill
-          tone={HALTED[u.status] ? 'warn' : u.isSellable ? 'pass' : 'processing'}
+          // Not green. `is_sellable` is a lifecycle state — LISTED, sealed, QC
+          // in date — and the grade badge one column left is what carries the
+          // inspection's verdict. Two greens meaning two different things on one
+          // row is how the QC one stops being read.
+          tone={HALTED[u.status] ? 'warn' : u.isSellable ? 'info' : 'processing'}
           label={u.status.replaceAll('_', ' ')}
           className="whitespace-nowrap"
         />
@@ -303,7 +307,7 @@ export function UnitDetailRoute(): React.JSX.Element {
         subtitle={`Declared Grade ${gradeLabel(unit.gradeDeclared)} on ${onDate(unit.createdAt)}`}
         status={
           <StatusPill
-            tone={halted ? 'warn' : unit.isSellable ? 'pass' : 'processing'}
+            tone={halted ? 'warn' : unit.isSellable ? 'info' : 'processing'}
             label={unit.status.replaceAll('_', ' ')}
           />
         }

@@ -4,6 +4,7 @@ import { VendorDashboardRoute } from './Dashboard';
 import { VendorListingsRoute } from './Listings';
 import { ListingUnitsRoute, UnitDetailRoute } from './Units';
 import { BulkUploadRoute } from './BulkUpload';
+import { RepriceRoute } from './Reprice';
 import { SkuRequestRoute } from './SkuRequest';
 import { ListingWizardRoute } from './wizard/Wizard';
 
@@ -56,6 +57,11 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/listings/:id',
     permission: 'listing.own.read',
     element: guarded('listing.own.read', ListingUnitsRoute),
+  },
+  {
+    path: '/vendor/listings/:id/reprice',
+    permission: 'listing.own.write',
+    element: guarded('listing.own.write', RepriceRoute),
   },
   {
     path: '/vendor/listings/:id/bulk-upload',
