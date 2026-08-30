@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-30T08:20:00+00:00  
-Currently: T19 - customer dashboard (Wave 3 closed)
+Currently: Wave 4 - T19 customer dashboard
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -28,8 +28,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
 | T16 | Checkout | DONE | 93eb028 | 130 shots, 27 states x 2 themes x 3 widths | Archetype D. 16-step order transaction, 42 integration tests covering ORD-010/014/018/020 and PRC-030. Proven in data: PAYMENT_PENDING 3 units + 2 POs; AWAITING_APPROVAL 6 units + 0 POs. Six defects found by loading the screen, incl. an unresolved tax split drawn as settled with the wrong pair of heads. Also fixed: cart deletion stranding held stock (5ddf02b), and the header never reading the session (3963e99). |
 | T17 | Order confirmation and approval-required | DONE | 569ccfb | 54 shots, both themes, 1440/900/600 | Archetype C at /orders/[orderNumber]. Built the one missing route, GET /api/buyer/orders/:orderNumber, which never reads procurement.purchase_order — anonymity structural, not careful. A foreign order answers 404 not 403, because sequential order numbers make a 403 an order-volume oracle. A PENDING approval past its deadline is reported EXPIRED by the server. |
-| T18 | Bulk requirement upload | DONE |  | 78 shots, 13 states x 2 themes x 1440/900/600 | Closes Wave 3. Archetype D at /bulk. Real end to end: a seven-line CSV produced three `ordering.rfq` rows and one `platform.ticket` with the parsed rows attached, read back from the database. Magic-byte sniff refuses an xlsx/PNG named .csv by name with the fix. Every rejected row is reported with the column name from the buyer's own file, never the schema's. `loading.tsx` could not be photographed - reported below, not faked. |
-| T19 | Customer dashboard | TODO |  |  |  |
+| T18 | Bulk requirement upload | DONE | 856029c | 78 shots, 13 states x 2 themes x 3 widths | Archetype D. Closes Wave 3. Real lead created (TKT-202608-592E05E7) with 3 RFQ rows. XLSX refused by magic bytes rather than half-parsed. Found the CSV line-number shift and the A+ refusal, both fixed in 1361247. |
+| T19 | Customer dashboard | DOING |  |  |  |
 | T20 | Order list | TODO |  |  |  |
 | T21 | Order detail - serial level | TODO |  |  |  |
 | T22 | Documents - invoice, proforma, e-way bill | TODO |  |  |  |
@@ -1297,6 +1297,26 @@ buyer uses, so they read as scannable and are not.
   T14 worked around this by drawing its own real QR with `qrcode-generator`, which the
   API's PDF already depends on — so the library is present and the fix is to move T14's
   implementation into the package and delete the placeholder.
+
+## Backend readiness, measured 30 Aug — this decides how big each remaining task is
+
+| Module | internals | routes | Tasks that need it |
+|---|---|---|---|
+| ordering | 7 | 11 | T19 T20 T21 |
+| listing | 8 | 20 | T27 T28 T29 |
+| qc | 14 | 30 | T30 T31 |
+| catalog | 9 | 20 | T37 |
+| vendor | 2 | 3 | T26 (partial) |
+| logistics | 2 | **0** | T21 tracking |
+| **procurement** | **0** | **0** | T32 T33 T39 T40 |
+| **payment** | **0** | **0** | T22 T40 |
+| **platform** | **0** | **0** | T23 T24 T41 |
+| **customer** | **0** | **0** | T25 |
+
+Roughly 12 of the 30 remaining tasks are screens over a working API. The other 18 need a
+module built first — `payment` and `procurement` are the Phase 7 money layer, which exists
+as schema and contracts only. Those are not screen tasks wearing a screen task's size, and
+planning them as such is how a wave silently stalls.
 
 ## Reachability gaps found in Wave 3 — features whose states no route can produce
 
