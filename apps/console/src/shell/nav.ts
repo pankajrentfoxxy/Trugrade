@@ -5,7 +5,19 @@ import { qcRoutes } from '../routes/qc';
 export interface NavEntry {
   to: string;
   label: string;
-  permission: Permission;
+  /**
+   * The permission the API behind this link actually checks.
+   *
+   * Optional for exactly one entry, and the reason is worth stating: the ops
+   * overview has no single permission. Every section of it is gated separately
+   * by the server and assembled from whatever the caller holds, so there is no
+   * string that means "you may open this". Gating the link on any one of them —
+   * `identity.audit.read` being the tempting choice — would hide it from a
+   * QC_MANAGER and a FINANCE who each have a real slice on it. Absent means the
+   * link is gated on `orgType` alone, which is what that screen genuinely
+   * requires; anything else must name its permission.
+   */
+  permission?: Permission;
   /** The heading this link sits under. Links are ordered by group already. */
   group: string;
   /**
@@ -38,6 +50,12 @@ export interface NavEntry {
  * genuinely reached from these two and stay out of the rail.
  */
 export const NAV: readonly NavEntry[] = [
+  // T34. **First in the list, so it is where signing in lands platform staff** —
+  // `Landing` redirects to the first entry a principal can see, and the day's
+  // exceptions are the right first screen for anyone who works here. No
+  // `permission`: see `NavEntry.permission`. `orgType` keeps it off a vendor's
+  // rail, where it would 403 on every request behind it.
+  { to: '/overview', label: 'Today', group: 'Operations', orgType: 'PLATFORM' },
   // `kyc.application.read` is the permission the API actually gates
   // GET /api/kyc/review-queue on. The entry previously said 'kyc.review', which
   // is not in ROLE_PERMISSIONS — so no principal matched it and the KYC section
@@ -58,6 +76,17 @@ export const NAV: readonly NavEntry[] = [
     label: 'SKU requests',
     permission: 'catalog.sku_request.review',
     group: 'Catalog',
+  },
+  // T38. `listing.price.override` and not `listing.any.read`: the API guards the
+  // route on the former, and a link gated on something the server does not check
+  // is how a rail comes to offer a screen that 403s. It is also the narrower of
+  // the two — `listing.any.read` reaches OPS_MANAGER, QC_MANAGER, CATALOG_ADMIN
+  // and TECHNICIAN, and this screen carries what we keep on every machine.
+  {
+    to: '/pricing/rules',
+    label: 'Margin rules',
+    permission: 'listing.price.override',
+    group: 'Pricing',
   },
   ...qcRoutes.flatMap((r) =>
     r.label === undefined
@@ -134,7 +163,8 @@ export const NAV: readonly NavEntry[] = [
 ];
 
 export const canSee = (n: NavEntry, p: Principal): boolean =>
-  p.permissions.includes(n.permission) && (n.orgType === undefined || n.orgType === p.orgType);
+  (n.permission === undefined || p.permissions.includes(n.permission)) &&
+  (n.orgType === undefined || n.orgType === p.orgType);
 
 /**
  * The visible links, run-length grouped so the chrome reads as sections.

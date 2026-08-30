@@ -11,6 +11,15 @@ import {
 } from '@trugrade/ui';
 import { changeControlFor, type ChangeControl } from '@trugrade/contracts';
 import { Section, Textarea } from '../lib/controls';
+import {
+  DocumentsPanel,
+  VerificationPanel,
+  labelForCheck,
+  meaningOf,
+  type KycDocument,
+  type RejectionReason,
+  type VerificationCheck,
+} from './ReviewEvidence';
 
 /**
  * ARCHETYPE C — Record. Identity header + evidence panel + actions side panel.
@@ -46,9 +55,23 @@ async function postDecision(orgId: string, decision: Decision, notes?: string): 
 
 export interface VendorReviewData {
   orgId: string;
+  orgType: string;
   legalName: string;
   status: string;
   constitutionType: string | null;
+  /** All three computed on the server. A deadline a browser can move is not one. */
+  slaDueAt: string | null;
+  slaBreached: boolean;
+  slaHours: number | null;
+  /** Negative once we are past it. Computed on the server clock, never here. */
+  hoursRemaining: number | null;
+  decision: {
+    decision: string;
+    notes: string | null;
+    reasonCodes: string[];
+    decidedAt: string;
+  } | null;
+  checks: VerificationCheck[];
   /** The four Change 4 captures. */
   dispatchAddress: { line1: string; city: string; state: string; pincode: string } | null;
   dispatchSameAsRegistered: boolean;
@@ -100,11 +123,82 @@ function NotCaptured(): React.JSX.Element {
   return <StatusPill tone="warn" label="Not captured" />;
 }
 
+/**
+ * The documents, and the reason we may not be showing them.
+ *
+ * `kyc.document.read` is a permission of its own — OPS_MANAGER and SUPPORT hold
+ * `kyc.application.read` and not it — so a 403 here is a normal outcome for a
+ * legitimate reviewer, not an error. It is turned into a sentence rather than
+ * thrown, because a blank documents panel reads as "there are none", which is
+ * the same defect as a missing value rendering as a passing one.
+ */
+function useDocuments(orgId: string | undefined): {
+  documents: KycDocument[] | null;
+  reasons: RejectionReason[];
+  error: string | null;
+  /** Re-read after a decision, so the table and the database cannot disagree. */
+  refresh: () => void;
+} {
+  const [documents, setDocuments] = React.useState<KycDocument[] | null>(null);
+  const [reasons, setReasons] = React.useState<RejectionReason[]>([]);
+  const [error, setError] = React.useState<string | null>(null);
+  const [nonce, setNonce] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!orgId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [docsRes, reasonsRes] = await Promise.all([
+          fetch(`/api/kyc/orgs/${orgId}/documents`, { credentials: 'include' }),
+          fetch('/api/kyc/document-rejection-reasons', { credentials: 'include' }),
+        ]);
+        if (docsRes.status === 403) {
+          if (!cancelled) setError('Your account does not hold the document permission.');
+          return;
+        }
+        if (!docsRes.ok) throw new Error(`The documents did not load (${docsRes.status}).`);
+        const docs = (await docsRes.json()) as KycDocument[];
+        const list = reasonsRes.ok ? ((await reasonsRes.json()) as RejectionReason[]) : [];
+        if (!cancelled) {
+          setDocuments(docs);
+          setReasons(list);
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, nonce]);
+
+  return { documents, reasons, error, refresh: () => setNonce((n) => n + 1) };
+}
+
+async function postDocumentDecision(
+  orgId: string,
+  documentId: string,
+  body: { decision: 'VERIFIED' | 'REJECTED'; reasonCode?: string; specific?: string },
+): Promise<void> {
+  const res = await fetch(`/api/kyc/orgs/${orgId}/documents/${documentId}/review`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+  if (res.ok) return;
+  const payload = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  throw new Error(payload?.error?.message ?? `That decision did not go through (${res.status}).`);
+}
+
 export function VendorReviewRoute(): React.JSX.Element {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
   const [data, setData] = React.useState<VendorReviewData | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const docs = useDocuments(orgId);
   /** Which decision is waiting on its note. Both refusals need one. */
   const [pending, setPending] = React.useState<Exclude<Decision, 'APPROVED'> | null>(null);
   const [notes, setNotes] = React.useState('');
@@ -157,6 +251,20 @@ export function VendorReviewRoute(): React.JSX.Element {
     data.pricingMode === null && 'pricing mode',
   ].filter((x): x is string => typeof x === 'string');
 
+  /**
+   * Checks that need a human before this application can be approved.
+   *
+   * **Provider failures are deliberately absent.** `meaningOf(...).ours` is the
+   * one predicate that decides it: a GST portal outage is not an outstanding
+   * question about the applicant, and listing it here would put our downtime on
+   * the list of things they have to answer for.
+   */
+  const unresolved = data.checks.filter((c) => {
+    const meaning = meaningOf(c.outcome);
+    return !meaning.ours && c.outcome !== 'PASS';
+  });
+  const rejectedDocs = (docs.documents ?? []).filter((d) => d.status === 'REJECTED');
+
   return (
     <div className="tg-stack">
       <Breadcrumb
@@ -177,14 +285,52 @@ export function VendorReviewRoute(): React.JSX.Element {
             label={data.status.replace(/_/g, ' ')}
           />
         }
-        identifiers={[{ label: 'Organisation', value: data.orgId }]}
+        identifiers={[
+          { label: 'Organisation', value: data.orgId },
+          { label: 'Applicant', value: data.orgType },
+        ]}
       />
+
+      <SlaBand data={data} />
+
+      {data.decision && (
+        // The decision already made, in the reviewer's own words. A record that
+        // shows a REJECTED status and not the sentence behind it forces the next
+        // person to guess, and the applicant has already been sent that sentence.
+        <Section
+          title="The decision on this application"
+          subtitle={`Recorded ${new Date(data.decision.decidedAt).toLocaleString('en-IN')}.`}
+        >
+          <p className="max-w-prose text-body-sm text-ink">{data.decision.notes}</p>
+          {data.decision.reasonCodes.length > 0 && (
+            <p className="mt-2 font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+              {data.decision.reasonCodes.join(' · ')}
+            </p>
+          )}
+        </Section>
+      )}
 
       {/* Evidence on the left, the decision on the right. The actions are in one
           place and never beside the field they act on — a Reject button next to
           a dispatch address is how one gets pressed by accident. */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div>
+        <div className="tg-stack">
+          <VerificationPanel checks={data.checks} />
+
+          <DocumentsPanel
+            documents={docs.documents}
+            error={docs.error}
+            reasons={docs.reasons}
+            {...(orgId
+              ? {
+                  onReview: async (documentId, body) => {
+                    await postDocumentDecision(orgId, documentId, body);
+                    docs.refresh();
+                  },
+                }
+              : {})}
+          />
+
           <Section title="Commercial terms" subtitle="Every field says what happens if they edit it later.">
             <Field field="vendor_facility.dispatch_address_id" label="Dispatch address">
               {data.dispatchSameAsRegistered ? (
@@ -261,6 +407,41 @@ export function VendorReviewRoute(): React.JSX.Element {
               : 'Approving lets this vendor list stock. Nothing else on this screen changes anything.'
           }
         >
+          {/*
+            Stated, and deliberately NOT enforced.
+
+            §3C.1 says approval requires every automated check green or
+            "explicitly overridden with a written justification". There is no
+            override anywhere in this product — no table records one, no route
+            writes one — so a hard block would leave every application with a
+            single name mismatch permanently un-approvable with no way through.
+            Naming what is outstanding, above the button, is the honest half we
+            can actually deliver; the override is logged as not built.
+          */}
+          {(unresolved.length > 0 || rejectedDocs.length > 0) && (
+            <div className="rounded border border-warn/40 bg-sheet-2 p-4">
+              <p className="font-mono text-label uppercase tracking-[0.13em] text-warn">
+                Outstanding before approval
+              </p>
+              <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-body-sm text-ink-2">
+                {unresolved.map((c) => (
+                  <li key={c.id}>
+                    {labelForCheck(c.checkType)} — {meaningOf(c.outcome).label.toLowerCase()}
+                  </li>
+                ))}
+                {rejectedDocs.length > 0 && (
+                  <li>
+                    <span className="font-mono tnum">{rejectedDocs.length}</span> document
+                    {rejectedDocs.length === 1 ? '' : 's'} rejected and not replaced
+                  </li>
+                )}
+              </ul>
+              <p className="mt-2 text-body-sm text-ink-3">
+                Nothing here blocks the button — there is no override record in this product yet, so
+                the judgement is yours and the audit log carries your name.
+              </p>
+            </div>
+          )}
           {/*
             A reason-disabled button is `aria-disabled`, not `disabled` — it stays
             focusable so the reason can be read, which also means it still fires a
@@ -347,4 +528,56 @@ export function VendorReviewRoute(): React.JSX.Element {
 
 function gapReason(missing: string[]): string {
   return `Ask for the ${missing.join(', ')} before approving — every one of these is needed before their first listing can go live.`;
+}
+
+/**
+ * Our own promise, on the record screen as well as the board.
+ *
+ * `warn` and never `fail` when it is broken. The 48 hours is a promise **we**
+ * made; the applicant submitted and waited. A red band across a business's
+ * record because our queue is long is the same defect T28 found on the board,
+ * and it is worse here — this is the screen on which somebody is decided about.
+ */
+function SlaBand({ data }: { data: VendorReviewData }): React.JSX.Element {
+  const settled = data.status === 'VERIFIED' || data.status === 'REJECTED';
+  if (data.slaDueAt === null) {
+    return (
+      <p className="text-body-sm text-ink-4">
+        No review clock is running on this application.
+      </p>
+    );
+  }
+
+  const hours = Math.round(Math.abs(data.hoursRemaining ?? 0));
+  const promise =
+    data.slaHours === null ? null : (
+      <>
+        {' '}
+        Our promise for a {data.orgType.toLowerCase()} application is{' '}
+        <span className="font-mono tnum">{data.slaHours}</span> working hours.
+      </>
+    );
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded border border-rule bg-sheet-2 px-4 py-3">
+      {settled ? (
+        <span className="text-body-sm text-ink-2">
+          Decided. The review clock stopped when the decision was recorded.
+        </span>
+      ) : data.slaBreached ? (
+        <>
+          <StatusPill tone="warn" label="Past our promise" />
+          <span className="text-body-sm text-ink-2">
+            We are <span className="font-mono tnum text-ink">{hours} h</span> past the date we gave
+            them.{promise}
+          </span>
+        </>
+      ) : (
+        <span className="text-body-sm text-ink-2">
+          <span className="font-mono tnum text-ink">{hours} h</span> left before we break the
+          promise we made.{promise}
+        </span>
+      )}
+    </div>
+  );
 }

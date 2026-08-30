@@ -103,6 +103,35 @@ interface DocumentRow {
 }
 
 /** A document a reviewer has already ruled on is evidence, not a draft. */
+/**
+ * Why a reviewer may refuse a document. Closed list, and it is the API's, not a
+ * screen's.
+ *
+ * 03_UX_SPEC.md §3C.1: "Rejecting a document **requires** choosing a reason from
+ * a controlled list and adds a free-text specific: the buyer/vendor sees exactly
+ * that text." The list is served to the console from `GET
+ * /api/kyc/document-rejection-reasons` for the same reason the upload rules are
+ * — a second copy of these sentences on the client is the copy that drifts, and
+ * these particular sentences are read by the applicant.
+ *
+ * Each `sentence` is a whole sentence rather than a label, because it is
+ * prefixed to the reviewer's own specific and the two are read as one paragraph.
+ */
+export const DOCUMENT_REJECTION_REASONS = [
+  { code: 'ILLEGIBLE', sentence: 'We could not read this document.' },
+  { code: 'WRONG_DOCUMENT', sentence: 'This is not the document we asked for.' },
+  { code: 'INCOMPLETE', sentence: 'Part of this document is missing or cut off.' },
+  { code: 'EXPIRED', sentence: 'This document has expired.' },
+  { code: 'TOO_OLD', sentence: 'This document is older than we can accept.' },
+  {
+    code: 'NAME_MISMATCH',
+    sentence: 'The name on this document does not match the business name you registered.',
+  },
+  { code: 'ALTERED', sentence: 'This document appears to have been edited after it was issued.' },
+] as const;
+
+export type DocumentRejectionReason = (typeof DOCUMENT_REJECTION_REASONS)[number]['code'];
+
 const SETTLED_STATUSES = ['VERIFIED', 'UNDER_REVIEW'];
 
 @Injectable()
@@ -255,6 +284,83 @@ export class DocumentService {
       before: { sha256: existing.file_hash_sha256, filename: existing.original_filename },
       after: { sha256: stored.hash, filename },
       actorUserId: input.uploadedBy,
+      actorOrgId: input.orgId,
+    });
+
+    return toView(row, await this.labels());
+  }
+
+  /**
+   * A reviewer's verdict on one document.
+   *
+   * **The rejection sentence is built from a controlled reason plus the
+   * reviewer's own specific, and the applicant reads the whole of it verbatim.**
+   * That is the difference between "Address proof rejected" — which sends
+   * somebody back to a form with no idea what to change — and "This document is
+   * older than we can accept. Your electricity bill is dated Jan 2025; we need
+   * one from the last three months." The controlled half keeps the categories
+   * countable; the free half is the only part that tells the applicant what to
+   * do. Neither is optional, which is why both are required here rather than
+   * validated on the screen alone.
+   *
+   * Not org-scoped through `own()` with the caller's org: the caller is platform
+   * staff and has no org of their own. The org id comes from the path and is
+   * checked against the row, so a document id from another application cannot be
+   * settled by pointing this route at the wrong org.
+   */
+  async review(input: {
+    orgId: string;
+    documentId: string;
+    decision: 'VERIFIED' | 'REJECTED';
+    /** One of `DOCUMENT_REJECTION_REASONS`. Required for a rejection. */
+    reasonCode?: string;
+    /** The reviewer's own sentence about THIS file. Required for a rejection. */
+    specific?: string;
+    reviewerId: string;
+  }): Promise<KycDocumentView> {
+    const existing = await this.own(input.orgId, input.documentId);
+
+    let rejectionReason: string | null = null;
+    if (input.decision === 'REJECTED') {
+      const reason = DOCUMENT_REJECTION_REASONS.find((r) => r.code === input.reasonCode);
+      if (!reason) {
+        throw new ValidationError(
+          'Choose why this document is being rejected. The applicant is shown the reason you pick.',
+          { reasonCode: 'Choose one of the listed reasons.' },
+        );
+      }
+      const specific = input.specific?.trim() ?? '';
+      if (specific.length < 10) {
+        throw new ValidationError(
+          'Say what is wrong with this particular file. "Rejected" on its own tells the applicant nothing they can act on.',
+          {
+            specific:
+              'Name what you saw and what you need instead — for example "dated Jan 2025; we need one from the last three months".',
+          },
+        );
+      }
+      rejectionReason = `${reason.sentence} ${specific}`;
+    }
+
+    const row = await this.prisma.db.kyc_document.update({
+      where: { id: existing.id },
+      data: {
+        status: input.decision,
+        rejection_reason: rejectionReason,
+        // The code, not the sentence: the sentence is already in
+        // `rejection_reason` and a second copy of it is the copy that drifts.
+        review_note: input.decision === 'REJECTED' ? (input.reasonCode ?? null) : null,
+        reviewed_by: input.reviewerId,
+      },
+    });
+
+    await this.audit.record({
+      action: `kyc.document.${input.decision.toLowerCase()}`,
+      entityType: 'kyc_document',
+      entityId: existing.id,
+      before: { status: existing.status, rejectionReason: existing.rejection_reason },
+      after: { status: input.decision, rejectionReason },
+      actorUserId: input.reviewerId,
       actorOrgId: input.orgId,
     });
 

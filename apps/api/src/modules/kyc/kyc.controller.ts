@@ -27,7 +27,12 @@ import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.servic
 import { ValidationError } from '../../shared/errors/domain-errors';
 import { IdentityService, type OrganizationSummary } from '../identity';
 import { VendorService, type VendorReviewCaptures } from '../vendor';
-import { KycService, type OnboardingSummary, type ReviewQueueItem } from './kyc.service';
+import {
+  KycService,
+  type OnboardingSummary,
+  type ReviewDecision,
+  type ReviewQueueItem,
+} from './kyc.service';
 import type { StepDefinitionView } from './internal/onboarding.service';
 import { StepPromotionService } from './internal/promotion.service';
 import type { ConsentPurpose, ConsentState } from './internal/consent.service';
@@ -38,6 +43,7 @@ import {
 } from './internal/verification.service';
 import {
   DocumentService,
+  DOCUMENT_REJECTION_REASONS,
   type DocumentTypeRuleView,
   type UploadedBytes,
   type KycDocumentView,
@@ -128,10 +134,49 @@ export interface KycApplicationView {
  */
 export interface VendorReviewView extends VendorReviewCaptures {
   orgId: string;
+  orgType: string;
   legalName: string;
   status: string;
   constitutionType: string | null;
+  /**
+   * The clock, computed here and never in the browser.
+   *
+   * Same reason T31 and T33 give: a deadline a client machine can move is not a
+   * deadline. `slaHours` rides with it because a buyer is owed 24 and a vendor
+   * 48, and a screen that names one number over both misstates the promise for
+   * half its rows.
+   */
+  slaDueAt: Date | null;
+  slaBreached: boolean;
+  slaHours: number | null;
+  /**
+   * Hours to the deadline, negative once we are past it.
+   *
+   * Sent rather than derived from `slaDueAt` in the browser: the console's lint
+   * rule forbids `Date.now()` for exactly this reason, and a promise a client
+   * clock can move is not a promise. `reviewQueue` sends the same field for the
+   * same reason, so the board and the record cannot disagree by a machine's
+   * clock skew.
+   */
+  hoursRemaining: number | null;
+  /** The last decision, if the application has already had one. */
+  decision: ReviewDecision | null;
+  /**
+   * Every automated check ever run on this applicant, newest first.
+   *
+   * On this payload rather than behind a second call for the reason the
+   * `orgs/:orgId` route gives: a reviewer deciding on a GSTIN that came back
+   * MISMATCH needs to see that it did, and a screen that has to fetch it
+   * separately is a screen where somebody approves before it arrives.
+   *
+   * Masked inputs only (VR-META-03). No raw GSTIN, PAN or account number
+   * reaches a support desk, and `history()` is where that is enforced.
+   */
+  checks: VerificationCheckView[];
 }
+
+/** One row of `kyc.verification_check`, as `VerificationService.history` returns it. */
+type VerificationCheckView = Awaited<ReturnType<KycService['verificationHistory']>>[number];
 
 /**
  * A payout-account change. Declared here rather than in `dto/kyc.dto.ts` because
@@ -151,6 +196,29 @@ const changeBankAccountBodySchema = z.object({
 });
 
 type ChangeBankAccountBodyDto = z.infer<typeof changeBankAccountBodySchema>;
+
+/**
+ * A reviewer's verdict on one document.
+ *
+ * `reasonCode` is an enum built from the controlled list rather than a free
+ * string, so a code the applicant's screen cannot render is refused at the edge
+ * instead of being stored. The `specific` minimum is deliberate and matched by
+ * the service's own check: a screen is not a trust boundary, and the sentence
+ * this produces is read by the applicant.
+ */
+const reviewDocumentBodySchema = z
+  .object({
+    decision: z.enum(['VERIFIED', 'REJECTED']),
+    reasonCode: z.enum(DOCUMENT_REJECTION_REASONS.map((r) => r.code) as [string, ...string[]]).optional(),
+    specific: z.string().trim().min(10).max(500).optional(),
+  })
+  .refine((b) => b.decision === 'VERIFIED' || (b.reasonCode && b.specific), {
+    message: 'A rejection needs a reason and a sentence about this particular file.',
+    path: ['reasonCode'],
+  });
+
+type ReviewDocumentBodyDto = z.infer<typeof reviewDocumentBodySchema>;
+
 
 /** The stepper plus what was typed into it, which is what "resume" needs. */
 export interface ResumableOnboarding extends OnboardingSummary {
@@ -173,6 +241,7 @@ export class KycReviewController {
     private readonly kyc: KycService,
     private readonly identity: IdentityService,
     private readonly vendor: VendorService,
+    private readonly docs: DocumentService,
   ) {}
 
   /**
@@ -225,17 +294,89 @@ export class KycReviewController {
   async review(
     @Param('orgId', new ZodValidationPipe(uuidSchema)) orgId: string,
   ): Promise<VendorReviewView> {
-    const [org, captures] = await Promise.all([
+    const [org, captures, onboarding, checks] = await Promise.all([
       this.identity.getOrganization(orgId),
       this.vendor.reviewCaptures(orgId),
+      this.kyc.getOnboarding(orgId),
+      this.kyc.verificationHistory({ orgId }),
     ]);
     return {
       orgId: org.id,
+      orgType: org.orgType,
       legalName: org.legalName,
       status: org.status,
       constitutionType: org.constitution,
+      slaDueAt: onboarding.slaDueAt,
+      slaBreached: onboarding.slaBreached,
+      slaHours: this.kyc.reviewSlaHours(org.orgType === 'PLATFORM' ? 'INTERNAL' : org.orgType),
+      hoursRemaining: this.kyc.hoursToSla(onboarding.slaDueAt),
+      decision: onboarding.decision,
+      checks,
       ...captures,
     };
+  }
+
+  /**
+   * The applicant's documents, behind their own permission.
+   *
+   * **Not folded into `review/:orgId`, and that is the whole point.**
+   * `kyc.document.read` is held by KYC_REVIEWER, AUDITOR and the DPO;
+   * `kyc.application.read` is also held by OPS_MANAGER and SUPPORT, who may see
+   * that an application is late without seeing the director's Aadhaar. Putting
+   * the list on the payload that route already returns would have widened the
+   * grant silently — the guard would still read `kyc.application.read` and the
+   * response would carry documents anyway.
+   *
+   * So the screen makes two calls and renders a refusal on the second, which is
+   * also the honest thing for the reviewer to see: "you are not cleared for the
+   * documents", not a blank panel that reads as "there are none".
+   */
+  @Get('orgs/:orgId/documents')
+  @RequirePermissions('kyc.document.read')
+  documents(
+    @Param('orgId', new ZodValidationPipe(uuidSchema)) orgId: string,
+  ): Promise<KycDocumentView[]> {
+    return this.docs.list(orgId);
+  }
+
+  /**
+   * The reasons a document may be refused. Served, never hard-coded on a screen.
+   *
+   * Gated on `kyc.document.read` and not left public: the list is only useful to
+   * somebody who can see the documents, and it names the categories we screen
+   * for, which is not information an applicant benefits from having in advance.
+   */
+  @Get('document-rejection-reasons')
+  @RequirePermissions('kyc.document.read')
+  rejectionReasons(): ReadonlyArray<{ code: string; sentence: string }> {
+    return DOCUMENT_REJECTION_REASONS;
+  }
+
+  /**
+   * Accept or refuse one document.
+   *
+   * `kyc.application.review` and not `.approve`: chasing a missing document is
+   * the reviewing job, and OPS_MANAGER holds it — the same split the request-fix
+   * route below already draws. `.document.read` is ANDed because settling a file
+   * you are not cleared to look at is not a decision anybody should be able to
+   * make.
+   */
+  @Post('orgs/:orgId/documents/:documentId/review')
+  @RequirePermissions('kyc.application.review', 'kyc.document.read')
+  reviewDocument(
+    @CurrentUser() user: Principal,
+    @Param('orgId', new ZodValidationPipe(uuidSchema)) orgId: string,
+    @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
+    @Body(new ZodValidationPipe(reviewDocumentBodySchema)) body: ReviewDocumentBodyDto,
+  ): Promise<KycDocumentView> {
+    return this.docs.review({
+      orgId,
+      documentId,
+      decision: body.decision,
+      ...(body.reasonCode === undefined ? {} : { reasonCode: body.reasonCode }),
+      ...(body.specific === undefined ? {} : { specific: body.specific }),
+      reviewerId: user.userId,
+    });
   }
 
   /**

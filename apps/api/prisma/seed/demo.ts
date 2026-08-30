@@ -59,7 +59,21 @@ const PLATFORM_PEOPLE: Person[] = [
   // See identity-roles.spec.ts, which now fails on any role that grants nothing.
   { email: 'admin@trugrade.in', name: 'Asha Menon', role: 'PLATFORM_SUPERADMIN', owner: true },
   { email: 'kyc@trugrade.in', name: 'Rohit Sharma', role: 'KYC_REVIEWER' },
+  // OPS_MANAGER holds `kyc.application.read` and NOT `kyc.document.read`, which
+  // is the split the onboarding record screen is built around: they see that an
+  // application is late and who it belongs to, and they do not see the
+  // director's Aadhaar. With no such account on the demo database that branch —
+  // "you are not cleared for this applicant's documents" — could only be
+  // photographed by faking a 403, which is the same as not photographing it.
+  // Also the only demo login for the ops dashboard's own slice.
+  { email: 'ops@trugrade.in', name: 'Anand Krishnan', role: 'OPS_MANAGER' },
   { email: 'catalog@trugrade.in', name: 'Nisha Rao', role: 'CATALOG_ADMIN' },
+  // T38. `/admin/pricing/rules` is guarded by `listing.price.override`, which is
+  // held by PRICING_ADMIN and PLATFORM_SUPERADMIN and nobody else — and the
+  // superadmin needs MFA. So until this row existed the margin-rule screen was
+  // unreachable on the demo database by every account that could sign in, which
+  // is the same shape of gap as the missing rider in T23.
+  { email: 'pricing@trugrade.in', name: 'Meera Raghavan', role: 'PRICING_ADMIN' },
   { email: 'qc@trugrade.in', name: 'Vikram Iyer', role: 'QC_MANAGER' },
   { email: 'tech@trugrade.in', name: 'Rakesh Kumar', role: 'TECHNICIAN' },
   { email: 'finance@trugrade.in', name: 'Priya Nair', role: 'FINANCE' },

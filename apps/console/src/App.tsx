@@ -4,7 +4,10 @@ import { AuthProvider, RequirePermission, useAuth } from './lib/auth';
 import { CatalogTreeRoute } from './routes/CatalogTree';
 import { ConditionImageCoverageRoute } from './routes/ConditionImageCoverage';
 import { LoginRoute } from './routes/Login';
+import { OpsOverviewRoute, RequirePlatform } from './routes/OpsOverview';
 import { ReviewQueueRoute } from './routes/ReviewQueue';
+import { PricingRulesRoute } from './routes/PricingRules';
+import { SkuRecordRoute } from './routes/SkuRecord';
 import { SkuRequestsRoute } from './routes/SkuRequests';
 import { VendorReviewRoute } from './routes/VendorReview';
 import { qcRoutes } from './routes/qc';
@@ -54,6 +57,21 @@ export function App(): React.JSX.Element {
             sections you cannot reach yet is noise.
           */}
           <Route path="/login" element={<LoginRoute />} />
+          {/*
+            T34. `RequirePlatform` and not `RequirePermission`: the overview has
+            no single permission, and gating it on one would hide it from staff
+            who each have a real slice of it. See `OpsOverview.tsx`.
+          */}
+          <Route
+            path="/overview"
+            element={
+              <RequirePlatform>
+                <Shell>
+                  <OpsOverviewRoute />
+                </Shell>
+              </RequirePlatform>
+            }
+          />
           <Route
             path="/kyc"
             element={
@@ -84,6 +102,21 @@ export function App(): React.JSX.Element {
               </RequirePermission>
             }
           />
+          {/*
+            Declared before `/catalog/condition-images` for no routing reason —
+            react-router 7 ranks static above dynamic — but it reads in tree
+            order, which is how somebody looking for the SKU record finds it.
+          */}
+          <Route
+            path="/catalog/skus/:id"
+            element={
+              <RequirePermission permission="catalog.sku.read">
+                <Shell>
+                  <SkuRecordRoute />
+                </Shell>
+              </RequirePermission>
+            }
+          />
           <Route
             path="/catalog/condition-images"
             element={
@@ -100,6 +133,24 @@ export function App(): React.JSX.Element {
               <RequirePermission permission="catalog.sku_request.review">
                 <Shell>
                   <SkuRequestsRoute />
+                </Shell>
+              </RequirePermission>
+            }
+          />
+
+          {/*
+            `listing.price.override` guards a READ here, which is unusual and is
+            the narrower of the two honest choices: §3C.2 gives this screen to
+            ADMIN_PRICING and ADMIN_SUPER, and that pair is exactly who holds it.
+            `listing.any.read` also reaches OPS_MANAGER, QC_MANAGER, CATALOG_ADMIN
+            and TECHNICIAN, and the room contains what we keep on every machine.
+          */}
+          <Route
+            path="/pricing/rules"
+            element={
+              <RequirePermission permission="listing.price.override">
+                <Shell>
+                  <PricingRulesRoute />
                 </Shell>
               </RequirePermission>
             }

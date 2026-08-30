@@ -68,6 +68,17 @@ export interface ReviewQueueItem {
   /** Negative once breached. Ops sorts on this. */
   hoursRemaining: number | null;
   slaBreached: boolean;
+  /**
+   * The promise this row is measured against, in working hours.
+   *
+   * On the wire because it is **not the same number for every row**:
+   * `REVIEW_SLA_HOURS` gives a vendor 48 and a buyer 24, and the board said
+   * "past the 48-hour promise" over both — which overstated by a day what a
+   * buyer was owed, on the one screen whose job is to be honest about a
+   * promise. Null where `org_type` carries no promise at all, so the clause is
+   * dropped rather than defaulted.
+   */
+  slaHours: number | null;
 }
 
 /**
@@ -384,6 +395,13 @@ export class KycService implements IKycService {
           ? { equals: filter.status as never }
           : { in: ['KYC_SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED'] },
         ...(filter.orgType ? { org_type: filter.orgType as never } : {}),
+        // **The clock has to have started.** `submitForReview` writes the status
+        // and the submission instant in one update, so a row carrying the status
+        // and no instant cannot have come through the product — it is residue
+        // from a flow abandoned part way. Twelve of them were sitting at the top
+        // of this board, sorted above every real application because their SLA
+        // was the most overdue, against a promise nobody had ever been made.
+        submitted_for_review_at: { not: null },
       },
       orderBy: { review_sla_due_at: 'asc' },
       take: 200,
@@ -397,10 +415,9 @@ export class KycService implements IKycService {
       status: o.status,
       submittedAt: o.submitted_for_review_at,
       slaDueAt: o.review_sla_due_at,
-      hoursRemaining: o.review_sla_due_at
-        ? Math.round(((o.review_sla_due_at.getTime() - now) / 3_600_000) * 10) / 10
-        : null,
+      hoursRemaining: this.hoursToSla(o.review_sla_due_at),
       slaBreached: Boolean(o.review_sla_due_at && o.review_sla_due_at.getTime() < now),
+      slaHours: REVIEW_SLA_HOURS[o.org_type] ?? null,
     }));
   }
 
@@ -595,5 +612,30 @@ export class KycService implements IKycService {
 
   funnel(orgIds: readonly string[]): ReturnType<OnboardingService['funnel']> {
     return this.onboarding.funnel(orgIds);
+  }
+
+  /**
+   * The promise made to one kind of applicant, in working hours.
+   *
+   * Exposed rather than copied into the review controller: the queue and the
+   * record screen both state it, and two copies of a promise are how one screen
+   * comes to tell a buyer they are owed 48 hours when they are owed 24. Null for
+   * an org type with no promise, which the screens render as an absent clause
+   * rather than a borrowed default.
+   */
+  reviewSlaHours(orgType: string): number | null {
+    return REVIEW_SLA_HOURS[orgType] ?? null;
+  }
+
+  /**
+   * Hours from now to a review deadline, negative once it has passed.
+   *
+   * On the server for the reason every other deadline in this build is: a
+   * browser clock can be wrong, or set, and this number is the one a reviewer
+   * prioritises by. One decimal, so the queue can sort on it.
+   */
+  hoursToSla(due: Date | null): number | null {
+    if (!due) return null;
+    return Math.round(((due.getTime() - this.clock.nowMs()) / 3_600_000) * 10) / 10;
   }
 }

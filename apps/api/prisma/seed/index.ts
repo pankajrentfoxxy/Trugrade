@@ -8,6 +8,7 @@ import { seedDemo } from './demo';
 import { seedInvoicing } from './invoicing';
 import { seedAfterSale } from './after-sale';
 import { seedQcVisits } from './qc-visits';
+import { seedKycReview } from './kyc-review';
 
 const prisma = new PrismaClient();
 
@@ -61,6 +62,13 @@ async function main(): Promise<void> {
     // a fixed-clock test's window somewhere neither of them intended.
     console.log('Seeding QC visits, manifests and facility hours…');
     await seedQcVisits(prisma, clock.now(), (m) => console.log(m));
+
+    // Applications a reviewer can actually decide on. Same injected instant,
+    // and for the same reason: the 48-hour promise on these rows is derived
+    // from it, so a seed on wall-clock time would put the overdue chip
+    // somewhere the submission time does not explain.
+    console.log('Seeding the onboarding review spread…');
+    await seedKycReview(prisma, clock.now(), (m) => console.log(m));
   }
 
   const runway = await prisma.$queryRaw<Array<{ table_name: string; runway_days: number }>>`
