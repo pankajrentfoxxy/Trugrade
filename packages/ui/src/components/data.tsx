@@ -89,7 +89,12 @@ export function DataTable<Row>({
   const isEmpty = !loading && rows.length === 0;
 
   return (
-    <div className={cn('w-full overflow-x-auto', className)}>
+    // `relative` is load-bearing: the caption and live region below are
+    // `sr-only`, which is position:absolute. With no containing block here they
+    // resolve against the initial containing block and escape this wrapper's
+    // clip, landing at the far right of a wide table and scrolling the whole
+    // PAGE sideways underneath a fixed-width header.
+    <div className={cn('relative w-full overflow-x-auto', className)}>
       {/* The caption doubles as the live region: re-sorting rewrites it, and a
           polite announcement is the only way the new order reaches a reader who
           cannot see the arrow move. */}

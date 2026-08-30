@@ -140,3 +140,16 @@ describe('QueueList', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 });
+
+describe('a queue with no promise', () => {
+  // The failure this guards is inventing one. A default SLA rendered beside a
+  // number nobody committed to reads as a commitment, which is the same defect
+  // as showing an unmeasured value as a passing one.
+  it('says nothing about an SLA rather than borrowing a default', () => {
+    const { slaHours: _omitted, ...noPromise } = q({ key: 'unpromised' });
+    render(<QueueList items={[noPromise]} label="Queues" />);
+    expect(screen.getByText('unpromised')).toBeInTheDocument();
+    expect(screen.queryByText(/SLA/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\b(24|48)\s*h\b/)).not.toBeInTheDocument();
+  });
+});

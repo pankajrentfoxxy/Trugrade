@@ -520,7 +520,12 @@ export function EmptyState({
   className,
 }: {
   title: string;
-  body?: string;
+  /**
+   * ReactNode, not string: an empty state routinely has to name a serial, an
+   * order number or a count in the product's own mono type, and a string forces
+   * every caller that needs one to hand-roll the whole component instead.
+   */
+  body?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
 }): React.JSX.Element {

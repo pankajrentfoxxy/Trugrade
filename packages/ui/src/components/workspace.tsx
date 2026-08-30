@@ -157,8 +157,15 @@ export interface QueueItem {
   breachedCount?: number;
   /** Hours the oldest waiting item has been waiting. */
   oldestWaitHours?: number;
-  /** The promise, in hours. 48 for onboarding review. */
-  slaHours: number;
+  /**
+   * The promise, in hours. 48 for onboarding review.
+   *
+   * Optional because not every queue has one, and a queue with no promise must
+   * not be handed a borrowed default — printing "SLA 24 h" beside a number
+   * nobody committed to is the same failure as rendering an unmeasured value as
+   * a passing one. Absent means the clause is not shown at all.
+   */
+  slaHours?: number;
   /** One line on what the queue is for. Optional. */
   description?: React.ReactNode;
 }
@@ -245,10 +252,14 @@ export function QueueList({ items, label, className }: QueueListProps): React.JS
                         </span>
                       </>
                     )}
-                    <span aria-hidden="true" className="px-2 text-ink-4">
-                      ·
-                    </span>
-                    SLA <span className="font-mono text-data tnum">{item.slaHours} h</span>
+                    {item.slaHours !== undefined && (
+                      <>
+                        <span aria-hidden="true" className="px-2 text-ink-4">
+                          ·
+                        </span>
+                        SLA <span className="font-mono text-data tnum">{item.slaHours} h</span>
+                      </>
+                    )}
                   </span>
                 </span>
 
