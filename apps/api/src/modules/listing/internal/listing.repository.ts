@@ -3,7 +3,11 @@ import { Money, moneyFromDb, type Grade, type SerialIssue } from '@trugrade/cont
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { OrgScope } from '../../../shared/db/org-scope';
-import { ConflictError, ForbiddenError } from '../../../shared/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  PreconditionFailedError,
+} from '../../../shared/errors/domain-errors';
 
 /**
  * Every statement that touches `listing.listing`, `listing.unit`,
@@ -739,6 +743,40 @@ export class ListingRepository {
    * fixes a mistyped serial before submitting, leaving a permanent trail for a
    * machine that never existed.
    */
+  /**
+   * The vendor's letter for the city they dispatch from.
+   *
+   * Anonymity is the whole point of this column: a buyer sees
+   * "Supply Point A - Gurugram" and never a vendor name. The letter is assigned
+   * PER CITY, so one vendor is a different letter in Noida than in Gurugram and
+   * two vendors in one city can never share one. That is why this resolves
+   * through listing.assign_supply_point rather than choosing a label here — the
+   * register of assignments belongs to that function, and a second place that
+   * invents labels is a second identity for the same vendor.
+   *
+   * A pickup address with no city cannot be labelled, and an unlabelled unit
+   * silently vanishes from the buyer's board. So this refuses and names the fix
+   * rather than writing a NULL that surfaces as missing stock weeks later.
+   */
+  private async supplyPointFor(vendorOrgId: string, addressId: string): Promise<string> {
+    const [address] = await this.prisma.$queryRaw<Array<{ city: string | null }>>`
+      SELECT city FROM identity.org_address WHERE id = ${addressId}::uuid`;
+
+    const city = address?.city?.trim();
+    if (!city) {
+      throw new PreconditionFailedError(
+        "This listing's pickup address has no city on it, so we cannot give it a supply-point " +
+          'label. Buyers see that label instead of your name, so we will not publish stock ' +
+          'without one. Add the city to that address and submit again.',
+        { addressId, reason: 'pickup_address_has_no_city' },
+      );
+    }
+
+    const [assigned] = await this.prisma.$queryRaw<Array<{ assign_supply_point: string }>>`
+      SELECT listing.assign_supply_point(${vendorOrgId}::uuid, ${city})`;
+    return assigned!.assign_supply_point;
+  }
+
   async addUnits(listingId: string, serials: readonly string[]): Promise<AddUnitsResult> {
     const wanted = [...new Set(serials)];
     if (wanted.length === 0) return { added: [], rejected: [] };
@@ -747,20 +785,49 @@ export class ListingRepository {
       // FOR UPDATE so a concurrent reprice cannot land between reading the ask
       // and writing it onto the new units.
       const [listing] = await this.prisma.$queryRaw<
-        Array<{ sku_id: string; grade: string; vendor_org_id: string; unit_price: unknown }>
+        Array<{
+          sku_id: string;
+          grade: string;
+          vendor_org_id: string;
+          unit_price: unknown;
+          pickup_location_id: string;
+        }>
       >`
-        SELECT sku_id, grade, vendor_org_id, unit_price
+        SELECT sku_id, grade, vendor_org_id, unit_price, pickup_location_id
           FROM listing.listing WHERE id = ${listingId}::uuid FOR UPDATE`;
       if (!listing) return { added: [], rejected: [] };
       this.scope.assertOwns(listing.vendor_org_id, 'listing');
+
+      // The supply-point label, stamped at creation.
+      //
+      // publicBoardUnits joins supply_point ON code AND filters
+      // `supply_point_code IS NOT NULL`, so a unit without one is SELLABLE AND
+      // INVISIBLE — it passes QC, goes LISTED, counts as stock, and never
+      // appears on the comparison board a buyer actually shops from. Nothing in
+      // the product set this column: listing.assign_supply_point existed from
+      // the first migration and only the SEED had ever called it, which is why
+      // every seeded unit had a label and every unit created through the
+      // product did not.
+      //
+      // The function is idempotent — it returns the vendor's existing letter for
+      // that city, or assigns a free one — so calling it per batch is correct
+      // rather than merely safe. The city is read as a single-table select, not
+      // a join, because identity owns that address (and `facilityAt` in
+      // submit.service reads vendor.vendor_facility the same way).
+      const supplyPointCode = await this.supplyPointFor(
+        listing.vendor_org_id,
+        listing.pickup_location_id,
+      );
 
       let inserted: Array<{ serial_number: string }>;
       try {
         inserted = await this.prisma.$queryRaw<Array<{ serial_number: string }>>`
           INSERT INTO listing.unit
-            (serial_number, listing_id, vendor_org_id, sku_id, grade_declared, vendor_ask_price)
+            (serial_number, listing_id, vendor_org_id, sku_id, grade_declared, vendor_ask_price,
+             supply_point_code)
           SELECT s, ${listingId}::uuid, ${listing.vendor_org_id}::uuid, ${listing.sku_id}::uuid,
-                 ${listing.grade}::public.grade_type, ${String(listing.unit_price)}::numeric
+                 ${listing.grade}::public.grade_type, ${String(listing.unit_price)}::numeric,
+                 ${supplyPointCode}
             FROM unnest(${wanted}::text[]) AS s
           ON CONFLICT DO NOTHING
           RETURNING serial_number`;
