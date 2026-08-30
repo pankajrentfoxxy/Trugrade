@@ -131,6 +131,17 @@ interface VendorSpec {
   warrantyMonths: number;
   scoreBase: number;
   batteryBase: number;
+  /**
+   * A Udyam registration number, on the vendors that have one.
+   *
+   * It makes this supplier an MSME, and s.15 of the MSMED Act 2006 then binds us
+   * to pay within 45 days of the goods being accepted — a statutory deadline with
+   * compound interest behind it, not a payout cycle. `/vendor/payables` shows a
+   * different clock depending on it, and with `vendor.vendor_profile` holding no
+   * rows at all neither branch could be reached through the product. One vendor
+   * carries one so both can be.
+   */
+  udyam?: string;
 }
 
 const NORTHGATE = 'Northgate IT Assets Pvt. Ltd.';
@@ -154,7 +165,7 @@ const VENDORS: readonly VendorSpec[] = [
   { legalName: PHASE2, city: 'Noida', state: 'Uttar Pradesh', stateCode: '09', pincode: '201310', valuation: 'REGULAR', warrantyMonths: 3, scoreBase: 91, batteryBase: 90 },
   { legalName: OKHLA, city: 'New Delhi', state: 'Delhi', stateCode: '07', pincode: '110020', valuation: 'MARGIN', warrantyMonths: 0, scoreBase: 85, batteryBase: 87 },
   { legalName: MAYAPURI, city: 'New Delhi', state: 'Delhi', stateCode: '07', pincode: '110092', valuation: 'REGULAR', warrantyMonths: 3, scoreBase: 74, batteryBase: 78 },
-  { legalName: FARIDABAD, city: 'Faridabad', state: 'Haryana', stateCode: '06', pincode: '121001', valuation: 'REGULAR', warrantyMonths: 6, scoreBase: 90, batteryBase: 91 },
+  { legalName: FARIDABAD, city: 'Faridabad', state: 'Haryana', stateCode: '06', pincode: '121001', valuation: 'REGULAR', warrantyMonths: 6, scoreBase: 90, batteryBase: 91, udyam: 'UDYAM-HR-05-0042317' },
   { legalName: GHAZIABAD, city: 'Ghaziabad', state: 'Uttar Pradesh', stateCode: '09', pincode: '201001', valuation: 'REGULAR', warrantyMonths: 0, scoreBase: 82, batteryBase: 85 },
   { legalName: SONIPAT, city: 'Sonipat', state: 'Haryana', stateCode: '06', pincode: '131001', valuation: 'MARGIN', warrantyMonths: 3, scoreBase: 87, batteryBase: 88 },
   // Palwal is an ODA lane, so it also gives the freight quote a surcharged origin.
@@ -725,6 +736,24 @@ export async function seedDemo(
     // what stops the labels publishing either the join order or the vendor count.
     const rows = await prisma.$queryRaw<Array<{ assign_supply_point: string }>>`
       SELECT listing.assign_supply_point(${orgId}::uuid, ${spec.city})`;
+
+    // **`vendor.vendor_profile` had zero rows for every vendor on the platform.**
+    //
+    // The real onboarding path writes it — `vendor/internal/promotion.service.ts`
+    // upserts the row when step 3 is promoted — and this seed builds its vendors
+    // directly, so the table nobody looked at stayed empty. `licence.service.ts`,
+    // `vendor.service.ts` and T33's payables screen all read it, which means the
+    // MSME payment clock, the settlement cycle and the DeviceSure licence state
+    // were three behaviours no demo account could reach. Found by T33 trying to
+    // photograph the MSMED 45-day deadline and finding nobody was an MSME.
+    //
+    // Everything except the Udyam number takes its column default; a business
+    // category is required and REFURBISHER is what these ten are.
+    await prisma.$executeRaw`
+      INSERT INTO vendor.vendor_profile (org_id, business_category, msme_udyam_no, verified_at)
+      VALUES (${orgId}::uuid, 'REFURBISHER', ${spec.udyam ?? null}, now())
+      ON CONFLICT (org_id) DO UPDATE SET msme_udyam_no = EXCLUDED.msme_udyam_no`;
+
     vendors.set(spec.legalName, {
       spec,
       orgId,

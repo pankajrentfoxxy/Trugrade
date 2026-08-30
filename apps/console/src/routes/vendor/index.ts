@@ -8,6 +8,7 @@ import { VendorCorrectionsRoute, VendorCorrectionDetailRoute } from './Correctio
 import { VendorPickListRoute } from './PickList';
 import { VendorPurchaseOrderRoute } from './PurchaseOrder';
 import { VendorPurchaseOrdersRoute } from './PurchaseOrders';
+import { VendorPayablesRoute } from './Payables';
 import { RepriceRoute } from './Reprice';
 import { SkuRequestRoute } from './SkuRequest';
 import { ListingWizardRoute } from './wizard/Wizard';
@@ -116,6 +117,15 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/orders/:poId/pick-list',
     permission: 'procurement.po.read_own',
     element: guarded('procurement.po.read_own', VendorPickListRoute),
+  },
+  {
+    // Guarded by the permission the API actually checks. The payables screen
+    // is §3B.4's FINANCE/OWNER screen; there is no payable permission in
+    // ROLE_PERMISSIONS to gate it on, so it rides on the purchase order's read
+    // whose money it restates. Recorded in the ledger as a deviation.
+    path: '/vendor/payables',
+    permission: 'procurement.po.read_own',
+    element: guarded('procurement.po.read_own', VendorPayablesRoute),
   },
   {
     path: '/vendor/sku-request',

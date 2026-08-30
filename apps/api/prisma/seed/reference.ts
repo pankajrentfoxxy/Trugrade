@@ -170,6 +170,19 @@ export const CONFIG: Array<[string, unknown, string]> = [
     'Below this the balance rolls forward. Nobody wants a Rs 400 NEFT.',
   ],
   ['procurement.default_payout_cycle', 'T_PLUS_2', 'Q6 — requested by the vendor, granted by tier'],
+  [
+    // **Present in the baseline migration and missing here**, which is the same
+    // shape of defect T28 found on `qc.visit_fee_waived_above`: a database built
+    // from migrations knew the statutory period and one built from this seed did
+    // not, so `/vendor/payables` silently fell back to the purchase order's own
+    // terms for an MSME supplier. That is not a display bug — s.15 of the MSMED
+    // Act 2006 binds us to 45 days and s.16 charges compound interest at three
+    // times the RBI bank rate on the delay, so the wrong clock is a real
+    // liability. Found by T33's integration suite, which seeds config from here.
+    'msme.max_payment_days',
+    45,
+    'MSMED Act 2006 s.15 — payment to an MSME supplier within 45 days of acceptance',
+  ],
   ['procurement.price_variance_tolerance_pct', 0.5, 'Three-way match price tolerance'],
   ['procurement.price_variance_tolerance_inr', 100, 'Whichever is greater'],
 

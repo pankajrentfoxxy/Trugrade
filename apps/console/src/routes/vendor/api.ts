@@ -89,6 +89,17 @@ export const API = {
   purchaseOrder: (poId: string) => `/api/vendor/purchase-orders/${poId}`,
   pickList: (poId: string) => `/api/vendor/purchase-orders/${poId}/pick-list`,
   acknowledgePo: (poId: string) => `/api/vendor/purchase-orders/${poId}/acknowledge`,
+
+  /**
+   * What we owe, the deduction stack, and what is honestly unknown (T33).
+   *
+   * There is no `/api/vendor/payouts` here and no route to add one to.
+   * `procurement.payout_run` and `payout_line` have no writer, so a payouts
+   * board would be a route whose only reachable state is "nothing yet" — the
+   * statement §3B.4 asks for is built from the payables that exist and served
+   * by this one endpoint.
+   */
+  payables: '/api/vendor/payables',
 } as const;
 
 /** The four answers, exactly as `listing.grade_correction.vendor_response` allows. */
@@ -448,6 +459,118 @@ export interface PickList {
   }>;
 }
 
+/* --------------------------------------------------------------------------
+ * T33 — payables and the statement
+ * ------------------------------------------------------------------------ */
+
+/** `procurement.vendor_payable.status`, as its CHECK constraint allows. */
+export const PAYABLE_STATUSES = [
+  'ACCRUED',
+  'ELIGIBLE',
+  'IN_RUN',
+  'PAID',
+  'ON_HOLD',
+  'CANCELLED',
+] as const;
+
+/**
+ * Why a payable has not been paid, decided on the server against its clock.
+ *
+ * The two arms that compare a time — the inspection window and "payable but
+ * nothing has run" — are money deadlines, so the answer is handed to the client
+ * rather than the ingredients. A browser clock must not be able to move when a
+ * vendor is owed.
+ */
+export type PayableWaitingOn =
+  | 'PAID'
+  | 'ON_HOLD'
+  | 'CANCELLED'
+  | 'NOT_DELIVERED'
+  | 'INSPECTION_WINDOW_OPEN'
+  | 'NO_PAYOUT_RUN'
+  | 'WINDOW_NOT_CONFIGURED';
+
+export interface PayableRow {
+  payableId: string;
+  poId: string;
+  poNumber: string;
+  units: number;
+  gross: MoneyString;
+  tds: MoneyString;
+  penalties: MoneyString;
+  qcFee: MoneyString;
+  net: MoneyString;
+  status: string;
+  holdReason: string | null;
+  accruedAt: IsoDate;
+  deliveredAt: IsoDate | null;
+  inspectionWindowClosesAt: IsoDate | null;
+  /**
+   * What the system has RECORDED as the eligibility instant.
+   *
+   * **Null on every payable in existence — nothing writes it.** Kept beside
+   * `inspectionWindowClosesAt` rather than merged with it: one is the rule and
+   * the other is the record, and the screen must not present the first as the
+   * second.
+   */
+  eligibleAt: IsoDate | null;
+  paidAt: IsoDate | null;
+  /** The date we are BOUND to pay by. Null until something is delivered. */
+  payBy: IsoDate | null;
+  payByBasis: 'MSMED_ACT' | 'PO_TERMS' | null;
+  payByDays: number | null;
+  overdue: boolean;
+  waitingOn: PayableWaitingOn;
+}
+
+/**
+ * The deduction stack over everything unpaid.
+ *
+ * **There is no `expectedPaymentOn` on this type and there must not be.** No
+ * payout run has ever executed, `eligible_at` is set by nothing, and
+ * `procurement.default_payout_cycle` is a cycle rather than a promise — a date
+ * derived from it is one a vendor plans cash against and we invented.
+ */
+export interface PayablesView {
+  statement: {
+    /** The denominator for every figure below. */
+    payables: number;
+    gross: MoneyString;
+    tds: {
+      amount: MoneyString;
+      /** The rate that would apply ABOVE the threshold, from config. Never ₹0 ÷ gross. */
+      ratePct: number | null;
+      thresholdAmount: MoneyString | null;
+      financialYearPurchases: MoneyString;
+      financialYear: string;
+      /** `computeTds`'s own sentence, from `@trugrade/contracts`. Never restated. */
+      reason: string;
+      hasVerifiedPan: boolean;
+    };
+    penalties: MoneyString;
+    qcFees: MoneyString;
+    net: MoneyString;
+  };
+  rows: PayableRow[];
+  /** Zero everywhere, and the screen says so rather than showing an empty board. */
+  payoutsEver: number;
+  msme: {
+    registered: boolean;
+    udyamNumber: string | null;
+    /** `msme.max_payment_days`. Null when unconfigured — never defaulted to 45. */
+    maxPaymentDays: number | null;
+  };
+  inspectionWindowHours: number | null;
+  account: {
+    last4: string;
+    holderName: string;
+    bankName: string | null;
+    verified: boolean;
+    pennyDropStatus: string;
+    frozenUntil: IsoDate | null;
+  } | null;
+}
+
 export interface PayoutDeduction {
   code: 'QC_VISIT_FEE' | 'TDS' | 'PENALTY';
   label: string;
@@ -543,6 +666,25 @@ export function onDate(iso: IsoDate | null | undefined): string {
   return Number.isNaN(d.getTime())
     ? NO_DATE
     : new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(d);
+}
+
+/**
+ * A deadline to the hour.
+ *
+ * `onDate` is right for a day somebody plans around; an inspection window closes
+ * at a particular time and rounding it to a date would move a money deadline by
+ * up to a day in the direction that suits us.
+ */
+export function onDateTime(iso: IsoDate | null | undefined): string {
+  if (!iso) return NO_DATE;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? NO_DATE
+    : new Intl.DateTimeFormat('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'Asia/Kolkata',
+      }).format(d);
 }
 
 /** `A_PLUS` → `A+`, everywhere a grade is spoken rather than badged. */

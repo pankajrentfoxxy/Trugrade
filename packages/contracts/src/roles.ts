@@ -114,6 +114,14 @@ export const PERMISSIONS = [
   'procurement.invoice.upload',
   'procurement.match.review',
   'procurement.payout.run',
+  /**
+   * Narrower than procurement.po.read_own on purpose. UX spec §3B.4 gives
+   * /vendor/payables to FINANCE and OWNER only, while po.read_own reaches
+   * VENDOR_VIEWER, ADMIN and OPS — so guarding payables with the PO permission
+   * would show what we owe, and what we withheld, to roles the spec does not
+   * put in that room.
+   */
+  'procurement.payable.read_own',
   // payment
   'payment.invoice.read_own',
   'payment.invoice.read_any',
@@ -306,6 +314,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'identity.user.write',
     'identity.role.assign',
     'procurement.po.read_own',
+    'procurement.payable.read_own',
     'procurement.po.acknowledge',
     'procurement.invoice.upload',
     'platform.ticket.read',
@@ -333,6 +342,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
   VENDOR_FINANCE: P(
     'listing.own.read',
     'procurement.po.read_own',
+    'procurement.payable.read_own',
     'procurement.invoice.upload',
     'platform.ticket.write',
   ),

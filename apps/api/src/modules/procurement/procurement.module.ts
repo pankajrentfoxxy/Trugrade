@@ -2,9 +2,12 @@ import { Module } from '@nestjs/common';
 import { CatalogModule } from '../catalog';
 import { QcModule } from '../qc';
 import { ProcurementController } from './procurement.controller';
+import { PayablesController } from './payables.controller';
 import { ProcurementService } from './procurement.service';
 import { PurchaseOrderRepository } from './internal/purchase-order.repository';
 import { PurchaseOrderService } from './internal/purchase-order.service';
+import { PayableRepository } from './internal/payable.repository';
+import { PayableService } from './internal/payable.service';
 
 /**
  * The procurement module's first internals and first routes (T32).
@@ -24,8 +27,14 @@ import { PurchaseOrderService } from './internal/purchase-order.service';
  */
 @Module({
   imports: [CatalogModule, QcModule],
-  controllers: [ProcurementController],
-  providers: [ProcurementService, PurchaseOrderRepository, PurchaseOrderService],
+  controllers: [ProcurementController, PayablesController],
+  providers: [
+    ProcurementService,
+    PurchaseOrderRepository,
+    PurchaseOrderService,
+    PayableRepository,
+    PayableService,
+  ],
   exports: [ProcurementService],
 })
 export class ProcurementModule {}
