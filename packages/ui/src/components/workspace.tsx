@@ -205,9 +205,16 @@ export interface QueueListProps {
  * archetype's rule, and a rule every caller re-implements is a rule one caller
  * gets wrong.
  *
- * Breach is stated in words and carried by a `--fail` rule down the left edge,
+ * Breach is stated in words and carried by a `--warn` rule down the left edge,
  * never by colour alone — an ops screen read by a colourblind operator has to
  * work, and it is read all day.
+ *
+ * WARN, NOT FAIL. A breached queue is a promise WE missed, not a verdict on
+ * anything in it. The row this paints says "Buyer applications", so red there is
+ * a red mark against a stack of applicants for the crime of us being slow. T28's
+ * colour sweep reached the same conclusion on ReviewQueue and moved it to warn;
+ * this is the shared component that sweep could not reach. Green and red stay
+ * PASS and FAIL.
  */
 export function QueueList({ items, label, className }: QueueListProps): React.JSX.Element {
   const headingId = React.useId();
@@ -232,7 +239,7 @@ export function QueueList({ items, label, className }: QueueListProps): React.JS
                 data-breached={breached || undefined}
                 className={cn(
                   'tg-card flex flex-wrap items-center gap-4 rounded-lg border border-l-4 bg-sheet',
-                  breached ? 'border-rule border-l-fail' : 'border-rule border-l-rule',
+                  breached ? 'border-rule border-l-warn' : 'border-rule border-l-rule',
                   'hover:border-ink-3',
                 )}
               >
@@ -268,7 +275,7 @@ export function QueueList({ items, label, className }: QueueListProps): React.JS
                   {item.breachedCount === undefined ? (
                     <span className="text-body-sm text-ink-4">Breaches not measured</span>
                   ) : breached ? (
-                    <span className="text-body-sm font-medium text-fail">
+                    <span className="text-body-sm font-medium text-warn">
                       <span className="font-mono tnum">{item.breachedCount}</span> past SLA
                     </span>
                   ) : (

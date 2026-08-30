@@ -153,3 +153,24 @@ describe('a queue with no promise', () => {
     expect(screen.queryByText(/\b(24|48)\s*h\b/)).not.toBeInTheDocument();
   });
 });
+
+describe('a breached queue is our failure, not a verdict on what is in it', () => {
+  // The row this paints is labelled with a queue of PEOPLE — "Buyer
+  // applications". Red there is a red mark against a stack of applicants for the
+  // crime of us being slow. Green and red are PASS and FAIL; a promise we missed
+  // is warn.
+  it('paints a breach warn, never fail', () => {
+    const { container } = render(
+      <QueueList items={[q({ key: 'buyer-applications', breachedCount: 9, count: 18 })]} label="Queues" />,
+    );
+    expect(screen.getByText(/past SLA/i)).toBeInTheDocument();
+    expect(container.querySelectorAll('.text-fail, .border-l-fail')).toHaveLength(0);
+    expect(container.querySelectorAll('.text-warn, .border-l-warn').length).toBeGreaterThan(0);
+  });
+
+  it('still says it in words, so colour is never the only carrier', () => {
+    render(<QueueList items={[q({ key: 'vendor-applications', breachedCount: 3, count: 7 })]} label="Queues" />);
+    expect(screen.getByText(/3/)).toBeInTheDocument();
+    expect(screen.getByText(/past SLA/i)).toBeInTheDocument();
+  });
+});
