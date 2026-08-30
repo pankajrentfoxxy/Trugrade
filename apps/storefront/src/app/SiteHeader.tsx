@@ -1,5 +1,45 @@
+import { cookies } from 'next/headers';
 import { ThemeToggle } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
+
+/**
+ * Who, if anyone, is signed in — read on the server from the request's own
+ * cookie.
+ *
+ * The header used to render "Sign in / Create account" unconditionally, and
+ * that is worse than cosmetic. A buyer who HAS signed in is invited to sign in
+ * again on every page, with no way to reach their account and nothing to show
+ * they are recognised — and reviewing a screenshot of the cart or checkout, the
+ * only reasonable conclusion is that the flow ran unauthenticated. It does not:
+ * every /api/buyer route answers 401 without a session. The header was simply
+ * never told.
+ *
+ * Server-side rather than a client fetch, because a header that renders
+ * signed-out and then corrects itself is a flash of the wrong answer on every
+ * navigation — and this is the one component on the page whose job is to say
+ * who you are.
+ *
+ * A failure returns null and the signed-out chrome. We cannot prove a session,
+ * so we do not claim one.
+ */
+async function currentUser(): Promise<{ orgType: string } | null> {
+  const jar = await cookies();
+  const header = jar
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join('; ');
+  if (!header) return null;
+
+  try {
+    const res = await fetch(`${process.env.API_URL ?? 'http://localhost:4000/api'}/auth/session`, {
+      headers: { cookie: header },
+      cache: 'no-store',
+    });
+    return res.ok ? ((await res.json()) as { orgType: string }) : null;
+  } catch {
+    return null;
+  }
+}
 
 import { SearchBar } from './SearchBar';
 
@@ -11,12 +51,13 @@ import { SearchBar } from './SearchBar';
  * Both are `--chrome` in both themes. That is the brand: only the working
  * surfaces below flip.
  */
-export function SiteHeader({
+export async function SiteHeader({
   inspected,
 }: {
   /** The live tested count. `null` when the API did not answer — see below. */
   inspected: number | null;
-}): React.JSX.Element {
+}): Promise<React.JSX.Element> {
+  const user = await currentUser();
   return (
     <>
       <div className="util">
@@ -88,15 +129,31 @@ export function SiteHeader({
                 <strong>Requirement</strong>
               </span>
             </a>
-            <a className="hbtn" href="/sign-in">
-              <span>
-                <small>Returning?</small>
-                <strong>Sign in</strong>
-              </span>
-            </a>
-            <a className="hbtn solid" href="/register">
-              Create account
-            </a>
+            {user ? (
+              <>
+                <a className="hbtn hide-sm" href="/cart">
+                  <span>
+                    <small>Your</small>
+                    <strong>Cart</strong>
+                  </span>
+                </a>
+                <a className="hbtn solid" href="/account">
+                  Account
+                </a>
+              </>
+            ) : (
+              <>
+                <a className="hbtn" href="/sign-in">
+                  <span>
+                    <small>Returning?</small>
+                    <strong>Sign in</strong>
+                  </span>
+                </a>
+                <a className="hbtn solid" href="/register">
+                  Create account
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
