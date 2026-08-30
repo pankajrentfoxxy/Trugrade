@@ -43,6 +43,7 @@ import { LockService, RedisModule, RedisService } from '../../src/shared/redis/r
 import { CatalogModule } from '../../src/modules/catalog';
 import { OrderingModule } from '../../src/modules/ordering';
 import { CheckoutService } from '../../src/modules/ordering/internal/checkout.service';
+import { OrderReadService } from '../../src/modules/ordering/internal/order-read.service';
 import { HoldService } from '../../src/modules/ordering/internal/hold.service';
 import {
   OrderTransactionService,
@@ -81,6 +82,7 @@ const VENDOR_ASK = 30_000;
 
 let moduleRef: TestingModule;
 let checkout: CheckoutService;
+let readOrder: OrderReadService;
 let holds: HoldService;
 let orders: OrderTransactionService;
 let ctx: RequestContextService;
@@ -280,6 +282,7 @@ beforeAll(async () => {
     .compile();
 
   checkout = moduleRef.get(CheckoutService);
+  readOrder = moduleRef.get(OrderReadService);
   holds = moduleRef.get(HoldService);
   orders = moduleRef.get(OrderTransactionService);
   ctx = moduleRef.get(RequestContextService);
@@ -1282,5 +1285,173 @@ describe('the transaction as an API, with no hold in front of it', () => {
     const [cart] = await db.$queryRaw<Array<{ status: string }>>`
       SELECT status FROM ordering.cart WHERE id = ${cartId}::uuid`;
     expect(cart!.status).toBe('CONVERTED');
+  });
+});
+
+/* ==========================================================================
+ * Reading an order back — the record T17 renders
+ * ======================================================================== */
+
+/** A buyer at a DIFFERENT organisation, with a real principal of their own. */
+function asOtherBuyer<T>(orgId: string, userId: string, fn: () => Promise<T>): Promise<T> {
+  const roles: Role[] = ['CUSTOMER_BUYER'];
+  return ctx.run({ requestId: randomUUID() }, () => {
+    ctx.setPrincipal({
+      userId,
+      orgId,
+      orgType: 'BUYER',
+      roles,
+      permissions: permissionsFor(roles),
+      sessionId: 's',
+      mfaSatisfied: true,
+    });
+    return fn();
+  });
+}
+
+describe('the buyer reads their order back', () => {
+  it('carries the allocated serials, grouped by dispatch point, and no vendor anywhere', async () => {
+    const vendorA = await makeVendor(HARYANA);
+    const vendorB = await makeVendor(DELHI);
+    const a = await makeOffer({
+      vendorOrgId: vendorA.orgId,
+      pickupAddressId: vendorA.addressId,
+      qty: 2,
+      city: HARYANA.city,
+    });
+    const b = await makeOffer({
+      vendorOrgId: vendorB.orgId,
+      pickupAddressId: vendorB.addressId,
+      qty: 1,
+      city: DELHI.city,
+    });
+    const cartId = await makeCart([
+      { listingId: a.listingId, qty: 2 },
+      { listingId: b.listingId, qty: 1 },
+    ]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const record = await asBuyer(() => readOrder.byNumber(placed.orderNumber));
+
+    expect(record.unitsAllocated).toBe(3);
+    expect(record.dispatchGroups).toHaveLength(2);
+    expect(
+      record.dispatchGroups
+        .flatMap((g) => g.machines)
+        .map((m) => m.serialNumber)
+        .sort(),
+    ).toEqual([...a.serials, ...b.serials].sort());
+    for (const group of record.dispatchGroups) {
+      expect(group.label).toMatch(/^Supply Point [A-Z]+ · /);
+    }
+    expect(record.grandTotal).toBe(placed.grandTotal);
+    expect(record.approval).toBeNull();
+
+    // The whole payload, swept for the two vendors actually behind it.
+    const json = JSON.stringify(record);
+    for (const orgId of [vendorA.orgId, vendorB.orgId]) expect(json).not.toContain(orgId);
+    const names = await db.$queryRaw<Array<{ legal_name: string }>>`
+      SELECT legal_name FROM identity.organization
+       WHERE id IN (${vendorA.orgId}::uuid, ${vendorB.orgId}::uuid)`;
+    for (const { legal_name } of names) expect(json).not.toContain(legal_name);
+  });
+
+  /**
+   * The one that matters. Not "a scope exists" — another organisation's buyer
+   * ASKS for the order, by its real number, and is refused.
+   */
+  it('refuses an order that belongs to another organisation, without confirming it exists', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const otherOrgId = await makeOrganization(
+      { org_type: 'BUYER', legal_name: 'Meridian Devices Pvt Ltd' },
+      db,
+    );
+    const otherUserId = await makeUser(otherOrgId, { full_name: 'Anita Rao' }, db);
+
+    const refusal = await asOtherBuyer(otherOrgId, otherUserId, () =>
+      readOrder.byNumber(placed.orderNumber).then(
+        () => null,
+        (e: Error & { httpStatus?: number; code?: string }) => e,
+      ),
+    );
+
+    expect(refusal).not.toBeNull();
+    // 404, not 403. Order numbers are sequential, so "you may not see
+    // TT-26-00004" confirms TT-26-00004 exists and turns the route into an
+    // order-volume oracle for anyone with an account.
+    expect(refusal?.httpStatus).toBe(404);
+    expect(refusal?.code).toBe('NOT_FOUND');
+    expect(refusal?.message).not.toContain(placed.orderNumber);
+  });
+
+  it('reports a PENDING approval past its deadline as EXPIRED, not as still waiting', async () => {
+    const approverId = await makeUser(buyerOrgId, { full_name: 'Suresh Pillai' }, db);
+    await db.$executeRaw`
+      INSERT INTO customer.buyer_approval_policy (org_id, user_id, requires_approval_above,
+                                                  approver_user_id, is_active)
+      VALUES (${buyerOrgId}::uuid, ${buyerUserId}::uuid, 1000, ${approverId}::uuid, TRUE)`;
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+    expect(placed.status).toBe('AWAITING_APPROVAL');
+
+    const pending = await asBuyer(() => readOrder.byNumber(placed.orderNumber));
+    expect(pending.approval?.status).toBe('PENDING');
+    expect(pending.approval?.approverName).toBe('Suresh Pillai');
+
+    // The release job runs on a schedule, so past the deadline the row still
+    // reads PENDING. The true statement is that our own 24 hours ran out.
+    await db.$executeRaw`
+      UPDATE ordering.order_approval SET expires_at = ${new Date(NOW.getTime() - 60_000)}
+       WHERE order_id IN (SELECT id FROM ordering."order"
+                           WHERE order_number = ${placed.orderNumber})`;
+    const expired = await asBuyer(() => readOrder.byNumber(placed.orderNumber));
+    expect(expired.approval?.status).toBe('EXPIRED');
+  });
+
+  it('never reaches the purchase order, at any depth', async () => {
+    const vendor = await makeVendor();
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    // A purchase order really was raised: this is not a case of there being
+    // nothing to leak. Two reads, one per schema — `no-cross-schema-join` is
+    // the rule this whole test exists to defend, and it caught the one-query
+    // version of it.
+    const [order] = await db.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM ordering."order" WHERE order_number = ${placed.orderNumber}`;
+    const [po] = await db.$queryRaw<Array<{ po_number: string }>>`
+      SELECT po_number FROM procurement.purchase_order WHERE order_id = ${order!.id}::uuid`;
+    expect(po?.po_number).toMatch(/^PO-/);
+
+    const json = JSON.stringify(await asBuyer(() => readOrder.byNumber(placed.orderNumber)));
+    expect(json).not.toContain(po!.po_number);
+    // The agreed payout to the supply point. A retail screen must never carry it.
+    expect(json).not.toContain(String(VENDOR_ASK));
+    for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout']) {
+      expect(json.toLowerCase()).not.toContain(word);
+    }
   });
 });

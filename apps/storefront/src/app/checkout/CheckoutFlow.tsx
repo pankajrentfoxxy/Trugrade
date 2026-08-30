@@ -75,26 +75,6 @@ const isGrade = (g: string): g is Grade => g === 'A_PLUS' || g === 'A' || g === 
 const machines = (n: number): string => `${n} machine${n === 1 ? '' : 's'}`;
 
 /**
- * The server's `next` sentence, with any machine timestamp made readable.
- *
- * `OrderConfirmation.next` is product copy — it is the only thing a buyer is
- * told after the transaction commits — and on the approval arm it interpolates
- * a raw instant: "…is not given by 2026-08-30T21:28:25.288Z". Milliseconds and a
- * Z suffix are a log line, not a deadline a person can act on, and IST is the
- * only zone this product operates in. Formatting here rather than rewording the
- * sentence: the words are the API's and are right; only the instant is
- * unreadable. **The fix belongs in the service that writes the string.**
- */
-const readableInstants = (sentence: string): string =>
-  sentence.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (iso) =>
-    new Intl.DateTimeFormat('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: 'Asia/Kolkata',
-    }).format(new Date(iso)) + ' IST',
-  );
-
-/**
  * What went wrong, in the server's words where it had any.
  *
  * `UNKNOWN` and `NETWORK` are the two failures with no domain message behind
@@ -299,6 +279,12 @@ export function CheckoutFlow(): React.JSX.Element {
 
     if (placed.ok) {
       setPhase({ k: 'placed', order: placed.data });
+      // The order is now a resource with a URL, and that URL is the
+      // confirmation screen (T17). Handing over rather than rendering a second
+      // copy of it here means one screen tells a buyer what they bought — and it
+      // is one they can bookmark, reload and send to their finance team, which a
+      // component holding a function's return value never could be.
+      window.location.assign(`/orders/${placed.data.orderNumber}`);
       return;
     }
     if (placed.status === 401) {
@@ -1315,86 +1301,29 @@ function Failed({ message }: { message: string }): React.JSX.Element {
 }
 
 /**
- * The order exists.
+ * The order exists, and its own screen is `/orders/{orderNumber}` (T17).
  *
- * T17 builds the full confirmation screen; this is what checkout itself owes the
- * buyer the instant the transaction commits — the order number, the exact
- * serials that are now theirs, the money, and what happens next in words.
+ * `place()` navigates there the moment the transaction commits, so this is only
+ * ever on screen for the instant the browser takes to follow — and it is what a
+ * buyer sees if that navigation is blocked or slow, which is why it carries the
+ * order number and a link rather than a spinner. There is deliberately no second
+ * rendering of the serials and the money here: two screens describing one order
+ * is two places for them to disagree.
  */
 function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
-  const awaiting = order.status === 'AWAITING_APPROVAL';
   return (
-    // The same column width every step of the flow used. Without it the
-    // confirmation runs the full 1400px of `.wrap` and puts a serial number and
-    // its dispatch point a thousand pixels apart.
-    <div className="flex max-w-[74ch] flex-col gap-5">
-      <header className="flex flex-col items-start gap-2">
-        {/* Neutral, not `pass`. Green is PASS/FAIL and an order is neither —
-            and this one is `PAYMENT_PENDING`, so a green tick beside it would
-            be reading a verdict into a state that is still waiting on money.
-            `warn` on the approval arm is a real hold-up, not a verdict. */}
-        <StatusPill
-          tone={awaiting ? 'warn' : 'neutral'}
-          label={awaiting ? 'Awaiting approval' : 'Order placed · payment pending'}
-        />
-        <h1 className="text-h1 text-ink">
-          Order <span className="font-mono tnum">{order.orderNumber}</span>
-        </h1>
-        <p className="max-w-[64ch] text-body-sm text-ink-2">{readableInstants(order.next)}</p>
-      </header>
-
-      <div className="rounded-lg border border-rule bg-sheet p-4">
-        <h2 className="text-h3 text-ink">
-          {/* Not "yours" while an approver still has to say yes. They are held
-              — off sale to everyone else, committed to nobody. */}
-          {awaiting ? 'The machines held for you' : 'The machines that are yours'}{' '}
-          <span className="font-mono text-label tnum text-ink-3">({order.serials.length})</span>
-        </h2>
-        <ul className="mt-3 flex flex-col gap-2">
-          {order.serials.map((s) => (
-            <li key={s.serialNumber} className="flex flex-wrap items-baseline justify-between gap-3">
-              <a
-                href={`/unit/${s.serialNumber}`}
-                className="font-mono text-data tnum text-ink underline underline-offset-2"
-              >
-                {s.serialNumber}
-              </a>
-              <span className="font-mono text-label text-ink-3">{s.dispatchPoint}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-rule bg-sheet p-4">
-        {/* Not "what you were charged": the order is `PAYMENT_PENDING` and no
-            money has moved. Naming a charge that has not happened is the same
-            failure as a missing value drawn as a settled one. */}
-        <h2 className="text-h3 text-ink">
-          {awaiting ? 'What this order would come to' : 'What this order comes to'}
-        </h2>
-        <dl className="mt-3 flex flex-col gap-2">
-          <Fact label="Machines" value={rupees(order.subtotal)} mono />
-          <Fact label="Freight" value={rupees(order.freight)} mono />
-          <Fact
-            label={order.tax.interState ? `IGST ${order.tax.ratePct}%` : `CGST + ${order.tax.stateTaxLabel}`}
-            value={rupees(order.gstTotal)}
-            mono
-          />
-          <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-rule-2 pt-3">
-            <dt className="text-body-sm font-medium text-ink">Total</dt>
-            <dd className="font-mono text-h3 tnum text-ink">{rupees(order.grandTotal)}</dd>
-          </div>
-        </dl>
-        <p className="mt-3 text-label text-ink-3">
-          {awaiting
-            ? 'Nothing is charged while it is with your approver.'
-            : 'Nothing has been charged yet. This is the figure the invoice will carry.'}
-        </p>
-      </div>
-
+    <div className="flex max-w-[74ch] flex-col gap-4" role="status">
+      <StatusPill
+        tone={order.status === 'AWAITING_APPROVAL' ? 'warn' : 'neutral'}
+        label={order.status === 'AWAITING_APPROVAL' ? 'Awaiting approval' : 'Order placed'}
+      />
+      <h1 className="text-h1 text-ink">
+        Order <span className="font-mono tnum">{order.orderNumber}</span>
+      </h1>
+      <p className="text-body-sm text-ink-2">Opening your order…</p>
       <p>
-        <a className="pill acc" href="/search">
-          Keep browsing
+        <a className="pill acc" href={`/orders/${order.orderNumber}`}>
+          Open order {order.orderNumber}
         </a>
       </p>
     </div>

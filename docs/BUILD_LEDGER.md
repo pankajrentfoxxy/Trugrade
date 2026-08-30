@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-30T00:40:00+00:00  
-Currently: T17 - order confirmation and the approval-required state
+Currently: T18 - bulk requirement upload
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -27,7 +27,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
 | T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
 | T16 | Checkout | DONE | 93eb028 | 130 shots, 27 states x 2 themes x 3 widths | Archetype D. 16-step order transaction, 42 integration tests covering ORD-010/014/018/020 and PRC-030. Proven in data: PAYMENT_PENDING 3 units + 2 POs; AWAITING_APPROVAL 6 units + 0 POs. Six defects found by loading the screen, incl. an unresolved tax split drawn as settled with the wrong pair of heads. Also fixed: cart deletion stranding held stock (5ddf02b), and the header never reading the session (3963e99). |
-| T17 | Order confirmation and approval-required | DOING |  |  |  |
+| T17 | Order confirmation and approval-required | DONE |  | 54 shots, both themes, 1440/900/600 | Archetype C at `/orders/[orderNumber]`. Built the one endpoint that did not exist: `GET /api/buyer/orders/:orderNumber`. Checkout now HANDS OVER to it rather than rendering a second copy of the order. Approval arm proven on real data: held / expired / declined, each saying what is held, for whom, until when, who was asked, and what happens if nobody answers. No buyer-reachable route reads `procurement.purchase_order` at all. |
 | T18 | Bulk requirement upload | TODO |  |  |  |
 | T19 | Customer dashboard | TODO |  |  |  |
 | T20 | Order list | TODO |  |  |  |
@@ -59,6 +59,114 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T17 — decisions, not code
+
+- **The confirmation screen is a resource, not a return value.** Checkout's
+  `Placed` was rendering `OrderConfirmationView` — the transaction's return
+  value — which meant a buyer who closed the tab, or who came back from the
+  "your order needs a signature" email, had nowhere to go. T17 gives the order a
+  URL and `place()` navigates to it, so `Placed` shrank from 90 lines to a
+  hand-off. **Two screens describing one order is two places for them to
+  disagree**, and the money and the serials were duplicated across both.
+- **`/orders/[orderNumber]`, not `/orders/[id]`.** The human number is what is on
+  the confirmation, in the email and in the buyer's finance system. A route keyed
+  on a uuid makes "look up TT-26-00004" impossible without a search first.
+- **A foreign order answers 404, not 403.** "You may not see TT-26-00004"
+  confirms TT-26-00004 exists, and order numbers are sequential — a 403 turns the
+  route into an order-volume oracle for anyone with an account. The screen for a
+  foreign order and the screen for a number that never existed are therefore the
+  same screen, deliberately, and a test asserts the copy does not distinguish
+  them.
+- **A `PENDING` approval past `expires_at` is reported as `EXPIRED`, by the
+  server.** The release job runs on a schedule, so the raw row still says PENDING
+  for as long as the job lags. A screen reading it would tell a buyer their order
+  is still with their manager an hour after our own deadline passed. The deadline
+  is ours and it has gone; that is the true statement, and it is computed against
+  `ClockPort` rather than the browser.
+- **`order.stock_hold_expires_at` is deliberately not exposed.** On a confirmed
+  order it still holds the spent twenty-minute checkout hold — an instant in the
+  past — and a screen handed that would draw an expired deadline over machines
+  that are allocated and are not going anywhere. The only hold with a deadline a
+  buyer needs is the approval one.
+- **Hours and minutes, not `mm:ss`.** Checkout's `Countdown` is right for twenty
+  minutes and wrong for twenty-four hours: it would print `1439:58` and tick it
+  down one second at a time in front of somebody who has gone to find their
+  manager. `Deadline` recomputes once a minute and prints the absolute instant
+  beside it, because that is the figure you put in a message to the approver.
+- **There is no amber primary action on this screen, and that is the design.**
+  Payment is Phase 7, cancellation and reorder are T21, and the one action an
+  approval-pending order wants — approving it — is not the requester's to take. A
+  primary control that led nowhere would be worse than none. "One primary action
+  per screen" is a ceiling, not a quota.
+- **The proforma and the tax invoice say "not issued yet" rather than showing a
+  disabled download.** Neither is generated (the proforma is the rest of PHASE_06
+  Task 6; the tax invoice is Phase 7). A missing document drawn as a present one
+  is the same failure as a missing measurement drawn as a passing one.
+
+## Reported by T17 — the endpoint that did not exist
+
+`OrderingController` had carts and checkout and nothing that read an order back.
+`CheckoutService.confirm()` returns `OrderConfirmationView`, but a function's
+return value is not a resource — there was no way to see an order a second time,
+from any client, ever. Built, in `apps/api` and only this:
+
+- `GET /api/buyer/orders/:orderNumber` → `OrderReadService.byNumber()`
+  (`apps/api/src/modules/ordering/internal/order-read.service.ts`, 380 lines),
+  registered in `OrderingModule`, guarded by `ordering.own.read`, validated by a
+  new `orderNumberSchema` (`^TT-\d{2}-\d{5}$`).
+- Seven queries, none of them crossing a schema — the ESLint rule caught the one
+  place a test tried to (`ordering` JOIN `procurement`), which is the rule doing
+  exactly its job.
+- The tax heads are not stored on `ordering."order"`, only the total is, so they
+  are resolved again through `resolveTaxSplit` from the same two facts that
+  decided them at confirmation: our state and the DELIVERY state.
+- **It does not read `procurement.purchase_order` at all** — not counted, not
+  summarised, not referenced by number. Under the merchant-of-record model our PO
+  to a supply point is vendor-and-admin-only (PHASE_06 Task 6), and the way that
+  stays true is structural rather than careful.
+
+Four integration tests in `checkout-order.spec.ts` (now 46, was 42). Each one
+attempts the forbidden thing: another organisation's buyer asks for the order by
+its real number and is refused 404; a raised PO's number and its agreed payout
+are looked up and then swept for in the buyer's payload; a PENDING approval is
+pushed past its deadline and must come back EXPIRED.
+
+## Reported by T17 — not fixed, they are outside my files
+
+- **`EmptyState.body` is typed `string`, so an identifier in the sentence cannot
+  be mono.** The "no order with that number" screen names two order numbers and
+  both must be IBM Plex Mono. `body?: React.ReactNode` would fix it in one line;
+  until then `Missing` is hand-rolled on the storefront's own `.empty` class,
+  which is what `Failed` already does. `packages/ui/src/components/primitives.tsx`.
+- **`CheckoutService.confirm()` still interpolates a raw ISO instant into
+  `next`** — "…is not given by 2026-08-30T21:28:25.288Z". T16 formatted it on the
+  client; T17 deleted that helper because the sentence is now shown for the
+  instant before the hand-off. **The fix belongs in the service that writes the
+  string.** `apps/api/src/modules/ordering/internal/checkout.service.ts`.
+- **There is no approve/reject endpoint.** PHASE_06 Task 2 builds the policy and
+  the `order_approval` row, and the transaction writes it, but nothing can decide
+  one — so `APPROVED` and `REJECTED` are unreachable through the product. The
+  approver's screen is not in this backlog under any number I can find; it needs
+  one.
+- **Order confirmation and proforma PDFs are not generated** (PHASE_06 Task 6
+  asks for both). The screen says "not issued yet" rather than faking a download,
+  and it is the honest answer until they exist.
+
+## Reported by T17 — data moved for two captures, and put back
+
+`EXPIRED` and `REJECTED` cannot be reached by driving the UI, because nothing can
+decide an approval. `scripts/t17-shots.mjs` moves two rows through the real
+columns and restores them in a `finally`, printing the rows before and after:
+
+- `TT-26-00007` — `order_approval.expires_at` brought back an hour, then restored
+  to the exact microsecond it held before the run (`requested_at + 24 hours` was
+  close and not equal, which is not "put back").
+- `TT-26-00009` — `status` / `decided_at` / `comment` set to what an approver
+  pressing decline would write, then reset to `PENDING` / NULL / NULL.
+
+Verified restored: all four seeded approvals are `PENDING`, undecided, with their
+original deadlines.
 
 ## Reported by T16 — what loading the screen found
 

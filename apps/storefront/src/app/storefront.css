@@ -914,3 +914,68 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
    immediately below, in `CheckoutFlow`. The fix belongs in the component — the
    save block needs to be omittable — and is reported in the ledger. */
 .checkoutrail > p:last-child{display:none}
+
+/* ==========================================================================
+ * /orders/[orderNumber] — the order record and the approval-required state
+ * ========================================================================== */
+
+/* The approval block. Outlined in --warn only while it is live, because a
+   decided or expired approval is a fact in the past and outlining it would
+   keep asking for attention nobody can act on. Never filled: a filled warn
+   panel reads as a primary action at a glance. */
+.oappr{border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--sheet);
+  padding:16px 18px}
+.oappr.pending{border-color:var(--warn)}
+.oappr .sh{margin-bottom:8px}
+.oapprlead{margin:0;font-size:13px;line-height:1.65;color:var(--ink-2);max-width:78ch}
+.oapprlead b{color:var(--ink)}
+.oapprfacts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;margin:14px 0 0}
+.oapprfacts>div{display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+  padding:9px 0;border-bottom:1px solid var(--rule-2)}
+.oapprfacts dt{font-size:12.5px;color:var(--ink-3)}
+.oapprfacts dd{font-size:13px;color:var(--ink);text-align:right;
+  font-variant-numeric:tabular-nums;min-width:0}
+.oappr .fnote{max-width:78ch}
+
+/* The machines, grouped by the warehouse they leave from. */
+.omach{display:flex;flex-direction:column;gap:14px}
+.omlist{list-style:none;margin:0;padding:0}
+.omlist li{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-bottom:1px solid var(--rule-2);min-height:60px}
+.omlist li:last-child{border-bottom:0}
+.omid{display:flex;flex-direction:column;gap:2px;min-width:0}
+.omserial{font-size:13.5px;color:var(--ink);text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:3px;letter-spacing:.04em}
+.omserial:hover{text-decoration-color:var(--acc);color:var(--acc-ink)}
+.omtitle{font-size:13px;color:var(--ink-2)}
+.omspec{font-size:11.5px;color:var(--ink-4)}
+.omright{display:flex;align-items:center;gap:14px;margin-left:auto}
+.omprice{font-size:13.5px;color:var(--ink)}
+.omreleased{margin:0;padding:12px 16px;border-top:1px solid var(--rule);background:var(--sheet-2);
+  font-size:12px;color:var(--ink-3)}
+
+/* Documents. A definition list, because each row is one document and its
+   status — not two things to compare. */
+.odocs dl{margin:0}
+.odocs dl>div{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;
+  justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--rule-2)}
+.odocs dt{font-size:13px;color:var(--ink);display:flex;flex-direction:column;gap:3px;
+  max-width:52ch}
+.odocs dt .d{font-size:11.5px;color:var(--ink-4);font-weight:400}
+.odocs dd{font-size:13px;color:var(--ink-2);text-align:right;margin:0}
+.odocs>.fnote{padding:12px 16px;margin:0;border-top:1px solid var(--rule);
+  background:var(--sheet-2);border-left:0;max-width:none}
+
+@media(max-width:1000px){
+  .oapprfacts{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .omlist li{align-items:flex-start;flex-direction:column;gap:8px}
+  .omright{margin-left:0}
+  .odocs dl>div{flex-direction:column;gap:4px}
+  .odocs dd{text-align:left}
+}
+
+/* The states that are not the record. Capped: an error sentence centred across
+   the full 1400px of `.wrap` puts its first and last words a metre apart. */
+.ostate{max-width:74ch;margin:24px auto 0}

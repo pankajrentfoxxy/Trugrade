@@ -5,6 +5,7 @@ import { ZodValidationPipe } from '../../shared/http/http';
 import {
   addCartItemSchema,
   createCartSchema,
+  orderNumberSchema,
   requirementIntakeSchema,
   type AddCartItemDto,
   type CreateCartDto,
@@ -24,6 +25,7 @@ import {
   type CheckoutSessionView,
   type OrderConfirmationView,
 } from './internal/checkout.service';
+import { OrderReadService, type OrderRecordView } from './internal/order-read.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
 
 /**
@@ -55,6 +57,7 @@ export class OrderingController {
   constructor(
     private readonly carts: CartService,
     private readonly checkout: CheckoutService,
+    private readonly orders: OrderReadService,
     private readonly requirements: RfqIntakeService,
   ) {}
 
@@ -190,6 +193,36 @@ export class OrderingController {
     @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
   ): Promise<{ released: number }> {
     return this.checkout.abandon(cartId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Orders
+  // -------------------------------------------------------------------------
+
+  /**
+   * One order the buyer's organisation placed, by its human number.
+   *
+   * Addressed by `order_number` rather than by id because that is the string on
+   * the confirmation, in the email and in the buyer's own finance system — a
+   * route keyed on a uuid makes "look up TT-26-00004" impossible without a
+   * search first.
+   *
+   * **There is deliberately no route below this one that reaches a vendor
+   * purchase order.** Under the merchant-of-record model the buyer's documents
+   * are their own PO reference and our confirmation to them; our purchase order
+   * to a supply point is vendor-and-admin-only (PHASE_06 Task 6), and the way to
+   * keep that true is for no buyer-reachable endpoint to read
+   * `procurement.purchase_order` at all.
+   *
+   * An order belonging to another organisation answers 404, not 403 — see the
+   * service for why a 403 would turn sequential order numbers into an oracle.
+   */
+  @Get('orders/:orderNumber')
+  @RequirePermissions('ordering.own.read')
+  order(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<OrderRecordView> {
+    return this.orders.byNumber(orderNumber);
   }
 
   // -------------------------------------------------------------------------

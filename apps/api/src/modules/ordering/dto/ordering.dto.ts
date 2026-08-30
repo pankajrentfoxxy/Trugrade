@@ -126,3 +126,16 @@ export const requirementIntakeSchema = z.union([
 ]);
 
 export type RequirementIntakeDto = z.infer<typeof requirementIntakeSchema>;
+
+/**
+ * A human order number — `TT-26-00004`. Two-digit year, five-digit sequence,
+ * exactly as `order_transaction.service.ts` mints them.
+ *
+ * Validated as a shape rather than passed through as free text because it
+ * addresses a resource: a uuid schema would reject it and no schema at all
+ * would send arbitrary strings to the database on every mistyped URL.
+ */
+export const orderNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^TT-\d{2}-\d{5}$/, 'An order number looks like TT-26-00004.');
