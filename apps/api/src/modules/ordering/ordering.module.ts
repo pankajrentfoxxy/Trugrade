@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ClockModule } from '../../shared/clock';
 import { PrismaModule } from '../../shared/db/prisma.service';
+import { IdentityModule } from '../identity';
 import { ListingModule } from '../listing';
 import { LogisticsModule } from '../logistics';
+import { PaymentModule } from '../payment';
 import { PlatformModule } from '../platform';
 import { QcModule } from '../qc';
 import { OrderingController } from './ordering.controller';
+import { OrderingOpsController } from './ordering-ops.controller';
 import { OrderingService } from './ordering.service';
 import { ApprovalService } from './internal/approval.service';
 import { CartService } from './internal/cart.service';
@@ -13,6 +16,7 @@ import { CheckoutService } from './internal/checkout.service';
 import { HoldService } from './internal/hold.service';
 import { OrderListService } from './internal/order-list.service';
 import { OrderReadService } from './internal/order-read.service';
+import { OrderDocumentsService } from './internal/order-documents.service';
 import { OrderUnitsService } from './internal/order-units.service';
 import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
@@ -51,13 +55,31 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
  * later is drip pricing. The unserviceable arm of `FreightQuote` is why the
  * quote can say "we could not price this lane" instead of charging zero.
  *
+ * `PaymentModule` is imported for the invoice slice (T22), and the dependency
+ * runs deliberately in this direction. `ordering` owns the order and hands
+ * `payment` an `OrderBillingBasis` — a value, not a handle — so `payment` has no
+ * path back into `ordering."order"` and therefore no path to a vendor org id.
+ * The reverse import would close a cycle AND open that path in one move.
+ *
+ * `IdentityModule` is imported for `AuditService`. Every document download
+ * writes an `audit_log` row (03_UX_SPEC §3A.3), and `identity` owns that table.
+ *
  * `OrderingService` stays the only export, because the barrel is this module's
  * whole public surface and a cart service leaking out of it is how the seam is
  * lost.
  */
 @Module({
-  imports: [PrismaModule, ClockModule, ListingModule, LogisticsModule, PlatformModule, QcModule],
-  controllers: [OrderingController],
+  imports: [
+    PrismaModule,
+    ClockModule,
+    IdentityModule,
+    ListingModule,
+    LogisticsModule,
+    PaymentModule,
+    PlatformModule,
+    QcModule,
+  ],
+  controllers: [OrderingController, OrderingOpsController],
   providers: [
     OrderingService,
     CartService,
@@ -66,6 +88,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
     OrderTransactionService,
     OrderReadService,
     OrderUnitsService,
+    OrderDocumentsService,
     OrderListService,
     ApprovalService,
     CatalogLookup,

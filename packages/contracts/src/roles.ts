@@ -368,6 +368,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'ordering.cart.write',
     'ordering.order.create',
     'ordering.own.read',
+    // The spec's BUYER_PROCURER, and the documents route lists them alongside
+    // finance, admin and owner. They were the only one of the four without this,
+    // so the person who placed the order could not read its tax invoice while
+    // three colleagues could. read_own is org-scoped, so this grants sight of
+    // their own company's invoices and nobody else's.
+    'payment.invoice.read_own',
     'platform.ticket.write',
   ),
   /** VR-123: an approver may never approve their own order. Enforced in the service, not here. */

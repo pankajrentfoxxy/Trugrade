@@ -4,7 +4,6 @@ import {
   Money,
   resolveTaxSplit,
   stateTaxLabel,
-  supplyPointLabel,
   type Grade,
 } from '@trugrade/contracts';
 import { ClockPort } from '../../../shared/clock';
@@ -12,6 +11,7 @@ import { RequestContextService } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ForbiddenError, NotFoundError } from '../../../shared/errors/domain-errors';
 import { CatalogLookup } from './catalog-lookup';
+import { dispatchLabels, UNKNOWN_DISPATCH_LABEL } from './dispatch-label';
 
 /**
  * One order, read back by the buyer who placed it — PHASE_06 Task 6 and the
@@ -313,7 +313,7 @@ export class OrderReadService {
    */
   private async groups(rows: readonly AllocatedRow[]): Promise<DispatchGroupView[]> {
     if (rows.length === 0) return [];
-    const labels = await this.dispatchLabels(rows.map((r) => r.unit_id));
+    const labels = await dispatchLabels(this.prisma, rows.map((r) => r.unit_id));
     const descriptions = new Map(
       await Promise.all(
         [...new Set(rows.map((r) => r.sku_id))].map(
@@ -324,7 +324,7 @@ export class OrderReadService {
 
     const groups = new Map<string, DispatchGroupView>();
     for (const row of rows) {
-      const label = labels.get(row.unit_id) ?? 'Dispatch point to be confirmed';
+      const label = labels.get(row.unit_id) ?? UNKNOWN_DISPATCH_LABEL;
       const description = descriptions.get(row.sku_id) ?? null;
       const group = groups.get(label) ?? { label, machines: [] };
       group.machines.push({
@@ -339,30 +339,6 @@ export class OrderReadService {
     return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
   }
 
-  /**
-   * The anonymised label per machine. Joined inside `listing`'s own schema, and
-   * on both keys the unique constraint uses — `uq_supply_point_vendor_city`
-   * makes a code unique per city, not globally, so joining on `code` alone would
-   * eventually merge two supply points into one on screen.
-   */
-  private async dispatchLabels(unitIds: readonly string[]): Promise<Map<string, string>> {
-    const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; supply_point_code: string | null; city: string | null }>
-    >`
-      SELECT u.id, u.supply_point_code, p.city
-        FROM listing.unit u
-        LEFT JOIN listing.supply_point p
-               ON p.vendor_org_id = u.vendor_org_id AND p.code = u.supply_point_code
-       WHERE u.id = ANY(${[...unitIds]}::uuid[])`;
-    return new Map(
-      rows.map((r) => [
-        r.id,
-        r.supply_point_code && r.city
-          ? supplyPointLabel(r.supply_point_code, r.city)
-          : 'Dispatch point to be confirmed',
-      ]),
-    );
-  }
 
   /** Who the invoice will name. The buyer's own entity, from their GSTIN. */
   private async party(gstProfileId: string): Promise<OrderPartyView | null> {

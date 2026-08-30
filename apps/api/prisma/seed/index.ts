@@ -4,6 +4,7 @@ import { seedReference } from './reference';
 import { seedLogisticsNcr } from './logistics-ncr';
 import { seedCatalog } from './catalog-seed';
 import { seedDemo } from './demo';
+import { seedInvoicing } from './invoicing';
 
 const prisma = new PrismaClient();
 
@@ -30,6 +31,12 @@ async function main(): Promise<void> {
   if (process.env.SEED_DEMO === '1') {
     console.log('Seeding demo accounts and stock…');
     await seedDemo(prisma, (m) => console.log(m));
+
+    // Our own GST registration and the invoice series. Demo-gated because it
+    // depends on the INTERNAL organisation the demo seed creates, and because a
+    // synthetic GSTIN has no business on a database that is not a demo.
+    console.log('Seeding the seller registration and invoice series…');
+    await seedInvoicing(prisma, (m) => console.log(m));
   }
 
   const runway = await prisma.$queryRaw<Array<{ table_name: string; runway_days: number }>>`

@@ -9,6 +9,8 @@ export interface SkuDescription {
   title: string;
   /** "Core i5 · 16 GB · 512 GB NVME_SSD · 13.3\"" */
   specSummary: string;
+  /** `catalog.sku.hsn_code`. It prints on the invoice, so it is read, not assumed. */
+  hsn: string;
 }
 
 /**
@@ -55,6 +57,7 @@ export class CatalogLookup {
         `${sku.storageGb} GB ${sku.storageType}`,
         `${sku.screenSizeIn}"`,
       ].join(' · '),
+      hsn: sku.hsnCode,
     };
   }
 
@@ -79,6 +82,10 @@ export class CatalogLookup {
         `${hit.storageGb} GB`,
         `${hit.screenSizeIn}"`,
       ].join(' · '),
+      // The search view carries no HSN. A requirement-list match is a shopping
+      // suggestion and never an invoice line, so the catalog default stands in
+      // rather than a second lookup nobody needs.
+      hsn: '84713010',
     };
   }
 }

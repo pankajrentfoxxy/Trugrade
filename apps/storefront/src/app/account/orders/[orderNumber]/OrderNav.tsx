@@ -34,6 +34,7 @@ interface OrderTab {
 const TABS: readonly OrderTab[] = [
   { segment: '', label: 'Order' },
   { segment: '/units', label: 'Machines' },
+  { segment: '/documents', label: 'Documents' },
 ];
 
 export function OrderNav({ orderNumber }: { orderNumber: string }): React.JSX.Element {

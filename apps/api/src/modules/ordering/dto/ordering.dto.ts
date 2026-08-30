@@ -219,3 +219,19 @@ export const approvalDecisionSchema = z.object({
 
 export type ApprovalListQueryDto = z.infer<typeof approvalListQuerySchema>;
 export type ApprovalDecisionDto = z.infer<typeof approvalDecisionSchema>;
+
+/**
+ * A document id on an order — the literal `proforma`, or an invoice uuid.
+ *
+ * A union rather than `uuidSchema`, because the proforma genuinely has no row:
+ * it is derived from the order, consumes no number from the GST series and is
+ * rendered on demand (T22). Anything else is refused here rather than sent to
+ * the database as a uuid cast that would throw a 500 on every mistyped URL.
+ */
+export const documentIdSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^(proforma|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+    'That is not a document on this order.',
+  );

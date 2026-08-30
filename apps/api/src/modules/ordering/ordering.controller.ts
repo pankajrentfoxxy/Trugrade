@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Redirect,
+} from '@nestjs/common';
 import { uuidSchema } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
@@ -8,6 +18,7 @@ import {
   approvalListQuerySchema,
   createCartSchema,
   orderListQuerySchema,
+  documentIdSchema,
   orderNumberSchema,
   requirementIntakeSchema,
   type AddCartItemDto,
@@ -42,6 +53,10 @@ import {
   type OrderDashboardView,
   type OrderListView,
 } from './internal/order-list.service';
+import {
+  OrderDocumentsService,
+  type OrderDocumentsView,
+} from './internal/order-documents.service';
 import { OrderReadService, type OrderRecordView } from './internal/order-read.service';
 import { OrderUnitsService, type OrderUnitsView } from './internal/order-units.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
@@ -77,6 +92,7 @@ export class OrderingController {
     private readonly checkout: CheckoutService,
     private readonly orders: OrderReadService,
     private readonly orderUnits: OrderUnitsService,
+    private readonly documents: OrderDocumentsService,
     private readonly orderBoard: OrderListService,
     private readonly approvals: ApprovalService,
     private readonly requirements: RfqIntakeService,
@@ -304,6 +320,65 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<OrderUnitsView> {
     return this.orderUnits.byOrderNumber(orderNumber);
+  }
+
+  /**
+   * The documents on one order — T22, `03_UX_SPEC.md` §3A.3.
+   *
+   * Guarded by `payment.invoice.read_own` rather than `ordering.own.read`,
+   * because a tax invoice is a finance document and reading an order is not the
+   * same permission as reading what it was billed at. The spec lists this route
+   * for OWNER, ADMIN, FINANCE and PROCURER; of those four, `CUSTOMER_BUYER` (the
+   * procurer) is the one whose role in `packages/contracts/src/roles.ts` does not
+   * carry the permission today. That is a role-definition gap and not something
+   * to paper over by guarding this route with a weaker permission — the screen
+   * renders the refusal as a state and says who in the organisation can help.
+   *
+   * **Reads only.** It never issues an invoice: issuing consumes a number from
+   * the statutory series, and a number spent by a page load is a gap somebody
+   * has to explain in an audit.
+   *
+   * A document that does not exist yet comes back as a ROW with a reason, never
+   * as an absence and never as a dead download.
+   *
+   * Same 404-not-403 rule as the order itself and for the same reason. Nothing
+   * below reads `procurement.purchase_order`.
+   */
+  @Get('orders/:orderNumber/documents')
+  @RequirePermissions('payment.invoice.read_own')
+  orderDocuments(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<OrderDocumentsView> {
+    return this.documents.byOrderNumber(orderNumber);
+  }
+
+  /**
+   * One document, as a redirect to a short-lived signed URL.
+   *
+   * **A redirect rather than the bytes, on purpose.** The signed URL is minted
+   * here, so this route is where the `audit_log` row is written — one row per
+   * download, which is what §3A.3 asks for and what a row per page view would
+   * destroy. The URL itself is an AES-GCM encrypted object token, not a
+   * presigned S3 URL: a presign publishes the key path, and a key path is where
+   * a supplier identifier leaks (PHASE_05 Task 1). `GET /api/objects/:token`
+   * resolves it.
+   *
+   * 302 rather than 307: the browser is being sent somewhere to GET bytes, and
+   * there is no method or body to preserve.
+   *
+   * `:documentId` is the literal `proforma` or an invoice uuid — the ids the
+   * list handed out. An id belonging to another organisation, or to another
+   * order, answers 404.
+   */
+  @Get('orders/:orderNumber/documents/:documentId')
+  @Redirect(undefined, 302)
+  @RequirePermissions('payment.invoice.read_own')
+  async orderDocument(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+    @Param('documentId', new ZodValidationPipe(documentIdSchema)) documentId: string,
+  ): Promise<{ url: string; statusCode: number }> {
+    const { url } = await this.documents.download(orderNumber, documentId);
+    return { url, statusCode: 302 };
   }
 
 
