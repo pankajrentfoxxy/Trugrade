@@ -1,0 +1,8 @@
+model,quantity,grade,target_price,delivery_pincode,needed_by
+Dell Latitude 5420 i5 16GB 512GB,40,A,42000,122001,2026-10-15
+Lenovo ThinkPad E14 Gen 3,15,B,31000,122001,
+HP EliteBook 840 G8,12,A,38000,201301,2026-09-30
+Zorblax Quantum Ultrabook 9000,25,A,45000,110001,2026-11-01
+Kryotek Nebula 17 workstation chassis,8,,22000,560001,
+Dell Latitude 5320,zzz,A,40000,122001,
+Apple MacBook Air M2,5,A,,99999,

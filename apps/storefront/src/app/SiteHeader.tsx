@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import Link from 'next/link';
 import { ThemeToggle } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 
@@ -123,12 +124,15 @@ export async function SiteHeader({
 
           <div className="hact">
             <ThemeToggle className="h-9 w-9 border-chrome-line-2" />
-            <a className="hbtn hide-sm" href="/bulk">
+            {/* `Link`, not `a`: this is an internal route, and a plain anchor
+                makes every visit a full document load — which also means
+                `/bulk`'s own loading state can never render. */}
+            <Link className="hbtn hide-sm" href="/bulk">
               <span>
                 <small>Bulk order</small>
                 <strong>Requirement</strong>
               </span>
-            </a>
+            </Link>
             {user ? (
               <>
                 <a className="hbtn hide-sm" href="/cart">

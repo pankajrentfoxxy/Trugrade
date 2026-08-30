@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-30T00:40:00+00:00  
-Currently: T18 - bulk requirement upload (closes Wave 3)
+Updated: 2026-08-30T08:20:00+00:00  
+Currently: T19 - customer dashboard (Wave 3 closed)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -28,7 +28,7 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
 | T16 | Checkout | DONE | 93eb028 | 130 shots, 27 states x 2 themes x 3 widths | Archetype D. 16-step order transaction, 42 integration tests covering ORD-010/014/018/020 and PRC-030. Proven in data: PAYMENT_PENDING 3 units + 2 POs; AWAITING_APPROVAL 6 units + 0 POs. Six defects found by loading the screen, incl. an unresolved tax split drawn as settled with the wrong pair of heads. Also fixed: cart deletion stranding held stock (5ddf02b), and the header never reading the session (3963e99). |
 | T17 | Order confirmation and approval-required | DONE | 569ccfb | 54 shots, both themes, 1440/900/600 | Archetype C at /orders/[orderNumber]. Built the one missing route, GET /api/buyer/orders/:orderNumber, which never reads procurement.purchase_order — anonymity structural, not careful. A foreign order answers 404 not 403, because sequential order numbers make a 403 an order-volume oracle. A PENDING approval past its deadline is reported EXPIRED by the server. |
-| T18 | Bulk requirement upload | DOING |  |  |  |
+| T18 | Bulk requirement upload | DONE |  | 78 shots, 13 states x 2 themes x 1440/900/600 | Closes Wave 3. Archetype D at /bulk. Real end to end: a seven-line CSV produced three `ordering.rfq` rows and one `platform.ticket` with the parsed rows attached, read back from the database. Magic-byte sniff refuses an xlsx/PNG named .csv by name with the fix. Every rejected row is reported with the column name from the buyer's own file, never the schema's. `loading.tsx` could not be photographed - reported below, not faked. |
 | T19 | Customer dashboard | TODO |  |  |  |
 | T20 | Order list | TODO |  |  |  |
 | T21 | Order detail - serial level | TODO |  |  |  |
@@ -59,6 +59,99 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T46 | Performance budgets | TODO |  |  |  |
 | T47 | Hindi localisation | TODO |  |  |  |
 | T48 | Legal pages and Rule 4(2) block | TODO |  |  |  |
+
+## Reported by T18 — decisions, not code
+
+- **Archetype D, not B.** The answer is two tables, but there is nothing to
+  filter, sort or page: there is one task with two states — the list going in and
+  the answer coming back — and a rail that says which of the two you are looking
+  at. The tables themselves are `DataBoard` at the storefront's comfortable
+  density, like every other screen.
+- **The upload and the typed form are one screen, with one primary action.**
+  Choosing a file submits it, exactly as the KYC document step does; the typed
+  form has the single amber button. Two amber buttons on one screen would have
+  been the alternative, and a tab strip to avoid them would have hidden half the
+  answer to "how do I give you this".
+- **`loading.tsx` exists and could not be photographed.** A `<Link>` transition
+  in the App Router holds the previous page on screen while the segment's payload
+  streams rather than painting the boundary, and every other way in is a full
+  document load. It is not dead code — it is the standard boundary and it renders
+  when the segment suspends — but the capture named `T18-loading` would have been
+  a picture of something else, so there is none. What is captured instead is the
+  wait a person really sits through: `T18-uploading` (the file being checked) and
+  `T18-checking-typed` (the form in flight).
+- **The header's `/bulk` link is now a `next/link`.** It was a plain `<a>`, which
+  made every visit a full document load and meant the route's own loading state
+  could never render at all. One import and one tag, in `SiteHeader`.
+- **The magic-byte check lives in the browser, and it is not the trust boundary.**
+  The endpoint takes a JSON string, not a multipart file, so there is nothing on
+  the wire for the server to sniff; the server's boundary is the capped string and
+  the per-row report. The client check exists so that somebody who picked the
+  wrong file gets one sentence about the file — "requirements-q4.csv is an Excel
+  workbook, not a CSV" with the Save As that fixes it — instead of two hundred
+  sentences about its rows. The extension and the browser's `type` are consulted
+  nowhere.
+- **XLSX is refused, not parsed.** The backlog line says "CSV/XLSX". A workbook is
+  a zip of XML and reading one needs a dependency the API deliberately does not
+  have — `RfqIntakeService` reuses the SKU importer's RFC 4180 parser precisely to
+  avoid it — and a client-side parser would put a second, divergent definition of
+  "a requirement row" in a page. So an XLSX is detected by its first bytes and
+  refused by name with the two-click conversion. If XLSX has to be genuinely
+  supported it belongs in `@trugrade/contracts` beside `parseCsv`, serving both
+  importers, and it is a deliberate dependency rather than a page's private one.
+- **The typed path keeps your rows on a failure; the file path does not.** A 500
+  on the form leaves every line on screen with the refusal above it, because
+  throwing away what somebody just typed is worse than the failure. A 500 on an
+  upload has nothing to keep, so it gets the full-screen refusal with a way back.
+- **Nothing is stored until the list is sent, and the rail says so.** `StepRail`
+  always closes with registration's save-and-resume state, which would promise a
+  draft this flow does not keep — the same defect checkout hit. Suppressed the
+  same way, and the rule in `storefront.css` now names both flows. The fix still
+  belongs in the component: the save block needs to be omittable.
+
+## Reported by T18 — found in the API, not fixed (ownership was storefront only)
+
+- **`A+` is refused as a grade, and it is the way everyone writes it.** The row
+  schema upper-cases and turns spaces and hyphens into underscores, so `a plus`
+  and `A_PLUS` both land — but `A+`, which is how the grade is printed on every
+  screen in this product, becomes the string `A+` and fails the enum. A whole
+  otherwise-good row is lost to it. One line in `requirementRowSchema`'s
+  preprocess (`.replace(/\+/g, '_PLUS')`) closes it. `docs/review/T18-unreadable-rows-*`
+  shows the refusal on line 4.
+- **A blank line in the middle of a file shifts every line number after it.**
+  `parseCsv` drops all-blank rows from the grid, and `fromCsv` then numbers rows
+  by their position in the FILTERED grid. Proved against the live API: a file
+  whose third row is blank reports its fourth line as line 3. That is exactly the
+  "line 47 vanished" failure this task is written against, pointed one row off.
+  The fix is to number rows before filtering — the parser already has the
+  information.
+- **A rejected row is reported with the schema's field name, not the CSV's.** The
+  server answers `deliveryPincode`; the buyer's header says `delivery_pincode`.
+  The screen maps it back (`CSV_COLUMN` in `BulkIntake.tsx`) because it had to,
+  but the mapping belongs where the two names are both known — the intake service
+  parsed the header and knows which column each field came from.
+- **Zod's raw text reaches the buyer.** "Expected number, received nan" and
+  "Invalid enum value. Expected 'A_PLUS' | 'A' | 'B', received 'GRADE_A_PLUS'" are
+  rendered verbatim because the server's wording is the rule. They are not house
+  style — "Enter the quantity as a whole number of machines" is — and
+  `requirementRowSchema` is the one place to say so.
+- **`MatchedRequirement` does not echo the buyer's own text.** `UnmatchedRequirement`
+  carries `model`; the matched arm drops it. That matters because the matcher is
+  a trigram search: "Dell Latitude 5320" matches "Dell Latitude 5420" and the
+  buyer cannot see the substitution from the response alone. The screen shows the
+  matched title and full specification so the swap is at least visible, and says
+  the line number is the row in their own file — but echoing `model` back is one
+  field and it is the honest version.
+- **The endpoint is unrated and every call writes.** Each submission inserts an
+  `ordering.rfq` per matched row and opens a `platform.ticket` when anything is
+  unmatched. Running the capture script twice put eleven `BULK_REQUIREMENT`
+  tickets in the demo database. Nothing here is corrupt and none of it was moved
+  by hand, but a rate limit belongs on a route that writes on every POST.
+- **The constants are restated in the storefront.** `REQUIREMENT_COLUMNS`, the
+  2,000,000-character cap and the 500-row cap live in the API's DTO file, which
+  the storefront may not import. Restated in `bulk/api.ts` with the duplication
+  named — the same report `CART_NAME_MAX` already carries. They belong in
+  `@trugrade/contracts`.
 
 ## Reported by T17 — decisions, not code
 

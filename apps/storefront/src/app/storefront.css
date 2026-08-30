@@ -903,17 +903,19 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 }
 
 /* ==========================================================================
- * /checkout — the step rail's save-and-resume state
+ * /checkout and /bulk — the step rail's save-and-resume state
  * ========================================================================== */
 /* `StepRail` always closes with a save state, and with no `savedAt` that state
    is "Nothing saved yet. Finish a step to save a draft." True in registration,
-   which writes `onboarding_progress.draft_json` after every step. False here,
-   and dangerously so: checkout saves no draft at all, and the promise that
-   finishing a step will save one is the opposite of a twenty-minute hold that
-   releases whether or not this tab is open. The rail's own sentence replaces it
-   immediately below, in `CheckoutFlow`. The fix belongs in the component — the
-   save block needs to be omittable — and is reported in the ledger. */
-.checkoutrail > p:last-child{display:none}
+   which writes `onboarding_progress.draft_json` after every step. False in both
+   flows below, and dangerously so in checkout: it saves no draft at all, and the
+   promise that finishing a step will save one is the opposite of a twenty-minute
+   hold that releases whether or not this tab is open. /bulk saves nothing
+   either — a requirement list exists once it has been sent, and not before. Each
+   flow puts its own true sentence immediately below the rail. The fix belongs in
+   the component — the save block needs to be omittable — and is reported in the
+   ledger. */
+.checkoutrail > p:last-child,.nodraft > p:last-child{display:none}
 
 /* ==========================================================================
  * /orders/[orderNumber] — the order record and the approval-required state
@@ -979,3 +981,14 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 /* The states that are not the record. Capped: an error sentence centred across
    the full 1400px of `.wrap` puts its first and last words a metre apart. */
 .ostate{max-width:74ch;margin:24px auto 0}
+
+/* ==========================================================================
+ * /bulk — the requirement intake's two answer tables
+ * ========================================================================== */
+/* The global `table` floor is 940px, which is right for a full-width board and
+   wrong inside a flow: the step rail and the why rail take 540px of a 1400px
+   page, so a 940px table scrolls sideways on a desktop that has room for it.
+   Five columns at a tighter gutter fit the column the flow actually gives them,
+   and the `.scroll` wrapper still carries anything narrower. */
+.bulktbl table{min-width:660px}
+.bulktbl td,.bulktbl th{padding-left:12px;padding-right:12px}
