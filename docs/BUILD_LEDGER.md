@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-30T00:40:00+00:00  
-Currently: T18 - bulk requirement upload
+Currently: T18 - bulk requirement upload (closes Wave 3)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -27,8 +27,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T14 | Certificate verification /qc/verify/[code] | DONE | 878f888 | 60 shots, 600/900/1440, both themes | Archetype F, phone-first. Broken seal outranks the verdict. Expired is not failure. Unknown vs malformed distinguished without adding a third validator. Real QR, not the reference's decorative one. |
 | T15 | Cart | DONE | ccc664a | 54 shots, both themes, 1440/900/600 | Archetype C. Grouped by dispatch point, never called a sub-order. 20-minute hold honestly absent (belongs to checkout). Fixed a silent false sign-out affecting EVERY authenticated screen, and /sign-in dropping ?next=. |
 | T16 | Checkout | DONE | 93eb028 | 130 shots, 27 states x 2 themes x 3 widths | Archetype D. 16-step order transaction, 42 integration tests covering ORD-010/014/018/020 and PRC-030. Proven in data: PAYMENT_PENDING 3 units + 2 POs; AWAITING_APPROVAL 6 units + 0 POs. Six defects found by loading the screen, incl. an unresolved tax split drawn as settled with the wrong pair of heads. Also fixed: cart deletion stranding held stock (5ddf02b), and the header never reading the session (3963e99). |
-| T17 | Order confirmation and approval-required | DONE |  | 54 shots, both themes, 1440/900/600 | Archetype C at `/orders/[orderNumber]`. Built the one endpoint that did not exist: `GET /api/buyer/orders/:orderNumber`. Checkout now HANDS OVER to it rather than rendering a second copy of the order. Approval arm proven on real data: held / expired / declined, each saying what is held, for whom, until when, who was asked, and what happens if nobody answers. No buyer-reachable route reads `procurement.purchase_order` at all. |
-| T18 | Bulk requirement upload | TODO |  |  |  |
+| T17 | Order confirmation and approval-required | DONE | 569ccfb | 54 shots, both themes, 1440/900/600 | Archetype C at /orders/[orderNumber]. Built the one missing route, GET /api/buyer/orders/:orderNumber, which never reads procurement.purchase_order — anonymity structural, not careful. A foreign order answers 404 not 403, because sequential order numbers make a 403 an order-volume oracle. A PENDING approval past its deadline is reported EXPIRED by the server. |
+| T18 | Bulk requirement upload | DOING |  |  |  |
 | T19 | Customer dashboard | TODO |  |  |  |
 | T20 | Order list | TODO |  |  |  |
 | T21 | Order detail - serial level | TODO |  |  |  |
@@ -1204,6 +1204,18 @@ buyer uses, so they read as scannable and are not.
   T14 worked around this by drawing its own real QR with `qrcode-generator`, which the
   API's PDF already depends on — so the library is present and the fix is to move T14's
   implementation into the package and delete the placeholder.
+
+## Reachability gaps found in Wave 3 — features whose states no route can produce
+
+- **No approve/reject endpoint exists.** PHASE_06 Task 2 builds the policy, the row and the 24-hour
+  expiry, and the order transaction writes an `order_approval` — but nothing can DECIDE one, so
+  `APPROVED` and `REJECTED` are unreachable through the product. Four orders sit at
+  AWAITING_APPROVAL with no way forward. An approver's screen appears under no backlog number I could
+  find; it likely belongs with T25 (approval inbox) in Wave 4.
+- **Order confirmation and proforma PDFs are not generated**, though PHASE_06 Task 6 asks for both.
+  T17's screen says "not issued yet" rather than faking a download.
+- **The seed contains no FAIL, PASS_WITH_NOTE or MISMATCH QC report** — all 239 are PASS, so the
+  `--fail` verdict path on T14 is covered by tests and by no screenshot.
 
 ## Known bugs, not yet fixed
 
