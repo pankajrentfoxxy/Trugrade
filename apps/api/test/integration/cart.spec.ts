@@ -527,3 +527,53 @@ describe('bulk requirement intake', () => {
     expect(() => requirements.fromCsv('machine,howmany\nLatitude,5')).toThrow(/quantity/i);
   });
 });
+
+describe('the line number a buyer is told is the line in their file', () => {
+  /**
+   * `parseCsv` used to end with a filter that dropped blank rows, and both its
+   * callers number rows by position in the array it returns — so one blank line
+   * shifted the reported line number of everything after it.
+   *
+   * That is exactly the failure line numbers exist to prevent. A procurement
+   * head told "line 5 is wrong" opens line 5; if we point one row off they
+   * correct a line that was fine and the broken one stays broken. Confidently
+   * wrong is worse than absent.
+   *
+   * Written as the file that used to break it: a blank third line, and the bad
+   * row physically on line 5.
+   */
+  it('counts a blank row rather than silently closing the gap', () => {
+    const csv = [
+      'model,quantity,delivery_pincode', // line 1
+      'Dell Latitude 5420,10,122001', //    line 2
+      '', //                                line 3 — blank
+      'Dell Latitude 5420,5,122001', //     line 4
+      'Dell Latitude 5420,notanumber,122001', // line 5 — the bad one
+    ].join(String.fromCharCode(10));
+
+    const { rows, rejected } = requirements.fromCsv(csv);
+
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.line).toBe(5);
+    // The blank row is skipped, not reported as a broken requirement.
+    expect(rows.map((r) => r.line)).toEqual([2, 4]);
+  });
+
+  /**
+   * "A+" is how the grade is printed on the offer board, the passport and the
+   * certificate. A buyer copying our own notation back to us had the whole row
+   * refused.
+   */
+  it('accepts the grade notation the product itself prints', () => {
+    const csv = [
+      'model,quantity,grade,delivery_pincode',
+      'Dell Latitude 5420,10,A+,122001',
+      'Dell Latitude 5420,10,a plus,122001',
+      'Dell Latitude 5420,10,A_PLUS,122001',
+    ].join(String.fromCharCode(10));
+
+    const { rows, rejected } = requirements.fromCsv(csv);
+    expect(rejected).toEqual([]);
+    expect(rows.map((r) => r.value.grade)).toEqual(['A_PLUS', 'A_PLUS', 'A_PLUS']);
+  });
+});

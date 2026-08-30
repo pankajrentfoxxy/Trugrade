@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import {
+  isBlankCsvRow,
   parseCsv,
   splitSerialBlock,
   validateSerialBatch,
@@ -131,7 +132,14 @@ export class SerialService {
     // first row is not a header, it is a serial like every other row.
     const hasHeader = column >= 0;
     const index = hasHeader ? column : 0;
-    const dataRows = hasHeader ? grid.slice(1) : grid;
+    // Blank rows are dropped HERE, not by the parser, and the file line each
+    // surviving row came from is carried with it. `parseCsv` used to filter
+    // blanks itself, which shifted every line number after a blank row — a
+    // vendor told "line 47" would look at a line that was fine. The parser
+    // returns what is in the file; deciding what an empty row means is ours.
+    const dataRows = (hasHeader ? grid.slice(1) : grid)
+      .map((row, i) => ({ row, fileLine: i + 1 }))
+      .filter((r) => !isBlankCsvRow(r.row));
 
     if (!hasHeader && grid[0]!.length > 1) {
       return {
@@ -146,7 +154,7 @@ export class SerialService {
       };
     }
 
-    const serials = dataRows.map((r) => (r[index] ?? '').trim());
+    const serials = dataRows.map((r) => (r.row[index] ?? '').trim());
     // The line the vendor sees in their editor: the header is line 1.
     const fileLineOf = (batchLine: number): number => batchLine + (hasHeader ? 1 : 0);
 
@@ -162,12 +170,12 @@ export class SerialService {
       const issue = byLine.get(i + 1);
       return issue
         ? {
-            lineNumber: fileLineOf(i + 1),
+            lineNumber: fileLineOf(dataRows[i]!.fileLine),
             serial: issue.serial,
             outcome: issue.outcome,
             reason: issue.message,
           }
-        : { lineNumber: fileLineOf(i + 1), serial, outcome: 'WILL_ADD' };
+        : { lineNumber: fileLineOf(dataRows[i]!.fileLine), serial, outcome: 'WILL_ADD' };
     });
 
     return {

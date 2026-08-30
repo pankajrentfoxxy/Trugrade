@@ -122,8 +122,34 @@ export function parseCsv(text: string): string[][] {
     row.push(field);
     rows.push(row);
   }
-  return rows.filter((r) => r.some((f) => f.trim() !== ''));
+  // Blank rows are RETURNED, not dropped.
+  //
+  // This used to end `.filter(r => r.some(f => f.trim() !== ''))`, which looks
+  // like tidying and is destructive: every caller numbers its rows by position
+  // in this array, so removing a row silently shifts the reported line number of
+  // every row after it. A file whose third line is blank reported its fourth
+  // line as line 3 — proved against the live API.
+  //
+  // That is precisely the failure these line numbers exist to prevent. A
+  // procurement head told "line 47 is wrong" looks at line 47; if we have
+  // pointed one row off, they correct a line that was fine and the real one
+  // stays broken. Silently dropping the row would be bad; misnumbering the rest
+  // is worse, because it is confidently wrong rather than absent.
+  //
+  // Filtering is the caller's decision and the caller is the one that knows what
+  // an empty row means in its file. Parsing returns what is in the file.
+  //
+  // TRAILING blanks are the one exception, and the distinction is the point: a
+  // file ending in a newline is what every editor produces, so the empty row it
+  // implies is an artefact of the format rather than a line anybody typed.
+  // Dropping it changes no line number, because there is nothing after it.
+  while (rows.length > 0 && isBlankCsvRow(rows[rows.length - 1]!)) rows.pop();
+  return rows;
 }
+
+/** True for a row that is entirely empty — what callers skip while keeping the index. */
+export const isBlankCsvRow = (row: readonly string[]): boolean =>
+  row.every((f) => f.trim() === '');
 
 export type RowOutcome = 'WILL_CREATE' | 'WILL_MERGE' | 'ERROR';
 

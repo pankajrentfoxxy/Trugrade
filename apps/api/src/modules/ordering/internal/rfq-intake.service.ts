@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { parseCsv, type Grade, type Money } from '@trugrade/contracts';
+import { isBlankCsvRow, parseCsv, type Grade, type Money } from '@trugrade/contracts';
 import { ClockPort } from '../../../shared/clock';
 import { RequestContextService } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
@@ -163,6 +163,10 @@ export class RfqIntakeService {
       // sees in the left-hand gutter of their own spreadsheet.
       const line = i + 1;
       const cells = grid[i]!;
+      // Skipped here rather than filtered out of the grid, so `line` stays the
+      // number in the person's own spreadsheet. A blank row between requirements
+      // is ordinary formatting, not an error to report back at them.
+      if (isBlankCsvRow(cells)) continue;
       const raw: Record<string, string> = {};
       columns.forEach((name, col) => {
         if (name) raw[name] = cells[col] ?? '';

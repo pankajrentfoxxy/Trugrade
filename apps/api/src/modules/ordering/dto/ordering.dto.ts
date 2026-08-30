@@ -93,6 +93,12 @@ export const requirementRowSchema = z.object({
           ? v
               .trim()
               .toUpperCase()
+              // "A+" before whitespace, because "+" is how the grade is PRINTED
+              // on every screen in this product — the offer board, the passport,
+              // the certificate. A buyer copying what we show them into their own
+              // spreadsheet had the whole row rejected, which is us refusing our
+              // own notation.
+              .replace(/\+/g, '_PLUS')
               .replace(/[\s-]+/g, '_')
           : v,
       gradeSchema,
