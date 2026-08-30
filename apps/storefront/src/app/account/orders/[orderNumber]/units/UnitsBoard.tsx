@@ -265,7 +265,7 @@ export function UnitsBoard({
               ? 'Reading the inspections on this order.'
               : `${rows.length} of ${all.length} machines on order ${orderNumber}, sorted by ${SORT_CAPTION[sortKey]}, ${direction === 'asc' ? 'lowest first' : 'highest first'}.`
           }
-          columns={COLUMNS}
+          columns={columnsFor(orderNumber)}
           rows={rows}
           rowKey={(u) => u.serialNumber}
           sort={{ key: sortKey, direction }}
@@ -320,7 +320,13 @@ const SORT_CAPTION: Record<SortKey, string> = {
  * The columns
  * ======================================================================== */
 
-const COLUMNS: readonly Column<OrderedUnit>[] = [
+/**
+ * Built per order rather than a module constant, because two cells now need the
+ * order number: the passport link and — new in T24 — the action on a machine the
+ * inspection did not clear. T21 could state a MISMATCH and go no further; this
+ * is the control it was missing.
+ */
+const columnsFor = (orderNumber: string): readonly Column<OrderedUnit>[] => [
   {
     key: 'serial',
     header: 'Serial',
@@ -342,12 +348,33 @@ const COLUMNS: readonly Column<OrderedUnit>[] = [
   {
     key: 'verdict',
     header: 'Inspection',
-    cell: (u) =>
-      u.verdict === null ? (
-        <span className="notmeasured">Not inspected</span>
-      ) : (
-        <StatusPill tone={VERDICT[u.verdict].tone} label={VERDICT[u.verdict].label} />
-      ),
+    cell: (u) => (
+      <div className="ubverdict">
+        {u.verdict === null ? (
+          <span className="notmeasured">Not inspected</span>
+        ) : (
+          <StatusPill tone={VERDICT[u.verdict].tone} label={VERDICT[u.verdict].label} />
+        )}
+        {(u.verdict === 'MISMATCH' || u.verdict === 'FAIL') && (
+          // The action T21 deferred. Stating a mismatch and offering no way to
+          // act on it puts the buyer in the position of having been told
+          // something is wrong and having to find somebody to tell. The reason
+          // is pre-selected from the verdict, and the return form asks them for
+          // the detail our own `qc_mismatch` table has never been given.
+          <a
+            className="ubflag"
+            href={
+              `/account/returns/new?order=${encodeURIComponent(orderNumber)}` +
+              `&units=${encodeURIComponent(u.serialNumber)}` +
+              (u.verdict === 'MISMATCH' ? '&reason=SPEC_MISMATCH' : '&reason=DOA')
+            }
+          >
+            Flag a mismatch
+            <span className="sr-only"> on {u.serialNumber}</span>
+          </a>
+        )}
+      </div>
+    ),
   },
   {
     key: 'grade',

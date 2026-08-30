@@ -1,7 +1,20 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { RequirePermissions } from '../../shared/auth/guards';
+import { NotFoundError } from '../../shared/errors/domain-errors';
 import { ZodValidationPipe } from '../../shared/http/http';
 import { claimNumberSchema, raiseClaimSchema, type RaiseClaimDto } from './dto/warranty.dto';
+import {
+  raiseReturnSchema,
+  returnEligibilityQuerySchema,
+  returnNumberSchema,
+  type RaiseReturnDto,
+  type ReturnEligibilityQueryDto,
+} from './dto/returns.dto';
+import {
+  ReturnsService,
+  type ReturnEligibility,
+  type ReturnView,
+} from './internal/returns.service';
 import {
   WarrantyService,
   type ClaimView,
@@ -42,7 +55,10 @@ import {
  */
 @Controller('buyer')
 export class PlatformController {
-  constructor(private readonly warranty: WarrantyService) {}
+  constructor(
+    private readonly warranty: WarrantyService,
+    private readonly returns: ReturnsService,
+  ) {}
 
   /**
    * Warranty status for every machine the organisation owns.
@@ -86,5 +102,72 @@ export class PlatformController {
     @Body(new ZodValidationPipe(raiseClaimSchema)) body: RaiseClaimDto,
   ): Promise<ClaimView> {
     return this.warranty.raiseClaim(body);
+  }
+
+  // -------------------------------------------------------------------------
+  // Returns — T24, inside the 48-hour inspection window
+  // -------------------------------------------------------------------------
+
+  /**
+   * What can be sent back, and what cannot, and why.
+   *
+   * `?order=` narrows it to one order, which is how the return form arrives from
+   * an order record. **Every machine is listed either way, blocked ones
+   * included** — a machine that silently vanished from this list because its
+   * window closed would leave the buyer thinking the serial was wrong. The
+   * `blockedReason` is the sentence saying which of the four it is, and the
+   * closed-window one carries the exact instant and the warranty route.
+   *
+   * A foreign order comes back with no machines and the route answers 404, never
+   * 403: order numbers are sequential, so a refusal that distinguished them
+   * would let anyone with an account count our orders.
+   */
+  @Get('returns/eligibility')
+  @RequirePermissions('ordering.own.read')
+  async eligibility(
+    @Query(new ZodValidationPipe(returnEligibilityQuerySchema)) query: ReturnEligibilityQueryDto,
+  ): Promise<ReturnEligibility> {
+    const view = await this.returns.eligibility(query.order);
+    if (query.order !== undefined && view.machines.length === 0) {
+      throw new NotFoundError('order', { reason: 'no_such_order_for_this_org' });
+    }
+    return view;
+  }
+
+  @Get('returns')
+  @RequirePermissions('ordering.own.read')
+  returnList(): Promise<{ returns: readonly ReturnView[] }> {
+    return this.returns.list();
+  }
+
+  @Get('returns/:returnNumber')
+  @RequirePermissions('ordering.own.read')
+  returnRecord(
+    @Param('returnNumber', new ZodValidationPipe(returnNumberSchema)) returnNumber: string,
+  ): Promise<ReturnView> {
+    return this.returns.view(returnNumber);
+  }
+
+  /**
+   * Raise a return over one or more machines on one order.
+   *
+   * 201 by Nest's default, and deliberately not idempotent: a return is a new
+   * record with its own number, one per machine. What makes a double-submit safe
+   * is `uq_return_open_per_unit` — a partial unique index on the states that are
+   * still live — and the service refusing a machine that already has a return
+   * open by naming its number, so the buyer goes to it rather than wondering
+   * whether the first one landed.
+   *
+   * `platform.ticket.write` for the same reason a claim uses it: a return is the
+   * same kind of act as raising a ticket, and it is what BUYER_PROCURER,
+   * BUYER_ADMIN, BUYER_OWNER and BUYER_FINANCE already carry. VIEWER does not,
+   * which is §3A.4's role list exactly.
+   */
+  @Post('returns')
+  @RequirePermissions('platform.ticket.write')
+  raiseReturn(
+    @Body(new ZodValidationPipe(raiseReturnSchema)) body: RaiseReturnDto,
+  ): Promise<{ returns: readonly ReturnView[] }> {
+    return this.returns.raise(body);
   }
 }

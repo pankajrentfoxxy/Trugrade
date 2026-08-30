@@ -8,7 +8,7 @@
  * Anything added here becomes something another module may depend on, so adding
  * to this file is an architectural decision, not a convenience.
  */
-export { type IQcService, QcService } from './qc.service';
+export { type IQcService, QcService, type SealCheck } from './qc.service';
 /**
  * Types only, and they are genuinely part of the contract: `SupplyPointQuality`
  * is what `qualityForSupplyPoints` returns, and a caller cannot type the answer

@@ -235,3 +235,70 @@ export const documentIdSchema = z
     /^(proforma|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
     'That is not a document on this order.',
   );
+
+// ---------------------------------------------------------------------------
+// The buyer's seal check at handover — T24
+// ---------------------------------------------------------------------------
+
+/**
+ * A seal code as it is printed on the sticker.
+ *
+ * Upper-cased on the way in, for the reason `serialSchema` gives about a
+ * serial: somebody standing at a lorry door types what they can see on a label,
+ * and a check that failed on lower case would tell them the seal is not on the
+ * delivery — which is the single most alarming thing this screen can say
+ * wrongly, because the correct response to it is to refuse the machine.
+ *
+ * The shape is deliberately permissive about the prefix. `qc.seal_code_prefix`
+ * is what the physical rolls are printed against and `SealingService` validates
+ * against it; restating the prefix here would put it in two places, and the one
+ * that matters is the one beside the seals.
+ */
+export const sealCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .min(3)
+  .max(64)
+  .regex(/^[A-Z0-9-]+$/, 'A seal code is letters, digits and hyphens.');
+
+/**
+ * What the person at the door found.
+ *
+ * Three outcomes and not two. MISSING is offered beside BROKEN because a seal
+ * that is not there at all is the same claim about custody with less evidence
+ * about how it happened, and a form that only offered "broken" would have people
+ * choosing it for a sticker that was never on the machine.
+ */
+export const sealCheckSchema = z.object({
+  sealCode: sealCodeSchema,
+  outcome: z.enum(['INTACT', 'BROKEN', 'MISSING']),
+  /**
+   * The buyer's own words on a break, kept verbatim on the seal record. Optional
+   * because a person refusing a machine at a door should not be held up by a
+   * text box; the service supplies a factual default when it is absent.
+   */
+  note: z.string().trim().max(1000).optional(),
+});
+
+export type SealCheckDto = z.infer<typeof sealCheckSchema>;
+
+/**
+ * Which delivery on this order is being signed for — `1` for "Delivery 1 of 3".
+ *
+ * Receipt is confirmed per consignment and not per order, because three
+ * consignments arriving on three days are three separate handovers with three
+ * separate windows, and one of them can be refused while the others are
+ * accepted.
+ *
+ * **A position, not `sub_order_number`.** "Sub-order" is an internal grouping
+ * and the word never reaches a buyer — to them this is one order from one seller
+ * with one invoice, arriving in a number of deliveries. Putting the internal
+ * number in a buyer-reachable URL would leak the vocabulary and, with it, the
+ * fact that their order was split by supplier.
+ */
+export const deliveryIndexSchema = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(99, 'No order on the platform has that many deliveries.');

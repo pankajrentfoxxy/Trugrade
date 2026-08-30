@@ -18,15 +18,18 @@ import {
   approvalListQuerySchema,
   createCartSchema,
   orderListQuerySchema,
+  deliveryIndexSchema,
   documentIdSchema,
   orderNumberSchema,
   requirementIntakeSchema,
+  sealCheckSchema,
   type AddCartItemDto,
   type ApprovalDecisionDto,
   type ApprovalListQueryDto,
   type CreateCartDto,
   type OrderListQueryDto,
   type RequirementIntakeDto,
+  type SealCheckDto,
 } from './dto/ordering.dto';
 import {
   checkoutQuerySchema,
@@ -57,6 +60,11 @@ import {
   OrderDocumentsService,
   type OrderDocumentsView,
 } from './internal/order-documents.service';
+import {
+  DeliveryCheckService,
+  type DeliveryView,
+  type SealCheckResult,
+} from './internal/delivery-check.service';
 import { OrderReadService, type OrderRecordView } from './internal/order-read.service';
 import { OrderUnitsService, type OrderUnitsView } from './internal/order-units.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
@@ -92,6 +100,7 @@ export class OrderingController {
     private readonly checkout: CheckoutService,
     private readonly orders: OrderReadService,
     private readonly orderUnits: OrderUnitsService,
+    private readonly deliveryCheck: DeliveryCheckService,
     private readonly documents: OrderDocumentsService,
     private readonly orderBoard: OrderListService,
     private readonly approvals: ApprovalService,
@@ -320,6 +329,80 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<OrderUnitsView> {
     return this.orderUnits.byOrderNumber(orderNumber);
+  }
+
+  // -------------------------------------------------------------------------
+  // The buyer's own seal check at handover — T24, §3A.3
+  // -------------------------------------------------------------------------
+
+  /**
+   * The delivery manifest: what arrived, in which consignment, with each seal.
+   *
+   * Per consignment, because three consignments arriving on three days open
+   * three 48-hour windows — and a screen that averaged them into one deadline
+   * would tell a buyer their remedy on Tuesday's delivery expired with Monday's.
+   *
+   * Every deadline on the payload is a server verdict. `window.open` and
+   * `hoursRemaining` are fields, not ingredients: a laptop clock two days fast
+   * must not be able to refuse a buyer a remedy they are owed.
+   *
+   * Same 404-not-403 rule as the order itself.
+   */
+  @Get('orders/:orderNumber/delivery')
+  @RequirePermissions('ordering.own.read')
+  delivery(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<DeliveryView> {
+    return this.deliveryCheck.manifest(orderNumber);
+  }
+
+  /**
+   * Scan a code at the door and say what you found.
+   *
+   * `platform.ticket.write`, the permission the buyer roles already carry for
+   * raising something with us, and the one §3A.3's role list resolves to:
+   * PROCURER, ADMIN, OWNER and FINANCE have it; VIEWER and APPROVER do not.
+   * Inventing a `ordering.delivery.verify` permission would put this route out
+   * of reach of every seeded role until somebody remembered to grant it.
+   *
+   * 200 rather than 201: nothing is created in the ordinary case — a seal moves
+   * from APPLIED to INTACT — and the useful answer is the whole refreshed
+   * manifest, so the screen re-renders from one response rather than guessing
+   * what changed.
+   *
+   * **A code that is not on this delivery is a 422 with a sentence, not a
+   * silent no-op.** §3A.3 writes it out: *"Seal 88-041992 is not on this
+   * delivery. Do not accept this machine."*
+   */
+  @Post('orders/:orderNumber/delivery/seal-checks')
+  @HttpCode(200)
+  @RequirePermissions('platform.ticket.write')
+  checkSeal(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+    @Body(new ZodValidationPipe(sealCheckSchema)) body: SealCheckDto,
+  ): Promise<SealCheckResult> {
+    return this.deliveryCheck.check(orderNumber, body);
+  }
+
+  /**
+   * Sign for one delivery.
+   *
+   * Addressed by position — `2` for "Delivery 2 of 3" — and never by
+   * `sub_order_number`: that is an internal grouping and the word "sub-order"
+   * does not reach a buyer.
+   *
+   * Refused while any seal on the consignment is unchecked, broken or missing,
+   * and the refusal names the machines. 200 and idempotent: an acceptance is not
+   * a thing to record twice, and a second press returns the manifest unchanged.
+   */
+  @Post('orders/:orderNumber/delivery/:deliveryIndex/receipt')
+  @HttpCode(200)
+  @RequirePermissions('platform.ticket.write')
+  confirmReceipt(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+    @Param('deliveryIndex', new ZodValidationPipe(deliveryIndexSchema)) deliveryIndex: number,
+  ): Promise<DeliveryView> {
+    return this.deliveryCheck.confirmReceipt(orderNumber, deliveryIndex);
   }
 
   /**

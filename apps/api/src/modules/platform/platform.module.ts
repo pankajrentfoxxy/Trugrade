@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ClockModule } from '../../shared/clock';
 import { PrismaModule } from '../../shared/db/prisma.service';
+import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
 import { OrderingLookup } from './internal/ordering-lookup';
+import { ReturnsRepository } from './internal/returns.repository';
+import { ReturnsService } from './internal/returns.service';
 import { WarrantyRepository } from './internal/warranty.repository';
 import { WarrantyService } from './internal/warranty.service';
 
@@ -23,8 +26,17 @@ import { WarrantyService } from './internal/warranty.service';
  */
 @Module({
   imports: [PrismaModule, ClockModule],
-  controllers: [PlatformController],
-  providers: [PlatformService, WarrantyService, WarrantyRepository, OrderingLookup],
+  // T41. `PlatformAdminController` reads this module's own three admin tables —
+  // config, feature flags, notification templates — and writes none of them.
+  controllers: [PlatformController, PlatformAdminController],
+  providers: [
+    PlatformService,
+    WarrantyService,
+    WarrantyRepository,
+    ReturnsService,
+    ReturnsRepository,
+    OrderingLookup,
+  ],
   exports: [PlatformService],
 })
 export class PlatformModule {}

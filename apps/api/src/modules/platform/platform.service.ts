@@ -1,8 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/db/prisma.service';
+import { ReturnsService } from './internal/returns.service';
 import { WarrantyService, type OpenWarrantyUnit } from './internal/warranty.service';
 
 export type { OpenWarrantyUnit };
+
+/**
+ * A seal the buyer found broken or missing at their own door — T24.
+ *
+ * No org id. The buyer's organisation is read from the request context inside
+ * this module, so there is no argument a caller could get wrong and no signature
+ * that is one careless call away from opening a return on another company's
+ * machine.
+ */
+export interface SealDiscrepancy {
+  /** `ordering.order_line_unit.id` — what a return is raised against. */
+  orderLineUnitId: string;
+  serialNumber: string;
+  sealCode: string;
+  /** BROKEN or MISSING. Both are the same claim: nobody can vouch for what is inside. */
+  finding: 'BROKEN' | 'MISSING';
+}
 
 /**
  * The public interface of the `platform` module.
@@ -57,6 +75,26 @@ export interface IPlatformService {
   openWarranties(
     units: readonly OpenWarrantyUnit[],
   ): Promise<{ opened: number; alreadyCovered: number }>;
+
+  /**
+   * Open the discrepancy a broken seal opens by itself — T24.
+   *
+   * **`03_UX_SPEC.md` §3A.3 requires this to be one tap, not a support call.**
+   * Rule 7(4) take-back is ours and non-delegable, so a buyer who finds a broken
+   * seal at their door must not then have to persuade somebody that they did.
+   * `ordering` owns the delivery manifest and knows the machine; `platform` owns
+   * returns and decides what one is. Ordering asks for one rather than writing
+   * into `platform.*` across the seam — the same shape as the bulk-requirement
+   * lead and the warranty cover that already run this way.
+   *
+   * **Idempotent**, and by `uq_return_open_per_unit` rather than by care: the
+   * only caller is a button a person can press twice, and a second return on one
+   * machine gets two inspections and neither of them the whole story. A machine
+   * that already has a live return gets its number back unchanged.
+   */
+  openSealDiscrepancy(
+    input: SealDiscrepancy,
+  ): Promise<{ returnNumber: string; alreadyOpen: boolean }>;
 }
 
 export interface OpenInternalLeadInput {
@@ -81,6 +119,7 @@ export class PlatformService implements IPlatformService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly warranty: WarrantyService,
+    private readonly returns: ReturnsService,
   ) {}
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
@@ -126,5 +165,12 @@ export class PlatformService implements IPlatformService {
     units: readonly OpenWarrantyUnit[],
   ): Promise<{ opened: number; alreadyCovered: number }> {
     return this.warranty.openWarranties(units);
+  }
+
+  /** Delegated verbatim: what a return is, and who may have one, lives in one file. */
+  openSealDiscrepancy(
+    input: SealDiscrepancy,
+  ): Promise<{ returnNumber: string; alreadyOpen: boolean }> {
+    return this.returns.openSealDiscrepancy(input);
   }
 }

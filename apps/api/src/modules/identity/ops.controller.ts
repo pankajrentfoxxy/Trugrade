@@ -55,8 +55,14 @@ interface OpsQueue {
    * you cannot open is not a queue, it is a number, and it belongs on the KPI
    * row instead. T26 shipped three tiles pointing at routes that did not exist
    * and the ledger's conclusion stands: a number with no board beats a link to
-   * the wrong one. Purchase orders, order approvals, payables and tickets are
-   * therefore metrics below and not queues, until T39 builds their boards.
+   * the wrong one. Purchase orders, order approvals, payables and tickets were
+   * therefore metrics below and not queues.
+   *
+   * T39 built two of those four boards, so the purchase-order and order-approval
+   * TILES now carry an href — they are still metrics rather than queues, because
+   * neither carries a promise this product has made and `QueueList` orders by
+   * breach. Payables and tickets stay hrefless: their boards are T40's and
+   * T41's.
    */
   href: string;
   description: string;
@@ -283,9 +289,15 @@ export class OpsController {
         // deadline and not a promise we made, so nothing here is our breach.
         hint:
           oldestApproval === null
-            ? 'Stock stays reserved while they wait. There is no ops board for these yet.'
-            : `Stock stays reserved while they wait; the oldest has waited ${oldestApproval} hours. There is no ops board for these yet.`,
-        href: null,
+            ? 'Stock stays reserved while they wait.'
+            : `Stock stays reserved while they wait; the oldest has waited ${oldestApproval} hours.`,
+        // T39. This was `null` because no board answered it, and a tile linking
+        // to a route that 403s or does not exist is worse than no tile. The
+        // board exists now and the link is the SAME predicate the count is —
+        // `?approval=pending` filters on the `order_approval` row, not on the
+        // order's status, so a tile saying "2 waiting" cannot land on a board of
+        // nine. T28 logged that exact drift on the corrections queue.
+        href: '/orders?approval=pending',
       });
     }
 
@@ -323,7 +335,9 @@ export class OpsController {
           oldestPo === null
             ? 'No acceptance deadline exists in this product, so none of these is late.'
             : `The oldest has waited ${oldestPo} hours. No acceptance deadline exists in this product, so none of these is late.`,
-        href: null,
+        // T39. `procurement.po.read_any` guards this block AND the board behind
+        // the link, so a caller who can see the number can always open it.
+        href: '/procurement/pos?status=RAISED',
       });
 
       metrics.push({

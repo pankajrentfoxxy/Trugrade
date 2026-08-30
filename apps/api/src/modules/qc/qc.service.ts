@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ClockPort } from '../../shared/clock';
 import { PrismaService } from '../../shared/db/prisma.service';
+import { ValidationError } from '../../shared/errors/domain-errors';
 import { QcRepository } from './internal/qc.repository';
+import { SealingService } from './internal/sealing.service';
 import {
   VendorQualityService,
   type SupplyPointQuality,
@@ -107,6 +109,45 @@ export interface IQcService {
    * would show a buyer a verdict that did not exist when they bought it.
    */
   inspectionsByReport(reportIds: readonly string[]): Promise<UnitInspection[]>;
+
+  /**
+   * The buyer's own check at handover — T24, `/account/orders/[id]/delivery`.
+   *
+   * On the interface because `ordering` owns the delivery manifest and `qc` owns
+   * seals, and the buyer's check is the one place the two meet. `ordering`
+   * decides whether a scanned code is on THIS delivery — a question about an
+   * order, which only it can answer — and then says what the person at the door
+   * found. Everything about what a seal may BECOME stays here: the transition
+   * table, the terminal BROKEN, the unit dropping off the storefront, and
+   * `qc.seal.broken` on the outbox.
+   *
+   * **`unitId` is checked against the seal rather than trusted.** The caller has
+   * already matched the code to its own manifest; this refuses the combination
+   * anyway, because "verify a seal that is on a different machine" is exactly
+   * what a manifest lookup with an off-by-one produces, and the module that owns
+   * seals is where it must not pass.
+   *
+   * `verifiedBy` is an `identity.user_account.id` — the buyer at the door, not
+   * the technician who inspected the machine three weeks ago. `qc_seal` carries
+   * two separate columns for exactly that reason.
+   */
+  recordSealCheck(input: SealCheck): Promise<{ sealCode: string; status: string }>;
+}
+
+/** What the person at the door found, and on which machine. */
+export interface SealCheck {
+  unitId: string;
+  sealCode: string;
+  /**
+   * INTACT is the only outcome that is a pass, and it is one because somebody
+   * looked. BROKEN and MISSING are both refusals of the handover: a missing
+   * sticker is the same claim as a broken one — nobody can vouch for what is
+   * inside — with less evidence about how it happened.
+   */
+  outcome: 'INTACT' | 'BROKEN' | 'MISSING';
+  verifiedBy: string;
+  /** The buyer's own words on a break. Required by `reportBroken`, unused by INTACT. */
+  note?: string;
 }
 
 @Injectable()
@@ -116,6 +157,7 @@ export class QcService implements IQcService {
     private readonly clock: ClockPort,
     private readonly prisma: PrismaService,
     private readonly quality: VendorQualityService,
+    private readonly sealing: SealingService,
   ) {}
 
   /**
@@ -215,5 +257,38 @@ export class QcService implements IQcService {
       batteryHealthPct: r.battery_health_pct,
       seal: r.seal_code && r.seal_status ? { code: r.seal_code, status: r.seal_status } : null,
     }));
+  }
+
+  /**
+   * Delegated to `SealingService`, which owns every rule about what a seal may
+   * become — refused here first if the code is not the one on the machine the
+   * caller named. Both halves matter: the transition table is not restated, and
+   * one machine's seal cannot be verified against another machine's serial.
+   */
+  async recordSealCheck(input: SealCheck): Promise<{ sealCode: string; status: string }> {
+    const code = input.sealCode.trim().toUpperCase();
+    const current = await this.sealing.currentSeal(input.unitId);
+    if (!current || current.sealCode !== code) {
+      throw new ValidationError(`Seal ${code} is not the seal on that machine.`, {
+        sealCode: 'This seal belongs to a different machine.',
+      });
+    }
+
+    const row =
+      input.outcome === 'INTACT'
+        ? await this.sealing.verifyIntact({ sealCode: code, verifiedBy: input.verifiedBy })
+        : input.outcome === 'BROKEN'
+          ? await this.sealing.reportBroken({
+              sealCode: code,
+              reason: input.note ?? 'Found broken by the buyer at handover.',
+              detectedBy: 'DELIVERY',
+            })
+          : await this.sealing.reportMissing({
+              sealCode: code,
+              reason: input.note ?? 'Not on the machine when the buyer took delivery.',
+              detectedBy: 'DELIVERY',
+            });
+
+    return { sealCode: row.sealCode, status: row.status };
   }
 }

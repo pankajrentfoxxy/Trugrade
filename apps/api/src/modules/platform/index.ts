@@ -12,5 +12,6 @@ export {
   type IPlatformService,
   PlatformService,
   type OpenWarrantyUnit,
+  type SealDiscrepancy,
 } from './platform.service';
 export { PlatformModule } from './platform.module';

@@ -1586,3 +1586,223 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   .wtfilters{width:100%}
   .careas{grid-template-columns:minmax(0,1fr)}
 }
+
+/* ==========================================================================
+ * T24 - the buyer's seal check at handover, and returns.
+ * `/account/orders/[id]/delivery` (C), `/account/returns` (B),
+ * `/account/returns/new` (D), `/account/returns/[id]` (C).
+ *
+ * The record chrome (.rec/.evid/.sidep/.tbl), the flow chrome (.flow2/.cfield/
+ * .careas/.csel/.cblocked/.cfrefusal) and the board chrome (.rbar/.chipf) are
+ * reused unchanged from T12, T21 and T23. Only what these screens have and
+ * those do not is below.
+ * ========================================================================== */
+
+.dvhead{margin-top:20px}
+.dvrec{margin-top:18px}
+
+/* ---- one consignment ---------------------------------------------------- */
+
+.dvcons{background:var(--sheet);border:1px solid var(--rule);border-radius:var(--r-lg);
+  padding:var(--s5) var(--s6)}
+.dvconshead{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-start;
+  justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--rule-2)}
+.dvconshead h2{margin:0;font-size:14.5px;font-weight:600;color:var(--ink)}
+.dvnote{margin:14px 0 0;font-size:12.5px;line-height:1.65;color:var(--ink-2);max-width:74ch}
+.dvnote a{color:var(--acc-ink);text-decoration:underline;text-decoration-color:var(--acc);
+  text-underline-offset:2px}
+
+/* The window. Amber is on the NUMBER only, because hours remaining are a
+   measured value - one of the accent's three meanings. Nothing here is red and
+   nothing moves: a countdown that manufactures urgency is the dark pattern the
+   spec names, and this one measures a promise we made rather than pushing
+   anybody. A closed window is neutral ink and a date. */
+.dvwin{display:flex;flex-direction:column;gap:2px;text-align:right;min-width:220px}
+.dvwin .l{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
+.dvwin .v{font-size:15px;color:var(--ink)}
+.dvwin .v b{color:var(--acc-ink);font-size:19px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+.dvwin .d{font-size:10.5px;line-height:1.5;color:var(--ink-4);
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.dvwin.closed .l{color:var(--ink-3)}
+.dvwin.closed .mono{font-size:12px;color:var(--ink-2)}
+.dvwin.off{font-size:12px;color:var(--ink-4)}
+
+/* ---- the scan box ------------------------------------------------------- */
+
+.dvscan{margin-top:16px;display:flex;flex-direction:column;gap:14px;
+  background:var(--sheet-2);border:1px solid var(--rule);border-radius:var(--r);
+  padding:var(--s4) var(--s5)}
+.dvcode{display:flex;flex-direction:column;gap:4px;max-width:44ch}
+.dvcode .l{font-size:12.5px;font-weight:500;color:var(--ink)}
+.dvcode .d{font-size:11px;line-height:1.5;color:var(--ink-4)}
+.dvcode input{width:100%;padding:11px 12px;border:1px solid var(--rule);border-radius:var(--r-sm);
+  background:var(--sheet);color:var(--ink);font-family:"IBM Plex Mono",monospace;
+  font-variant-numeric:tabular-nums;font-size:16px;letter-spacing:.04em}
+.dvcode input::placeholder{color:var(--ink-4);letter-spacing:normal}
+.dvcode input:focus-visible{outline:2px solid var(--acc);outline-offset:1px;border-color:var(--acc)}
+
+.dvout{border:0;padding:0;margin:0;min-width:0}
+.dvout legend{font-size:12.5px;font-weight:500;color:var(--ink);padding:0 0 7px}
+.dvouts{display:flex;flex-wrap:wrap;gap:8px}
+.dvopt{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);padding:9px 13px;cursor:pointer;background:var(--sheet);
+  min-height:44px}
+.dvopt input{accent-color:var(--acc)}
+.dvopt .l{font-size:12.5px;font-weight:500;color:var(--ink)}
+/* An active state, so amber - the third of the accent's three meanings. The
+   BROKEN option is deliberately not red: it is a choice, not a verdict, and it
+   becomes one only once the seal record says so. */
+.dvopt.on{border-color:var(--acc);background:var(--acc-wash)}
+.dvopt:focus-within{outline:2px solid var(--acc);outline-offset:1px}
+.dvhint{margin:9px 0 0;font-size:11.5px;line-height:1.55;color:var(--ink-3);max-width:76ch}
+.dvgo{align-self:flex-start}
+.dvgo:disabled{opacity:.5;cursor:not-allowed}
+
+/* ---- the manifest ------------------------------------------------------- */
+
+.dvmachines{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:0}
+.dvmach{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,.9fr);
+  gap:6px 18px;align-items:start;padding:14px 0;border-top:1px solid var(--rule-2);
+  min-height:60px}
+.dvmach:first-child{border-top:0}
+.dvempty{padding:14px 0;font-size:12.5px}
+.dvid{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dvserial{font-size:13.5px;font-weight:600;color:var(--ink);letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;text-decoration:none}
+.dvserial:hover{color:var(--acc-ink);text-decoration:underline;text-decoration-color:var(--acc)}
+.dvtitle{font-size:12px;color:var(--ink-2)}
+.dvspec{font-size:10.5px;color:var(--ink-4)}
+.dvseal{display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0}
+.dvuse{font-size:11px;color:var(--ink-3);border:1px solid var(--rule);border-radius:var(--r-xs);
+  padding:5px 9px;background:var(--sheet-2)}
+.dvuse:hover{color:var(--acc-ink);border-color:var(--acc)}
+.dvverdict{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.dvflag,.ubflag{font-size:11px;color:var(--ink-2);text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:2px}
+.dvflag:hover,.ubflag:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+.ubverdict{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+/* The reason spans the row beneath the three columns: it is a sentence, and a
+   sentence in a 200px column is four words a line. */
+.dvwhy{grid-column:1/-1;margin:2px 0 0;font-size:11.5px;line-height:1.6;max-width:88ch}
+.dvtodo{color:var(--ink-3)}
+.dvclear{color:var(--ink-4)}
+/* A seal we cannot vouch for IS a verdict, and it is the one thing on this
+   screen allowed to be red. */
+.dvstop{color:var(--fail)}
+.dvmach.bad{background:var(--sheet-2);box-shadow:inset 3px 0 0 var(--fail)}
+.dvmach.bad>*{padding-left:11px}
+
+/* ---- the alert, and what was recorded ----------------------------------- */
+
+/* "Seal 88-041992 is not on this delivery. Do not accept this machine." - this
+   is a safety instruction, not a form error, so it is a panel above the record
+   rather than a red line under an input. */
+.dvalert{border:1px solid var(--fail);border-left-width:3px;border-radius:var(--r-lg);
+  background:var(--sheet);padding:var(--s4) var(--s5)}
+.dvalert h2{margin:0 0 7px;font-size:15px;font-weight:600;color:var(--fail);line-height:1.4}
+.dvalert p{margin:0;font-size:12.5px;line-height:1.65;color:var(--ink-2);max-width:76ch}
+
+.dvdone{border:1px solid var(--rule);border-left:3px solid var(--pass);border-radius:var(--r-lg);
+  background:var(--sheet);padding:var(--s4) var(--s5)}
+.dvdone.bad{border-left-color:var(--fail)}
+.dvdone h2{margin:0 0 6px;font-size:14px;font-weight:600;color:var(--ink)}
+.dvdone p{margin:0;font-size:12.5px;line-height:1.65;color:var(--ink-2);max-width:76ch}
+.dvdone .dvret{margin-top:7px}
+.dvdone a{color:var(--acc-ink);text-decoration:underline;text-decoration-color:var(--acc);
+  text-underline-offset:2px}
+
+/* ---- the actions panel -------------------------------------------------- */
+
+.dvside .pill{justify-content:center;width:100%;text-decoration:none}
+.dvside .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
+.dvside .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc)}
+.dvsign:disabled{opacity:.5;cursor:not-allowed}
+.dvsigned,.dvcannot{margin:0;display:flex;flex-direction:column;gap:3px;
+  padding:11px 13px;border:1px solid var(--rule);border-radius:var(--r-sm);
+  background:var(--sheet-2)}
+.dvsigned .l,.dvcannot .l{font-size:12px;font-weight:500;color:var(--ink)}
+.dvsigned .mono{font-size:11px;color:var(--ink-3)}
+.dvcannot .d{font-size:11px;line-height:1.55;color:var(--ink-3)}
+.dvfoot{margin-top:20px}
+
+/* ==========================================================================
+ * Returns
+ * ========================================================================== */
+
+.rthead{margin-top:20px}
+.rtbar{margin-top:16px}
+.rttable{margin-top:12px}
+.rtfoot{margin-top:16px}
+.rtid{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rtnum,.rtserial{font-size:12.5px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums;text-decoration:none}
+.rtnum:hover,.rtserial:hover{color:var(--acc-ink);text-decoration:underline;
+  text-decoration-color:var(--acc)}
+.rtreason,.rttitle{font-size:11px;color:var(--ink-3)}
+
+/* ---- the form ----------------------------------------------------------- */
+
+.rnhead{margin-top:20px}
+.rnform{display:flex;flex-direction:column;gap:var(--s6);margin-top:20px}
+.rnpick{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rnmach{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:3px 11px;
+  align-items:center;border:1px solid var(--rule);border-radius:var(--r-sm);
+  padding:11px 13px;cursor:pointer;min-height:60px}
+.rnmach input{grid-row:1/span 2;accent-color:var(--acc)}
+.rnmach.on{border-color:var(--acc);background:var(--acc-wash)}
+.rnmach:focus-within{outline:2px solid var(--acc);outline-offset:1px}
+.rnserial{font-size:13px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.rntitle{grid-column:2;font-size:11px;color:var(--ink-3)}
+.rnwin{grid-column:3;grid-row:1/span 2;display:flex;flex-direction:column;gap:1px;
+  text-align:right;font-size:12px;color:var(--ink-2)}
+.rnwin b{color:var(--acc-ink);font-size:16px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+.rnwin .d{font-size:10px;color:var(--ink-4);font-family:"IBM Plex Mono",monospace;
+  font-variant-numeric:tabular-nums}
+.rnmixed{margin:10px 0 0;padding:10px 13px;border:1px solid var(--rule);
+  border-left:3px solid var(--warn);border-radius:var(--r-sm);background:var(--sheet);
+  font-size:12px;line-height:1.6;color:var(--ink-2);max-width:76ch}
+.rnevidence{margin:10px 0 0;font-size:11.5px;line-height:1.6;color:var(--ink-3);max-width:76ch}
+.rnevidence b{color:var(--ink-2);font-weight:600}
+.cfnone{margin:0;font-size:12.5px;line-height:1.6;color:var(--ink-2);max-width:74ch}
+
+/* ---- the record --------------------------------------------------------- */
+
+.rrneed{display:block;margin-top:5px;font-size:11px;line-height:1.55;color:var(--ink-4);
+  max-width:52ch}
+
+@media(max-width:1000px){
+  .dvmach{grid-template-columns:minmax(0,1fr)}
+  .dvwin{text-align:left;min-width:0}
+  .dvconshead{flex-direction:column}
+}
+@media(max-width:640px){
+  .dvcons{padding:var(--s4)}
+  .dvouts{flex-direction:column;align-items:stretch}
+  .dvopt{justify-content:flex-start}
+  .rnmach{grid-template-columns:auto minmax(0,1fr)}
+  .rnwin{grid-column:1/-1;grid-row:auto;text-align:left}
+}
+
+/* The board's one primary action, pushed to the right edge of the result bar —
+   the same slot T21's asset-register export occupies. */
+.rtnew{margin-left:auto;text-decoration:none;white-space:nowrap}
+@media(max-width:900px){.rtnew{margin-left:0;width:100%;justify-content:center}}
+
+/* `.pill.wire`'s base rule is the HEADER's dark-chrome variant — on-chrome text
+   on a translucent white border — which is correct on the dark chrome and very
+   nearly invisible on a light working surface. Every screen that puts one on a
+   sheet has had to restate it (.cactions, .crside, .dvside), and the one place
+   nobody had was inside an EmptyState: T24's returns board found it, and T21's
+   units board, T22's documents board and T23's warranty board all have the same
+   button in the same place. One rule rather than four. */
+.empty .pill.wire,
+.rtempty .pill.wire,
+.dvscan .pill.wire{background:var(--sheet-2);border-color:var(--rule);color:var(--ink)}
+.empty .pill.wire:hover,
+.rtempty .pill.wire:hover,
+.dvscan .pill.wire:hover{background:var(--sheet-3);border-color:var(--acc)}
+
+.rtempty{margin-top:12px}
