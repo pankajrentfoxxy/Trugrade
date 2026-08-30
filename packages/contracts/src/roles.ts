@@ -278,6 +278,26 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
   DPO: P('platform.dsr.handle', 'identity.user.read', 'identity.audit.read', 'kyc.document.read'),
 
   // --- vendor side. Never `*.any.*` — the org scope is enforced at the repository. ---
+  /*
+   * WHY NO VENDOR ROLE HOLDS qc.visit.read OR qc.report.read
+   * -------------------------------------------------------
+   * They used to, and it was a cross-tenant read. Both are unscoped console
+   * permissions, and the qc console routes behind them take no principal and
+   * apply no org predicate — correctly, because they are OPS queues meant to
+   * span every vendor. GET /api/qc/grade-corrections returned every vendor's
+   * serials, unit ids and resolved vendor NAMES to any vendor account that
+   * asked; GET /api/qc/visits/:id did the same for another vendor's manifest.
+   *
+   * Note the shape of every other vendor grant in this file: listing.own.read,
+   * procurement.po.read_own. Vendor-reachable permissions are OWN-scoped by
+   * name. These two were not, which is exactly how they slipped through.
+   *
+   * No vendor screen called either — verified across apps/console and
+   * apps/technician before removing them — so this closes a hole rather than
+   * removing a capability. When T30 and T31 build the vendor's own QC visit and
+   * grade-correction screens, they need qc.visit.read_own / qc.report.read_own
+   * alongside routes that scope at the repository layer, NOT these back.
+   */
   VENDOR_OWNER: P(
     'listing.own.read',
     'listing.own.write',
@@ -285,8 +305,6 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'identity.user.read',
     'identity.user.write',
     'identity.role.assign',
-    'qc.visit.read',
-    'qc.report.read',
     'procurement.po.read_own',
     'procurement.po.acknowledge',
     'procurement.invoice.upload',
@@ -299,8 +317,6 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'listing.grade_correction.respond',
     'identity.user.read',
     'identity.user.write',
-    'qc.visit.read',
-    'qc.report.read',
     'procurement.po.read_own',
     'procurement.po.acknowledge',
     'platform.ticket.read',
@@ -310,8 +326,6 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'listing.own.read',
     'listing.own.write',
     'listing.grade_correction.respond',
-    'qc.visit.read',
-    'qc.report.read',
     'procurement.po.read_own',
     'procurement.po.acknowledge',
     'platform.ticket.write',
@@ -322,7 +336,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'procurement.invoice.upload',
     'platform.ticket.write',
   ),
-  VENDOR_VIEWER: P('listing.own.read', 'qc.report.read', 'procurement.po.read_own'),
+  VENDOR_VIEWER: P('listing.own.read', 'procurement.po.read_own'),
 
   // --- customer side ---
   CUSTOMER_OWNER: P(
