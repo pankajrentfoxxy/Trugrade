@@ -63,7 +63,7 @@ const GEO_VARIANCE_KEY = 'qc.geo_variance_alert_metres';
  * exits on purpose: a cancelled visit is re-run as a new visit, so the
  * `reschedule_count` on the original stays true.
  */
-const VISIT_TRANSITIONS: Readonly<Record<QcVisitStatus, readonly QcVisitStatus[]>> = Object.freeze({
+export const VISIT_TRANSITIONS: Readonly<Record<QcVisitStatus, readonly QcVisitStatus[]>> = Object.freeze({
   REQUESTED: ['QUOTED', 'SCHEDULED', 'CANCELLED'],
   QUOTED: ['SCHEDULED', 'CANCELLED'],
   SCHEDULED: ['TECH_ASSIGNED', 'RESCHEDULED', 'CANCELLED', 'NO_SHOW_VENDOR'],

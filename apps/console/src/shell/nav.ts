@@ -86,6 +86,18 @@ export const NAV: readonly NavEntry[] = [
     group: 'Vendor',
     orgType: 'VENDOR',
   },
+  // T30. Its own entry because an inspection is the gate every listing passes
+  // through — nothing a vendor lists is on sale until a technician has held it —
+  // and the board is where they find out when we are coming. `listing.own.read`
+  // and not a `qc.*` permission: no vendor role holds one, deliberately, and the
+  // vendor's routes are org-scoped copies rather than the console's queues.
+  {
+    to: '/vendor/qc/visits',
+    label: 'Inspections',
+    permission: 'listing.own.read',
+    group: 'Vendor',
+    orgType: 'VENDOR',
+  },
   // Its own entry rather than a tile alone: a correction is on a two-day clock
   // and auto-applies, so it must be reachable without first noticing a queue on
   // the dashboard. `listing.own.read` and not the respond permission — a

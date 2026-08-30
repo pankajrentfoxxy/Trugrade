@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Navigate } from 'react-router';
 import { RequirePermission } from '../../lib/auth';
 import { VendorDashboardRoute } from './Dashboard';
 import { VendorListingsRoute } from './Listings';
@@ -11,6 +12,7 @@ import { VendorPurchaseOrdersRoute } from './PurchaseOrders';
 import { VendorPayablesRoute } from './Payables';
 import { RepriceRoute } from './Reprice';
 import { SkuRequestRoute } from './SkuRequest';
+import { VendorVisitDetailRoute, VendorVisitResultsRoute, VendorVisitsRoute } from './Visits';
 import { ListingWizardRoute } from './wizard/Wizard';
 
 /**
@@ -102,6 +104,39 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/corrections/:id',
     permission: 'listing.own.read',
     element: guarded('listing.own.read', VendorCorrectionDetailRoute),
+  },
+  {
+    // T30. §3B names `/vendor/qc/requests` and `/vendor/qc/visits` as two
+    // screens; they are one board over one table, differing only by a status
+    // filter that already lives in the URL. So `requests` is a redirect onto the
+    // filtered board rather than a second component — a colleague who is sent
+    // the link gets the canonical URL, and there is one screen to keep correct.
+    path: '/vendor/qc/requests',
+    permission: 'listing.own.read',
+    element: React.createElement(Navigate, {
+      to: '/vendor/qc/visits?status=REQUESTED',
+      replace: true,
+    }),
+  },
+  {
+    path: '/vendor/qc/visits',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorVisitsRoute),
+  },
+  {
+    // Reading an inspection of your own machines is reading your own stock;
+    // CALLING ONE OFF is `listing.own.write`, which VENDOR_FINANCE and
+    // VENDOR_VIEWER do not hold. The guard here is the read, the API refuses the
+    // write, and the panel is simply absent for a role that cannot send it —
+    // the same shape T31 used for answering a grade correction.
+    path: '/vendor/qc/visits/:id',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorVisitDetailRoute),
+  },
+  {
+    path: '/vendor/qc/visits/:id/results',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorVisitResultsRoute),
   },
   {
     path: '/vendor/orders',

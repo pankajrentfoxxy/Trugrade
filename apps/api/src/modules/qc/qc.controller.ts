@@ -37,7 +37,13 @@ import { VisitClosingService } from './internal/visit-closing.service';
 import { SealingService } from './internal/sealing.service';
 import { AuditRecheckService } from './internal/audit-recheck.service';
 import { GradeCorrectionService } from './internal/grade-correction.service';
-import { ToleranceService, cfgBool, cfgNum, istDate, readConfig } from './internal/tolerance.service';
+import {
+  ToleranceService,
+  cfgBool,
+  cfgNum,
+  istDate,
+  readConfig,
+} from './internal/tolerance.service';
 import { VerdictService } from './internal/verdict.service';
 import {
   QC_PHOTO_ANGLES,
@@ -46,6 +52,7 @@ import {
   auditRecheckSchema,
   checkInSchema,
   createVisitSchema,
+  scheduleVisitSchema,
   disputeRulingSchema,
   expenseSchema,
   fieldMapSchema,
@@ -64,6 +71,7 @@ import {
   type AuditRecheckDto,
   type CheckInDto,
   type CreateVisitDto,
+  type ScheduleVisitDto,
   type DisputeRulingDto,
   type ExpenseDto,
   type FieldMapDto,
@@ -336,7 +344,13 @@ export interface VisitManifest {
   rules: {
     version: string;
     gradeThresholds: Record<string, { minBatteryHealthPct: number; maxCycleCount: number }>;
-    tolerance: Array<{ field: string; comparison: string; value: string | null; severity: string; isBlocking: boolean }>;
+    tolerance: Array<{
+      field: string;
+      comparison: string;
+      value: string | null;
+      severity: string;
+      isBlocking: boolean;
+    }>;
   };
   autoApproval: {
     minScore: number;
@@ -593,9 +607,7 @@ export class QcConsoleService {
         maxSitesPerDay: tech.maxSitesPerDay,
         days: dates.map((date) => {
           const dayVisits = (byTech.get(tech.id) ?? []).filter((v) => v.scheduledDate === date);
-          const slot = availability.find(
-            (a) => a.technicianId === tech.id && a.theDate === date,
-          );
+          const slot = availability.find((a) => a.technicianId === tech.id && a.theDate === date);
           return {
             date,
             // A booked day with no roster row still reads as BOOKED: the visit
@@ -655,10 +667,10 @@ export class QcConsoleService {
   async technicianFor(userId: string): Promise<QcTechnicianRow> {
     const technician = await this.repo.findTechnicianByUserId(userId);
     if (!technician) {
-      throw new PreconditionFailedError(
-        'This account is not registered as a QC technician.',
-        { userId, reason: 'not_a_technician' },
-      );
+      throw new PreconditionFailedError('This account is not registered as a QC technician.', {
+        userId,
+        reason: 'not_a_technician',
+      });
     }
     return technician;
   }
@@ -692,7 +704,13 @@ export class QcConsoleService {
     startedAt: Date;
     completedAt: Date;
     durationSeconds?: number;
-    areas: Array<{ area: QcAreaCode; status: 'PASS' | 'WARN' | 'FAIL'; score: number; maxScore: number; note?: string | null }>;
+    areas: Array<{
+      area: QcAreaCode;
+      status: 'PASS' | 'WARN' | 'FAIL';
+      score: number;
+      maxScore: number;
+      note?: string | null;
+    }>;
     hardware?: {
       ramDetectedGb: number;
       ramModules?: number | null;
@@ -947,9 +965,7 @@ export class QcConsoleService {
       samplePct: Math.round(Number(input.samplePct)),
       minPassRate: Number(input.minPassRate),
       minGradeAccuracy: Number(input.minGradeAccuracy),
-      alwaysFullAboveValue: input.alwaysFullAboveValue
-        ? money(input.alwaysFullAboveValue)
-        : null,
+      alwaysFullAboveValue: input.alwaysFullAboveValue ? money(input.alwaysFullAboveValue) : null,
     });
     return {
       id: saved.id,
@@ -958,9 +974,7 @@ export class QcConsoleService {
       minPassRate: (saved.minPassRate ?? 0).toFixed(2),
       minGradeAccuracy: (saved.minGradeAccuracy ?? 0).toFixed(2),
       samplePct: saved.samplePct.toFixed(2),
-      alwaysFullAboveValue: saved.alwaysFullAboveValue
-        ? saved.alwaysFullAboveValue.toJSON()
-        : null,
+      alwaysFullAboveValue: saved.alwaysFullAboveValue ? saved.alwaysFullAboveValue.toJSON() : null,
       effectiveFrom: saved.effectiveFrom,
       isActive: saved.isActive,
     };
@@ -1088,7 +1102,11 @@ export class QcConsoleService {
     const hash = createHash('sha256').update(bytes).digest('hex');
     const key = photoKey(hash, mime);
     await this.store.put(key, bytes, mime);
-    return { fileKey: key, url: await this.store.presignDownload(key, PHOTO_URL_TTL_SECONDS), hash };
+    return {
+      fileKey: key,
+      url: await this.store.presignDownload(key, PHOTO_URL_TTL_SECONDS),
+      hash,
+    };
   }
 
   /** The app's confirmation after its own PUT. Trust the store, not the claim. */
@@ -1348,12 +1366,12 @@ export class QcConsoleService {
   }
 
   /** Technician id -> the person's name, through `qc_technician.user_id`. */
-  private async technicianNames(
-    ids: readonly (string | null)[],
-  ): Promise<Map<string, string>> {
+  private async technicianNames(ids: readonly (string | null)[]): Promise<Map<string, string>> {
     const unique = [...new Set(ids.filter((id): id is string => id !== null))];
     if (unique.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; user_id: string; employee_code: string }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; user_id: string; employee_code: string }>
+    >`
       SELECT id, user_id, employee_code FROM qc.qc_technician
        WHERE id = ANY(${unique}::text[]::uuid[])`;
     const names = await this.userNames(rows.map((r) => r.user_id));
@@ -1474,6 +1492,37 @@ export class QcController {
     return this.console.detail(visit.id);
   }
 
+  /**
+   * Book — or move — a visit that already exists.
+   *
+   * `SchedulingService.schedule()` has always done this and until now the only
+   * way to reach it was `POST /qc/visits` with a `schedule` block, which also
+   * creates a visit. So a REQUESTED visit raised by a vendor submitting a
+   * listing — the only way a visit is ever raised in production — could not be
+   * given a date without inventing a second visit for the same machines. Every
+   * check in that file's header runs here: facility hours, the holiday
+   * calendar, the technician's zone, their certification, their availability,
+   * their day's capacity and the tool licence seat.
+   *
+   * Re-calling it on a booked visit is a move rather than a second booking; the
+   * old availability slot is released inside the same transaction.
+   */
+  @Post('visits/:visitId/schedule')
+  @HttpCode(200)
+  @RequirePermissions('qc.visit.schedule')
+  async scheduleVisit(
+    @Param('visitId', new ZodValidationPipe(uuidSchema)) visitId: string,
+    @Body(new ZodValidationPipe(scheduleVisitSchema)) body: ScheduleVisitDto,
+  ): Promise<VisitDetail> {
+    await this.scheduling.schedule(visitId, {
+      scheduledDate: body.scheduledDate,
+      slotFrom: body.slotFrom,
+      slotTo: body.slotTo,
+      ...(body.technicianId ? { technicianId: body.technicianId } : {}),
+    });
+    return this.console.detail(visitId);
+  }
+
   @Get('visits/:visitId')
   @RequirePermissions('qc.visit.read')
   visit(
@@ -1542,9 +1591,7 @@ export class QcController {
       expenseType: body.category,
       amount: money(body.amountInr),
       ...(body.distanceKm === undefined ? {} : { distanceKm: body.distanceKm }),
-      ...(body.receiptSha256
-        ? { receiptKey: `qc/photos/${body.receiptSha256}.jpg` }
-        : {}),
+      ...(body.receiptSha256 ? { receiptKey: `qc/photos/${body.receiptSha256}.jpg` } : {}),
     });
     return { id: row.id, amount: row.amount.toJSON() };
   }
@@ -1721,10 +1768,10 @@ export class QcController {
     const technician = await this.console.technicianFor(user.userId);
     const report = await this.repo.findCurrentReportByUnit(body.unitId);
     if (!report) {
-      throw new PreconditionFailedError(
-        'This machine has no inspection to seal against yet.',
-        { unitId: body.unitId, reason: 'no_current_report' },
-      );
+      throw new PreconditionFailedError('This machine has no inspection to seal against yet.', {
+        unitId: body.unitId,
+        reason: 'no_current_report',
+      });
     }
     const seal = await this.sealing.applySeal({
       sealCode: body.sealCode,
@@ -1903,7 +1950,6 @@ export class QcController {
   ): Promise<ToolProviderRow> {
     return this.console.saveFieldMap(id, body.fieldMapJson);
   }
-
 }
 
 /**

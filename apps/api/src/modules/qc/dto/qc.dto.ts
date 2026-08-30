@@ -389,6 +389,16 @@ export const createVisitSchema = z.object({
 export type CreateVisitDto = z.infer<typeof createVisitSchema>;
 
 /**
+ * Booking a visit that already exists.
+ *
+ * The same four fields `createVisitSchema.schedule` carries, declared once and
+ * reused by both — a second definition of a slot is a second set of rules about
+ * what a slot is.
+ */
+export const scheduleVisitSchema = createVisitSchema.shape.schedule.unwrap();
+export type ScheduleVisitDto = z.infer<typeof scheduleVisitSchema>;
+
+/**
  * Arrival at the vendor's site.
  *
  * The technician app also sends `accuracyMetres`, `capturedAt` and its nonce;
@@ -669,10 +679,29 @@ export const photoSignSchema = z.object({
   purpose: z.enum(['QC_PHOTO', 'SEAL', 'EXPENSE_RECEIPT']),
   sha256: sha256Schema,
   contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  bytes: z.number().int().min(1).max(15 * 1024 * 1024),
+  bytes: z
+    .number()
+    .int()
+    .min(1)
+    .max(15 * 1024 * 1024),
   angle: z.string().max(32).optional(),
   visitUnitId: uuidSchema.nullable().optional(),
   expenseLocalId: z.string().max(64).nullable().optional(),
   nonce: nonceSchema.optional(),
 });
 export type PhotoSignDto = z.infer<typeof photoSignSchema>;
+
+/**
+ * A vendor calling off an inspection they asked for.
+ *
+ * The reason is required and it is not ceremony. `SchedulingService.advance()`
+ * refuses a cancellation without one, for the reason it gives: the row is read
+ * later by the technician whose day it was and by whoever settles the visit fee,
+ * and "cancelled" with no sentence beside it is a fact nobody can act on. Ten
+ * characters rather than the service's three, because this is a person typing
+ * into a box rather than an ops tool passing a code.
+ */
+export const vendorVisitCancelSchema = z.object({
+  reason: z.string().trim().min(10, 'Say why you are calling this off, in a sentence.').max(500),
+});
+export type VendorVisitCancelDto = z.infer<typeof vendorVisitCancelSchema>;

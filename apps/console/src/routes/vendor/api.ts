@@ -100,6 +100,18 @@ export const API = {
    * by this one endpoint.
    */
   payables: '/api/vendor/payables',
+
+  /**
+   * The vendor's own QC visits (T30) — org-scoped, and NOT the QC console's
+   * `/api/qc/visits`, which spans every vendor and carries a resolved vendor
+   * name and a technician's real name on every row. No vendor role holds the
+   * permission that guards those, and none should: the two audiences are one
+   * `WHERE` clause apart, and that is exactly how a competitor's manifest was
+   * readable once already.
+   */
+  visits: '/api/vendor/qc/visits',
+  visit: (id: string) => `/api/vendor/qc/visits/${id}`,
+  cancelVisit: (id: string) => `/api/vendor/qc/visits/${id}/cancel`,
 } as const;
 
 /** The four answers, exactly as `listing.grade_correction.vendor_response` allows. */
@@ -690,4 +702,134 @@ export function onDateTime(iso: IsoDate | null | undefined): string {
 /** `A_PLUS` → `A+`, everywhere a grade is spoken rather than badged. */
 export function gradeLabel(grade: string): string {
   return grade === 'A_PLUS' ? 'A+' : grade;
+}
+
+/* ==========================================================================
+ * QC visits (T30)
+ * ======================================================================== */
+
+/** `qc_visit.status`, exactly as `public.qc_visit_status` allows. */
+export const VISIT_STATUSES = [
+  'REQUESTED',
+  'QUOTED',
+  'SCHEDULED',
+  'TECH_ASSIGNED',
+  'EN_ROUTE',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'PARTIALLY_COMPLETED',
+  'CANCELLED',
+  'NO_SHOW_VENDOR',
+  'NO_SHOW_TECH',
+  'RESCHEDULED',
+] as const;
+export type VisitStatus = (typeof VISIT_STATUSES)[number];
+
+/** `qc_visit_unit.outcome`. UNTESTABLE is where a serial mismatch lands. */
+export type UnitOutcome =
+  | 'PENDING'
+  | 'PASS'
+  | 'PASS_GRADE_CORRECTED'
+  | 'PASS_WITH_NOTE'
+  | 'FAIL'
+  | 'UNTESTABLE'
+  | 'ABSENT';
+
+/**
+ * The visit fee, with everything needed to say what it is and why.
+ *
+ * A bare `₹0` is the one rendering this screen may never produce: it reads as
+ * "nothing to pay" whether the truth is that we are bearing it, that the batch
+ * cleared the waiver, or that nobody has priced the visit yet. `waivedAboveUnits`
+ * is `null` and not `0` when the threshold could not be read — "we cannot tell
+ * you the threshold" is not "there is no threshold".
+ */
+export interface VisitFee {
+  amount: MoneyString;
+  bearer: 'TRUETECH' | 'VENDOR' | 'SPLIT' | 'WAIVED';
+  waiverReason: string | null;
+  waivedAboveUnits: number | null;
+  standardFee: MoneyString | null;
+}
+
+/**
+ * One visit as the vendor's own routes send it.
+ *
+ * There is no vendor name (they are the vendor) and no technician name — §3B
+ * identifies the technician as `TECH-0142` until arrival, and a name never
+ * crosses this wire at any status.
+ */
+export interface VendorVisit {
+  id: string;
+  visitNumber: string;
+  status: VisitStatus;
+  siteLabel: string;
+  requestedAt: IsoDate;
+  scheduledDate: string | null;
+  slotFrom: string | null;
+  slotTo: string | null;
+  technicianCode: string | null;
+  unitsRequested: number;
+  /** Null until somebody has arrived and counted. Never a zero standing in. */
+  unitsPresented: number | null;
+  unitsInspected: number;
+  unitsPassed: number;
+  unitsGradeCorrected: number;
+  unitsFailed: number;
+  unitsAbsent: number;
+  arrivedAt: IsoDate | null;
+  startedAt: IsoDate | null;
+  completedAt: IsoDate | null;
+  vendorSignoffAt: IsoDate | null;
+  vendorSignoffName: string | null;
+  rescheduleCount: number;
+  cancellationReason: string | null;
+  notes: string | null;
+  fee: VisitFee;
+  /** Server-decided from the same transition map the scheduler enforces. */
+  cancellable: boolean;
+}
+
+export interface VisitUnitResult {
+  verdict: string | null;
+  grade: string | null;
+  qcScore: number | null;
+  inspectedOn: string | null;
+  batteryHealthPct: number | null;
+  seal: { code: string; status: string } | null;
+  /** The areas marked down, worst first, each with its own denominator. */
+  findings: Array<{ area: string; score: number; maxScore: number }>;
+}
+
+export interface VisitManifestUnit {
+  visitUnitId: string;
+  unitId: string;
+  sequenceNo: number | null;
+  serialNumber: string;
+  skuCode: string;
+  gradeDeclared: string | null;
+  outcome: UnitOutcome;
+  absentReason: string | null;
+  /** `null` means nobody has opened this machine. It never means a zero score. */
+  result: VisitUnitResult | null;
+}
+
+export interface FacilityCalendar {
+  hours: Array<{
+    dayOfWeek: number;
+    openTime: string | null;
+    closeTime: string | null;
+    isClosed: boolean;
+  }>;
+  holidays: Array<{ date: string; reason: string | null }>;
+}
+
+export interface VendorVisitDetail extends VendorVisit {
+  manifest: VisitManifestUnit[];
+  calendar: FacilityCalendar;
+}
+
+/** A visit nobody has been to yet: no arrival, so no result of any kind. */
+export function notVisitedYet(v: VendorVisit): boolean {
+  return v.arrivedAt === null;
 }

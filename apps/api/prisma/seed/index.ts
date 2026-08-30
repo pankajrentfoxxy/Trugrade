@@ -7,6 +7,7 @@ import { seedCatalog } from './catalog-seed';
 import { seedDemo } from './demo';
 import { seedInvoicing } from './invoicing';
 import { seedAfterSale } from './after-sale';
+import { seedQcVisits } from './qc-visits';
 
 const prisma = new PrismaClient();
 
@@ -52,6 +53,14 @@ async function main(): Promise<void> {
     // order statuses, which has no business on a database that is not a demo.
     console.log('Advancing orders so the after-sale screens are reachable…');
     await seedAfterSale(prisma, clock.now(), (m) => console.log(m));
+
+    // QC visits with a manifest and a spread of outcomes, plus the facility
+    // hours and offered slots that make the real scheduling path reachable.
+    // Same injected instant as the line above, for the reason that file's
+    // header gives: a seed on wall-clock time and a service on `ClockPort` put
+    // a fixed-clock test's window somewhere neither of them intended.
+    console.log('Seeding QC visits, manifests and facility hours…');
+    await seedQcVisits(prisma, clock.now(), (m) => console.log(m));
   }
 
   const runway = await prisma.$queryRaw<Array<{ table_name: string; runway_days: number }>>`

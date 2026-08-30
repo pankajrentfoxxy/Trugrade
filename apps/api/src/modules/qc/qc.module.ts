@@ -22,6 +22,8 @@ import { QcPassportService, QcPublicController } from './qc-public.controller';
 import { QcConsoleService, QcController } from './qc.controller';
 import { VendorCorrectionRepository } from './internal/vendor-correction.repository';
 import { VendorCorrectionsController } from './vendor-corrections.controller';
+import { VendorVisitRepository } from './internal/vendor-visit.repository';
+import { VendorVisitsController } from './vendor-visits.controller';
 
 /**
  * Registers the QC core: the repository every other service in this module
@@ -61,6 +63,7 @@ import { VendorCorrectionsController } from './vendor-corrections.controller';
     QcPublicController,
     QcController,
     VendorCorrectionsController,
+    VendorVisitsController,
   ],
   providers: [
     QcService,
@@ -81,6 +84,7 @@ import { VendorCorrectionsController } from './vendor-corrections.controller';
     ReportPdfService,
     QcConsoleService,
     VendorCorrectionRepository,
+    VendorVisitRepository,
   ],
   exports: [QcService],
 })
