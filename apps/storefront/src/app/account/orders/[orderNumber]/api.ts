@@ -15,7 +15,7 @@
  * wanted to. The buyer's own PO reference — `buyerPoNumber` — is a different
  * document belonging to a different party, and it is theirs.
  */
-import { call, type ApiResult } from '../../register/api';
+import { call, type ApiResult } from '../../../register/api';
 
 /** `A_PLUS` | `A` | `B`, as the grade enum spells it. */
 export interface OrderedMachine {

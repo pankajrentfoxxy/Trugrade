@@ -938,7 +938,7 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .checkoutrail > p:last-child,.nodraft > p:last-child{display:none}
 
 /* ==========================================================================
- * /orders/[orderNumber] — the order record and the approval-required state
+ * /account/orders/[orderNumber] — the order record and the approval-required state
  * ========================================================================== */
 
 /* The approval block. Outlined in --warn only while it is live, because a

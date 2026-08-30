@@ -293,7 +293,7 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     sortable: true,
     cell: (o) => (
       <span className="obord">
-        <a className="mono" href={`/orders/${o.orderNumber}`}>
+        <a className="mono" href={`/account/orders/${o.orderNumber}`}>
           {o.orderNumber}
         </a>
         <span className="obwhen">{inIst(o.placedAt)}</span>
@@ -365,7 +365,7 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     header: 'Open',
     headerHidden: true,
     cell: (o) => (
-      <a className="sel gh" href={`/orders/${o.orderNumber}`}>
+      <a className="sel gh" href={`/account/orders/${o.orderNumber}`}>
         Open
       </a>
     ),

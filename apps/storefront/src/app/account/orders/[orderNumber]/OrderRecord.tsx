@@ -15,8 +15,8 @@ import {
 } from '@trugrade/ui';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { Money, type Grade } from '@trugrade/contracts';
-import type { ApiFailure } from '../../register/api';
-import { Deadline, inIst } from '../../../lib/deadline';
+import type { ApiFailure } from '../../../register/api';
+import { Deadline, inIst } from '../../../../lib/deadline';
 import {
   getOrder,
   type DispatchGroup,
@@ -623,7 +623,7 @@ function SignedOut({ orderNumber }: { orderNumber: string }): React.JSX.Element 
         action={
           <a
             className="pill acc"
-            href={`/sign-in?next=${encodeURIComponent(`/orders/${orderNumber}`)}`}
+            href={`/sign-in?next=${encodeURIComponent(`/account/orders/${orderNumber}`)}`}
           >
             Sign in
           </a>

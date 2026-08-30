@@ -284,7 +284,7 @@ export function CheckoutFlow(): React.JSX.Element {
       // copy of it here means one screen tells a buyer what they bought — and it
       // is one they can bookmark, reload and send to their finance team, which a
       // component holding a function's return value never could be.
-      window.location.assign(`/orders/${placed.data.orderNumber}`);
+      window.location.assign(`/account/orders/${placed.data.orderNumber}`);
       return;
     }
     if (placed.status === 401) {
@@ -1301,7 +1301,7 @@ function Failed({ message }: { message: string }): React.JSX.Element {
 }
 
 /**
- * The order exists, and its own screen is `/orders/{orderNumber}` (T17).
+ * The order exists, and its own screen is `/account/orders/{orderNumber}` (T17).
  *
  * `place()` navigates there the moment the transaction commits, so this is only
  * ever on screen for the instant the browser takes to follow — and it is what a
@@ -1322,7 +1322,7 @@ function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
       </h1>
       <p className="text-body-sm text-ink-2">Opening your order…</p>
       <p>
-        <a className="pill acc" href={`/orders/${order.orderNumber}`}>
+        <a className="pill acc" href={`/account/orders/${order.orderNumber}`}>
           Open order {order.orderNumber}
         </a>
       </p>

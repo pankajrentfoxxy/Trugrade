@@ -324,7 +324,7 @@ describe('the states that are not the record', () => {
     });
     render(<OrderRecord orderNumber="TT-26-00002" />);
     const link = await screen.findByRole('link', { name: 'Sign in' });
-    expect(link).toHaveAttribute('href', '/sign-in?next=%2Forders%2FTT-26-00002');
+    expect(link).toHaveAttribute('href', '/sign-in?next=%2Faccount%2Forders%2FTT-26-00002');
   });
 
   it('answers an order that is not on this account without confirming it exists', async () => {

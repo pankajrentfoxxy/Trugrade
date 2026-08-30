@@ -242,7 +242,7 @@ function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): Re
         {approvals.map((a) => (
           <li key={a.orderNumber} className={a.breached ? 'gone' : undefined}>
             <div className="wal">
-              <a className="mono waord" href={`/orders/${a.orderNumber}`}>
+              <a className="mono waord" href={`/account/orders/${a.orderNumber}`}>
                 {a.orderNumber}
               </a>
               <span className="wameta">

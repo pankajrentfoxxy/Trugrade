@@ -1,5 +1,5 @@
-import { getStats } from '../../../lib/api';
-import { SiteHeader } from '../../SiteHeader';
+import { getStats } from '../../../../lib/api';
+import { SiteHeader } from '../../../SiteHeader';
 
 /** The chrome, in the layout, exactly as `/cart` and `/checkout` do it. */
 export default async function OrderLayout({
