@@ -87,12 +87,36 @@ export async function seedAfterSale(
   log: (m: string) => void = () => undefined,
 ): Promise<void> {
   const dispatched: string[] = [];
+  // An order nobody has approved has not been bought, so it cannot arrive.
+  //
+  // This file and T25's approval seed independently chose TT-26-00007 and
+  // TT-26-00009 for opposite purposes — T25 left them PENDING so the approval
+  // inbox has something outstanding, and the list above delivered them. The
+  // result was two orders sitting DELIVERED with a PENDING approval and ZERO
+  // purchase orders: six machines each in a buyer's hands with no record
+  // anywhere of what we owe the vendor, because commitApproved is the only
+  // thing that raises a PO.
+  //
+  // Guarded by state rather than by renaming the orders, because renaming only
+  // moves the collision to whoever picks those numbers next.
+  const blocked = await prisma.$queryRaw<Array<{ order_number: string }>>`
+    SELECT o.order_number
+      FROM ordering."order" o
+      JOIN ordering.order_approval a ON a.order_id = o.id
+     WHERE a.status = 'PENDING'`;
+  const awaitingApproval = new Set(blocked.map((b) => b.order_number));
+  if (awaitingApproval.size > 0) {
+    log(`  not delivering ${[...awaitingApproval].join(', ')} — approval still pending`);
+  }
+
   for (const orderNumber of [...ARRIVING_TODAY, ...ARRIVED_EARLIER.map((a) => a.order)]) {
+    if (awaitingApproval.has(orderNumber)) continue;
     if (await dispatch(prisma, orderNumber)) dispatched.push(orderNumber);
   }
   if (dispatched.length > 0) log(`  dispatched ${dispatched.join(', ')}`);
 
   for (const arrival of ARRIVED_EARLIER) {
+    if (awaitingApproval.has(arrival.order)) continue;
     const when = new Date(now.getTime() - arrival.daysAgo * 86_400_000);
     const rows = await prisma.$executeRaw`
       UPDATE ordering.sub_order so

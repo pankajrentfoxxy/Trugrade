@@ -95,6 +95,32 @@ export class DeliveryService {
          WHERE order_number = ${orderNumber}`;
       if (!order) throw new NotFoundError('order', { reason: 'no_such_order' });
 
+      // An order nobody has approved has not been bought yet.
+      //
+      // The consignment guard below is not enough on its own: it asks whether a
+      // parcel looks dispatchable, not whether we ever agreed to buy the
+      // machines in it. Purchase orders are raised AT APPROVAL — T25's
+      // commitApproved is the only thing that writes one — so delivering an
+      // order whose approval is still PENDING hands a buyer machines with no
+      // record anywhere of what we owe the vendor for them, and starts a
+      // warranty clock on the strength of it.
+      //
+      // Not hypothetical: TT-26-00007 and TT-26-00009 were sitting DELIVERED
+      // with PENDING approvals and zero purchase orders, six machines each,
+      // written straight in by the seed. Found by T39's board, which was the
+      // first screen to put "delivered" and "what we paid" in one row.
+      const [blocking] = await this.prisma.$queryRaw<Array<{ status: string }>>`
+        SELECT status::text AS status FROM ordering.order_approval
+         WHERE order_id = ${order.id}::uuid AND status = 'PENDING'
+         LIMIT 1`;
+      if (blocking) {
+        throw new PreconditionFailedError(
+          `Order ${orderNumber} is still waiting on an approval, so nothing has been bought for it yet. ` +
+            `Approve or decline it first — delivering it now would leave us owing a vendor with no purchase order to say for what.`,
+          { reason: 'approval_still_pending' },
+        );
+      }
+
       const consignments = await this.prisma.$queryRaw<ConsignmentRow[]>`
         SELECT id, status::text AS status, delivered_at
           FROM ordering.sub_order

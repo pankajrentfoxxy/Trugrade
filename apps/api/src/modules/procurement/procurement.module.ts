@@ -3,11 +3,13 @@ import { CatalogModule } from '../catalog';
 import { QcModule } from '../qc';
 import { ProcurementController } from './procurement.controller';
 import { PayablesController } from './payables.controller';
+import { OpsProcurementController } from './ops-procurement.controller';
 import { ProcurementService } from './procurement.service';
 import { PurchaseOrderRepository } from './internal/purchase-order.repository';
 import { PurchaseOrderService } from './internal/purchase-order.service';
 import { PayableRepository } from './internal/payable.repository';
 import { PayableService } from './internal/payable.service';
+import { OpsPurchaseOrderService } from './internal/ops-purchase-order.service';
 
 /**
  * The procurement module's first internals and first routes (T32).
@@ -27,13 +29,14 @@ import { PayableService } from './internal/payable.service';
  */
 @Module({
   imports: [CatalogModule, QcModule],
-  controllers: [ProcurementController, PayablesController],
+  controllers: [ProcurementController, PayablesController, OpsProcurementController],
   providers: [
     ProcurementService,
     PurchaseOrderRepository,
     PurchaseOrderService,
     PayableRepository,
     PayableService,
+    OpsPurchaseOrderService,
   ],
   exports: [ProcurementService],
 })

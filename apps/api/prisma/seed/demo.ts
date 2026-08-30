@@ -78,6 +78,16 @@ const PLATFORM_PEOPLE: Person[] = [
   { email: 'tech@trugrade.in', name: 'Rakesh Kumar', role: 'TECHNICIAN' },
   { email: 'finance@trugrade.in', name: 'Priya Nair', role: 'FINANCE' },
   { email: 'logistics@trugrade.in', name: 'Sameer Bose', role: 'LOGISTICS_MANAGER' },
+  // T39. 03_UX_SPEC §3C.4 gives the order board to ADMIN_OPS *and* ADMIN_SUPPORT
+  // ("read + notes"), and no SUPPORT account existed — so the read-only support
+  // view of an order was unreachable on the demo database, and both accounts
+  // that could reach the board at all (OPS_MANAGER, FINANCE) need MFA. Same
+  // shape of gap as the missing rider in T23 and the missing pricing admin in
+  // T38. The slice is also the interesting one: SUPPORT holds
+  // `ordering.any.read` and NOT `procurement.po.read_any`, so it gets the order
+  // board and the record and is refused the purchase-order board — which is
+  // exactly the division §3C.4 describes, photographed rather than asserted.
+  { email: 'support@trugrade.in', name: 'Farida Sheikh', role: 'SUPPORT' },
   // The only role carrying `logistics.delivery.execute`, which is what marks an
   // order delivered — and delivery is what starts a warranty and opens the
   // 48-hour inspection window (T23/T24). Without a rider on the demo database

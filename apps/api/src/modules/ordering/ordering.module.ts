@@ -15,11 +15,13 @@ import { CartService } from './internal/cart.service';
 import { CheckoutService } from './internal/checkout.service';
 import { HoldService } from './internal/hold.service';
 import { OrderListService } from './internal/order-list.service';
+import { OpsOrderService } from './internal/ops-order.service';
 import { OrderReadService } from './internal/order-read.service';
 import { OrderDocumentsService } from './internal/order-documents.service';
 import { OrderUnitsService } from './internal/order-units.service';
 import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
+import { DeliveryCheckService } from './internal/delivery-check.service';
 import { DeliveryService } from './internal/delivery.service';
 import { OwnedUnitsService } from './internal/owned-units.service';
 import { RfqIntakeService } from './internal/rfq-intake.service';
@@ -94,9 +96,11 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
     OrderUnitsService,
     OrderDocumentsService,
     OrderListService,
+    OpsOrderService,
     ApprovalService,
     CatalogLookup,
     DeliveryService,
+    DeliveryCheckService,
     OwnedUnitsService,
     RfqIntakeService,
   ],

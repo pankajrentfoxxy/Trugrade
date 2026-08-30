@@ -1,10 +1,16 @@
-import { Controller, HttpCode, Param, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import type { IssuedInvoice } from '../payment';
 import { orderNumberSchema } from './dto/ordering.dto';
+import { opsOrderListQuerySchema, type OpsOrderListQueryDto } from './dto/ops-order.dto';
 import { DeliveryService, type DeliveryRecorded } from './internal/delivery.service';
 import { OrderDocumentsService } from './internal/order-documents.service';
+import {
+  OpsOrderService,
+  type OpsOrderBoardView,
+  type OpsOrderRecordView,
+} from './internal/ops-order.service';
 
 /**
  * Operator-side actions on an order. Platform staff only — never a buyer, never
@@ -21,7 +27,50 @@ export class OrderingOpsController {
   constructor(
     private readonly documents: OrderDocumentsService,
     private readonly delivery: DeliveryService,
+    private readonly board: OpsOrderService,
   ) {}
+
+  /**
+   * The order board — T39, `03_UX_SPEC.md` §3C.4.
+   *
+   * `ordering.any.read` and not `ordering.own.read`: this is every order on the
+   * platform and there is no org predicate under it. The `*.any.*` convention in
+   * `roles.ts` is what keeps that safe — no vendor or buyer role holds one, and
+   * the six that do are all ours.
+   *
+   * Declared **before** `:orderNumber`, and the reason is worth the line: Nest
+   * matches in declaration order, and a bare `GET /ops/orders` after a
+   * parameterised route is still fine — but the record below is what must not
+   * swallow anything, and keeping the list first makes that impossible to get
+   * wrong later.
+   */
+  @Get()
+  @RequirePermissions('ordering.any.read')
+  list(
+    @Query(new ZodValidationPipe(opsOrderListQuerySchema)) query: OpsOrderListQueryDto,
+  ): Promise<OpsOrderBoardView> {
+    return this.board.list(query);
+  }
+
+  /**
+   * One order end-to-end, both sides on one screen.
+   *
+   * §3C.4: "the buyer's invoice and the vendor PO with the margin — this is the
+   * only place the two ever sit on one screen, and it is ADMIN-only." That is
+   * the whole reason this route exists separately from
+   * `GET /api/buyer/orders/:orderNumber`, which reads `procurement` nowhere at
+   * all and must never learn to.
+   *
+   * `orderNumberSchema` rather than a uuid, because an operator reading a number
+   * off a customer's email is the case this route is for.
+   */
+  @Get(':orderNumber')
+  @RequirePermissions('ordering.any.read')
+  record(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<OpsOrderRecordView> {
+    return this.board.record(orderNumber);
+  }
 
   /**
    * Issue the tax invoices this order is due — T22.

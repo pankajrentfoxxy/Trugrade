@@ -1,5 +1,6 @@
 import type { Permission } from '@trugrade/contracts';
 import type { Principal } from '../lib/auth';
+import { platformRoutes } from '../routes/platform';
 import { qcRoutes } from '../routes/qc';
 
 export interface NavEntry {
@@ -88,6 +89,28 @@ export const NAV: readonly NavEntry[] = [
     permission: 'listing.price.override',
     group: 'Pricing',
   },
+  // T39. Each entry names the permission the API actually checks —
+  // `ordering.any.read` on GET /api/ops/orders and `procurement.po.read_any` on
+  // GET /api/ops/purchase-orders — and the two are deliberately DIFFERENT:
+  // SUPPORT holds the first and not the second, FINANCE and PRICING_ADMIN the
+  // second and (for PRICING_ADMIN) not the first, so a single permission over
+  // both would offer one of them a screen that 403s. `orgType` on top, as the
+  // QC group does: both are `*.any.*` and no tenant role holds either, but a
+  // rail is cheap to be sure about.
+  {
+    to: '/orders',
+    label: 'Orders',
+    permission: 'ordering.any.read',
+    group: 'Orders',
+    orgType: 'PLATFORM',
+  },
+  {
+    to: '/procurement/pos',
+    label: 'Purchase orders',
+    permission: 'procurement.po.read_any',
+    group: 'Orders',
+    orgType: 'PLATFORM',
+  },
   ...qcRoutes.flatMap((r) =>
     r.label === undefined
       ? []
@@ -160,6 +183,19 @@ export const NAV: readonly NavEntry[] = [
     group: 'Vendor',
     orgType: 'VENDOR',
   },
+  // T40 and T41, derived from their own barrel for the reason the QC entries
+  // are: that array already carries the label and the permission, and a second
+  // copy of a permission string is the copy that goes stale. `orgType` keeps
+  // them off a vendor's rail — no vendor role holds `payment.ledger.read`,
+  // `platform.config.write` or `identity.audit.read`, but a link that would 403
+  // must not be offered even in principle.
+  ...platformRoutes.map((r) => ({
+    to: r.path,
+    label: r.label,
+    permission: r.permission,
+    group: r.group,
+    orgType: 'PLATFORM' as const,
+  })),
 ];
 
 export const canSee = (n: NavEntry, p: Principal): boolean =>

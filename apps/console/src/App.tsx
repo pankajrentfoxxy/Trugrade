@@ -10,6 +10,8 @@ import { PricingRulesRoute } from './routes/PricingRules';
 import { SkuRecordRoute } from './routes/SkuRecord';
 import { SkuRequestsRoute } from './routes/SkuRequests';
 import { VendorReviewRoute } from './routes/VendorReview';
+import { opsRoutes } from './routes/ops';
+import { platformRoutes } from './routes/platform';
 import { qcRoutes } from './routes/qc';
 import { vendorRoutes } from './routes/vendor';
 import { Shell } from './shell/Shell';
@@ -157,6 +159,23 @@ export function App(): React.JSX.Element {
           />
 
           {/*
+            T39. The ops barrel hands back elements bare, exactly as the QC one
+            does, so guarding and chroming them stays the shell's business. Both
+            permissions are `*.any.*`, which no vendor or buyer role holds.
+          */}
+          {opsRoutes.map((r) => (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={
+                <RequirePermission permission={r.permission}>
+                  <Shell>{r.element}</Shell>
+                </RequirePermission>
+              }
+            />
+          ))}
+
+          {/*
             The QC barrel hands back elements bare — guarding and chroming them is
             the shell's business, so both wrappers go on here.
           */}
@@ -181,6 +200,22 @@ export function App(): React.JSX.Element {
           */}
           {vendorRoutes.map((r) => (
             <Route key={r.path} path={r.path} element={<Shell>{r.element}</Shell>} />
+          ))}
+
+          {/*
+            T40 and T41. Same shape as the QC and ops barrels: the elements come
+            back bare and the guard and the chrome are applied here.
+          */}
+          {platformRoutes.map((r) => (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={
+                <RequirePermission permission={r.permission}>
+                  <Shell>{r.element}</Shell>
+                </RequirePermission>
+              }
+            />
           ))}
 
           <Route path="/" element={<Landing />} />
