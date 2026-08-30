@@ -204,6 +204,32 @@ describe('SealChip', () => {
     expect(screen.getByText('Seal intact')).toBeInTheDocument();
   });
 
+  // The failure this guards is claiming a check that nobody performed. APPLIED
+  // means we sealed the machine; INTACT means somebody looked afterwards and
+  // found it unbroken. Only the second is a verdict, and only the second may be
+  // green. unit_is_sellable accepts APPLIED and INTACT alike, so most sellable
+  // stock is APPLIED — and the buyer's handover check exists precisely because
+  // those seals have NOT been verified yet.
+  it('does not paint an unverified seal as a checked one', () => {
+    const { container, unmount } = render(<SealChip sealCode="TRG-26HR-0004821" status="APPLIED" />);
+    expect(screen.getByText('Sealed')).toBeInTheDocument();
+    expect(container.querySelectorAll('.text-pass')).toHaveLength(0);
+    unmount();
+
+    // The control: a seal somebody actually checked still reads as a pass, so
+    // this cannot be satisfied by draining the colour out of the component.
+    const checked = render(<SealChip sealCode="TRG-26HR-0004821" status="INTACT" />);
+    expect(checked.container.querySelectorAll('.text-pass')).toHaveLength(1);
+    checked.unmount();
+
+    // And the two that stop a handover keep red.
+    for (const status of ['BROKEN', 'MISSING'] as const) {
+      const stopped = render(<SealChip status={status} />);
+      expect(stopped.container.querySelectorAll('.text-fail')).toHaveLength(1);
+      stopped.unmount();
+    }
+  });
+
   it('distinguishes "no seal" from "seal intact" in words', () => {
     render(<SealChip status="NOT_APPLIED" />);
     expect(screen.getByText('No seal')).toBeInTheDocument();

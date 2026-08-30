@@ -388,8 +388,28 @@ export function ScoreRing({
 
 export type SealStatus = 'APPLIED' | 'INTACT' | 'BROKEN' | 'MISSING' | 'REPLACED' | 'NOT_APPLIED';
 
+/**
+ * APPLIED IS NOT A PASS.
+ *
+ * A seal has two different facts in it and only one of them is a verdict.
+ * INTACT means somebody looked at this seal and found it unbroken — that is a
+ * checked outcome and it may be green. APPLIED means we put a seal on the
+ * machine and NOBODY HAS LOOKED SINCE. Painting that green claims a
+ * verification that has not happened, which is this build's oldest defect
+ * wearing a different hat: a missing value rendered as a passing one.
+ *
+ * It is not hypothetical. `unit_is_sellable` accepts APPLIED and INTACT alike,
+ * so most sellable stock is APPLIED, and the buyer's delivery check exists
+ * precisely because nobody has verified those seals yet. A green chip on every
+ * one of them tells the person doing the checking that the check is already
+ * done.
+ *
+ * REPLACED stays warn — a seal that had to be replaced is a fact worth reading
+ * twice. BROKEN and MISSING are the genuine FAIL, and they keep red: those are
+ * the two that stop a handover.
+ */
 const SEAL_TONE: Record<SealStatus, StatusPillProps['tone']> = {
-  APPLIED: 'pass',
+  APPLIED: 'neutral',
   INTACT: 'pass',
   BROKEN: 'fail',
   MISSING: 'fail',
