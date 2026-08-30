@@ -135,7 +135,9 @@ function Workspace({ data }: { data: OrderDashboard }): React.JSX.Element {
             {
               key: 'approvals',
               label: 'Orders waiting on an approver',
-              href: '/account/orders?status=AWAITING_APPROVAL',
+              // T25 gave this queue somewhere to land. It used to point at the
+              // order board, which could show the wait and do nothing about it.
+              href: '/account/approvals',
               count: data.awaitingApproval.orders,
               breachedCount: breached,
               ...(data.oldestApprovalWaitHours === null
@@ -224,9 +226,11 @@ function kpis(data: OrderDashboard): Kpi[] {
  * are the facts an approval needs to be honest about: what is held, for whom,
  * until when, who was asked, and what happens if nobody answers.
  *
- * **No approve button.** Nothing in this product can decide an approval yet, and
- * the decision would not be the requester's to take in any case. A control that
- * led nowhere would be worse than none.
+ * **The decision is not taken here.** It is taken on the approval itself, where
+ * the serials, the landed cost and the policy clause that fired are all on
+ * screen — 03_UX_SPEC asks for exactly that before the button. Until T25 built
+ * `POST /api/buyer/approvals/:id/decision` there was no decision to link to at
+ * all; this list has a route now, and every row leads to it.
  */
 function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): React.JSX.Element {
   return (
@@ -285,10 +289,12 @@ function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): Re
       </ul>
 
       <p className="fnote off">
-        Nobody can approve an order from this account yet, so there is no button here to press. What
-        this screen is for is knowing which request is closest to its deadline and who to go and
-        ask. If the deadline passes, the hold releases on its own, the machines go back on sale to
-        everyone, and you are told — there is no charge and no order to cancel.
+        An approval is addressed to one person, and only that person can answer it — never whoever
+        raised the order.{' '}
+        <a href="/account/approvals">The ones waiting on you</a> are where you answer them; the rest
+        are here so you know which request is closest to its deadline and who to go and ask. If a
+        deadline passes, the hold releases on its own, the machines go back on sale to everyone, and
+        you are told — there is no charge and no order to cancel.
       </p>
     </section>
   );

@@ -4,11 +4,15 @@ import { RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
   addCartItemSchema,
+  approvalDecisionSchema,
+  approvalListQuerySchema,
   createCartSchema,
   orderListQuerySchema,
   orderNumberSchema,
   requirementIntakeSchema,
   type AddCartItemDto,
+  type ApprovalDecisionDto,
+  type ApprovalListQueryDto,
   type CreateCartDto,
   type OrderListQueryDto,
   type RequirementIntakeDto,
@@ -21,6 +25,12 @@ import {
   type ConfirmCheckoutDto,
   type StartCheckoutDto,
 } from './dto/checkout.dto';
+import {
+  ApprovalService,
+  type ApprovalDecisionResult,
+  type ApprovalInboxView,
+  type ApprovalRecordView,
+} from './internal/approval.service';
 import { CartService, type CartSummary, type CartView } from './internal/cart.service';
 import {
   CheckoutService,
@@ -68,6 +78,7 @@ export class OrderingController {
     private readonly orders: OrderReadService,
     private readonly orderUnits: OrderUnitsService,
     private readonly orderBoard: OrderListService,
+    private readonly approvals: ApprovalService,
     private readonly requirements: RfqIntakeService,
   ) {}
 
@@ -293,6 +304,80 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<OrderUnitsView> {
     return this.orderUnits.byOrderNumber(orderNumber);
+  }
+
+
+  // -------------------------------------------------------------------------
+  // Approvals — T25, and the decision that did not exist
+  // -------------------------------------------------------------------------
+
+  /**
+   * The approvals addressed to the signed-in person.
+   *
+   * **Declared above `orders/:orderNumber` is not enough — it is a different
+   * path segment entirely**, which is why approvals live at `/buyer/approvals`
+   * rather than `/buyer/orders/approvals`: an approval is a decision about an
+   * order, not a view of one, and it outlives the order's own status.
+   *
+   * Board state is in the query string for the same reason every other board's
+   * is: an approver forwarding "the four I still owe you" to a colleague must
+   * send a link that reproduces it.
+   *
+   * Guarded by `ordering.own.read` rather than `ordering.order.approve`, because
+   * reading what is waiting on you is not the same permission as deciding it —
+   * an account owner who cannot approve can still see the queue, and the row
+   * itself carries whether they may act.
+   */
+  @Get('approvals')
+  @RequirePermissions('ordering.own.read')
+  approvalInbox(
+    @Query(new ZodValidationPipe(approvalListQuerySchema)) query: ApprovalListQueryDto,
+  ): Promise<ApprovalInboxView> {
+    return this.approvals.inbox(query);
+  }
+
+  /**
+   * One approval, with the order it is about — the serials included.
+   *
+   * 03_UX_SPEC §3A: *"Shows the serials that will be allocated, so an approver
+   * approves specific machines."* The order half comes back through
+   * `OrderReadService`'s existing allow-list, so this route inherits the
+   * anonymity guarantee structurally rather than restating it.
+   */
+  @Get('approvals/:approvalId')
+  @RequirePermissions('ordering.own.read')
+  approval(
+    @Param('approvalId', new ZodValidationPipe(uuidSchema)) approvalId: string,
+  ): Promise<ApprovalRecordView> {
+    return this.approvals.byId(approvalId);
+  }
+
+  /**
+   * Approve or reject.
+   *
+   * The endpoint this build has been missing since PHASE_06 Task 2: the policy,
+   * the `order_approval` row and the twenty-four-hour deadline were all built,
+   * and nothing could decide one — so `APPROVED` and `REJECTED` were unreachable
+   * and held stock had no way forward but to lapse.
+   *
+   * One route for both decisions rather than `/approve` and `/reject`, because
+   * they are one act with two answers: the same guards, the same race, the same
+   * row. Two routes means two places to forget VR-123.
+   *
+   * 200 rather than 201: what this returns is the approval and what the order
+   * became, not a new resource. `POST` because it is emphatically not
+   * idempotent — it raises purchase orders on approval and puts machines back on
+   * sale on rejection, and `settle`'s `AND status = 'PENDING'` is what makes a
+   * double-press safe rather than the verb.
+   */
+  @Post('approvals/:approvalId/decision')
+  @HttpCode(200)
+  @RequirePermissions('ordering.order.approve')
+  decideApproval(
+    @Param('approvalId', new ZodValidationPipe(uuidSchema)) approvalId: string,
+    @Body(new ZodValidationPipe(approvalDecisionSchema)) body: ApprovalDecisionDto,
+  ): Promise<ApprovalDecisionResult> {
+    return this.approvals.decide(approvalId, body);
   }
 
   // -------------------------------------------------------------------------

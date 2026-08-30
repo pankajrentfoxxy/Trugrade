@@ -1188,3 +1188,136 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   .ubexport{margin-left:0;width:100%;justify-content:center}
   .ubkpi{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 }
+
+/* ==========================================================================
+   T25 — approvals, addresses and team
+   ========================================================================== */
+
+/* --- approval inbox ------------------------------------------------------ */
+
+/* Four content columns and an action column. Comfortable density means every
+   column costs its gutter before it holds anything, so the value column is the
+   only one that gets a floor. */
+.aboard table{min-width:820px}
+.aboard td{vertical-align:middle}
+.obord.r{align-items:flex-end;text-align:right}
+
+/* Why a row has no control. A greyed button with no sentence is the defect this
+   replaces, and it has to read as prose, not as a disabled state. */
+.ablocked{display:block;max-width:34ch;font-size:11.5px;line-height:1.45;color:var(--ink-4)}
+
+/* The calm empty state 03_UX_SPEC asks for by name: no border emphasis, no
+   action, nothing that reads as a task. */
+.empty.calm{border-style:dashed;border-color:var(--rule-2)}
+.empty.calm h3{color:var(--ink-2)}
+
+/* --- one approval -------------------------------------------------------- */
+
+.awhy{padding:var(--s5);border:1px solid var(--rule);border-radius:var(--r-lg);
+  background:var(--sheet)}
+
+/* The decision panel. One amber control; everything else is secondary. */
+.adec{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.adec .fnote{margin-top:2px}
+
+.adecreason{display:flex;flex-direction:column;gap:6px}
+.adecreason .l{font-size:12.5px;font-weight:500;color:var(--ink)}
+.adecreason .d{font-size:11.5px;line-height:1.5;color:var(--ink-3)}
+.adecreason .d b{color:var(--ink-2)}
+.adecreason textarea{width:100%;padding:10px 12px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);background:var(--sheet-2);color:var(--ink);
+  font:inherit;font-size:13px;line-height:1.5;resize:vertical}
+.adecreason textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+
+/* The refusal under the control, never only in a `title`. */
+.adechint{margin:0;font-size:11.5px;line-height:1.45;color:var(--ink-3)}
+.adecfail{margin:0 0 10px;padding:10px 12px;border:1px solid var(--fail);
+  border-radius:var(--r-sm);font-size:12.5px;line-height:1.5;color:var(--fail)}
+
+.ablock{margin:0;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.sidep .retry{margin-top:12px}
+
+/* --- addresses ----------------------------------------------------------- */
+
+.adrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.adrcard{display:flex;flex-direction:column;gap:8px;min-width:0}
+/* Retired, not failed. Dimmed rather than coloured — a switched-off site is not
+   a verdict about anything. */
+.adrcard.off{opacity:.62}
+.adrlock{margin:0;font-size:11.5px;line-height:1.55;color:var(--ink-3);max-width:60ch}
+.adrnote{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink-4)}
+.adrfail{margin:0;font-size:12px;line-height:1.5;color:var(--fail)}
+.adrok{margin:0 0 10px;padding:10px 12px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);background:var(--sheet-2);font-size:12.5px;color:var(--ink-2)}
+.adrok b{color:var(--ink)}
+
+.adrretired{margin-top:16px}
+.adrretired>summary{cursor:pointer;font-size:12.5px;color:var(--ink-3);padding:6px 0}
+.adrretired>summary:hover{color:var(--ink-2)}
+
+.adrform{display:flex;flex-direction:column;gap:14px;margin-top:4px}
+.adrsel{display:flex;flex-direction:column;gap:6px}
+.adrsel .l{font-size:12.5px;font-weight:500;color:var(--ink)}
+.adrsel .d{font-size:11px;line-height:1.5;color:var(--ink-4)}
+.adrsel select,.adrsel textarea{width:100%;padding:9px 11px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);background:var(--sheet-2);color:var(--ink);
+  font:inherit;font-size:13px}
+.adrsel textarea{line-height:1.5;resize:vertical}
+.adrsel select:focus-visible,.adrsel textarea:focus-visible{
+  outline:2px solid var(--acc);outline-offset:1px}
+
+/* A field the schema has no column for. Stated, never offered. */
+.adrmissing{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;
+  border:1px dashed var(--rule);border-radius:var(--r-sm)}
+.adrmissing span{font-size:11px;line-height:1.5;color:var(--ink-4)}
+
+/* --- team ---------------------------------------------------------------- */
+
+.tboard table{min-width:880px}
+.tboard td{vertical-align:middle}
+
+.troles{display:flex;flex-wrap:wrap;gap:5px;max-width:36ch}
+/* Neutral, always. A role is not a verdict and never carries PASS/FAIL colour. */
+.tchip{display:inline-flex;align-items:center;padding:3px 9px;border:1px solid var(--rule);
+  border-radius:999px;background:var(--sheet-2);font-size:11px;color:var(--ink-2);
+  white-space:nowrap}
+.tyou{margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--acc-wash);
+  color:var(--acc-ink);font-size:10px;font-weight:500;letter-spacing:.04em}
+
+.tact{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.tnote{margin-top:16px;max-width:84ch}
+
+.troleedit{margin-top:16px;padding:var(--s5);border:1px solid var(--rule);
+  border-radius:var(--r-lg);background:var(--sheet)}
+.trolelist{list-style:none;margin:12px 0 0;padding:0;display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.trolelist>li{border:1px solid var(--rule);border-radius:var(--r-sm);padding:10px 12px}
+.trolelist>li.off{opacity:.6}
+.trolelist label{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;
+  align-items:start;cursor:pointer}
+.trolelist input{grid-row:1/span 4;margin-top:2px;accent-color:var(--acc)}
+.trolelist .l{font-size:13px;font-weight:500;color:var(--ink)}
+.trolelist .d{font-size:11px;line-height:1.5;color:var(--ink-3)}
+.trolelist .d.off{color:var(--ink-4)}
+.trolelist>li.off label{cursor:not-allowed}
+
+.tsave{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+
+@media(max-width:900px){
+  .adrgrid{grid-template-columns:minmax(0,1fr)}
+  .trolelist{grid-template-columns:minmax(0,1fr)}
+  .ablocked,.troles{max-width:none}
+}
+
+/* The account area's own navigation bar, in the layout above every page's own
+   `.body`. Its bottom padding is zeroed so the two do not stack into a gap. */
+.accnavbar{padding:18px 0 0}
+.acctabs{margin-bottom:0}
+
+/* The approval record and the address book keep their evidence above their
+   panel on a phone. `.sidep{order:-1}` is right for a product page, where the
+   first thing to answer is the pincode; it is wrong where the panel holds the
+   button and the evidence is what the button is about. */
+@media(max-width:1000px){
+  .apprrec .sidep{order:0}
+}

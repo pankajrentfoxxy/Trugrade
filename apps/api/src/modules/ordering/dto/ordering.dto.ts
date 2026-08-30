@@ -183,3 +183,39 @@ export const orderListQuerySchema = z.object({
 });
 
 export type OrderListQueryDto = z.infer<typeof orderListQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Approvals — T25
+// ---------------------------------------------------------------------------
+
+/**
+ * The inbox's whole state, as it arrives from the URL.
+ *
+ * `waiting` is the default because an inbox opens on what is outstanding, and
+ * `decided` folds `APPROVED`, `REJECTED` and `EXPIRED` together deliberately:
+ * they are three ways of being finished with, and an approver looking back
+ * wants the history, not three tabs of it. The verdict is on every row.
+ */
+export const approvalListQuerySchema = z.object({
+  status: z.enum(['waiting', 'decided', 'all']).default('waiting'),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  per: z.coerce.number().int().min(5).max(50).default(10),
+});
+
+/**
+ * A decision.
+ *
+ * The reason is optional in the shape and mandatory on a rejection, and that
+ * asymmetry is enforced in the service rather than by a discriminated union
+ * here — the message a rejecting approver needs ("whoever raised it sees your
+ * words exactly as you write them") is a sentence about consequences, and Zod's
+ * would be a sentence about a string length. One place decides, and it is the
+ * place that knows what the field is for.
+ */
+export const approvalDecisionSchema = z.object({
+  decision: z.enum(['APPROVE', 'REJECT']),
+  comment: z.string().trim().max(1000).optional(),
+});
+
+export type ApprovalListQueryDto = z.infer<typeof approvalListQuerySchema>;
+export type ApprovalDecisionDto = z.infer<typeof approvalDecisionSchema>;

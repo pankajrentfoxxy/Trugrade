@@ -7,6 +7,7 @@ import { PlatformModule } from '../platform';
 import { QcModule } from '../qc';
 import { OrderingController } from './ordering.controller';
 import { OrderingService } from './ordering.service';
+import { ApprovalService } from './internal/approval.service';
 import { CartService } from './internal/cart.service';
 import { CheckoutService } from './internal/checkout.service';
 import { HoldService } from './internal/hold.service';
@@ -66,6 +67,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
     OrderReadService,
     OrderUnitsService,
     OrderListService,
+    ApprovalService,
     CatalogLookup,
     RfqIntakeService,
   ],

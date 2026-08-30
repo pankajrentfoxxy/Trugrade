@@ -143,6 +143,17 @@ export interface OrderTransactionResult {
   purchaseOrderIds: string[];
 }
 
+/**
+ * What finishing an approved order produced. Internal: `purchaseOrderIds` is
+ * ours to a supply point and never reaches a buyer-facing payload.
+ */
+export interface CommitApprovedResult {
+  status: 'CONFIRMED' | 'PAYMENT_PENDING';
+  orderNumber: string;
+  purchaseOrderIds: string[];
+  units: number;
+}
+
 /* ==========================================================================
  * Internal shapes
  * ======================================================================== */
@@ -388,11 +399,12 @@ export class OrderTransactionService {
     if (input.approval) {
       await this.prisma.$executeRaw`
         INSERT INTO ordering.order_approval
-          (order_id, requested_by, approver_user_id, status, order_value, policy_id, expires_at)
+          (order_id, requested_by, approver_user_id, status, order_value, policy_id,
+           requested_at, expires_at)
         VALUES (${orderId}::uuid, ${input.buyerUserId}::uuid,
                 ${input.approval.approverUserId}::uuid, 'PENDING',
                 ${grandTotal.toString()}::numeric,
-                ${input.approval.policyId}::uuid, ${input.approval.expiresAt})`;
+                ${input.approval.policyId}::uuid, ${now}, ${input.approval.expiresAt})`;
     }
 
     // 16. The outbox. `EventBus.publish` only ever writes a row; the dispatcher
@@ -766,6 +778,229 @@ export class OrderTransactionService {
 
   private fyShort(): string {
     return financialYearOf(this.clock.now().toISOString()).slice(2, 4);
+  }
+
+  /* ------------------------------------------------------------------------
+   * The half of the transaction an approval defers — T25
+   * --------------------------------------------------------------------- */
+
+  /**
+   * Finish an order a manager has just signed off.
+   *
+   * `AWAITING_APPROVAL` is the one status this transaction can leave behind
+   * unfinished: steps 6 to 12 ran, so the order, its lines and its serials all
+   * exist and the machines are `RESERVED` — but steps 13, 14 and 16 were
+   * deliberately skipped, because a purchase order sitting in a vendor's portal
+   * against an order nobody has signed is a commitment we have not made. This
+   * runs exactly those steps and nothing else.
+   *
+   * **It calls `raisePurchaseOrder`, it does not restate it.** There is one
+   * definition of what raising a PO means — the payout, the TDS accrual, the
+   * frozen `purchase_price`, the payable — and a second copy written for the
+   * approval path is the copy that would drift on the next tax change.
+   *
+   * No listing lock is taken and none is needed: nothing here decrements a
+   * counter or picks a serial. The machines were picked at placement and have
+   * been off sale ever since. What it does check is that they are still ours to
+   * commit — a machine scrapped or found seal-broken while a manager was
+   * thinking is not sold by an approval arriving afterwards.
+   */
+  async commitApproved(orderId: string): Promise<CommitApprovedResult> {
+    return this.prisma.runInTransaction(() => this.commitBody(orderId), { timeoutMs: 30_000 });
+  }
+
+  private async commitBody(orderId: string): Promise<CommitApprovedResult> {
+    const now = this.clock.now();
+    const actorId = this.ctx.principal?.userId ?? null;
+
+    const [order] = await this.prisma.$queryRaw<
+      Array<{
+        order_number: string;
+        buyer_org_id: string;
+        payment_mode: string;
+        status: string;
+        grand_total: string;
+      }>
+    >`
+      SELECT order_number, buyer_org_id, payment_mode::text AS payment_mode,
+             status::text AS status, grand_total::text AS grand_total
+        FROM ordering."order"
+       WHERE id = ${orderId}::uuid
+         FOR UPDATE`;
+    if (!order || order.status !== 'AWAITING_APPROVAL') {
+      throw new PreconditionFailedError('That order is no longer waiting for approval.', {
+        reason: 'order_not_awaiting_approval',
+        status: order?.status ?? 'missing',
+      });
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ vendor_org_id: string; unit_id: string; serial_number: string; listing_id: string }>
+    >`
+      SELECT so.vendor_org_id, olu.unit_id, olu.serial_number, ol.listing_id
+        FROM ordering.order_line_unit olu
+        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${orderId}::uuid
+       ORDER BY olu.unit_id`;
+
+    const units = await this.unitFacts(rows.map((r) => r.unit_id));
+    const byVendor = groupBy(rows, (r) => r.vendor_org_id);
+
+    const status = statusFor(order.payment_mode);
+    const purchaseOrderIds: string[] = [];
+
+    for (const [vendorOrgId, vendorRows] of byVendor) {
+      const allocated = vendorRows.map((r) => {
+        const fact = units.get(r.unit_id);
+        // The machine moved while the approval sat. Refusing here is the only
+        // honest answer: the alternative is selling a scrapped laptop because a
+        // manager pressed approve after somebody else pressed scrap.
+        if (!fact) {
+          throw new PreconditionFailedError(
+            'One of the machines held for this order is no longer available, so it cannot be confirmed. Nothing has been charged — place the order again and we will hold different stock.',
+            { reason: 'held_unit_no_longer_reserved', unitId: r.unit_id },
+          );
+        }
+        return { ...fact, serialNumber: r.serial_number, listingId: r.listing_id };
+      });
+
+      purchaseOrderIds.push(
+        await this.raisePurchaseOrder({ orderId, vendorOrgId, units: allocated, now }),
+      );
+    }
+
+    await this.prisma.$executeRaw`
+      UPDATE ordering."order"
+         SET status = ${status}::public.order_status
+       WHERE id = ${orderId}::uuid`;
+    await this.prisma.$executeRaw`
+      UPDATE ordering.sub_order
+         SET status = ${status}::public.order_status
+       WHERE order_id = ${orderId}::uuid`;
+    await this.prisma.$executeRaw`
+      UPDATE ordering.order_line ol
+         SET status = ${status}::public.order_status
+        FROM ordering.sub_order so
+       WHERE so.id = ol.sub_order_id AND so.order_id = ${orderId}::uuid`;
+
+    await this.writeEvent(orderId, {
+      type: 'order.approved',
+      from: 'AWAITING_APPROVAL',
+      to: status,
+      note: `Approved. ${rows.length} ${machines(rows.length)} are now committed to you by serial number.`,
+      occurredAt: now,
+      actorId,
+    });
+
+    // Step 16, held back until now for the same reason the PO was: the
+    // subscribers on this event act on an order somebody has agreed to.
+    await this.events.publish('order.confirmed', {
+      orderId,
+      orderNumber: order.order_number,
+      buyerOrgId: order.buyer_org_id,
+      totalValue: order.grand_total,
+      unitIds: rows.map((r) => r.unit_id),
+    });
+
+    return { status, orderNumber: order.order_number, purchaseOrderIds, units: rows.length };
+  }
+
+  /**
+   * Put an order's held machines back on sale.
+   *
+   * The mirror of `HoldService.release` for the stage after a hold has been
+   * consumed: at `AWAITING_APPROVAL` there is no `checkout_hold` row left to
+   * release, and what holds the stock is `listing.unit.status = 'RESERVED'`
+   * against `order_line_unit`. `AND status = 'RESERVED'` is load bearing here
+   * for the reason it is there in `consume` — a machine scrapped underneath the
+   * order is not resurrected onto the storefront by a rejection.
+   *
+   * `listing.qty_available` is not touched: `trg_listing_counters` recomputes it
+   * from the units on every status change, and a second hand-written arithmetic
+   * correction beside a trigger is how counters end up disagreeing.
+   */
+  async releaseOrderStock(orderId: string, reason: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
+      SELECT olu.unit_id
+        FROM ordering.order_line_unit olu
+        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${orderId}::uuid
+       ORDER BY olu.unit_id`;
+    if (rows.length === 0) return 0;
+
+    const unitIds = rows.map((r) => r.unit_id);
+    await this.prisma.$executeRaw`
+      WITH before AS (
+        SELECT u.id, u.status, u.location
+          FROM listing.unit u
+         WHERE u.id = ANY(${unitIds}::uuid[])
+           AND u.status = 'RESERVED'::public.unit_status
+         ORDER BY u.id
+           FOR UPDATE
+      ),
+      moved AS (
+        UPDATE listing.unit u
+           SET status = 'LISTED'::public.unit_status, order_line_id = NULL
+          FROM before b
+         WHERE u.id = b.id
+        RETURNING u.id, b.status AS from_status, u.status AS to_status,
+                  b.location AS from_location, u.location AS to_location
+      )
+      INSERT INTO listing.stock_movement
+        (unit_id, from_status, to_status, from_location, to_location,
+         reason, actor_id, ref_type, ref_id, occurred_at)
+      SELECT m.id, m.from_status, m.to_status, m.from_location, m.to_location,
+             ${reason}, ${this.ctx.principal?.userId ?? null}::uuid,
+             'ORDER', ${orderId}::uuid, ${this.clock.now()}
+        FROM moved m`;
+
+    return unitIds.length;
+  }
+
+  /**
+   * The facts `raisePurchaseOrder` needs about each machine, read back from
+   * `listing.unit` — and only for units still `RESERVED`. One missing from the
+   * result is one that moved, and the caller refuses on it.
+   */
+  private async unitFacts(
+    unitIds: readonly string[],
+  ): Promise<Map<string, Omit<AllocatedUnit, 'serialNumber' | 'listingId'>>> {
+    if (unitIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        vendor_org_id: string;
+        sku_id: string;
+        grade: string;
+        vendor_ask_price: { toString(): string } | null;
+        valuation_method: string;
+        qc_report_id: string | null;
+      }>
+    >`
+      SELECT id, vendor_org_id, sku_id,
+             COALESCE(grade_actual, grade_declared)::text AS grade,
+             vendor_ask_price, valuation_method, qc_report_id
+        FROM listing.unit
+       WHERE id = ANY(${[...unitIds]}::uuid[])
+         AND status = 'RESERVED'::public.unit_status
+       ORDER BY id
+         FOR UPDATE`;
+    return new Map(
+      rows.map((u) => [
+        u.id,
+        {
+          unitId: u.id,
+          vendorOrgId: u.vendor_org_id,
+          skuId: u.sku_id,
+          grade: u.grade,
+          vendorAskPrice: u.vendor_ask_price ? Money.parse(u.vendor_ask_price.toString()) : null,
+          valuationMethod: u.valuation_method,
+          qcReportId: u.qc_report_id,
+        },
+      ]),
+    );
   }
 
   /**

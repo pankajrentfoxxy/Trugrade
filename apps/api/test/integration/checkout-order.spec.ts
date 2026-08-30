@@ -27,7 +27,7 @@ import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
 import type { PrismaClient } from '@prisma/client';
-import { Money, permissionsFor, type Role } from '@trugrade/contracts';
+import { Money, findForbiddenKeys, permissionsFor, type Role } from '@trugrade/contracts';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
@@ -46,6 +46,7 @@ import { CheckoutService } from '../../src/modules/ordering/internal/checkout.se
 import type { OrderListQueryDto } from '../../src/modules/ordering/dto/ordering.dto';
 import { OrderListService } from '../../src/modules/ordering/internal/order-list.service';
 import { OrderReadService } from '../../src/modules/ordering/internal/order-read.service';
+import { ApprovalService } from '../../src/modules/ordering/internal/approval.service';
 import { OrderUnitsService } from '../../src/modules/ordering/internal/order-units.service';
 import { HoldService } from '../../src/modules/ordering/internal/hold.service';
 import {
@@ -88,6 +89,7 @@ let checkout: CheckoutService;
 let readOrder: OrderReadService;
 let readUnits: OrderUnitsService;
 let orderBoard: OrderListService;
+let approvals: ApprovalService;
 let holds: HoldService;
 let orders: OrderTransactionService;
 let ctx: RequestContextService;
@@ -290,6 +292,7 @@ beforeAll(async () => {
   readOrder = moduleRef.get(OrderReadService);
   readUnits = moduleRef.get(OrderUnitsService);
   orderBoard = moduleRef.get(OrderListService);
+  approvals = moduleRef.get(ApprovalService);
   holds = moduleRef.get(HoldService);
   orders = moduleRef.get(OrderTransactionService);
   ctx = moduleRef.get(RequestContextService);
@@ -1808,5 +1811,301 @@ describe('the buyer reads the machines on their order, by serial', () => {
     for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout', 'org_id']) {
       expect(json.toLowerCase()).not.toContain(word);
     }
+  });
+});
+
+/* ==========================================================================
+ * Deciding an approval — T25, the endpoint that did not exist
+ *
+ * Until this suite there was no way to reach `APPROVED` or `REJECTED` from the
+ * product at all: the policy, the row and the deadline were built and nothing
+ * could decide one. Every test below drives the real decision and then asks the
+ * database what moved, because the interesting half of an approval is not the
+ * 200 — it is the purchase order that did or did not come into existence.
+ *
+ * Three of them attempt the forbidden thing rather than asserting a guard:
+ * the requester approves their own order, an approver named as their own
+ * approver approves their own order (VR-123 proper), and a decision arrives
+ * after the deadline. In each case the refusal is asserted AND the order is
+ * re-read to prove nothing moved.
+ * ======================================================================== */
+
+/** A principal for somebody who may decide approvals. */
+function asApprover<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  const roles: Role[] = ['CUSTOMER_APPROVER'];
+  return ctx.run({ requestId: randomUUID() }, () => {
+    ctx.setPrincipal({
+      userId,
+      orgId: buyerOrgId,
+      orgType: 'BUYER',
+      roles,
+      permissions: permissionsFor(roles),
+      sessionId: 's',
+      mfaSatisfied: true,
+    });
+    return fn();
+  });
+}
+
+describe('deciding an approval', () => {
+  /** An order parked at AWAITING_APPROVAL, with the approver it was sent to. */
+  async function heldOrder(
+    approverUserId: string | null,
+    qty = 2,
+  ): Promise<{ orderId: string; approvalId: string; listingId: string }> {
+    await db.$executeRaw`
+      INSERT INTO customer.buyer_approval_policy
+        (org_id, user_id, requires_approval_above, approver_user_id, allowed_payment_modes)
+      VALUES (${buyerOrgId}::uuid, ${buyerUserId}::uuid, 50000,
+              ${approverUserId}::uuid, ARRAY['PREPAID']::public.payment_mode[])`;
+    const v = await makeVendor();
+    const offer = await makeOffer({ vendorOrgId: v.orgId, pickupAddressId: v.addressId, qty });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const order = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+    expect(order.status).toBe('AWAITING_APPROVAL');
+    const [row] = await db.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM ordering.order_approval WHERE order_id = ${order.orderId}::uuid`;
+    return { orderId: order.orderId, approvalId: row!.id, listingId: offer.listingId };
+  }
+
+  /** A second held order under whatever the policy currently says. */
+  async function heldOrder2(qty = 2): Promise<{ orderId: string; approvalId: string }> {
+    const v = await makeVendor();
+    const offer = await makeOffer({ vendorOrgId: v.orgId, pickupAddressId: v.addressId, qty });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const order = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+    const [row] = await db.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM ordering.order_approval WHERE order_id = ${order.orderId}::uuid`;
+    return { orderId: order.orderId, approvalId: row!.id };
+  }
+
+  const orderStatus = async (orderId: string): Promise<string> => {
+    const [row] = await db.$queryRaw<Array<{ status: string }>>`
+      SELECT status::text AS status FROM ordering."order" WHERE id = ${orderId}::uuid`;
+    return row!.status;
+  };
+
+  const poCount = async (orderId: string): Promise<number> => {
+    const [row] = await db.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) FROM procurement.purchase_order WHERE order_id = ${orderId}::uuid`;
+    return Number(row!.count);
+  };
+
+  it('approving raises the purchase order the placement deliberately did not', async () => {
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { orderId, approvalId, listingId } = await heldOrder(approver);
+
+    expect(await poCount(orderId)).toBe(0);
+
+    const result = await asApprover(approver, () =>
+      approvals.decide(approvalId, { decision: 'APPROVE' }),
+    );
+
+    // PREPAID, so the order is placed and not yet paid for. `CONFIRMED` on an
+    // unpaid prepaid order would tell a vendor to pick against money we do not
+    // have — the same rule `statusFor` applies at placement.
+    expect(result.orderStatus).toBe('PAYMENT_PENDING');
+    expect(result.approval.status).toBe('APPROVED');
+    expect(result.units).toBe(2);
+    expect(await orderStatus(orderId)).toBe('PAYMENT_PENDING');
+
+    // The PO, the payable and the frozen payout all exist now and did not before.
+    expect(await poCount(orderId)).toBe(1);
+    const [payable] = await db.$queryRaw<Array<{ status: string; net_payable: string }>>`
+      SELECT vp.status, vp.net_payable::text AS net_payable
+        FROM procurement.vendor_payable vp
+        JOIN procurement.purchase_order po ON po.id = vp.purchase_order_id
+       WHERE po.order_id = ${orderId}::uuid`;
+    expect(payable!.status).toBe('ACCRUED');
+
+    // The machines stay off sale: an approval commits them, it does not release.
+    expect(await counters(listingId)).toMatchObject({ qty_available: 0, qty_reserved: 2 });
+
+    // And the buyer's own screen can now see the decision.
+    const record = await asBuyer(() => readOrder.byNumber(result.approval.orderNumber));
+    expect(record.approval?.status).toBe('APPROVED');
+    expect(record.approval?.decidedAt).not.toBeNull();
+  });
+
+  it('rejecting cancels the order, puts the machines back on sale, and raises no PO', async () => {
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { orderId, approvalId, listingId } = await heldOrder(approver);
+
+    const result = await asApprover(approver, () =>
+      approvals.decide(approvalId, {
+        decision: 'REJECT',
+        comment: 'Over budget this quarter — resubmit in October.',
+      }),
+    );
+
+    expect(result.orderStatus).toBe('CANCELLED');
+    expect(result.approval.status).toBe('REJECTED');
+    expect(await orderStatus(orderId)).toBe('CANCELLED');
+    expect(await poCount(orderId)).toBe(0);
+
+    // The machines are on sale again, and `trg_listing_counters` — not
+    // hand-written arithmetic — is what put the count back.
+    expect(await counters(listingId)).toMatchObject({ qty_available: 2, qty_reserved: 0 });
+    // `ORDER BY id`, not `occurred_at`: the clock is fixed in this suite, so the
+    // reservation written at placement and the release written now share an
+    // instant to the microsecond and a timestamp sort between them is a coin toss.
+    const [movement] = await db.$queryRaw<Array<{ to_status: string; reason: string }>>`
+      SELECT to_status::text AS to_status, reason FROM listing.stock_movement
+       WHERE ref_id = ${orderId}::uuid ORDER BY id DESC LIMIT 1`;
+    expect(movement!.to_status).toBe('LISTED');
+    expect(movement!.reason).toContain('turned the order down');
+
+    // The reason reaches the requester verbatim, on their own order screen.
+    const record = await asBuyer(() => readOrder.byNumber(result.approval.orderNumber));
+    expect(record.approval?.comment).toBe('Over budget this quarter — resubmit in October.');
+  });
+
+  it('refuses a rejection with no reason, because the requester reads it verbatim', async () => {
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { orderId, approvalId } = await heldOrder(approver);
+
+    await expect(
+      asApprover(approver, () => approvals.decide(approvalId, { decision: 'REJECT' })),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    // Nothing moved on the refusal.
+    expect(await orderStatus(orderId)).toBe('AWAITING_APPROVAL');
+  });
+
+  it('REFUSES the person who raised the order when they try to approve it', async () => {
+    // The forbidden thing, attempted. `buyerUserId` placed this order and the
+    // policy sent it to somebody else.
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { orderId, approvalId } = await heldOrder(approver);
+
+    await expect(
+      asApprover(buyerUserId, () => approvals.decide(approvalId, { decision: 'APPROVE' })),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(await orderStatus(orderId)).toBe('AWAITING_APPROVAL');
+    expect(await poCount(orderId)).toBe(0);
+    const [row] = await db.$queryRaw<Array<{ status: string; decided_at: Date | null }>>`
+      SELECT status, decided_at FROM ordering.order_approval WHERE id = ${approvalId}::uuid`;
+    expect(row!.status).toBe('PENDING');
+    expect(row!.decided_at).toBeNull();
+  });
+
+  it('VR-123: REFUSES an approver named as their own approver, and says why', async () => {
+    // The way self-approval actually arises: a policy that names the buyer as
+    // the person who signs off their own spending. Rule 1 passes — they ARE the
+    // named approver — so only VR-123 stands between them and their own money.
+    const { orderId, approvalId } = await heldOrder(buyerUserId);
+    const [row] = await db.$queryRaw<Array<{ requested_by: string; approver_user_id: string }>>`
+      SELECT requested_by, approver_user_id FROM ordering.order_approval
+       WHERE id = ${approvalId}::uuid`;
+    expect(row!.requested_by).toBe(row!.approver_user_id);
+
+    await expect(
+      asApprover(buyerUserId, () => approvals.decide(approvalId, { decision: 'APPROVE' })),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      detail: { rule: 'VR-123' },
+    });
+
+    expect(await orderStatus(orderId)).toBe('AWAITING_APPROVAL');
+    expect(await poCount(orderId)).toBe(0);
+  });
+
+  it('REFUSES a decision that arrives after the deadline, and settles the row to EXPIRED', async () => {
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { orderId, approvalId } = await heldOrder(approver);
+
+    // The server's clock, not the browser's. `FixedClock(NOW)` is what decides.
+    await db.$executeRaw`
+      UPDATE ordering.order_approval SET expires_at = ${new Date(NOW.getTime() - 60_000)}
+       WHERE id = ${approvalId}::uuid`;
+
+    await expect(
+      asApprover(approver, () => approvals.decide(approvalId, { decision: 'APPROVE' })),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+
+    expect(await orderStatus(orderId)).toBe('AWAITING_APPROVAL');
+    expect(await poCount(orderId)).toBe(0);
+    const [row] = await db.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM ordering.order_approval WHERE id = ${approvalId}::uuid`;
+    expect(row!.status).toBe('EXPIRED');
+  });
+
+  it('refuses a second decision on an approval that is already decided', async () => {
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { orderId, approvalId } = await heldOrder(approver);
+
+    await asApprover(approver, () => approvals.decide(approvalId, { decision: 'APPROVE' }));
+    await expect(
+      asApprover(approver, () =>
+        approvals.decide(approvalId, { decision: 'REJECT', comment: 'changed my mind about it' }),
+      ),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+
+    // One PO, not two. The second press must not raise a second commitment.
+    expect(await poCount(orderId)).toBe(1);
+    expect(await orderStatus(orderId)).toBe('PAYMENT_PENDING');
+  });
+
+  it('shows an approver only what was sent to them, and reports a lapsed one as EXPIRED', async () => {
+    const anil = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const priya = await makeUser(buyerOrgId, { full_name: 'Priya Nair' }, db);
+    const mine = await heldOrder(anil);
+    // Re-point the policy rather than replacing it: `order_approval.policy_id`
+    // references the row that fired, so deleting it would orphan the first
+    // approval and the FK refuses — correctly.
+    await db.$executeRaw`
+      UPDATE customer.buyer_approval_policy SET approver_user_id = ${priya}::uuid
+       WHERE org_id = ${buyerOrgId}::uuid`;
+    const hers = await heldOrder2();
+
+    const inbox = await asApprover(anil, () =>
+      approvals.inbox({ status: 'all', page: 1, per: 10 }),
+    );
+    const ids = inbox.approvals.map((a) => a.id);
+    expect(ids).toContain(mine.approvalId);
+    expect(ids).not.toContain(hers.approvalId);
+    expect(inbox.approvals[0]!.approverName).toBe('Anil Kapoor');
+    expect(inbox.approvals[0]!.decidable).toBe(true);
+    // 24 hours, measured off the row rather than read from the column default.
+    expect(inbox.approvals[0]!.slaHours).toBe(24);
+
+    // A PENDING row past its deadline is EXPIRED to the server, whatever the
+    // stored status says while the release job lags.
+    await db.$executeRaw`
+      UPDATE ordering.order_approval SET expires_at = ${new Date(NOW.getTime() - 60_000)}
+       WHERE id = ${mine.approvalId}::uuid`;
+    const after = await asApprover(anil, () => approvals.inbox({ status: 'all', page: 1, per: 10 }));
+    expect(after.approvals[0]!.status).toBe('EXPIRED');
+    expect(after.approvals[0]!.decidable).toBe(false);
+    expect(after.waitingOnYou).toBe(0);
+  });
+
+  it('carries the serials on the detail, and names no vendor at any depth', async () => {
+    const approver = await makeUser(buyerOrgId, { full_name: 'Anil Kapoor' }, db);
+    const { approvalId } = await heldOrder(approver);
+
+    const record = await asApprover(approver, () => approvals.byId(approvalId));
+    expect(record.order.dispatchGroups.flatMap((g) => g.machines)).toHaveLength(2);
+    expect(record.policyRule).toContain('above');
+
+    // The whole payload, swept for every vendor identifier the seed holds.
+    const serialised = JSON.stringify(record);
+    const vendors = await db.$queryRaw<Array<{ id: string; legal_name: string }>>`
+      SELECT id, legal_name FROM identity.organization WHERE org_type = 'VENDOR'`;
+    for (const v of vendors) {
+      expect(serialised).not.toContain(v.id);
+      expect(serialised).not.toContain(v.legal_name);
+    }
+    // `findForbiddenKeys` minus `gstin`: the order record carries the BUYER's own
+    // registration, which is theirs and belongs on their approval screen. Every
+    // other forbidden key — the vendor's ask, our margin, the warranty split —
+    // must be absent, and so must anything naming our PO to a supply point.
+    expect(findForbiddenKeys(record).filter((k) => k !== 'gstin')).toEqual([]);
+    // Our PO to the supply point, by any of the names it has. Anchored on the
+    // opening quote so it cannot match `buyerPoNumber`, which is the BUYER's own
+    // reference to their own finance system and belongs to them.
+    expect(serialised).not.toMatch(/"po_?number|"purchase_?order|agreedNetPayout|supplier/i);
   });
 });
