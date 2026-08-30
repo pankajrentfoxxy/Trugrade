@@ -789,6 +789,31 @@ export async function seedDemo(
     );
   }
 
+  // VENDOR_FINANCE, one per supply point.
+  //
+  // /vendor/payables is FINANCE and OWNER only (UX spec §3B.4), and
+  // procurement.payable.read_own was narrowed to those two roles once it
+  // existed — before that the screen rode on procurement.po.read_own, which
+  // every vendor role holds. The narrowing was right and it stranded the demo:
+  // every supply point except Northgate had ONLY a VENDOR_OPS login, so the one
+  // vendor carrying a Udyam registration — the MSME 45-day clock, the whole
+  // reason that screen has a real date on it — had nobody who could open it.
+  //
+  // A permission that no demo account holds is a screen nobody reviews.
+  for (const spec of VENDORS) {
+    if (spec.legalName === NORTHGATE) continue;
+    await upsertPerson(
+      prisma,
+      vendors.get(spec.legalName)!.orgId,
+      {
+        email: `finance@${spec.legalName.split(' ')[0]!.toLowerCase()}.example`,
+        name: `${spec.city} finance`,
+        role: 'VENDOR_FINANCE',
+      },
+      hash,
+    );
+  }
+
   log(
     `  accounts: ${PLATFORM_PEOPLE.length} platform, ${VENDOR_PEOPLE.length + VENDORS.length - 1} vendor, ${BUYER_PEOPLE.length} buyer`,
   );
