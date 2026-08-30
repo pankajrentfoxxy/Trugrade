@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ClockModule } from '../../shared/clock';
 import { PrismaModule } from '../../shared/db/prisma.service';
 import { PlatformAdminController } from './platform-admin.controller';
+import { PlatformPublicController } from './platform-public.controller';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
 import { OrderingLookup } from './internal/ordering-lookup';
@@ -28,7 +29,10 @@ import { WarrantyService } from './internal/warranty.service';
   imports: [PrismaModule, ClockModule],
   // T41. `PlatformAdminController` reads this module's own three admin tables —
   // config, feature flags, notification templates — and writes none of them.
-  controllers: [PlatformController, PlatformAdminController],
+  // T48. `PlatformPublicController` is the only unauthenticated reader of this
+  // module's config, and it reads five named keys — the ones a published legal
+  // page quotes — rather than the table.
+  controllers: [PlatformController, PlatformAdminController, PlatformPublicController],
   providers: [
     PlatformService,
     WarrantyService,

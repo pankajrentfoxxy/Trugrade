@@ -221,13 +221,18 @@ export const CONFIG_CONSUMERS: Readonly<Record<string, readonly string[]>> = Obj
     "modules/identity/finance.controller.ts",
     "modules/ordering/internal/delivery-check.service.ts",
     "modules/platform/internal/returns.service.ts",
+    "modules/platform/platform-public.controller.ts",
     "modules/procurement/internal/payable.service.ts",
   ],
   "ordering.reservation_ttl_minutes": [
     "modules/ordering/internal/checkout.service.ts",
   ],
-  "platform.grievance_ack_hours": [],
-  "platform.grievance_redress_days": [],
+  "platform.grievance_ack_hours": [
+    "modules/platform/platform-public.controller.ts",
+  ],
+  "platform.grievance_redress_days": [
+    "modules/platform/platform-public.controller.ts",
+  ],
   "platform.sourcing_declaration_threshold_inr": [
     "modules/listing/internal/sourcing.service.ts",
   ],
@@ -235,9 +240,11 @@ export const CONFIG_CONSUMERS: Readonly<Record<string, readonly string[]>> = Obj
     "modules/listing/internal/pricing.service.ts",
     "modules/listing/pricing-admin.controller.ts",
     "modules/platform/internal/warranty.service.ts",
+    "modules/platform/platform-public.controller.ts",
   ],
   "platform.warranty_top_up_months": [
     "modules/platform/internal/warranty.service.ts",
+    "modules/platform/platform-public.controller.ts",
   ],
   "price.guardrail_lower_multiple": [
     "modules/listing/internal/pricing.service.ts",

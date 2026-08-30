@@ -368,8 +368,14 @@ export class InvoicePdfService {
     notes.push(
       `${BRAND.legalEntity} is the seller on this order. There is one seller and one invoice.`,
     );
+    // The phone is null until a real line is commissioned (T48). An invoice is
+    // the document a buyer reaches for when something is wrong, so a channel
+    // that does not answer must not be printed on it at all — the line simply
+    // lists the routes that work.
     notes.push(
-      `Queries: ${LEGAL_DISCLOSURE.customerCare.email} · ${LEGAL_DISCLOSURE.customerCare.phone} · ${LEGAL_DISCLOSURE.customerCare.hours}`,
+      ['Queries: ' + LEGAL_DISCLOSURE.customerCare.email, LEGAL_DISCLOSURE.customerCare.phone, LEGAL_DISCLOSURE.customerCare.hours]
+        .filter((part): part is string => part !== null)
+        .join(' · '),
     );
 
     for (const note of notes) {

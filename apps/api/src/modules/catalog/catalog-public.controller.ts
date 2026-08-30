@@ -202,26 +202,68 @@ export class CatalogPublicController {
    * Pulled from the database rather than written into the page so the marketing
    * copy cannot drift from what QC actually enforces — which is the whole point
    * of Phase 5 Task 2 item 7, and a r.7(5) exposure if it drifts.
+   *
+   * **T48 widened the row from one floor to all four.** `/legal/grading` is the
+   * r.7(5) liability document and r.7(5) asks for the *objective* definition of
+   * a grade, which battery health alone is not: a machine is A+ only if it also
+   * clears the cycle cap and the cosmetic floor, and a page that published one
+   * of the three thresholds would be describing a stricter promise than the
+   * engine keeps. The extra columns cost nothing — they are on the row already —
+   * and the alternative was retyping them into the page, which is the exact
+   * drift this endpoint exists to prevent.
+   *
+   * `effectiveFrom` travels too, because a versioned grade definition whose
+   * effective date is invisible cannot be quoted back at us by a buyer holding a
+   * machine we graded last quarter.
    */
   @Get('grades')
   @Public()
   @Header('Cache-Control', 'public, max-age=300')
   async grades(): Promise<
-    Array<{ grade: string; customerDescription: string; minBatteryHealthPct: number | null }>
+    Array<{
+      grade: string;
+      displayName: string;
+      customerDescription: string;
+      minBatteryHealthPct: number | null;
+      maxCycleCount: number | null;
+      minCosmeticScore: number | null;
+      screenDefectsAllowed: boolean;
+      effectiveFrom: string;
+    }>
   > {
     const rows = await this.prisma.$queryRaw<
-      Array<{ grade: string; customer_description: string; min_battery_health_pct: unknown }>
+      Array<{
+        grade: string;
+        display_name: string;
+        customer_description: string;
+        min_battery_health_pct: unknown;
+        max_cycle_count: unknown;
+        min_cosmetic_score: unknown;
+        screen_defects_allowed: boolean;
+        effective_from: Date;
+      }>
     >`
-      SELECT grade::text AS grade, customer_description, min_battery_health_pct
+      SELECT grade::text AS grade, display_name, customer_description,
+             min_battery_health_pct, max_cycle_count, min_cosmetic_score,
+             screen_defects_allowed, effective_from
         FROM catalog.grade_definition
        WHERE effective_to IS NULL
        ORDER BY CASE grade::text WHEN 'A_PLUS' THEN 1 WHEN 'A' THEN 2 ELSE 3 END`;
 
+    // Null survives as null all the way to the page. A threshold that was never
+    // set is not a threshold of zero, and "we do not cap cycles on this grade"
+    // and "any cycle count passes" read identically once a 0 is printed.
+    const int = (v: unknown): number | null => (v === null ? null : Number(v));
+
     return rows.map((r) => ({
       grade: r.grade,
+      displayName: r.display_name,
       customerDescription: r.customer_description,
-      minBatteryHealthPct:
-        r.min_battery_health_pct === null ? null : Number(r.min_battery_health_pct),
+      minBatteryHealthPct: int(r.min_battery_health_pct),
+      maxCycleCount: int(r.max_cycle_count),
+      minCosmeticScore: int(r.min_cosmetic_score),
+      screenDefectsAllowed: r.screen_defects_allowed,
+      effectiveFrom: r.effective_from.toISOString().slice(0, 10),
     }));
   }
 

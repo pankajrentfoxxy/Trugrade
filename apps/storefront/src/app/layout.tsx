@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
+import { BRAND } from '@trugrade/config/brand';
 import { THEME_PREPAINT_SCRIPT } from '@trugrade/ui';
+import { SiteFooter } from './SiteFooter';
 import '@trugrade/ui/globals.css';
 import './globals.css';
 import './storefront.css';
@@ -53,34 +54,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
           name, registered address and grievance contact, on every page. It is
           the cheapest compliance obligation in the whole product and the one
           most often left to a footer nobody templated.
+
+          T48 replaced the four-line version with block 9 of the reference
+          homepage — the same disclosure, plus the columns that make the ten
+          `/legal/**` documents reachable from anywhere. A published policy
+          nothing links to is a policy nobody finds.
         */}
-        <footer className="mt-9 border-t border-chrome-line">
-          <div className="mx-auto max-w-container px-5 py-6 text-body-sm text-on-chrome-2">
-            <p className="text-on-chrome">{LEGAL_DISCLOSURE.legalName}</p>
-            <p className="mt-1">
-              {[
-                LEGAL_DISCLOSURE.registeredOffice.line1,
-                LEGAL_DISCLOSURE.registeredOffice.city,
-                LEGAL_DISCLOSURE.registeredOffice.state,
-                LEGAL_DISCLOSURE.registeredOffice.pincode,
-              ].join(', ')}
-            </p>
-            <p className="mt-1">
-              {LEGAL_DISCLOSURE.grievanceOfficer.designation}:{' '}
-              {LEGAL_DISCLOSURE.grievanceOfficer.name} ·{' '}
-              <a
-                className="underline decoration-chrome-line-2 underline-offset-4 hover:text-on-chrome hover:decoration-acc"
-                href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}
-              >
-                {LEGAL_DISCLOSURE.grievanceOfficer.email}
-              </a>
-            </p>
-            <p className="mt-1">
-              Customer care: {LEGAL_DISCLOSURE.customerCare.email} ·{' '}
-              {LEGAL_DISCLOSURE.customerCare.hours}
-            </p>
-          </div>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );

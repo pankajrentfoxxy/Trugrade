@@ -1806,3 +1806,27 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .dvscan .pill.wire:hover{background:var(--sheet-3);border-color:var(--acc)}
 
 .rtempty{margin-top:12px}
+
+/* ---- T48: the grade table on /legal/grading ----------------------------
+   The global `table` rule is sized for a data board — 940px minimum, and a
+   `th` that is 9.5px uppercase mono with `white-space:nowrap`, which is right
+   for a column header and wrong for a row header. `/legal/grading` uses
+   `<th scope="row">` for the grade name, because the grade IS what its row is
+   about and a screen reader should announce it that way; without this the
+   customer description rendered as one uppercase mono line running straight
+   through the numeric columns.
+
+   Scoped, in the same way `.lview`, `.passport .areas` and `.cartlines`
+   already scope this table — a second table component is what the design
+   system says must not happen, so this is a setting rather than a rewrite. */
+.legaltbl table{min-width:560px}
+.legaltbl thead th{white-space:normal;padding:9px 12px 9px 0;vertical-align:bottom}
+.legaltbl td{padding:14px 12px 14px 0;vertical-align:top}
+.legaltbl tbody th[scope="row"]{
+  font-family:inherit;font-size:14px;letter-spacing:normal;text-transform:none;
+  font-weight:600;color:var(--ink);white-space:normal;padding:14px 16px 14px 0;
+  vertical-align:top;border-bottom:0;
+}
+.legaltbl tbody th[scope="row"] span{
+  font-weight:400;font-size:13px;color:var(--ink-3);letter-spacing:normal;
+}

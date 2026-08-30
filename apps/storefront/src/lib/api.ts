@@ -49,8 +49,30 @@ export interface BrandSummary {
 
 export interface GradeDefinition {
   grade: string;
+  displayName: string;
   customerDescription: string;
+  /** Every threshold is nullable. An unset floor is not a floor of zero. */
   minBatteryHealthPct: number | null;
+  maxCycleCount: number | null;
+  minCosmeticScore: number | null;
+  screenDefectsAllowed: boolean;
+  /** `YYYY-MM-DD`. Which definition a machine graded today was graded against. */
+  effectiveFrom: string;
+}
+
+/**
+ * The `platform_config` numbers the published legal pages quote — T48.
+ *
+ * Every field is nullable and the pages render null as "Not published", never as
+ * the figure the seed happens to hold. `/legal/returns-and-refunds` printing 48
+ * because the storefront assumed 48 would be a term nobody set.
+ */
+export interface LegalTerms {
+  inspectionWindowHours: number | null;
+  warrantyTopUpMonths: number | null;
+  warrantyMinTotalMonths: number | null;
+  grievanceAckHours: number | null;
+  grievanceRedressDays: number | null;
 }
 
 /** Revalidates every minute: it is a real counter, and a real counter moves. */
@@ -63,6 +85,17 @@ export const getBrands = (): Promise<BrandSummary[] | null> =>
 /** Grade bands change with a policy decision, not with stock. */
 export const getGrades = (): Promise<GradeDefinition[] | null> =>
   get<GradeDefinition[]>('/public/grades', 300);
+
+/**
+ * The legal pages' numbers, from the same config view the enforcement reads.
+ *
+ * Five minutes, matching the endpoint's own `max-age`. A window that ops
+ * shortens must reach the published document quickly — but the document is ISR
+ * and a five-minute lag is the price of serving it from cache at all, which is
+ * why `/legal/**` also prints the instant it was rendered.
+ */
+export const getLegalTerms = (): Promise<LegalTerms | null> =>
+  get<LegalTerms>('/public/legal-terms', 300);
 
 export interface PublicOffer {
   skuId: string;
