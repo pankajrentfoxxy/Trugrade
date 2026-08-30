@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { Button, EmptyState, Input, Skeleton, TickRule } from '@trugrade/ui';
+import { Button, EmptyState, Input, Skeleton, TickRule, cn } from '@trugrade/ui';
 import { API, type SkuDetail, type SkuHit } from '../api';
 import type { WizardDraft } from './draft';
 
@@ -166,7 +166,12 @@ export function StepMachine({
           {result.hits.map((hit) => (
             <li
               key={hit.skuId}
-              className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-3"
+              // Amber left edge as an active state, which is rule 1's third
+              // meaning and the only amber on this step apart from Continue.
+              className={cn(
+                'flex flex-wrap items-center gap-3 border-b border-l-2 border-rule-2 py-3 pl-4',
+                draft.sku?.skuId === hit.skuId ? 'border-l-acc' : 'border-l-transparent',
+              )}
             >
               <code className="font-mono text-data tnum text-ink-2">{hit.skuCode}</code>
               <span className="text-body-sm text-ink">
@@ -175,14 +180,24 @@ export function StepMachine({
               <span className="text-body-sm text-ink-3">
                 {hit.cpuFamily} · {hit.ramGb} GB · {hit.storageGb} GB · {hit.screenSizeIn}&quot;
               </span>
-              <Button
-                variant={draft.sku?.skuId === hit.skuId ? 'primary' : 'secondary'}
-                size="sm"
-                className="ml-auto"
-                onClick={() => void pick(hit)}
-              >
-                {draft.sku?.skuId === hit.skuId ? 'Selected' : 'Select'}
-              </Button>
+              {/* One primary action per screen, and on this step it is
+                  Continue. A selected row is a state, not an action, so it stops
+                  being a button — an amber "Selected" button reads as the way
+                  forward and is not. */}
+              {draft.sku?.skuId === hit.skuId ? (
+                <span className="ml-auto font-mono text-label uppercase tracking-[0.13em] text-acc-ink">
+                  Selected
+                </span>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={() => void pick(hit)}
+                >
+                  Select
+                </Button>
+              )}
             </li>
           ))}
         </ul>

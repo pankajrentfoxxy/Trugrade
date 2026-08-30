@@ -349,6 +349,21 @@ export class VendorController {
    * The type is fixed to PICKUP here rather than taken from the body. A billing
    * or registered address has different requirements and a different screen, and
    * accepting the discriminator from the client would let this route write both.
+   *
+   * **Two rows, one transaction, and that is the bug this route used to have.**
+   * An address is where a lorry goes; `vendor.vendor_facility` is what makes it
+   * somewhere we can send a *technician*, and `SubmitService.facilityAt` refuses
+   * a listing whose pickup address has no facility behind it. Writing only the
+   * address produced a location that the wizard offered, the vendor chose, and
+   * the submit then rejected with "add this pickup address as a facility in your
+   * vendor profile" — a screen that does not exist. Found by T27 trying to reach
+   * the wizard's own success state and failing.
+   *
+   * `facility_type` is WAREHOUSE and the operational columns take their database
+   * defaults. Onboarding step 5 collects dock, lift, hours and testing stations
+   * properly and `kyc/internal/promotion.service.ts` writes them; this route is
+   * the later "we opened another warehouse" case and asking for eight more
+   * fields to add an address is how nobody adds one.
    */
   @Post('facilities')
   @RequirePermissions('identity.user.write')
@@ -356,23 +371,29 @@ export class VendorController {
     @Body(new ZodValidationPipe(createFacilitySchema)) body: CreateFacilityDto,
   ): Promise<VendorFacilityView> {
     const orgId = this.requireVendorOrg();
-    const [row] = await this.prisma.$queryRaw<
-      Array<{ id: string; label: string | null; line1: string; city: string; pincode: string }>
-    >`
-      INSERT INTO identity.org_address
-        (org_id, type, label, line1, line2, city, state, state_code, pincode,
-         contact_name, contact_mobile, landmark, is_pickup_enabled, is_active)
-      VALUES
-        (${orgId}::uuid, 'PICKUP'::public.address_type, ${body.label}, ${body.line1},
-         ${body.line2 ?? null}, ${body.city}, ${body.state}, ${body.stateCode}, ${body.pincode},
-         ${body.contactName}, ${body.contactMobile}, ${body.landmark ?? null}, TRUE, TRUE)
-      RETURNING id, label, line1, city, pincode`;
+    return this.prisma.runInTransaction(async () => {
+      const [row] = await this.prisma.$queryRaw<
+        Array<{ id: string; label: string | null; line1: string; city: string; pincode: string }>
+      >`
+        INSERT INTO identity.org_address
+          (org_id, type, label, line1, line2, city, state, state_code, pincode,
+           contact_name, contact_mobile, landmark, is_pickup_enabled, is_active)
+        VALUES
+          (${orgId}::uuid, 'PICKUP'::public.address_type, ${body.label}, ${body.line1},
+           ${body.line2 ?? null}, ${body.city}, ${body.state}, ${body.stateCode}, ${body.pincode},
+           ${body.contactName}, ${body.contactMobile}, ${body.landmark ?? null}, TRUE, TRUE)
+        RETURNING id, label, line1, city, pincode`;
 
-    return {
-      addressId: row!.id,
-      label: row!.label ?? row!.line1,
-      city: row!.city,
-      pincode: row!.pincode,
-    };
+      await this.prisma.$executeRaw`
+        INSERT INTO vendor.vendor_facility (org_id, address_id, facility_type)
+        VALUES (${orgId}::uuid, ${row!.id}::uuid, 'WAREHOUSE')`;
+
+      return {
+        addressId: row!.id,
+        label: row!.label ?? row!.line1,
+        city: row!.city,
+        pincode: row!.pincode,
+      };
+    });
   }
 }

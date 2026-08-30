@@ -40,6 +40,20 @@ const BATTERY = [
   ['UNKNOWN', 'Not measured'],
 ] as const;
 
+/**
+ * The best a band can possibly measure. `null` for UNKNOWN, which is the point:
+ * a band nobody has read cannot be compared to a floor, and treating it as 100
+ * would clear every grade silently — a missing value rendering as a passing one,
+ * which is the defect class this build keeps finding.
+ */
+const BATTERY_CEILING: Record<string, number | null> = {
+  EXCELLENT_90_PLUS: 100,
+  GOOD_80_89: 89,
+  FAIR_70_79: 79,
+  LOW_BELOW_70: 69,
+  UNKNOWN: null,
+};
+
 const PARTS = [
   ['ALL_ORIGINAL', 'All original'],
   ['OEM_REPLACED', 'Replaced with OEM parts'],
@@ -86,21 +100,32 @@ const OEM_WARRANTY = [
  */
 function GradePicker({
   value,
+  batteryBand,
   onChange,
 }: {
   value: Grade;
+  batteryBand: string;
   onChange: (g: Grade) => void;
 }): React.JSX.Element {
   const { data, error } = useResource<GradeDefinition[]>(
     API.gradeDefinitions,
     'Grade definitions unavailable',
   );
-  const byGrade = new Map((data ?? []).map((d) => [d.grade, d.customerDescription]));
+  const byGrade = new Map((data ?? []).map((d) => [d.grade, d]));
+
+  // The declared band cannot reach the chosen grade's floor. Not a block — the
+  // vendor may have read the wrong band off a worn machine — but a correction
+  // they can avoid now costs nothing, and one they discover after the visit
+  // costs them a re-list and a point of grade accuracy.
+  const chosen = byGrade.get(value);
+  const ceiling = BATTERY_CEILING[batteryBand] ?? null;
+  const shortfall =
+    chosen && ceiling !== null && ceiling < chosen.minBatteryHealthPct ? chosen : null;
 
   return (
     <fieldset>
       <legend className="text-body-sm font-medium text-ink-2">Grade</legend>
-      <div className="mt-3 flex flex-col gap-3">
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
         {GRADES.map((g) => (
           <label
             key={g}
@@ -129,14 +154,64 @@ function GradePicker({
               ) : !data ? (
                 <Skeleton lines={2} />
               ) : (
-                <span className="text-body-sm text-ink-2">
-                  {byGrade.get(g) ?? 'No published definition for this grade yet.'}
-                </span>
+                <>
+                  <span className="text-body-sm text-ink-2">
+                    {byGrade.get(g)?.customerDescription ??
+                      'No published definition for this grade yet.'}
+                  </span>
+                  {/* The words are what the vendor reads; these are what the
+                      engine applies. A declaration anchored to adjectives is
+                      the root of most grade disputes. */}
+                  {byGrade.get(g) && (
+                    <span className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                      <span>
+                        Battery <span className="tnum text-ink-2">
+                          {byGrade.get(g)?.minBatteryHealthPct}%
+                        </span>{' '}
+                        or better
+                      </span>
+                      <span>
+                        Cosmetic <span className="tnum text-ink-2">
+                          {byGrade.get(g)?.minCosmeticScore}
+                        </span>{' '}
+                        of 100
+                      </span>
+                      {byGrade.get(g)?.maxCycleCount === null ? (
+                        <span className="text-ink-4">Cycles not capped</span>
+                      ) : (
+                        <span>
+                          Cycles under{' '}
+                          <span className="tnum text-ink-2">
+                            {byGrade.get(g)?.maxCycleCount}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </>
               )}
             </span>
           </label>
         ))}
       </div>
+
+      {shortfall && (
+        <p
+          className="mt-4 max-w-prose rounded border border-warn p-4 text-body-sm text-warn"
+          role="status"
+        >
+          Grade {gradeLabel(shortfall.grade)} needs battery health of{' '}
+          <span className="font-mono tnum">{shortfall.minBatteryHealthPct}%</span> or better, and
+          you have declared{' '}
+          <span className="font-mono tnum">
+            {BATTERY.find(([v]) => v === batteryBand)?.[1] ?? batteryBand}
+          </span>{' '}
+          — the top of that band is{' '}
+          <span className="font-mono tnum">{BATTERY_CEILING[batteryBand]}%</span>. Nothing is
+          blocked: you can still list it, and the inspection will correct the grade downwards when
+          it measures the cell. Change the grade or the band if you read one of them wrong.
+        </p>
+      )}
     </fieldset>
   );
 }
@@ -171,11 +246,15 @@ export function StepCondition({
         </p>
       </div>
 
-      <div className="mt-6 grid gap-7 lg:grid-cols-2">
-        <div className="flex flex-col gap-5">
-          <GradePicker value={draft.grade} onChange={(grade) => patch({ grade })} />
-        </div>
+      <div className="mt-6">
+        <GradePicker
+          value={draft.grade}
+          batteryBand={draft.batteryHealthBand}
+          onChange={(grade) => patch({ grade })}
+        />
+      </div>
 
+      <div className="mt-7 grid gap-x-7 gap-y-5 md:grid-cols-2">
         <div className="flex flex-col gap-5">
           <Select
             label="Condition"
@@ -196,6 +275,9 @@ export function StepCondition({
             options={opts(BATTERY)}
             onChange={(e) => patch({ batteryHealthBand: e.target.value })}
           />
+        </div>
+
+        <div className="flex flex-col gap-5">
           <Select
             label="Parts"
             value={draft.partsStatus}

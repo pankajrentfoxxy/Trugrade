@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { VendorDashboardRoute } from './Dashboard';
 import { VendorListingsRoute } from './Listings';
 import { ListingUnitsRoute, UnitDetailRoute } from './Units';
+import { RepriceRoute } from './Reprice';
 import { ListingWizardRoute } from './wizard/Wizard';
 import { StepPrice } from './wizard/StepPrice';
 import { EMPTY_DRAFT, type WizardDraft } from './wizard/draft';
@@ -197,6 +198,23 @@ describe('no vendor screen shows the retail price', () => {
     assertNoRetailPrice(container);
   });
 
+  it('the repricing screen does not, and it is the one that quotes a new price', async () => {
+    mockApi([
+      [/vendor\/listings\/l1\/units/, [UNIT, { ...UNIT, id: 'u2', serialNumber: 'LOCKED9', payoutLocked: true }]],
+      [/vendor\/listings\/l1$/, LISTING],
+      [/payout-preview/, PREVIEW],
+    ]);
+    const { container } = render(
+      <MemoryRouter initialEntries={['/vendor/listings/l1/reprice']}>
+        <Routes>
+          <Route path="/vendor/listings/:id/reprice" element={<RepriceRoute />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByText('What will not change');
+    assertNoRetailPrice(container);
+  });
+
   it('the units table does not', async () => {
     mockApi([[/listings\/l1\/units/, [UNIT]]]);
     const { container } = render(
@@ -260,7 +278,11 @@ describe('what the payout step does show', () => {
     // A deduction the vendor cannot see until the statement arrives is drip
     // pricing, and it is exactly the surprise this screen exists to prevent.
     expect(screen.getByText(/TDS at 0.1%/)).toBeInTheDocument();
-    expect(screen.getByText('−₹2,100.00')).toBeInTheDocument();
+    // Twice: once as the charge and once as the total of the charges. The
+    // itemisation has to add up on screen or the vendor adds it up themselves.
+    expect(screen.getAllByText('−₹2,100.00')).toHaveLength(2);
+    expect(screen.getByText('Deducted in total')).toBeInTheDocument();
+    expect(screen.getByText(/charge, from/)).toBeInTheDocument();
     expect(screen.getByTestId('commission-pct')).toHaveTextContent('12.5%');
     expect(screen.getByText('15 Sept 2026')).toBeInTheDocument();
     // The warranty incentive, as a number rather than a claim.
@@ -278,8 +300,72 @@ describe('what the payout step does show', () => {
       </MemoryRouter>,
     );
     await screen.findByTestId('net-payout');
-    await waitFor(() =>
-      expect(screen.getByText('Set by your payout cycle')).toBeInTheDocument(),
+    // NOT a sentence in the value slot. "Set by your payout cycle" reads as an
+    // answer; nothing has computed this date, and --ink-4 "Not calculated" is
+    // the only honest rendering of a figure we do not have.
+    await waitFor(() => expect(screen.getByText('Not calculated')).toBeInTheDocument());
+    expect(screen.queryByText('Set by your payout cycle')).not.toBeInTheDocument();
+  });
+});
+
+
+/**
+ * The repricing screen's whole reason to exist: it names the machines that will
+ * NOT move before the vendor commits.
+ *
+ * `unit.purchase_price` is immutable once set and the reprice handler updates
+ * `WHERE purchase_price IS NULL`, so a committed machine is silently skipped. A
+ * vendor who is not told which ones concludes the reprice half-failed. The
+ * integration suite proves the skip against the real trigger; this proves the
+ * screen says so.
+ */
+describe('what the repricing screen says before the button', () => {
+  const OPEN = { ...UNIT, id: 'u1', serialNumber: 'OPEN0001', payoutLocked: false };
+  const FROZEN = { ...UNIT, id: 'u2', serialNumber: 'FROZEN01', payoutLocked: true };
+
+  function renderReprice(units: unknown[]): ReturnType<typeof render> {
+    mockApi([
+      [/vendor\/listings\/l1\/units/, units],
+      [/vendor\/listings\/l1$/, LISTING],
+      [/payout-preview/, PREVIEW],
+    ]);
+    return render(
+      <MemoryRouter initialEntries={['/vendor/listings/l1/reprice']}>
+        <Routes>
+          <Route path="/vendor/listings/:id/reprice" element={<RepriceRoute />} />
+        </Routes>
+      </MemoryRouter>,
     );
+  }
+
+  it('names the committed serials and counts only the movable ones on the button', async () => {
+    renderReprice([OPEN, FROZEN]);
+
+    expect(await screen.findByText('FROZEN01')).toBeInTheDocument();
+    // The button promises exactly what will change. Two machines, one movable.
+    expect(screen.getByRole('button', { name: /Reprice 1 machine$/ })).toBeInTheDocument();
+    expect(screen.getByText(/2 machines on this listing, 1 of them repriceable/)).toBeInTheDocument();
+  });
+
+  it('refuses, with the reason, when nothing on the listing can move', async () => {
+    renderReprice([FROZEN, { ...FROZEN, id: 'u3', serialNumber: 'FROZEN02' }]);
+
+    const button = await screen.findByRole('button', { name: 'Nothing to reprice' });
+    // Attempting the forbidden thing: the control is refused rather than posting
+    // a request the API would correctly reject with a trigger's exception.
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAttribute(
+      'title',
+      expect.stringContaining('committed to an order'),
+    );
+  });
+
+  it('says so plainly when nothing is committed, rather than an empty list', async () => {
+    renderReprice([OPEN]);
+
+    expect(
+      await screen.findByText(/Nothing on this listing is committed to an order yet/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('FROZEN01')).not.toBeInTheDocument();
   });
 });

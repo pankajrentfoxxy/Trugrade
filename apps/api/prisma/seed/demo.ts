@@ -315,6 +315,17 @@ async function orgByName(
   return id;
 }
 
+/**
+ * A vendor's pickup address, **and the facility behind it**.
+ *
+ * The second insert is not decoration. `identity.org_address` is where a lorry
+ * goes; `vendor.vendor_facility` is what makes it somewhere we can send a
+ * technician, and `SubmitService.facilityAt` refuses any listing whose pickup
+ * address has no facility row. Without it the seed produced vendors who could
+ * fill in the whole listing wizard and never once reach an inspection — the
+ * success state was unreachable for every vendor in the database. Found by T27
+ * trying to photograph it.
+ */
 async function addr(
   prisma: PrismaClient,
   orgId: string,
@@ -325,16 +336,23 @@ async function addr(
 ): Promise<string> {
   const found = await prisma.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM identity.org_address WHERE org_id = ${orgId}::uuid AND pincode = ${pin} LIMIT 1`;
-  if (found[0]) return found[0].id;
-  const id = randomUUID();
+  const id = found[0]?.id ?? randomUUID();
+  if (!found[0]) {
+    await prisma.$executeRaw`
+      INSERT INTO identity.org_address
+        (id, org_id, type, label, line1, city, state, state_code, pincode,
+         contact_name, contact_mobile, is_default, is_pickup_enabled, is_billing_enabled, is_active)
+      VALUES (${id}::uuid, ${orgId}::uuid, 'PICKUP'::address_type, 'Primary',
+              ${'Plot 14, ' + city + ' Industrial Area'},
+              ${city}, ${state}, ${stateCode}, ${pin}, 'Operations desk', '+919810000000',
+              TRUE, TRUE, TRUE, TRUE)`;
+  }
+
   await prisma.$executeRaw`
-    INSERT INTO identity.org_address
-      (id, org_id, type, label, line1, city, state, state_code, pincode,
-       contact_name, contact_mobile, is_default, is_pickup_enabled, is_billing_enabled, is_active)
-    VALUES (${id}::uuid, ${orgId}::uuid, 'PICKUP'::address_type, 'Primary',
-            ${'Plot 14, ' + city + ' Industrial Area'},
-            ${city}, ${state}, ${stateCode}, ${pin}, 'Operations desk', '+919810000000',
-            TRUE, TRUE, TRUE, TRUE)`;
+    INSERT INTO vendor.vendor_facility
+      (org_id, address_id, facility_type, has_loading_dock, testing_stations)
+    VALUES (${orgId}::uuid, ${id}::uuid, 'WAREHOUSE', TRUE, 2)
+    ON CONFLICT (address_id) DO NOTHING`;
   return id;
 }
 
@@ -710,8 +728,34 @@ export async function seedDemo(
   }
   for (const p of VENDOR_PEOPLE) await upsertPerson(prisma, vendors.get(NORTHGATE)!.orgId, p, hash);
 
+  // **One operator per supply point, not just Northgate's three.**
+  //
+  // Nine of the ten vendors had no user account at all, and they are precisely
+  // the nine whose stock the demo orders were placed against — so every unit in
+  // the database with a `purchase_price` belonged to a vendor who could not sign
+  // in. The whole "machines already committed to an order keep the payout they
+  // were bought at" behaviour was therefore unreachable through the product, and
+  // the repricing screen that has to state it had nobody to state it to. Found
+  // by T28 trying to photograph it.
+  //
+  // VENDOR_OPS: it holds `listing.own.read` and `listing.own.write` and is not
+  // in MFA_REQUIRED_ROLES, which is the account a warehouse actually works from.
+  for (const spec of VENDORS) {
+    if (spec.legalName === NORTHGATE) continue;
+    await upsertPerson(
+      prisma,
+      vendors.get(spec.legalName)!.orgId,
+      {
+        email: `ops@${spec.legalName.split(' ')[0]!.toLowerCase()}.example`,
+        name: `${spec.city} operations`,
+        role: 'VENDOR_OPS',
+      },
+      hash,
+    );
+  }
+
   log(
-    `  accounts: ${PLATFORM_PEOPLE.length} platform, ${VENDOR_PEOPLE.length} vendor, ${BUYER_PEOPLE.length} buyer`,
+    `  accounts: ${PLATFORM_PEOPLE.length} platform, ${VENDOR_PEOPLE.length + VENDORS.length - 1} vendor, ${BUYER_PEOPLE.length} buyer`,
   );
   log(`  supply points: ${VENDORS.length} across ${new Set(VENDORS.map((v) => v.city)).size} NCR cities`);
 

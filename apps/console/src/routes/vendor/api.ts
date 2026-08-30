@@ -30,16 +30,19 @@ export const API = {
   /** Aggregates `listing.unit`, `listing.grade_correction` and the payables. */
   dashboard: '/api/vendor/dashboard',
 
-  /** MISSING route. `CatalogService.search()` exists; no controller exposes it. */
+  /**
+   * Every entry below was marked MISSING when this file was written and every
+   * one of them now exists — `catalog.controller.ts` 438/459/527/813,
+   * `vendor.controller.ts` 317, `listing.controller.ts` 236/417/454/502. T26
+   * found the same staleness on `dashboard` and nearly re-built a route that
+   * was already serving. Checked again at T27; the comments are the audit.
+   */
   catalogSearch: (q: string) => `/api/catalog/search?q=${encodeURIComponent(q)}&limit=20`,
-  /** MISSING route. `CatalogService.getSku()` exists; no controller exposes it. */
   sku: (skuId: string) => `/api/catalog/skus/${skuId}`,
-  /** MISSING route. `catalog.v_current_grade_definition` exists; no controller. */
   gradeDefinitions: '/api/catalog/grade-definitions',
-  /** MISSING route. `CatalogService.submitSkuRequest()` exists; no controller. */
   skuRequests: '/api/catalog/sku-requests',
 
-  /** MISSING. Needed for the pickup-location picker (`identity.org_address`). */
+  /** `identity.org_address`, scoped to the caller's org. The pickup picker. */
   facilities: '/api/vendor/facilities',
 
   listings: '/api/vendor/listings',
@@ -48,13 +51,9 @@ export const API = {
   validateSerials: '/api/vendor/listings/serials/validate',
   validateSerialsCsv: '/api/vendor/listings/serials/validate-csv',
 
-  /** MISSING route. `PricingService.previewPayout()` exists; no controller. */
   payoutPreview: '/api/vendor/listings/payout-preview',
-  /** MISSING route. `SubmitService` exists; no controller. */
   submit: (id: string) => `/api/vendor/listings/${id}/submit`,
-  /** MISSING. Bulk pause/resume over a selection. */
   bulkStatus: '/api/vendor/listings/bulk-status',
-  /** MISSING route. `PricingService.priceListing()` exists; no controller. */
   reprice: (id: string) => `/api/vendor/listings/${id}/reprice`,
 } as const;
 
@@ -124,10 +123,22 @@ export interface SkuDetail extends SkuHit {
   osLicenceType?: string | null;
 }
 
-/** `catalog.grade_definition`, current version. The words QC will grade against. */
+/**
+ * `catalog.v_current_grade_definition` — the words AND the numbers QC grades against.
+ *
+ * The thresholds were already on the wire and this type dropped them, so the
+ * wizard showed a vendor an adjective ("light marks") where the engine will
+ * apply a measurement. A declaration anchored to prose is the root of most grade
+ * disputes; the floors are what make it checkable before submission.
+ */
 export interface GradeDefinition {
   grade: string;
+  displayName: string;
   customerDescription: string;
+  minBatteryHealthPct: number;
+  maxCycleCount: number | null;
+  minCosmeticScore: number;
+  screenDefectsAllowed: boolean;
 }
 
 export interface VendorFacility {
@@ -170,6 +181,14 @@ export interface VendorUnit {
   isSellable: boolean;
   location: string;
   vendorAskPrice: MoneyString | null;
+  /**
+   * `unit.purchase_price IS NOT NULL` — a purchase order has named this serial
+   * and what we owe for it is settled. `trg_lock_purchase_price` enforces that
+   * at the database, and the reprice handler updates `WHERE purchase_price IS
+   * NULL`, so this is the flag a repricing screen has to read to say which
+   * machines will not move BEFORE the vendor commits.
+   */
+  payoutLocked: boolean;
   qcPassedAt: IsoDate | null;
   qcValidUntil: IsoDate | null;
   createdAt: IsoDate;
@@ -216,6 +235,8 @@ export interface PayoutDeduction {
  * inventing the date in the client would be a promise nobody can keep.
  */
 export interface PayoutPreview {
+  /** `NET_PAYOUT` | `COMMISSION` — which conversation the account is on. */
+  pricingMode: string;
   units: number;
   perUnitPayout: MoneyString;
   grossPayout: MoneyString;

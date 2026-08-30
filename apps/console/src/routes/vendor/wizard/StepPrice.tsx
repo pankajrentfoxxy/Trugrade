@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Input, Skeleton, TickRule } from '@trugrade/ui';
+import { NotMeasured } from '../../../lib/controls';
 import { API, onDate, postJson, rupees, type PayoutPreview } from '../api';
 import type { WizardDraft } from './draft';
 
@@ -85,8 +86,8 @@ export function StepPrice({
         the grade after inspection. It is fixed when the purchase order is raised.
       </p>
 
-      <div className="mt-6 grid gap-7 lg:grid-cols-2">
-        <div className="flex flex-col gap-5">
+      <div className="mt-6 grid max-w-2xl gap-7">
+        <div className="grid gap-5 sm:grid-cols-2">
           <Input
             label="Net payout per machine"
             mono
@@ -142,15 +143,16 @@ export function StepPrice({
             <dl className="flex flex-col gap-3">
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-body-sm text-ink-2">Per machine</dt>
-                <dd className="font-mono text-data tnum text-ink">
+                <dd className="whitespace-nowrap font-mono text-data tnum text-ink">
                   {rupees(preview.perUnitPayout)}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-4 border-t border-rule-2 pt-3">
                 <dt className="text-body-sm text-ink-2">
-                  {preview.units} {preview.units === 1 ? 'machine' : 'machines'}
+                  <span className="font-mono tnum">{preview.units}</span>{' '}
+                  {preview.units === 1 ? 'machine' : 'machines'}
                 </dt>
-                <dd className="font-mono text-data tnum text-ink">
+                <dd className="whitespace-nowrap font-mono text-data tnum text-ink">
                   {rupees(preview.grossPayout)}
                 </dd>
               </div>
@@ -161,16 +163,39 @@ export function StepPrice({
               {preview.deductions.map((d) => (
                 <div key={d.code} className="flex items-baseline justify-between gap-4">
                   <dt className="max-w-prose text-body-sm text-ink-2">{d.label}</dt>
-                  <dd className="font-mono text-data tnum text-ink-2">−{rupees(d.amount)}</dd>
+                  <dd className="whitespace-nowrap font-mono text-data tnum text-ink-2">
+                    −{rupees(d.amount)}
+                  </dd>
                 </div>
               ))}
-              {preview.deductions.length === 0 && (
+              {preview.deductions.length === 0 ? (
                 <p className="text-body-sm text-ink-2">Nothing is deducted from this batch.</p>
+              ) : (
+                // The itemisation has to add up on screen. A list of three
+                // charges with no total is a list the vendor totals themselves,
+                // and the first time their sum disagrees with ours they stop
+                // believing the net.
+                <div className="flex items-baseline justify-between gap-4 border-t border-rule-2 pt-3">
+                  <dt className="text-body-sm text-ink-2">
+                    Deducted in total
+                    <span className="block text-label text-ink-4">
+                      <span className="font-mono tnum">{preview.deductions.length}</span>{' '}
+                      {preview.deductions.length === 1 ? 'charge' : 'charges'}, from{' '}
+                      <span className="font-mono tnum">{rupees(preview.grossPayout)}</span>
+                    </span>
+                  </dt>
+                  <dd className="whitespace-nowrap font-mono text-data tnum text-ink-2">
+                    −{rupees(preview.totalDeductions)}
+                  </dd>
+                </div>
               )}
 
               <div className="flex items-baseline justify-between gap-4 border-t border-rule pt-3">
                 <dt className="text-body text-ink">You receive</dt>
-                <dd className="font-mono text-h3 tnum text-ink" data-testid="net-payout">
+                <dd
+                  className="whitespace-nowrap font-mono text-h3 tnum text-ink"
+                  data-testid="net-payout"
+                >
                   {rupees(preview.netPayout)}
                 </dd>
               </div>
@@ -178,10 +203,18 @@ export function StepPrice({
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-body-sm text-ink-2">
                   Our commission
-                  {/* The denominator in words. It cannot be a number here: the
-                      selling price is the one figure this screen must not show. */}
-                  <span className="block text-label text-ink-4">of the selling price</span>
+                  {/* The denominator, and it cannot be a rupee figure: the
+                      selling price is the one number this screen must not show.
+                      Naming what the percentage is OF is the honest half of the
+                      rule — a bare "12%" invites the vendor to read it against
+                      their own payout, which is the wrong base and a smaller
+                      number than the truth. */}
+                  <span className="block text-label text-ink-4">
+                    of the selling price, not of your{' '}
+                    <span className="font-mono tnum">{rupees(preview.perUnitPayout)}</span>
+                  </span>
                 </dt>
+                {/* Amber: a measured value, which is rule 1's second meaning. */}
                 <dd className="font-mono text-data tnum text-acc-ink" data-testid="commission-pct">
                   {preview.commissionPct}%
                 </dd>
@@ -189,10 +222,21 @@ export function StepPrice({
 
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-body-sm text-ink-2">Expected payout date</dt>
-                <dd className="font-mono text-data tnum text-ink-2">
-                  {preview.expectedPayoutDate
-                    ? onDate(preview.expectedPayoutDate)
-                    : 'Set by your payout cycle'}
+                <dd>
+                  {preview.expectedPayoutDate ? (
+                    <span className="font-mono text-data tnum text-ink-2">
+                      {onDate(preview.expectedPayoutDate)}
+                    </span>
+                  ) : (
+                    // NOT "set by your payout cycle" in the value slot. That is
+                    // a sentence dressed as an answer, and a vendor reads it as
+                    // one. Nothing has computed this date — the server type does
+                    // not carry the field yet — so it says so, in --ink-4.
+                    <NotMeasured
+                      label="Not calculated"
+                      why="Your payout cycle decides this date and we have not computed it for this batch yet"
+                    />
+                  )}
                 </dd>
               </div>
             </dl>
