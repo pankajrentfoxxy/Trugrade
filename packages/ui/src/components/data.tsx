@@ -167,13 +167,13 @@ export function DataTable<Row>({
               </tr>
             ))}
 
-          {isEmpty && (
-            <tr>
-              <td colSpan={columns.length} className="tg-cell">
-                {empty}
-              </td>
-            </tr>
-          )}
+          {/* The empty state is NOT rendered here.
+              A td inherits the table's intrinsic width — boards set a min-width
+              so their columns stay readable — so on a phone the empty panel sat
+              off the right edge of a horizontal scroll nobody knew was there.
+              The message a person needs when there is nothing to see was the one
+              thing they could not see. It is rendered outside the table below,
+              where there are no columns to be as wide as. */}
 
           {!loading &&
             rows.map((row) => (
@@ -193,6 +193,8 @@ export function DataTable<Row>({
             ))}
         </tbody>
       </table>
+
+      {isEmpty && empty}
     </div>
   );
 }

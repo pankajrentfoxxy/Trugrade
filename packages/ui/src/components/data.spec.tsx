@@ -160,10 +160,16 @@ describe('DataTable', () => {
         empty={<EmptyState title="Nothing yet" />}
       />,
     );
-    // A row that changes height when it starts loading is a layout jump on
-    // every fetch, which is why the skeleton and empty cells take the same
-    // class rather than their own padding.
-    expect(container.querySelector('td')?.className).toContain('tg-cell');
+    // The empty state is deliberately NOT a row any more. A td inherits the
+    // table's intrinsic width, and boards set a min-width so their columns stay
+    // readable — so on a phone the empty panel sat off the right edge of a
+    // horizontal scroll nobody knew was there, which made the message a person
+    // needs when there is nothing to see the one thing they could not see.
+    //
+    // The layout-jump argument that put it in a cell only ever covered
+    // loading -> empty, and it loses to a message that cannot be read at all.
+    expect(container.querySelector('td')).toBeNull();
+    expect(screen.getByText('Nothing yet')).toBeInTheDocument();
   });
 
   /**
@@ -261,5 +267,31 @@ describe('Pagination', () => {
   it('has no axe violations', async () => {
     const { container } = render(<Pagination page={5} pageCount={20} onPage={() => {}} />);
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('the empty state is not as wide as the table', () => {
+  // A board sets a min-width so its columns stay readable, and a `td` inherits
+  // it. Rendering the empty message inside one put it off the right edge of a
+  // horizontal scroll on a phone — the message a person needs when there is
+  // nothing to see was the one thing they could not see.
+  it('renders the empty node outside the table element', () => {
+    const { container } = render(
+      <DataTable
+        caption="Orders"
+        columns={[
+          { key: 'a', header: 'A', cell: () => null },
+          { key: 'b', header: 'B', cell: () => null },
+        ]}
+        rows={[]}
+        rowKey={(r: { id: string }) => r.id}
+        empty={<p data-testid="nothing">No orders yet</p>}
+      />,
+    );
+
+    const node = screen.getByTestId('nothing');
+    expect(node).toBeInTheDocument();
+    expect(node.closest('table')).toBeNull();
+    expect(container.querySelectorAll('td')).toHaveLength(0);
   });
 });
