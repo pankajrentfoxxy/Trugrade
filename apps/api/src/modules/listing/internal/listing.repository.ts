@@ -211,6 +211,16 @@ export interface ListingFilter {
   status?: ListingStatus;
   skuId?: string;
   grade?: Grade;
+  /**
+   * Only listings an inspection has raised a grade correction against.
+   *
+   * **The predicate is the correction, not `grade_corrected_from`.** That column
+   * is written when a correction is *applied* — by the vendor accepting it or by
+   * the auto-apply job — so filtering on it returned nothing at all for the
+   * corrections that are still open, which are precisely the ones the vendor's
+   * dashboard sends them here to answer.
+   */
+  corrected?: boolean;
 }
 
 export interface Page<T> {
@@ -628,6 +638,7 @@ export class ListingRepository {
     const status = filter.status ?? null;
     const skuId = filter.skuId ?? null;
     const grade = filter.grade ?? null;
+    const corrected = filter.corrected ?? false;
     const offset = (page.page - 1) * page.pageSize;
 
     const rows = await this.prisma.$queryRaw<RawListing[]>`
@@ -650,6 +661,8 @@ export class ListingRepository {
          AND (${status}::text IS NULL OR l.status::text = ${status})
          AND (${skuId}::uuid  IS NULL OR l.sku_id = ${skuId}::uuid)
          AND (${grade}::text  IS NULL OR l.grade::text = ${grade})
+         AND (NOT ${corrected} OR EXISTS (
+               SELECT 1 FROM listing.grade_correction gc WHERE gc.listing_id = l.id))
        ORDER BY l.updated_at DESC
        LIMIT ${page.pageSize} OFFSET ${offset}`;
 
@@ -659,7 +672,9 @@ export class ListingRepository {
        WHERE (${isPlatform} OR l.vendor_org_id = ${orgId}::uuid)
          AND (${status}::text IS NULL OR l.status::text = ${status})
          AND (${skuId}::uuid  IS NULL OR l.sku_id = ${skuId}::uuid)
-         AND (${grade}::text  IS NULL OR l.grade::text = ${grade})`;
+         AND (${grade}::text  IS NULL OR l.grade::text = ${grade})
+         AND (NOT ${corrected} OR EXISTS (
+               SELECT 1 FROM listing.grade_correction gc WHERE gc.listing_id = l.id))`;
 
     return {
       rows: rows.map(toListing),

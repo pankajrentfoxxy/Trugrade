@@ -118,6 +118,17 @@ export const listListingsQuerySchema = paginationSchema.extend({
   status: listingStatusSchema.optional(),
   skuId: uuidSchema.optional(),
   grade: gradeSchema.optional(),
+  /**
+   * `?corrected=1` — listings an inspection regraded.
+   *
+   * Coerced rather than `z.boolean()`: this arrives in a query string, where
+   * `z.boolean()` rejects the only two things a link can put there. Absent and
+   * `0` both mean "no filter"; the flag never narrows to the *un*corrected.
+   */
+  corrected: z
+    .enum(['0', '1'])
+    .optional()
+    .transform((v) => v === '1'),
 });
 
 /** Paste a block, or send an array. Both reach the same validator. */

@@ -27,7 +27,7 @@ export type MoneyString = string;
 export type IsoDate = string;
 
 export const API = {
-  /** MISSING on the API. Aggregates across listing, qc, procurement, payment. */
+  /** Aggregates `listing.unit`, `listing.grade_correction` and the payables. */
   dashboard: '/api/vendor/dashboard',
 
   /** MISSING route. `CatalogService.search()` exists; no controller exposes it. */
@@ -62,7 +62,27 @@ export const API = {
  * Wire types
  * ======================================================================== */
 
+/**
+ * One queue on the workspace, exactly as the server measured it.
+ *
+ * **`null` means "not measured here", never zero.** The server sends `null` for
+ * `slaHours` on a queue nobody has promised a turnaround for, and the screen
+ * drops the field rather than defaulting it — `QueueItem` renders an absent SLA
+ * as no clause at all and a `0` as a promise of nothing, which is not the same
+ * claim. `oldestWaitHours` and `breachedCount` are computed against the server
+ * clock: the correction window is a money deadline and a browser clock must not
+ * be able to move it.
+ */
+export interface VendorQueue {
+  count: number;
+  oldestWaitHours: number | null;
+  breachedCount: number | null;
+  slaHours: number | null;
+}
+
 export interface DashboardTiles {
+  /** Any state, ever. Tells a new vendor apart from one whose stock all failed. */
+  unitsEverListed: number;
   unitsAwaitingQc: number;
   unitsLive: number;
   unitsSoldThisMonth: number;
@@ -70,7 +90,10 @@ export interface DashboardTiles {
   unitsQcExpiring14d: number;
   payoutsDue: MoneyString;
   payoutsDueOn: IsoDate | null;
-  openGradeCorrections: number;
+  queues: {
+    gradeCorrections: VendorQueue;
+    awaitingInspection: VendorQueue;
+  };
 }
 
 /** One catalog hit, plus enough specification to recognise the machine. */

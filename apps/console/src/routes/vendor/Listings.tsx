@@ -140,6 +140,10 @@ export function VendorListingsRoute(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
   const status = params.get('status') ?? '';
   const grade = params.get('grade') ?? '';
+  // `?corrected=1` is where the dashboard's correction queue lands. It is a
+  // filter like any other, so it shows in the rail, clears with the rest, and
+  // survives being sent to a colleague.
+  const corrected = params.get('corrected') === '1';
 
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set());
   const [repricing, setRepricing] = React.useState<string | null>(null);
@@ -149,6 +153,7 @@ export function VendorListingsRoute(): React.JSX.Element {
   const query = new URLSearchParams({ page: '1', pageSize: '50' });
   if (status) query.set('status', status);
   if (grade) query.set('grade', grade);
+  if (corrected) query.set('corrected', '1');
   // The key is in the URL so a successful mutation re-runs the GET. `useResource`
   // keys off the url string, which is exactly the cache invalidation needed here.
   query.set('_', String(reloadKey));
@@ -344,6 +349,15 @@ export function VendorListingsRoute(): React.JSX.Element {
             ...GRADES.map((g) => ({ value: g, label: gradeLabel(g) })),
           ]}
         />
+        <Select
+          label="Inspection"
+          value={corrected ? '1' : ''}
+          onChange={(e) => setFilter('corrected', e.target.value)}
+          options={[
+            { value: '', label: 'Any outcome' },
+            { value: '1', label: 'grade corrected' },
+          ]}
+        />
 
         {selected.size > 0 && (
           <div className="flex items-center gap-3 pb-2">
@@ -384,14 +398,14 @@ export function VendorListingsRoute(): React.JSX.Element {
         skeletonRows={8}
         empty={
           <EmptyState
-            title={status || grade ? 'Nothing matches this filter' : 'No stock listed yet'}
+            title={status || grade || corrected ? 'Nothing matches this filter' : 'No stock listed yet'}
             body={
-              status || grade
+              status || grade || corrected
                 ? 'Your stock is not empty — this filter is. Clear it to see everything.'
                 : 'A listing starts with a machine from our catalog and ends with an inspection at your site. Fifty machines takes about ten minutes.'
             }
             action={
-              status || grade ? (
+              status || grade || corrected ? (
                 <Button variant="secondary" onClick={() => setParams(new URLSearchParams())}>
                   Clear the filter
                 </Button>

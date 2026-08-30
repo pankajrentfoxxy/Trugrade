@@ -50,13 +50,52 @@ interface VendorFacilityView {
 }
 
 /**
- * The six numbers on the vendor's landing screen.
+ * One queue on the vendor's workspace: how much is waiting, how long the oldest
+ * has waited, and whether any of it is past a promise we actually made.
+ *
+ * **Every field is nullable and null means "we do not measure this here",
+ * never "zero".** A queue with no committed turnaround has `slaHours: null` and
+ * therefore `breachedCount: null` — printing "0 past SLA" beside a promise
+ * nobody made is the same defect as rendering an unmeasured value as a passing
+ * one, and the screen renders the two differently on purpose.
+ *
+ * `oldestWaitHours` and `breachedCount` are computed **here**, against the
+ * injected clock, because the correction window is a money deadline: two days
+ * after it passes the corrected grade applies to the vendor's stock by itself.
+ * A browser clock must not be able to move that, so the client is handed the
+ * answer rather than the ingredients.
+ */
+interface VendorQueueView {
+  count: number;
+  oldestWaitHours: number | null;
+  breachedCount: number | null;
+  slaHours: number | null;
+}
+
+/**
+ * The vendor's landing screen: five counts, what they are owed, and two queues.
  *
  * Each is a number somebody can act on today. There is no revenue figure and no
  * lifetime total, because a dashboard fills up with vanity metrics one plausible
  * addition at a time and then nobody reads it.
+ *
+ * The response is assembled field by field below and never spread from a row.
+ * Nothing here names a buyer: `unitsSoldThisMonth` counts the vendor's own
+ * stock movements, and the payout figures are their own payables. The
+ * anonymity rule runs in both directions — a vendor learning which customer
+ * bought which serial is the same leak as a buyer learning the supply point,
+ * and an aggregate is where that detail creeps in unnoticed.
  */
 interface VendorDashboard {
+  /**
+   * Every unit they have ever declared, in any state.
+   *
+   * This exists to tell "brand new vendor" apart from "vendor whose stock all
+   * failed inspection". The screen shows a three-step first-run guide on zero,
+   * and inferring that from `live + awaiting + sold` told a vendor with
+   * fourteen failed machines to list their first stock.
+   */
+  unitsEverListed: number;
   unitsAwaitingQc: number;
   unitsLive: number;
   unitsSoldThisMonth: number;
@@ -64,8 +103,16 @@ interface VendorDashboard {
   unitsQcExpiring14d: number;
   payoutsDue: Money;
   payoutsDueOn: Date | null;
-  openGradeCorrections: number;
+  queues: {
+    /** Has a real promise: `qc.grade_correction_auto_days`, in hours. */
+    gradeCorrections: VendorQueueView;
+    /** Has none. Nothing in `platform_config` commits us to an inspection date. */
+    awaitingInspection: VendorQueueView;
+  };
 }
+
+/** `qc` owns the window; `platform_config` owns the number. We read the number. */
+const CORRECTION_WINDOW_KEY = 'qc.grade_correction_auto_days';
 
 const QC_EXPIRY_WARNING_DAYS = 14;
 
@@ -142,19 +189,41 @@ export class VendorController {
     // sellable, it applies the expiry live rather than waiting for the nightly
     // job, and a second definition of "live" on the vendor's own dashboard is
     // how a vendor comes to believe stock is selling that no buyer can see.
+    // The correction window is read before the counts because it decides which
+    // of them are late. `v_current_config` and not `platform_config`: config is
+    // effective-dated, and reading the table directly is how a future-dated row
+    // goes live early.
+    const [windowRow] = await this.prisma.$queryRaw<Array<{ value_json: unknown }>>`
+      SELECT value_json FROM platform.v_current_config WHERE key = ${CORRECTION_WINDOW_KEY}`;
+    const correctionWindowDays =
+      typeof windowRow?.value_json === 'number' ? windowRow.value_json : null;
+    // A window we cannot read is not a window of zero. Everything downstream
+    // reports "not measured" rather than declaring the whole queue on time.
+    const correctionDeadline =
+      correctionWindowDays === null ? null : this.clock.plusDays(-correctionWindowDays);
+
     const [counts] = await this.prisma.$queryRaw<
       Array<{
+        units_ever: bigint;
         awaiting_qc: bigint;
+        awaiting_oldest: Date | null;
         live: bigint;
         expiring: bigint;
         sold_this_month: bigint;
         open_corrections: bigint;
+        corrections_oldest: Date | null;
+        corrections_late: bigint;
       }>
     >`
       SELECT
         (SELECT count(*) FROM listing.unit u
+          WHERE u.vendor_org_id = ${orgId}::uuid)                                AS units_ever,
+        (SELECT count(*) FROM listing.unit u
           WHERE u.vendor_org_id = ${orgId}::uuid
             AND u.status IN ('AWAITING_QC','QC_SCHEDULED','QC_IN_PROGRESS'))     AS awaiting_qc,
+        (SELECT min(u.created_at) FROM listing.unit u
+          WHERE u.vendor_org_id = ${orgId}::uuid
+            AND u.status IN ('AWAITING_QC','QC_SCHEDULED','QC_IN_PROGRESS'))     AS awaiting_oldest,
         (SELECT count(*) FROM listing.v_sellable_unit s
           WHERE s.vendor_org_id = ${orgId}::uuid)                                AS live,
         (SELECT count(*) FROM listing.v_sellable_unit s
@@ -169,7 +238,19 @@ export class VendorController {
           JOIN listing.listing l ON l.id = g.listing_id
           WHERE l.vendor_org_id = ${orgId}::uuid
             AND g.vendor_responded_at IS NULL
-            AND g.auto_applied_at IS NULL)                                       AS open_corrections`;
+            AND g.auto_applied_at IS NULL)                                       AS open_corrections,
+        (SELECT min(g.vendor_notified_at) FROM listing.grade_correction g
+          JOIN listing.listing l ON l.id = g.listing_id
+          WHERE l.vendor_org_id = ${orgId}::uuid
+            AND g.vendor_responded_at IS NULL
+            AND g.auto_applied_at IS NULL)                                       AS corrections_oldest,
+        (SELECT count(*) FROM listing.grade_correction g
+          JOIN listing.listing l ON l.id = g.listing_id
+          WHERE l.vendor_org_id = ${orgId}::uuid
+            AND g.vendor_responded_at IS NULL
+            AND g.auto_applied_at IS NULL
+            AND ${correctionDeadline}::timestamptz IS NOT NULL
+            AND g.vendor_notified_at < ${correctionDeadline}::timestamptz)       AS corrections_late`;
 
     // ON_HOLD and CANCELLED are excluded: a held payable has no expected date,
     // and putting one under "expected on" would be a promise nobody made. PAID
@@ -182,14 +263,38 @@ export class VendorController {
        WHERE vendor_org_id = ${orgId}::uuid
          AND status IN ('ACCRUED','ELIGIBLE','IN_RUN')`;
 
+    const waitedHours = (since: Date | null | undefined): number | null =>
+      since ? Math.max(0, Math.round((this.clock.nowMs() - since.getTime()) / 3_600_000)) : null;
+
     return {
+      unitsEverListed: Number(counts?.units_ever ?? 0),
       unitsAwaitingQc: Number(counts?.awaiting_qc ?? 0),
       unitsLive: Number(counts?.live ?? 0),
       unitsSoldThisMonth: Number(counts?.sold_this_month ?? 0),
       unitsQcExpiring14d: Number(counts?.expiring ?? 0),
       payoutsDue: moneyFromDb(payables?.due ?? null) ?? Money.ZERO,
       payoutsDueOn: payables?.due_on ?? null,
-      openGradeCorrections: Number(counts?.open_corrections ?? 0),
+      queues: {
+        gradeCorrections: {
+          count: Number(counts?.open_corrections ?? 0),
+          oldestWaitHours: waitedHours(counts?.corrections_oldest),
+          // Null, not zero, when the window could not be read — see
+          // `VendorQueueView`. The two render differently and must.
+          breachedCount:
+            correctionWindowDays === null ? null : Number(counts?.corrections_late ?? 0),
+          slaHours: correctionWindowDays === null ? null : correctionWindowDays * 24,
+        },
+        awaitingInspection: {
+          count: Number(counts?.awaiting_qc ?? 0),
+          oldestWaitHours: waitedHours(counts?.awaiting_oldest),
+          // **Deliberately null.** Nothing in `platform_config` commits us to a
+          // date by which a declared machine is inspected, so there is no
+          // promise to be past. Inventing 24 or 48 here would put a number on
+          // the vendor's screen that no one in the business agreed to.
+          breachedCount: null,
+          slaHours: null,
+        },
+      },
     };
   }
 

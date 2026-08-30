@@ -30,8 +30,12 @@ export interface NavEntry {
  * entries with a `label` belong in navigation, which is how the two QC detail
  * routes and the inspection form stay out of it.
  *
- * The vendor portal contributes one entry by hand because `routes/vendor` has no
- * labels — six vendor screens are one section, reached through the dashboard.
+ * The vendor portal contributes its two by hand because `routes/vendor` has no
+ * labels. Two and not one: the single entry that used to be here was labelled
+ * "My listings" and pointed at `/vendor`, which is the dashboard — so the only
+ * link a vendor had named a screen it did not open, and the board it did name
+ * was reachable only by clicking a tile. The other four vendor screens are
+ * genuinely reached from these two and stay out of the rail.
  */
 export const NAV: readonly NavEntry[] = [
   // `kyc.application.read` is the permission the API actually gates
@@ -70,6 +74,13 @@ export const NAV: readonly NavEntry[] = [
   ),
   {
     to: '/vendor',
+    label: 'Today',
+    permission: 'listing.own.read',
+    group: 'Vendor',
+    orgType: 'VENDOR',
+  },
+  {
+    to: '/vendor/listings',
     label: 'My listings',
     permission: 'listing.own.read',
     group: 'Vendor',

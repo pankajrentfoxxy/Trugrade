@@ -150,13 +150,27 @@ describe('no vendor screen shows the retail price', () => {
       [
         /vendor\/dashboard/,
         {
+          unitsEverListed: 46,
           unitsAwaitingQc: 12,
           unitsLive: 30,
           unitsSoldThisMonth: 4,
           unitsQcExpiring14d: 2,
           payoutsDue: '150000.00',
           payoutsDueOn: '2026-09-15T00:00:00.000Z',
-          openGradeCorrections: 1,
+          queues: {
+            gradeCorrections: {
+              count: 1,
+              oldestWaitHours: 70,
+              breachedCount: 1,
+              slaHours: 48,
+            },
+            awaitingInspection: {
+              count: 12,
+              oldestWaitHours: 31,
+              breachedCount: null,
+              slaHours: null,
+            },
+          },
           ...POISON,
         },
       ],
@@ -166,7 +180,7 @@ describe('no vendor screen shows the retail price', () => {
         <VendorDashboardRoute />
       </MemoryRouter>,
     );
-    await screen.findByText('Awaiting inspection');
+    await screen.findByText('Machines awaiting inspection');
     assertNoRetailPrice(container);
   });
 

@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
 Updated: 2026-08-30T15:00:00+00:00  
-Currently: Wave 4 - T21 order detail, serial level
+Currently: Wave 4 - T22 documents (invoice, proforma, e-way bill)
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -31,12 +31,12 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T18 | Bulk requirement upload | DONE | 856029c | 78 shots, 13 states x 2 themes x 3 widths | Archetype D. Closes Wave 3. Real lead created (TKT-202608-592E05E7) with 3 RFQ rows. XLSX refused by magic bytes rather than half-parsed. Found the CSV line-number shift and the A+ refusal, both fixed in 1361247. |
 | T19 | Customer dashboard | DONE |  | 28 shots, 6 states x 2 themes, 1440/900/600 | Archetype E at `/account` — the header's Account button led to a 404 until now. Four KPI tiles and ONE queue, because the approval expiry is the only SLA a buyer is on the receiving end of. `approvalSlaHours` is measured off the row (`expires_at - requested_at`), never the column's 24h default. No approve/reject control, because no endpoint can decide one. Empty-account state reached by parking all 13 orders on another buyer org through the real column, then putting them back. |
 | T20 | Order list | DONE |  | 56 shots, 14 states x 2 themes, 1440/900/600 | Archetype B at `/account/orders`. Built `GET /api/buyer/orders` — the list endpoint did not exist. One search box over three numbers (ours, the buyer's PO reference, a serial) and the matched serial is shown on the row. Whole board state in the URL; the capture script reaches every filtered state by address, not by clicking. Facet counts live, zero-count options disabled not hidden. Found and fixed two page-level horizontal-scroll defects that affected EVERY storefront board. |
-| T21 | Order detail - serial level | TODO |  |  |  |
+| T21 | Order detail - serial level | DONE |  | 48 shots, 14 states x 2 themes, 1440/900/600 | Archetype B at `/account/orders/[orderNumber]/units`, the first sub-route of the record — the tab strip lives in the record's LAYOUT so T22/T23/T24 inherit it. Built `GET /api/buyer/orders/:orderNumber/units` and `IQcService.inspectionsByReport`, so ordering reads QC through qc's own allow-list rather than joining three of its tables. Reads neither `procurement.purchase_order` nor `listing.unit`. Foreign order 404 not 403, matching T17. **Fixed the QC seed monoculture**: 239 reports were all PASS/A/APPLIED — `prisma/seed/qc-spread.ts` now derives PASS_WITH_NOTE from the WARN areas already seeded and puts a FAIL, a MISMATCH, a broken seal and three grade corrections on allocated units only (a FAIL on a LISTED unit would put a failed laptop on the storefront, because `unit_is_sellable` does not look at the verdict). Three defects found by loading the screen: the order record had been rendering the site header TWICE since it moved under `/account`; `battery_health_pct` is NUMERIC so `$queryRaw` returned it as a STRING and an average would have concatenated it; and a descending sort flipped nulls-last to nulls-first, putting the unmeasured machine at the top as if it were the best battery. |
 | T22 | Documents - invoice, proforma, e-way bill | TODO |  |  |  |
 | T23 | Warranty and claims | TODO |  |  |  |
 | T24 | Returns inside the 48-hour window | TODO |  |  |  |
 | T25 | Account - addresses, team, approvals | TODO |  |  |  |
-| T26 | Vendor dashboard | TODO |  |  |  |
+| T26 | Vendor dashboard | DONE |  | 30 shots, 5 states x 2 themes, 1440/900/600 | Archetype E at `/vendor` — it was a KPI row and nothing else, which is B's furniture under E's name. Added the two queues, sorted by breach: grade corrections (real SLA, `qc.grade_correction_auto_days` x 24 = 48h) and awaiting inspection (**no SLA, and none invented** — `slaHours` and `breachedCount` come back `null`, and the route drops the fields rather than defaulting them). Cut three tiles that linked nowhere real: `/vendor/payables` and `/vendor/qc/corrections` are routes that do not exist, and `?expiring=14` is a parameter the listings board silently ignores. Kept the numbers, dropped the hrefs. Dropped the awaiting-inspection tile because the queue says the same thing with the wait attached. `unitsEverListed` added to the payload: first-run was inferred from `live + awaiting + sold`, which told a vendor whose whole first batch failed inspection to list their first stock. Added `?corrected=1` to the listings board so the corrections queue lands somewhere — predicate is the correction row, NOT `grade_corrected_from`, which is only written once a correction is APPLIED and therefore matched nothing for every correction still open. Nav lied: the single vendor entry said 'My listings' and pointed at the dashboard. Now two entries, 'Today' and 'My listings'. 6 integration tests, org scoping proven by seeding a neighbour with strictly more of everything and mutation-checked (removing one `vendor_org_id =` fails the suite). 6 console tests, one of which demands the ABSENCE of an SLA clause. |
 | T27 | Listing wizard design pass + commission readout | TODO |  |  |  |
 | T28 | Listing management and repricing | TODO |  |  |  |
 | T29 | Bulk serial upload with dry-run | TODO |  |  |  |
@@ -728,6 +728,39 @@ already shipped.
 Verified after: nine storefront routes at 600/900/1440 all report
 `scrollingElement.scrollLeft === 0` after being pushed right.
 
+## Reported by T21 — fixed here
+
+1. **The order record rendered the site header TWICE.** `/account/layout.tsx` has
+   `SiteHeader`, and when T17's record moved from `/orders/[orderNumber]` to
+   `/account/orders/[orderNumber]` its own layout kept one too — so the utility
+   bar, the logo, the search box and the account buttons were drawn twice on every
+   order screen, in both themes, at every width. A nested layout inherits its
+   parent's chrome; it does not restate it. Fixed by making the record's layout
+   carry only the sub-route nav.
+2. **`qc_hardware_detected.battery_health_pct` is NUMERIC, and `$queryRaw` hands a
+   NUMERIC back as a STRING.** The field was typed `number | null` on an interface
+   and was in fact `"87.50"`. Nothing failed loudly: the bar rendered, because
+   `Math.round("87.50")` works. The average above it would have been
+   `("82" + "93") / 2` — string concatenation, then division, reporting a fleet of
+   machines at 4146% battery health. Fixed with `::float8` in the one query that
+   reads it, and asserted with `typeof` rather than a value.
+3. **A descending sort flipped nulls-last into nulls-first.** The comparator put
+   an unmeasured battery last, and the board reversed the comparator's sign for a
+   descending sort — which reversed the null handling with it and put the machine
+   nobody measured at the top, as if it had the best battery on the order. A
+   comment claimed the opposite. Fixed by applying the direction to the comparison
+   of two PRESENT values only, and both directions are asserted.
+4. **The seed's QC estate was a monoculture** — 239 reports, every one
+   `PASS` / grade `A` / seal `APPLIED`, one absent battery. The ledger has carried
+   this as a known gap since Phase 4. `prisma/seed/qc-spread.ts` now derives
+   `PASS_WITH_NOTE` from the WARN area results `seedQcEvidence` already writes
+   (seven of twelve areas carrying a finding, about a sixth of the estate) and
+   puts one FAIL, one MISMATCH, one broken seal and three grade corrections on
+   ALLOCATED units only. It has to be allocated-only: `listing.unit_is_sellable`
+   looks at status, QC dates and the seal and **not at the verdict**, so a FAIL
+   written onto a LISTED unit would put a failed laptop on the storefront. That is
+   worth a look in its own right.
+
 ## packages/ui gaps reported by T19/T20 — fix when a task needs them
 
 - **`DataTable`'s scroll wrapper needs `relative`.** `packages/ui/src/components/data.tsx`
@@ -1358,7 +1391,7 @@ buyer uses, so they read as scannable and are not.
 | listing | 8 | 20 | T27 T28 T29 |
 | qc | 14 | 30 | T30 T31 |
 | catalog | 9 | 20 | T37 |
-| vendor | 2 | 3 | T26 (partial) |
+| vendor | 2 | 3 | T26 done — `/api/vendor/dashboard` existed all along; `api.ts` had it marked MISSING |
 | logistics | 2 | **0** | T21 tracking |
 | **procurement** | **0** | **0** | T32 T33 T39 T40 |
 | **payment** | **0** | **0** | T22 T40 |
@@ -1369,6 +1402,37 @@ Roughly 12 of the 30 remaining tasks are screens over a working API. The other 1
 module built first — `payment` and `procurement` are the Phase 7 money layer, which exists
 as schema and contracts only. Those are not screen tasks wearing a screen task's size, and
 planning them as such is how a wave silently stalls.
+
+## Security finding from T26 — one vendor can read every vendor's grade corrections
+
+**`GET /api/qc/grade-corrections` is guarded by `qc.report.read`, which every vendor role holds**
+(VENDOR_OWNER, VENDOR_ADMIN, VENDOR_OPS and VENDOR_VIEWER all carry it in
+`ROLE_PERMISSIONS`), and `QcConsoleService.correctionQueue()` applies **no org predicate at all** —
+it selects every open correction platform-wide and enriches each row with `vendorName`. So any
+signed-in vendor account can list its competitors' units, serials, SKUs and regrade reasons.
+
+Not introduced by T26 and not fixed by it: the same method is the ops console's board, so scoping it
+changes behaviour for T30/T31, and that is their call to make rather than a side effect of a
+dashboard pass. **T26 deliberately did not route the vendor's correction queue through it** — the
+counts come from the org-scoped `/api/vendor/dashboard` instead. The fix is a caller-org branch in
+`correctionQueue()` (platform sees all, a vendor sees its own), plus a test that signs in as a vendor
+and demands the neighbour's rows are absent.
+
+## Reachability gaps found in T26
+
+- **`GradeCorrectionService.respond()` is exposed by no controller.** The full transactional
+  implementation exists — accept, accept-and-reprice, withdraw, dispute — and
+  `listing.grade_correction.respond` is granted to four vendor roles and **guards nothing**. A vendor
+  therefore cannot answer a correction at all; every one of them auto-applies. That is T31.
+- **The auto-apply job is not running.** All nine seeded corrections are 69 hours into a 48-hour
+  window and still open, so `autoApplyDue()` has never fired against the dev database. The dashboard
+  reports them as breached, which is correct and is also the evidence.
+- **`procurement.vendor_payable` is written by `ordering`, not `procurement`.** The readiness table
+  reads "procurement 0/0" and the natural conclusion — that a payout figure has no source — is wrong:
+  `order-transaction.service.ts` inserts the payable and the PO in the same transaction as the order.
+  The dev database holds 15 of each. So the payout tile has real data and was kept. What does not
+  exist is `eligible_at` (nothing sets it, so "expected on" is genuinely unknown and says so) and any
+  vendor-facing payables screen.
 
 ## Reachability gaps found in Wave 3 — features whose states no route can produce
 
@@ -1387,6 +1451,12 @@ planning them as such is how a wave silently stalls.
 - `postJson` in `apps/console/src/routes/vendor/api.ts` reads `message` off the body root,
   but `DomainExceptionFilter` nests it under `error` — so every actionable refusal renders
   as "that did not go through (422)". Behaviour fix, deliberately not done inside a restyle.
+  **Update (T26): the code now reads `error.message` and the comment describes the fix. The
+  bug is gone; this entry stays only so nobody re-fixes it.**
+- **`STATUS_TONE` in the vendor listings board paints ACTIVE green and REJECTED/SUSPENDED red**
+  (`apps/console/src/routes/vendor/Listings.tsx`). 09_FRONTEND_LOCKED §2 rule 2 reserves green and
+  red for PASS and FAIL. A listing status is not a verdict. Found by T26 while photographing the
+  board its correction queue links to; not changed, because that board is T28's.
 
 ## Prerequisites built outside the numbered backlog
 
