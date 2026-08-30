@@ -9,6 +9,7 @@ import { OrderingService } from './ordering.service';
 import { CartService } from './internal/cart.service';
 import { CheckoutService } from './internal/checkout.service';
 import { HoldService } from './internal/hold.service';
+import { OrderListService } from './internal/order-list.service';
 import { OrderReadService } from './internal/order-read.service';
 import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
@@ -55,6 +56,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
     HoldService,
     OrderTransactionService,
     OrderReadService,
+    OrderListService,
     CatalogLookup,
     RfqIntakeService,
   ],

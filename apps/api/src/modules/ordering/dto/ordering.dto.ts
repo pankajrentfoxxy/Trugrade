@@ -145,3 +145,41 @@ export const orderNumberSchema = z
   .string()
   .trim()
   .regex(/^TT-\d{2}-\d{5}$/, 'An order number looks like TT-26-00004.');
+
+// ---------------------------------------------------------------------------
+// The order board
+// ---------------------------------------------------------------------------
+
+/**
+ * The board's whole state, as it arrives from the URL.
+ *
+ * Every field here is a query parameter the storefront puts in the address bar,
+ * because a buyer must be able to send a colleague a link that reproduces
+ * exactly what they were looking at (CLAUDE.md). The schema is therefore the
+ * contract for that URL as much as for the request.
+ *
+ * `q` is one box over three different identifiers — our order number, the
+ * buyer's own PO reference, and a serial — rather than three fields, because a
+ * person holding a number does not always know which of the three it is. It is
+ * matched, never parsed.
+ *
+ * `status` is a shape rather than the `order_status` enum: an unknown value
+ * returns an empty board, which is the honest answer to a filter for something
+ * that has never happened, and is better than a 422 on a link somebody kept.
+ */
+export const orderListQuerySchema = z.object({
+  q: z.string().trim().min(1).max(60).optional(),
+  status: z
+    .string()
+    .trim()
+    .regex(/^[A-Z_]{3,32}$/)
+    .optional(),
+  /** One of the buyer's OWN delivery sites, by `identity.org_address.id`. */
+  site: uuidSchema.optional(),
+  sort: z.enum(['recent', 'oldest', 'value', 'value_asc']).default('recent'),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  /** Ten rows at the storefront's 60px comfortable density is one screen. */
+  per: z.coerce.number().int().min(5).max(50).default(10),
+});
+
+export type OrderListQueryDto = z.infer<typeof orderListQuerySchema>;

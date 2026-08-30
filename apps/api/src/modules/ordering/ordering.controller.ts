@@ -5,10 +5,12 @@ import { ZodValidationPipe } from '../../shared/http/http';
 import {
   addCartItemSchema,
   createCartSchema,
+  orderListQuerySchema,
   orderNumberSchema,
   requirementIntakeSchema,
   type AddCartItemDto,
   type CreateCartDto,
+  type OrderListQueryDto,
   type RequirementIntakeDto,
 } from './dto/ordering.dto';
 import {
@@ -25,6 +27,11 @@ import {
   type CheckoutSessionView,
   type OrderConfirmationView,
 } from './internal/checkout.service';
+import {
+  OrderListService,
+  type OrderDashboardView,
+  type OrderListView,
+} from './internal/order-list.service';
 import { OrderReadService, type OrderRecordView } from './internal/order-read.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
 
@@ -58,6 +65,7 @@ export class OrderingController {
     private readonly carts: CartService,
     private readonly checkout: CheckoutService,
     private readonly orders: OrderReadService,
+    private readonly orderBoard: OrderListService,
     private readonly requirements: RfqIntakeService,
   ) {}
 
@@ -198,6 +206,47 @@ export class OrderingController {
   // -------------------------------------------------------------------------
   // Orders
   // -------------------------------------------------------------------------
+
+  /**
+   * The buyer's dashboard figures (T19).
+   *
+   * **Declared above `orders/:orderNumber`, and it has to be.** Nest matches in
+   * declaration order, so the other way round `summary` would be captured as an
+   * order number and refused by `orderNumberSchema` with a 422 — a route that
+   * exists answering as though it does not.
+   *
+   * It is a separate endpoint rather than a block bolted onto the list because
+   * the two answer different questions: the list answers "which orders match
+   * this filter", the dashboard answers "what is outstanding across all of
+   * them", and folding the second into the first would make every filtered
+   * board recompute org-wide totals it does not show.
+   */
+  @Get('orders/summary')
+  @RequirePermissions('ordering.own.read')
+  dashboard(): Promise<OrderDashboardView> {
+    return this.orderBoard.summary();
+  }
+
+  /**
+   * Every order the buyer's organisation placed (T20).
+   *
+   * The whole of the board's state is in the query string — search, status,
+   * delivery site, sort, page — because a buyer must be able to send a
+   * colleague a link that reproduces exactly what they saw, and that is only
+   * true if the server takes its instructions from the URL rather than from a
+   * session.
+   *
+   * An order belonging to another organisation is not in the list, and is not
+   * refused either: the scoping is inside every statement's own `WHERE`. See
+   * the service for why a refusal would be worse than an absence.
+   */
+  @Get('orders')
+  @RequirePermissions('ordering.own.read')
+  orderList(
+    @Query(new ZodValidationPipe(orderListQuerySchema)) query: OrderListQueryDto,
+  ): Promise<OrderListView> {
+    return this.orderBoard.list(query);
+  }
 
   /**
    * One order the buyer's organisation placed, by its human number.

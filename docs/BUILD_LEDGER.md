@@ -1,7 +1,7 @@
 # BUILD LEDGER
 
-Updated: 2026-08-30T08:20:00+00:00  
-Currently: Wave 4 - T19 customer dashboard
+Updated: 2026-08-30T15:00:00+00:00  
+Currently: Wave 4 - T21 order detail, serial level
 
 This file is the memory of a long run. Context gets compacted; this does not.
 Re-read it at the start of every task. Update it at the end of every task, in the
@@ -29,8 +29,8 @@ Status is one of `TODO` / `DOING` / `DONE` / `BLOCKED`.
 | T16 | Checkout | DONE | 93eb028 | 130 shots, 27 states x 2 themes x 3 widths | Archetype D. 16-step order transaction, 42 integration tests covering ORD-010/014/018/020 and PRC-030. Proven in data: PAYMENT_PENDING 3 units + 2 POs; AWAITING_APPROVAL 6 units + 0 POs. Six defects found by loading the screen, incl. an unresolved tax split drawn as settled with the wrong pair of heads. Also fixed: cart deletion stranding held stock (5ddf02b), and the header never reading the session (3963e99). |
 | T17 | Order confirmation and approval-required | DONE | 569ccfb | 54 shots, both themes, 1440/900/600 | Archetype C at /orders/[orderNumber]. Built the one missing route, GET /api/buyer/orders/:orderNumber, which never reads procurement.purchase_order — anonymity structural, not careful. A foreign order answers 404 not 403, because sequential order numbers make a 403 an order-volume oracle. A PENDING approval past its deadline is reported EXPIRED by the server. |
 | T18 | Bulk requirement upload | DONE | 856029c | 78 shots, 13 states x 2 themes x 3 widths | Archetype D. Closes Wave 3. Real lead created (TKT-202608-592E05E7) with 3 RFQ rows. XLSX refused by magic bytes rather than half-parsed. Found the CSV line-number shift and the A+ refusal, both fixed in 1361247. |
-| T19 | Customer dashboard | DOING |  |  |  |
-| T20 | Order list | TODO |  |  |  |
+| T19 | Customer dashboard | DONE |  | 28 shots, 6 states x 2 themes, 1440/900/600 | Archetype E at `/account` — the header's Account button led to a 404 until now. Four KPI tiles and ONE queue, because the approval expiry is the only SLA a buyer is on the receiving end of. `approvalSlaHours` is measured off the row (`expires_at - requested_at`), never the column's 24h default. No approve/reject control, because no endpoint can decide one. Empty-account state reached by parking all 13 orders on another buyer org through the real column, then putting them back. |
+| T20 | Order list | DONE |  | 56 shots, 14 states x 2 themes, 1440/900/600 | Archetype B at `/account/orders`. Built `GET /api/buyer/orders` — the list endpoint did not exist. One search box over three numbers (ours, the buyer's PO reference, a serial) and the matched serial is shown on the row. Whole board state in the URL; the capture script reaches every filtered state by address, not by clicking. Facet counts live, zero-count options disabled not hidden. Found and fixed two page-level horizontal-scroll defects that affected EVERY storefront board. |
 | T21 | Order detail - serial level | TODO |  |  |  |
 | T22 | Documents - invoice, proforma, e-way bill | TODO |  |  |  |
 | T23 | Warranty and claims | TODO |  |  |  |
@@ -704,6 +704,58 @@ Three things about them are worth carrying forward:
   organisation suspended" is the copy that gets forgotten.
 - **A reset revokes every session and clears the lockout budget.** A reset that
   leaves the intruder's thirty-day refresh token alive has changed a string.
+
+## Reported by T19/T20 — fixed, and they were live defects on every board
+
+Both were found by taking the 600px capture and noticing the header spanned 600px
+while the page behind it was 743px wide. Neither is in `apps/account`; both are in
+`apps/storefront/src/app/storefront.css`, which this task owns, and both were
+already shipped.
+
+1. **`.cols` was `grid-template-columns:1fr` below 900px.** `1fr` is
+   `minmax(auto,1fr)`, and a grid item's automatic minimum is its MIN-CONTENT
+   width — so a table with `min-width:940px` widened the grid item, then the
+   document, and the whole PAGE scrolled sideways under a header that did not.
+   The desktop rule was always `minmax(0,1fr)`; the mobile one was not. Fixed by
+   making them agree. `/search?view=list` at 600px scrolled 550px before this.
+2. **`.tbl` was not a containing block.** `DataBoard` renders its caption and its
+   `aria-live` region with Tailwind's `sr-only`, which is `position:absolute`,
+   and the table's own `overflow-x:auto` wrapper is not positioned — so those two
+   1px boxes resolved against the initial containing block, escaped the wrapper's
+   clip at the far right of a 940px table, and made the document scroll. Pinned
+   with `position:relative` on `.tbl`; see the gap below for the real fix.
+
+Verified after: nine storefront routes at 600/900/1440 all report
+`scrollingElement.scrollLeft === 0` after being pushed right.
+
+## packages/ui gaps reported by T19/T20 — fix when a task needs them
+
+- **`DataTable`'s scroll wrapper needs `relative`.** `packages/ui/src/components/data.tsx`
+  wraps the table in `div.w-full.overflow-x-auto`; its `sr-only` caption and live
+  region are `position:absolute` and therefore escape that wrapper's clipping.
+  Adding `relative` to that div fixes it for every consumer and lets
+  `.tbl{position:relative}` in the storefront be deleted. The console has the same
+  latent bug in thirteen places and has never been measured for it.
+- **`QueueItem.slaHours` is required and `number`.** A queue with no promise
+  attached to it therefore cannot be rendered at all without inventing one, which
+  is why T19 renders a single queue plus a plain calm panel rather than two
+  queues. Making it optional — rendering "No SLA set" the way `breachedCount`
+  already renders "Breaches not measured" — would let an honest second queue exist.
+- **`EmptyState.body` is typed `string`.** Still true, still the reason T17's
+  not-your-order screen is hand-rolled: two order numbers in one sentence both
+  have to be mono and a `string` cannot carry a `<span className="mono">`.
+
+## Reachability, measured by T19 — states that exist and cannot be reached
+
+- **A buyer with no orders.** One buyer organisation on the dev database has all
+  thirteen orders and the other verified buyer orgs have no users to sign in as.
+  `scripts/t19-shots.mjs` reaches the state by moving `ordering."order".buyer_org_id`
+  to another verified buyer org for the length of one capture and putting it back
+  in a `finally`, printing the rows before and after. No fixture was invented.
+- **An approval that has actually expired, or been declined.** Still unreachable
+  by driving the UI: there is no approve/reject endpoint (PHASE_06 Task 2 built
+  the policy and the row, not the decision screens). T17 borrows the columns for
+  its captures; T19 does the same for the near-deadline one.
 
 ## Reported by T10 — fixed, and they were live defects
 

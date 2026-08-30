@@ -16,7 +16,7 @@ import {
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { Money, type Grade } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
-import { Deadline, inIst } from './Deadline';
+import { Deadline, inIst } from '../../../lib/deadline';
 import {
   getOrder,
   type DispatchGroup,

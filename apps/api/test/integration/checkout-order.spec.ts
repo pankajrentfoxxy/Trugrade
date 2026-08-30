@@ -43,6 +43,8 @@ import { LockService, RedisModule, RedisService } from '../../src/shared/redis/r
 import { CatalogModule } from '../../src/modules/catalog';
 import { OrderingModule } from '../../src/modules/ordering';
 import { CheckoutService } from '../../src/modules/ordering/internal/checkout.service';
+import type { OrderListQueryDto } from '../../src/modules/ordering/dto/ordering.dto';
+import { OrderListService } from '../../src/modules/ordering/internal/order-list.service';
 import { OrderReadService } from '../../src/modules/ordering/internal/order-read.service';
 import { HoldService } from '../../src/modules/ordering/internal/hold.service';
 import {
@@ -83,6 +85,7 @@ const VENDOR_ASK = 30_000;
 let moduleRef: TestingModule;
 let checkout: CheckoutService;
 let readOrder: OrderReadService;
+let orderBoard: OrderListService;
 let holds: HoldService;
 let orders: OrderTransactionService;
 let ctx: RequestContextService;
@@ -283,6 +286,7 @@ beforeAll(async () => {
 
   checkout = moduleRef.get(CheckoutService);
   readOrder = moduleRef.get(OrderReadService);
+  orderBoard = moduleRef.get(OrderListService);
   holds = moduleRef.get(HoldService);
   orders = moduleRef.get(OrderTransactionService);
   ctx = moduleRef.get(RequestContextService);
@@ -1452,6 +1456,133 @@ describe('the buyer reads their order back', () => {
     expect(json).not.toContain(String(VENDOR_ASK));
     for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout']) {
       expect(json.toLowerCase()).not.toContain(word);
+    }
+  });
+});
+
+/**
+ * The board (T20) and the dashboard figures (T19), which widen the same read
+ * from one order to all of them — and therefore widen the same three ways of
+ * getting it wrong.
+ *
+ * The scoping test is the one that matters and it is deliberately not "the
+ * guard exists": it places an order as one organisation, then asks for the
+ * board and the dashboard as a DIFFERENT one, and expects the order to be
+ * absent and every figure to be zero. A list that filtered after the read, or
+ * one that trusted a service-layer check somebody later moves, passes nothing
+ * here.
+ */
+describe('the buyer reads their orders back as a board', () => {
+  const board = (query: Partial<OrderListQueryDto> = {}) =>
+    orderBoard.list({ sort: 'recent', page: 1, per: 10, ...query });
+
+  it('finds an order by its number, by the buyer’s own PO reference, and by a serial', async () => {
+    const vendor = await makeVendor(HARYANA);
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 2,
+      city: HARYANA.city,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 2 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const record = await asBuyer(() => readOrder.byNumber(placed.orderNumber));
+    const serial = record.dispatchGroups[0]!.machines[0]!.serialNumber;
+
+    const byNumber = await asBuyer(() => board({ q: placed.orderNumber }));
+    expect(byNumber.orders.map((o) => o.orderNumber)).toContain(placed.orderNumber);
+
+    const bySerial = await asBuyer(() => board({ q: serial }));
+    const hit = bySerial.orders.find((o) => o.orderNumber === placed.orderNumber);
+    expect(hit).toBeDefined();
+    // The row has to be able to say WHY it is in the result, or a serial search
+    // reads as a mistake.
+    expect(hit!.matchedSerials).toContain(serial);
+    expect(hit!.unitsAllocated).toBe(2);
+
+    if (record.buyerPoNumber) {
+      const byPo = await asBuyer(() => board({ q: record.buyerPoNumber! }));
+      expect(byPo.orders.map((o) => o.orderNumber)).toContain(placed.orderNumber);
+    }
+  });
+
+  it('does not put one organisation’s order on another organisation’s board', async () => {
+    const vendor = await makeVendor(HARYANA);
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+      city: HARYANA.city,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const otherOrgId = await makeOrganization(
+      { org_type: 'BUYER', legal_name: 'Meridian Devices Pvt Ltd' },
+      db,
+    );
+    const otherUserId = await makeUser(otherOrgId, { full_name: 'Anita Rao' }, db);
+
+    // Every parameter that could widen the read is pushed at once: the largest
+    // page size, and a search for the exact order number.
+    const foreign = await asOtherBuyer(otherOrgId, otherUserId, () =>
+      orderBoard.list({ sort: 'recent', page: 1, per: 50, q: placed.orderNumber }),
+    );
+    expect(foreign.total).toBe(0);
+    expect(foreign.orders).toEqual([]);
+
+    const unfiltered = await asOtherBuyer(otherOrgId, otherUserId, () =>
+      orderBoard.list({ sort: 'recent', page: 1, per: 50 }),
+    );
+    expect(unfiltered.orders.map((o) => o.orderNumber)).not.toContain(placed.orderNumber);
+
+    // The facets are a second read and would be a second way to leak: a status
+    // count of 1 tells a stranger an order exists even with no rows returned.
+    for (const option of [...unfiltered.facets.status, ...unfiltered.facets.site]) {
+      expect(option.count).toBe(0);
+    }
+
+    // And the dashboard, which counts rather than lists.
+    const summary = await asOtherBuyer(otherOrgId, otherUserId, () => orderBoard.summary());
+    expect(summary.orders).toBe(0);
+    expect(summary.machines).toBe(0);
+    expect(summary.approvals).toEqual([]);
+    expect(summary.approvalSlaHours).toBeNull();
+  });
+
+  it('carries no vendor identity and no purchase order of ours on any row', async () => {
+    const vendor = await makeVendor(HARYANA);
+    const offer = await makeOffer({
+      vendorOrgId: vendor.orgId,
+      pickupAddressId: vendor.addressId,
+      qty: 1,
+      city: HARYANA.city,
+    });
+    const cartId = await makeCart([{ listingId: offer.listingId, qty: 1 }]);
+    await asBuyer(() => checkout.begin(cartId));
+    const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
+
+    const [order] = await db.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM ordering."order" WHERE order_number = ${placed.orderNumber}`;
+    const [po] = await db.$queryRaw<Array<{ po_number: string }>>`
+      SELECT po_number FROM procurement.purchase_order WHERE order_id = ${order!.id}::uuid`;
+    expect(po?.po_number).toMatch(/^PO-/);
+
+    const json = JSON.stringify(await asBuyer(() => board({ per: 50 })));
+    expect(json).not.toContain(po!.po_number);
+    // The agreed payout to the supply point. A retail screen must never carry it.
+    expect(json).not.toContain(String(VENDOR_ASK));
+    for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout']) {
+      expect(json.toLowerCase()).not.toContain(word);
+    }
+
+    const dashboard = JSON.stringify(await asBuyer(() => orderBoard.summary()));
+    expect(dashboard).not.toContain(po!.po_number);
+    for (const word of ['vendor', 'supplier', 'purchase_order', 'suborder', 'payout']) {
+      expect(dashboard.toLowerCase()).not.toContain(word);
     }
   });
 });

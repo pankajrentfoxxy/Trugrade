@@ -234,7 +234,18 @@ summary:hover{background:var(--sheet-2)}
 .sh h2{font-size:17px}
 .sh .sub{font-size:12.5px;color:var(--ink-3)}
 .sh .more{margin-left:auto;font-size:12.5px;color:var(--ink-2);font-weight:600}
-.tbl{background:var(--sheet);border:1px solid var(--rule);border-radius:7px;overflow:hidden}
+/* `position:relative` is load bearing, not cosmetic. `DataBoard` renders its
+   caption and its live region with Tailwind's `sr-only`, which is
+   `position:absolute`, and the table's own `overflow-x:auto` wrapper is not
+   positioned — so those two 1px boxes resolved against the initial
+   containing block, escaped the wrapper's clip at the far right of a
+   940px-min table, and made the whole DOCUMENT scroll sideways under a
+   header that did not move. Every board in the storefront had it. The real
+   fix is `relative` on the wrapper inside `packages/ui`; that package is not
+   this task's to change, so it is pinned here and reported as a gap.
+   Do not remove this line without fixing it there first. */
+.tbl{background:var(--sheet);border:1px solid var(--rule);border-radius:7px;
+  overflow:hidden;position:relative}
 .tbh{padding:13px 16px;border-bottom:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:10px;
   align-items:center;background:var(--sheet-2)}
 .tbh b{font-size:14px;color:var(--ink)}
@@ -304,7 +315,16 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .pays span{border:1px solid var(--chrome-line-2);border-radius:3px;padding:3px 8px;font-size:10px;
   font-family:"IBM Plex Mono",monospace;letter-spacing:.05em}
 @media(max-width:1200px){.pgrid{grid-template-columns:repeat(3,1fr)}.proc{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:900px){.cols{grid-template-columns:1fr}.filters{position:static;max-height:none}
+/* `1fr` is `minmax(auto,1fr)`, and a grid item's automatic minimum is its
+   MIN-CONTENT width — so a 1000px table inside it widened the whole
+   document and the page itself scrolled sideways under a header that did
+   not. `minmax(0,1fr)` lets the item be narrower than its content, which
+   is what puts the scrollbar back inside the table's own wrapper where
+   `DataBoard` already put one. The desktop rule above was always written
+   this way; the mobile one was not, and every board on the storefront was
+   overflowing below 900px because of it. */
+@media(max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}
+  .filters{position:static;max-height:none}
   .hero{grid-template-columns:1fr;padding:20px}.gauge{display:none}
   .pgrid{grid-template-columns:repeat(2,1fr)}.strip,.sell{grid-template-columns:1fr}
   .sell{padding:20px}.fg{grid-template-columns:1fr 1fr}.hide-sm{display:none}}
@@ -992,3 +1012,100 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
    and the `.scroll` wrapper still carries anything narrower. */
 .bulktbl table{min-width:660px}
 .bulktbl td,.bulktbl th{padding-left:12px;padding-right:12px}
+
+/* ==========================================================================
+ * /account — T19, archetype E (workspace) and T20, archetype B (board)
+ * ========================================================================== */
+/* The header block. `.sh` is the section heading inside a workspace; this is
+   the page's own, one step up, and it carries the tick rule the reference puts
+   under every heading of this weight. */
+.wspace{padding:20px 0 0;display:flex;flex-direction:column;gap:24px}
+.wshead{display:flex;flex-direction:column;gap:8px}
+/* The system's own h1 step, not a near-miss of it: `text-h1` in the
+   Tailwind preset is clamp(21px,2.8vw,28px)/700 at -.022em. */
+.wshead h1{font-size:clamp(21px,2.8vw,28px);line-height:1.18;font-weight:700;
+  letter-spacing:-.022em;color:var(--ink)}
+.wshead p{margin:0;font-size:13.5px;line-height:1.6;color:var(--ink-2);max-width:74ch}
+.wshead .tickrule{margin-top:2px}
+
+/* The calm empty queue. Not an alert and not a nag: nothing waiting is the
+   good outcome, and 03_UX_SPEC.md §3A.5 asks for it to read that way. */
+.wqempty{border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--sheet);
+  padding:18px 20px}
+.wqempty h2{font-size:15.5px;line-height:1.35;font-weight:600;color:var(--ink);
+  letter-spacing:-.014em}
+.wqempty p{margin:6px 0 0;font-size:13px;line-height:1.6;color:var(--ink-2);max-width:74ch}
+
+/* The held orders, soonest deadline first. */
+.wappr{display:flex;flex-direction:column;gap:0}
+.wappr .sh{margin-bottom:10px}
+.wapprlist{list-style:none;margin:0;padding:0;border:1px solid var(--rule);
+  border-radius:var(--r-lg);background:var(--sheet);overflow:hidden}
+.wapprlist li{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;
+  justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--rule-2);
+  border-left:3px solid transparent}
+.wapprlist li:last-child{border-bottom:0}
+/* A released hold is a fact, not a failure, so it takes the warn edge rather
+   than --fail: green and red are PASS and FAIL and nothing else. */
+.wapprlist li.gone{border-left-color:var(--warn);background:var(--sheet-2)}
+.wal{display:flex;flex-direction:column;gap:3px;min-width:0}
+.waord{font-size:14px;font-weight:600;color:var(--ink);text-decoration:underline;
+  text-decoration-color:var(--rule);text-underline-offset:3px}
+.waord:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+.wameta{font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.wameta b{color:var(--ink)}
+.war{display:flex;flex-direction:column;gap:2px;align-items:flex-end;text-align:right;
+  margin-left:auto;min-width:0}
+/* The one measured value on this row, so the one amber thing on it. */
+.waclock{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;
+  font-variant-numeric:tabular-nums;color:var(--acc-ink)}
+.waclock.over{color:var(--warn)}
+.wawhen{font-size:11.5px;color:var(--ink-3)}
+.wanote{font-size:11.5px;line-height:1.5;color:var(--ink-4);max-width:34ch}
+.wappr>.fnote{margin-top:12px;max-width:82ch}
+
+.wskel{display:flex;flex-direction:column;gap:20px}
+.wskelrow{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+
+/* ---- T20, the board ---------------------------------------------------- */
+/* Eight columns of order facts. The floor is what the columns need before the
+   `.scroll` wrapper starts carrying them sideways. */
+.oboard table{min-width:1000px}
+/* Seven columns will not fit a phone, so below the rail's breakpoint the
+   table keeps a floor it can be read at and scrolls inside its own wrapper. */
+@media(max-width:900px){.oboard table{min-width:760px}.oboard{padding:0 12px}}
+.oboard td,.oboard th{padding-left:12px;padding-right:12px}
+.obord{display:flex;flex-direction:column;gap:3px}
+.obord .mono{font-size:13.5px;font-weight:600;color:var(--ink)}
+.obord a.mono{text-decoration:underline;text-decoration-color:var(--rule);
+  text-underline-offset:3px}
+.obord a.mono:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
+.obwhen{font-size:11px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.obsite{display:flex;flex-direction:column;gap:2px}
+.obsite span{font-size:11px;color:var(--ink-4)}
+.obhit{display:block;margin-top:4px;font-family:"IBM Plex Mono",monospace;font-size:11px;
+  font-variant-numeric:tabular-nums;color:var(--acc-ink)}
+.obdue{display:block;margin-top:3px;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-variant-numeric:tabular-nums;color:var(--ink-3)}
+/* The board's own head, tighter than the workspace's: the rail starts
+   immediately under it and a 24px gap floats the two apart. */
+.obhead{margin-bottom:14px}
+.obsearch{display:flex;flex-direction:column;gap:6px;padding:10px 14px 12px;
+  border-bottom:1px solid var(--rule-2)}
+.obsearch label{font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.obsearch .obrow{display:flex;gap:6px}
+.obsearch input{flex:1;min-width:0;height:38px;background:var(--sheet-2);
+  border:1px solid var(--rule);border-radius:var(--r-sm);padding:0 10px;font-size:12.5px;
+  color:var(--ink);font-family:"IBM Plex Mono",monospace}
+/* The placeholder is a sample ORDER NUMBER, so it stays monospace like
+   every other number in the product. */
+.obsearch input::placeholder{color:var(--ink-4)}
+.obsearch input:focus{border-color:var(--acc);outline:none}
+.obsearch .d{font-size:11px;line-height:1.5;color:var(--ink-4)}
+
+@media(max-width:900px){
+  .wapprlist li{flex-direction:column;gap:8px}
+  .war{margin-left:0;align-items:flex-start;text-align:left}
+  .wanote{max-width:none}
+}
