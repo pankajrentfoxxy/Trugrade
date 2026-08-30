@@ -238,7 +238,27 @@ describe('the batch-size decision', () => {
             ? { added: 3 }
             : url.endsWith('/api/vendor/listings')
               ? { id: 'listing-1' }
-              : {};
+              // The payout preview, which step 4 renders on the way to the
+              // batch-size question. It used to fall through to `{}`, and
+              // `StepPrice` maps over `preview.deductions` — so this fixture
+              // threw an unhandled TypeError after the assertions had already
+              // passed, which vitest reports as a failed FILE whenever the
+              // rejection lands inside the run rather than after it. A response
+              // shape the API cannot produce is not a useful stub.
+              : url.endsWith('/payout-preview')
+                ? {
+                    pricingMode: 'NET_PAYOUT',
+                    units: 3,
+                    perUnitPayout: '42000.00',
+                    grossPayout: '126000.00',
+                    deductions: [],
+                    totalDeductions: '0.00',
+                    netPayout: '126000.00',
+                    commissionPct: 14,
+                    vendorWarrantyMonths: 3,
+                    customerWarrantyMonths: 6,
+                  }
+                : {};
       return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
     });
 

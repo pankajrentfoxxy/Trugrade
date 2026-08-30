@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GRADES, type Grade, type MarginRule, type Money } from '@trugrade/contracts';
+import { GRADES, moneyFromDb, type Grade, type MarginRule, type Money } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 
@@ -77,6 +77,47 @@ function toReserveBands(v: unknown): Partial<Record<Grade, number>> {
   return out;
 }
 
+/** One rule as the admin screen needs it: every column, converted once, here. */
+export interface AdminMarginRule {
+  id: string;
+  priority: number;
+  category: string | null;
+  brandId: string | null;
+  grade: Grade | null;
+  /** Half-open `[valueFrom, valueTo)`. `null` at either end means unbounded. */
+  valueFrom: Money | null;
+  valueTo: Money | null;
+  targetMarginPct: number;
+  floorMarginPct: number;
+  warrantyTopUpMonths: number;
+  reservePctByGrade: Partial<Record<Grade, number>>;
+  /** Nullable on the table. Nobody has ever set it; the screen says so. */
+  approvedBy: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+interface RawAdminRule {
+  id: string;
+  priority: number;
+  category: string | null;
+  brand_id: string | null;
+  grade: string | null;
+  value_from: unknown;
+  value_to: unknown;
+  target_margin_pct: unknown;
+  floor_margin_pct: unknown;
+  warranty_top_up_months: number;
+  reserve_pct_by_grade: unknown;
+  approved_by: string | null;
+  effective_from: Date;
+  effective_to: Date | null;
+  is_active: boolean;
+  created_at: Date;
+}
+
 @Injectable()
 export class MarginRuleRepository {
   constructor(
@@ -145,6 +186,57 @@ export class MarginRuleRepository {
         // and the floor is the half of Q22 that the column name already hides.
       },
     };
+  }
+
+  /**
+   * Every rule, in the resolver's own walk order. **The admin read.**
+   *
+   * Two things about this method that the resolver above deliberately does not
+   * do, and both are about the screen rather than about pricing.
+   *
+   * **It selects `value_from` and `value_to`.** The class comment says the
+   * resolver never does, and the reason is real: they are query bounds, so the
+   * money goes in as a bind parameter and never comes back as a `Decimal` that
+   * somebody reaches for `Number()` on. Ops still has to be able to READ the
+   * band, so this one selects them - and converts through `moneyFromDb`, never
+   * through `Number`. The hazard was the conversion, not the projection.
+   *
+   * **It ignores the clock and `is_active`.** A rule that starts next month and
+   * a rule somebody switched off are both things ops has to be able to see; the
+   * resolver's job is to exclude them, and this one's is to show them with their
+   * state on the row. A screen that silently hid a scheduled rule would be a
+   * screen that hides the change about to move every price.
+   */
+  async all(): Promise<AdminMarginRule[]> {
+    const rows = await this.prisma.$queryRaw<RawAdminRule[]>`
+      SELECT id, priority, category, brand_id, grade::text AS grade,
+             value_from, value_to, target_margin_pct, floor_margin_pct,
+             warranty_top_up_months, reserve_pct_by_grade, approved_by,
+             effective_from, effective_to, is_active, created_at
+        FROM procurement.margin_rule
+       ORDER BY priority, created_at, id`;
+
+    return rows.map((r) => ({
+      id: r.id,
+      priority: r.priority,
+      category: r.category,
+      brandId: r.brand_id,
+      grade: (r.grade as Grade | null) ?? null,
+      valueFrom: moneyFromDb(r.value_from as string | null),
+      valueTo: moneyFromDb(r.value_to as string | null),
+      targetMarginPct: Number(r.target_margin_pct),
+      floorMarginPct: Number(r.floor_margin_pct),
+      warrantyTopUpMonths: r.warranty_top_up_months,
+      reservePctByGrade: toReserveBands(r.reserve_pct_by_grade),
+      approvedBy: r.approved_by,
+      // DATE columns. Sliced rather than formatted: an effective date is a
+      // business day on the IST calendar and putting it through a timezone
+      // conversion is how a rule starts a day early in one place.
+      effectiveFrom: r.effective_from.toISOString().slice(0, 10),
+      effectiveTo: r.effective_to === null ? null : r.effective_to.toISOString().slice(0, 10),
+      isActive: r.is_active,
+      createdAt: r.created_at,
+    }));
   }
 
   /**

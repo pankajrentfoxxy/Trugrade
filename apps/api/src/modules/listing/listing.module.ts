@@ -3,6 +3,7 @@ import { PrismaModule } from '../../shared/db/prisma.service';
 import { ClockModule } from '../../shared/clock';
 import { ListingController } from './listing.controller';
 import { ListingPublicController } from './listing-public.controller';
+import { PricingAdminController } from './pricing-admin.controller';
 import { OfferBoardService } from './internal/offer-board.service';
 import { LogisticsModule } from '../logistics';
 import { QcModule } from '../qc';
@@ -44,7 +45,9 @@ import { LocalQcVisitPort, QcVisitPort, SubmitService } from './internal/submit.
   // price is `logistics`' rate card, and reading either from here would be a
   // second definition of a number with legal consequences.
   imports: [PrismaModule, ClockModule, QcModule, LogisticsModule],
-  controllers: [ListingController, ListingPublicController],
+  // `PricingAdminController` is here rather than in `procurement` because the
+  // margin-rule RESOLVER is here. See the file's own comment.
+  controllers: [ListingController, ListingPublicController, PricingAdminController],
   providers: [
     ListingService,
     ListingRepository,
