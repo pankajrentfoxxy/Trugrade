@@ -45,6 +45,32 @@ import type { PrismaClient } from '@prisma/client';
  * allocated by the real checkout long after their listing was seeded.
  */
 
+/**
+ * A unit whose current report is not a clean pass carries no pass stamp.
+ *
+ * `verdict.service.ts` does exactly this in production — it nulls
+ * `qc_passed_at` and `qc_valid_until` on anything short of a clean pass, which
+ * is what makes a machine that was live yesterday and failed today leave the
+ * storefront in the same statement rather than on the next job run.
+ *
+ * The seed has to mirror it, and originally did not. `listing.unit_is_sellable`
+ * reads status, the QC dates and the seal — it never sees the verdict — so a
+ * report flipped to FAIL while the unit kept its pass stamp is a FAILED LAPTOP
+ * THAT THE VIEW CALLS SELLABLE. It was invisible here only because these
+ * verdicts land on allocated units, whose status disqualifies them anyway;
+ * proven by evaluating the function with the same rows and status LISTED, which
+ * returned true for both the FAIL and the MISMATCH.
+ *
+ * Writing the stamp correctly is the fix. Confining failures to allocated units
+ * is a habit that holds until someone seeds a failure somewhere else.
+ */
+async function clearPassStamp(prisma: PrismaClient, reportId: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE listing.unit
+       SET qc_passed_at = NULL, qc_valid_until = NULL
+     WHERE id = (SELECT unit_id FROM qc.qc_report WHERE id = ${reportId}::uuid)`;
+}
+
 export interface QcSpreadCounts {
   passWithNote: number;
   mismatch: number;
@@ -131,6 +157,7 @@ export async function seedQcSpread(
       UPDATE qc.qc_report
          SET verdict = 'FAIL'::qc_verdict, qc_score = 41
        WHERE id = ${failed.qc_report_id}::uuid`;
+    await clearPassStamp(prisma, failed.qc_report_id);
   }
 
   /**
@@ -151,6 +178,7 @@ export async function seedQcSpread(
       UPDATE qc.qc_hardware_detected
          SET ram_detected_gb = 8
        WHERE qc_report_id = ${mismatched.qc_report_id}::uuid`;
+    await clearPassStamp(prisma, mismatched.qc_report_id);
   }
 
   /**
