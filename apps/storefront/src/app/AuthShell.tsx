@@ -35,7 +35,8 @@ export function AuthShell({
 }): React.JSX.Element {
   return (
     <div className={wide ? 'authwrap solo' : 'authwrap'}>
-      <div className="authcard">
+      {/* T45: a <main>, not a <div> — these three routes had no main landmark. */}
+      <main className="authcard">
         <a className="brand" href="/">
           <span className="wm">
             tru<span className="g">grade</span>
@@ -45,7 +46,7 @@ export function AuthShell({
         <TickRule />
         <p className="authlede">{lede}</p>
         {children}
-      </div>
+      </main>
       {!wide && (
         <aside className="authside grid-bg">
           <h2>Every machine measured, not described.</h2>

@@ -51,6 +51,23 @@ import { SearchBar } from './SearchBar';
  *
  * Both are `--chrome` in both themes. That is the brand: only the working
  * surfaces below flip.
+ *
+ * T45 — WHY THESE ARE ELEMENTS AND NOT DIVS
+ * -----------------------------------------
+ * The reference implementation draws both bars as `<div>`s, and while that
+ * settles every question of chrome, spacing, type and colour, it leaves a
+ * screen reader with no landmarks at all: axe reported twenty-one nodes of
+ * content outside any landmark on the homepage, and the same on thirty-eight
+ * other routes, because the container they sit in has no role. `<header>` and
+ * `<nav>` change not one pixel — every rule in `storefront.css` selects on
+ * `.util` and `.head` — and they give a keyboard user the one thing the mock
+ * could not: a way to jump past this chrome, which is thirty tab stops deep
+ * before the first product on `/search`.
+ *
+ * The skip link is the other half of that. It is the first tab stop on every
+ * page, invisible until focused, and it targets `#content` — which every route
+ * that renders a `<main>` provides. Bypass blocks (WCAG 2.4.1) is not optional
+ * on a page whose header alone holds ten links.
  */
 export async function SiteHeader({
   inspected,
@@ -60,7 +77,10 @@ export async function SiteHeader({
 }): Promise<React.JSX.Element> {
   const user = await currentUser();
   return (
-    <>
+    <header>
+      <a className="skiplink" href="#content">
+        Skip to the main content
+      </a>
       <div className="util">
         <div className="wrap">
           <div className="l">
@@ -78,17 +98,24 @@ export async function SiteHeader({
                 tested
               </span>
             )}
-            <a href="/delivery" className="hide-sm">
+            {/*
+              T43: these five addresses were `/delivery`, `/gst`, `/verify`,
+              `/track` and `/help`, and every one of them was a 404 — on every
+              page of the storefront, which is where the utility bar renders.
+              Each now points at the document or board that actually answers the
+              claim beside it, rather than at a route nobody built.
+            */}
+            <a href="/legal/shipping" className="hide-sm">
               Pan-India delivery
             </a>
-            <a href="/gst" className="hide-sm">
+            <a href="/legal/pricing-and-taxes" className="hide-sm">
               GST invoice on every order
             </a>
           </div>
           <div className="r">
-            <a href="/verify">Verify a certificate</a>
-            <a href="/track">Track order</a>
-            <a href="/help">Help</a>
+            <a href="/qc/verify">Verify a certificate</a>
+            <a href="/account/orders">Track order</a>
+            <a href="/legal/grievance">Help</a>
             <a href="/sell/register" style={{ color: 'var(--acc)', fontWeight: 600 }}>
               Sell on {BRAND.name} &rarr;
             </a>
@@ -96,7 +123,7 @@ export async function SiteHeader({
         </div>
       </div>
 
-      <div className="head">
+      <nav className="head" aria-label="Trugrade">
         <div className="wrap">
           <a className="brand" href="/">
             <svg className="mk" width="28" height="28" viewBox="0 0 46 46" aria-label={BRAND.name}>
@@ -160,7 +187,7 @@ export async function SiteHeader({
             )}
           </div>
         </div>
-      </div>
-    </>
+      </nav>
+    </header>
   );
 }

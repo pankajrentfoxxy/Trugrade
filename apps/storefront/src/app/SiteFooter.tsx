@@ -46,8 +46,10 @@ const BUY = [
 ] as const;
 
 const SELL = [
-  ['Become a supplier', '/sell'],
-  ['Supplier registration', '/sell/register'],
+  // T43: `/sell` was a 404 on every page. There is one supplier entry and it
+  // is the registration flow; a second label for a route nobody built is not a
+  // second door.
+  ['Become a supplier', '/sell/register'],
   ['Grading standard', '/legal/grading'],
 ] as const;
 
@@ -77,7 +79,16 @@ function Column({
 }): React.JSX.Element {
   return (
     <div>
-      <h5>{heading}</h5>
+      {/*
+        T45: this was an `<h5>` — chosen for its size, which is what `.fg h5`
+        still supplies. But heading LEVEL is structure, not type scale, and a
+        level five under a page whose deepest heading is a two or a three is a
+        skipped level on every route the footer renders on: thirty-eight of the
+        forty audited failed `heading-order` for this one element and nothing
+        else. `<h2>` is the true level — a sibling of the page's own sections —
+        and the class carries the appearance unchanged.
+      */}
+      <h2 className="fgh">{heading}</h2>
       <ul>
         {links.map(([label, href]) => (
           <li key={href + label}>

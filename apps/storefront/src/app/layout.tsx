@@ -48,7 +48,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
         {/* The wrapper takes the slack so a short page — a one-panel step, an
             empty state — still puts the footer at the bottom of the window
             instead of floating it halfway up. */}
-        <div className="flex-1">{children}</div>
+        {/* `id="content"` is the skip link's target (SiteHeader). It sits on the
+            wrapper rather than on each route's own <main>, because sixteen
+            storefront routes render no <main> at all and a skip link that
+            silently lands nowhere is worse than none. */}
+        <div className="flex-1" id="content">
+          {children}
+        </div>
         {/*
           Rule 4(2) of the Consumer Protection (e-Commerce) Rules 2020: legal
           name, registered address and grievance contact, on every page. It is

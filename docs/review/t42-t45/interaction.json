@@ -1,0 +1,242 @@
+[
+  {
+    "task": "T45",
+    "route": "/",
+    "kind": "no-visible-focus-ring",
+    "detail": "9/70 stops paint no ring: select.-(3px none rgb(168, 177, 190)) | input.-(3px none rgb(233, 236, 241)) | input.mono(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/",
+    "kind": "tab-stops",
+    "detail": "70 stops; first: Pan-India delivery > GST invoice on every order > Verify a certificate > Track order"
+  },
+  {
+    "task": "T45",
+    "route": "/",
+    "kind": "no-skip-link",
+    "detail": "first tab stop is \"Pan-India delivery\"; a keyboard user crosses the whole chrome before reaching content"
+  },
+  {
+    "task": "T45",
+    "route": "/search",
+    "kind": "no-visible-focus-ring",
+    "detail": "9/70 stops paint no ring: select.-(3px none rgb(168, 177, 190)) | input.-(3px none rgb(233, 236, 241)) | input.mono(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/search",
+    "kind": "tab-stops",
+    "detail": "70 stops; first: Pan-India delivery > GST invoice on every order > Verify a certificate > Track order"
+  },
+  {
+    "task": "T45",
+    "route": "/search",
+    "kind": "no-skip-link",
+    "detail": "first tab stop is \"Pan-India delivery\"; a keyboard user crosses the whole chrome before reaching content"
+  },
+  {
+    "task": "T45",
+    "route": "/legal/grading",
+    "kind": "no-visible-focus-ring",
+    "detail": "2/66 stops paint no ring: select.-(3px none rgb(168, 177, 190)) | input.-(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/legal/grading",
+    "kind": "tab-stops",
+    "detail": "66 stops; first: Pan-India delivery > GST invoice on every order > Verify a certificate > Track order"
+  },
+  {
+    "task": "T45",
+    "route": "/legal/grading",
+    "kind": "no-skip-link",
+    "detail": "first tab stop is \"Pan-India delivery\"; a keyboard user crosses the whole chrome before reaching content"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/sign-in",
+    "kind": "tab-stops",
+    "detail": "27 stops; first: trugrade > input > Email me a sign-in code > Use a password instead"
+  },
+  {
+    "task": "T45",
+    "route": "/sign-in",
+    "kind": "no-skip-link",
+    "detail": "first tab stop is \"trugrade\"; a keyboard user crosses the whole chrome before reaching content"
+  },
+  {
+    "task": "T45",
+    "route": "/cart",
+    "kind": "no-visible-focus-ring",
+    "detail": "2/44 stops paint no ring: select.-(3px none rgb(168, 177, 190)) | input.-(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/cart",
+    "kind": "tab-stops",
+    "detail": "44 stops; first: Pan-India delivery > GST invoice on every order > Verify a certificate > Track order"
+  },
+  {
+    "task": "T45",
+    "route": "/cart",
+    "kind": "no-skip-link",
+    "detail": "first tab stop is \"Pan-India delivery\"; a keyboard user crosses the whole chrome before reaching content"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/search",
+    "kind": "filter-sheet-focus",
+    "detail": "on open, focus is button.fsheetbtn"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/search",
+    "kind": "filter-sheet-escape",
+    "detail": "Escape closed it: true"
+  },
+  {
+    "task": "T45",
+    "route": "/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_1_ -> _r_1_-hint _r_1_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_2_ -> _r_2_-hint _r_2_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_3_ -> _r_3_-hint _r_3_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/register",
+    "kind": "focus-not-moved-to-first-error",
+    "detail": "focus stayed on button#"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/register",
+    "kind": "empty-submit",
+    "detail": "5 alerts, 5 invalid, focus button#; first alert: Enter your full name — this is the name on the account."
+  },
+  {
+    "task": "T45",
+    "route": "/sell/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_1_ -> _r_1_-hint _r_1_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/sell/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_2_ -> _r_2_-hint _r_2_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/sell/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_3_ -> _r_3_-hint _r_3_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/sell/register",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_r_5_ -> _r_5_-hint _r_5_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/sell/register",
+    "kind": "focus-not-moved-to-first-error",
+    "detail": "focus stayed on button#"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/sell/register",
+    "kind": "empty-submit",
+    "detail": "8 alerts, 7 invalid, focus button#; first alert: Enter your full name — this is the name on the account."
+  },
+  {
+    "task": "T45",
+    "route": "/bulk",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_R_dcpaatqitmlb_ -> _R_dcpaatqitmlb_-hint _R_dcpaatqitmlb_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/bulk",
+    "kind": "aria-describedby-dangles",
+    "detail": "#_R_1dcpaatqitmlb_ -> _R_1dcpaatqitmlb_-hint _R_1dcpaatqitmlb_-error (no such element)"
+  },
+  {
+    "task": "T45",
+    "route": "/bulk",
+    "kind": "focus-not-moved-to-first-error",
+    "detail": "focus stayed on button#"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/bulk",
+    "kind": "empty-submit",
+    "detail": "4 alerts, 3 invalid, focus button#; first alert: 1 line still needs something. Nothing has been sent — the problem is named under each field."
+  },
+  {
+    "task": "T45",
+    "route": "/sign-in",
+    "kind": "empty-submit-announces-nothing",
+    "detail": "no role=\"alert\" appeared after submitting an empty form"
+  },
+  {
+    "task": "T45",
+    "route": "/sign-in",
+    "kind": "empty-submit-marks-nothing-invalid",
+    "detail": "no input carries aria-invalid after an empty submit"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/sign-in",
+    "kind": "empty-submit",
+    "detail": "0 alerts, 0 invalid, focus input#_R_lclritmlb_; first alert: (none)"
+  },
+  {
+    "task": "T45",
+    "route": "/account/orders",
+    "kind": "no-visible-focus-ring",
+    "detail": "5/81 stops paint no ring: select.-(3px none rgb(233, 236, 241)) | input.-(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/account/orders",
+    "kind": "tab-stops",
+    "detail": "81 stops"
+  },
+  {
+    "task": "T45",
+    "route": "/account/orders/TT-26-00013/delivery",
+    "kind": "no-visible-focus-ring",
+    "detail": "2/54 stops paint no ring: select.-(3px none rgb(168, 177, 190)) | input.-(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/account/orders/TT-26-00013/delivery",
+    "kind": "tab-stops",
+    "detail": "54 stops"
+  },
+  {
+    "task": "T45",
+    "route": "/account/addresses",
+    "kind": "no-visible-focus-ring",
+    "detail": "2/63 stops paint no ring: select.-(3px none rgb(168, 177, 190)) | input.-(3px none rgb(233, 236, 241))"
+  },
+  {
+    "task": "T45-observed",
+    "route": "/account/addresses",
+    "kind": "tab-stops",
+    "detail": "63 stops"
+  }
+]
