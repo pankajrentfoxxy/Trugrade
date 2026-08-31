@@ -3,6 +3,7 @@ import { IdentityService } from './identity.service';
 import { IdentityController } from './identity.controller';
 import { AccountController } from './account.controller';
 import { OpsController } from './ops.controller';
+import { ConsoleController } from './console.controller';
 import { AuditController } from './audit.controller';
 import { FinanceController } from './finance.controller';
 import { AccountService } from './internal/account.service';
@@ -25,10 +26,17 @@ import { OrgPromotionService } from './internal/promotion.service';
   // `OpsController` is — a money workspace spans five schemas and no service
   // owns the combination — and it follows the same rule: separate statements,
   // one module schema each, combined in TypeScript.
+  //
+  // T35's `ConsoleController` is here for the third time over that same reason:
+  // a global palette searches five schemas by definition and a serial's whole
+  // life spans six, and neither aggregate belongs to a domain. It shares the
+  // `ops` prefix with `OpsController` — `search` and `units/:serial` against
+  // that one's `dashboard` — because they are one workspace, not two.
   controllers: [
     IdentityController,
     AccountController,
     OpsController,
+    ConsoleController,
     AuditController,
     FinanceController,
   ],

@@ -13,6 +13,7 @@ import { VendorReviewRoute } from './routes/VendorReview';
 import { opsRoutes } from './routes/ops';
 import { platformRoutes } from './routes/platform';
 import { qcRoutes } from './routes/qc';
+import { unitRoutes } from './routes/units';
 import { vendorRoutes } from './routes/vendor';
 import { Shell } from './shell/Shell';
 import { NAV, canSee } from './shell/nav';
@@ -164,6 +165,25 @@ export function App(): React.JSX.Element {
             permissions are `*.any.*`, which no vendor or buyer role holds.
           */}
           {opsRoutes.map((r) => (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={
+                <RequirePermission permission={r.permission}>
+                  <Shell>{r.element}</Shell>
+                </RequirePermission>
+              }
+            />
+          ))}
+
+          {/*
+            T35. The unit 360, same shape as the ops barrel. `listing.any.read`
+            is what the API checks; the server additionally refuses any principal
+            outside the platform's own organisation, because that permission
+            reaches TECHNICIAN and CATALOG_ADMIN and a permission alone is not
+            the whole rule for a screen that names a buyer.
+          */}
+          {unitRoutes.map((r) => (
             <Route
               key={r.path}
               path={r.path}

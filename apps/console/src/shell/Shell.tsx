@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router';
 import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { cn, Logo, ThemeToggle } from '@trugrade/ui';
 import { useAuth } from '../lib/auth';
+import { CommandPalette } from './CommandPalette';
 import { activeEntry, monogram, visibleGroups, type NavEntry } from './nav';
 
 /**
@@ -121,6 +122,13 @@ function TopBar({
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/*
+            T35. §3C: the palette is the primary navigation for experienced ops
+            staff and the rail is the discoverable fallback — so it sits in the
+            chrome, beside the theme toggle, and is reachable with Ctrl+K from
+            every screen. It renders nothing without a principal.
+          */}
+          <CommandPalette />
           {principal ? (
             <span className="hidden font-mono text-label uppercase tracking-[0.13em] text-on-chrome-3 sm:inline">
               {principal.orgType}

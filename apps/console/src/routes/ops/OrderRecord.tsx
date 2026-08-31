@@ -252,7 +252,12 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
       />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div>
+        {/* T35. `min-w-0` on the evidence column: a grid item's default
+            `min-width` is `auto`, so without it this column refuses to shrink
+            below the min-content of the widest machine table and the PAGE
+            scrolls sideways at 600px, under a footer that stops at the viewport
+            edge. Measured here at 736px inside a 600px viewport. */}
+        <div className="min-w-0">
           {/* ------------------------------------------------------------- */}
           <Section
             title="The two sides"
