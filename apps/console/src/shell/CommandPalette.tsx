@@ -216,6 +216,29 @@ export function CommandPalette(): React.JSX.Element | null {
 
   React.useEffect(() => setCursor(0), [q, open]);
 
+  /**
+   * T45. Keep the active option inside the scrolling list.
+   *
+   * `aria-activedescendant` moves the announcement without moving DOM focus, so
+   * the browser does nothing about visibility — and the list is
+   * `max-h-[46vh] overflow-y-auto`. A search that fills five groups is well past
+   * that, so arrowing down walked the highlight off the bottom of the box: a
+   * screen reader read out the row the user could no longer see, and Enter
+   * opened a record nothing on screen had named. `block: 'nearest'` scrolls only
+   * when it has to and never moves the page behind the dialog.
+   *
+   * Called optionally for the same reason `showModal` is guarded above: jsdom
+   * implements neither, and mocking a layout method is mocking the thing under
+   * test. A browser has it; a test environment without it simply does not scroll.
+   */
+  React.useEffect(() => {
+    if (!open) return;
+    const el = document.getElementById(
+      optionId(Math.min(cursor, Math.max(0, selectable.length - 1))),
+    );
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [cursor, open, selectable.length]);
+
   if (!principal) return null;
 
   const go = (row: Row | undefined): void => {

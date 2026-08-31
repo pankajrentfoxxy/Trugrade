@@ -313,7 +313,16 @@ export function VendorReviewRoute(): React.JSX.Element {
       {/* Evidence on the left, the decision on the right. The actions are in one
           place and never beside the field they act on — a Reject button next to
           a dispatch address is how one gets pressed by accident. */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {/*
+        T44. `[&>*]:min-w-0` on every archetype-C grid in this console, and it is
+        load-bearing at 600px. `minmax(0,1fr)` only protects the FIRST track and
+        only at `lg`; below that the grid collapses to one implicit column whose
+        automatic minimum is min-content, and the fixed 320/380px track never had
+        the protection at any width. Measured: this panel rendered 736px wide
+        inside a 600px viewport and scrolled the whole PAGE sideways under a
+        fixed-width header — the fifth time this exact defect has been found here.
+      */}
+      <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="tg-stack">
           <VerificationPanel checks={data.checks} />
 

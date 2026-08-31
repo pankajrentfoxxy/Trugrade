@@ -251,7 +251,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
         ]}
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid [&>*]:min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* T35. `min-w-0` on the evidence column: a grid item's default
             `min-width` is `auto`, so without it this column refuses to shrink
             below the min-content of the widest machine table and the PAGE
@@ -263,7 +263,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
             title="The two sides"
             subtitle="What the buyer is charged, what the supply points are owed, and the difference. This screen is the only one in the product that shows both."
           >
-            <dl className="grid gap-x-8 sm:grid-cols-2">
+            <div className="grid gap-x-8 sm:grid-cols-2">
               <Datum label="Machines, ex GST">{rupees(data.money.subtotal)}</Datum>
               <Datum label="Freight">{rupees(data.money.freight)}</Datum>
               <Datum label="GST">{rupees(data.money.gstTotal)}</Datum>
@@ -277,7 +277,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
                   label={humanise(data.paymentStatus)}
                 />
               </Datum>
-            </dl>
+            </div>
 
             <div className="mt-5 rounded border border-rule bg-sheet-2 p-4">
               {data.margin ? (
@@ -387,7 +387,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
                 />
               }
             >
-              <dl className="mb-4 grid gap-x-8 sm:grid-cols-2">
+              <div className="mb-4 grid gap-x-8 sm:grid-cols-2">
                 <Datum label="Dispatch due">
                   {sub.dispatchSlaDueAt ? (
                     onDateTime(sub.dispatchSlaDueAt)
@@ -408,7 +408,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
                     />
                   )}
                 </Datum>
-              </dl>
+              </div>
               <Board tableMinWidth={680}>
                 <DataBoard
                   caption={`${sub.machines.length} ${sub.machines.length === 1 ? 'machine' : 'machines'} leaving ${sub.vendorLegalName ?? 'this supply point'}.`}
@@ -456,7 +456,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
             </>
           }
         >
-          <dl className="flex flex-col">
+          <div className="flex flex-col">
             <Datum label="Machines on this order">
               <span className="font-mono tnum">{machines}</span>
             </Datum>
@@ -502,7 +502,7 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
                 </span>
               </Datum>
             )}
-          </dl>
+          </div>
 
           <div className="mt-4">
             <h3 className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">

@@ -273,7 +273,22 @@ export function Section({
   );
 }
 
-/** A key/value line. Used everywhere a record is read rather than edited. */
+/**
+ * A key/value line. Used everywhere a record is read rather than edited.
+ *
+ * T45. It carries its OWN `<dl>` rather than emitting a bare pair of spans, and
+ * that is the whole point of the element: two adjacent spans are two unrelated
+ * strings to a screen reader, so "Buyer pays, all in" and the amount beside it
+ * were being read as separate facts on every record screen in the console.
+ *
+ * Self-contained because the twelve callers disagreed about their container —
+ * ten wrapped these in a `<div>` and two in a `<dl>`, and the two produced
+ * invalid markup (axe `definition-list`, on the order record and the unit 360)
+ * because a `<dl>` may not hold loose spans. One `<dl>` per pair is valid under
+ * either parent, so the component stops depending on what it is dropped into.
+ * **A `<dl>` may not contain another `<dl>`**, so the two callers that had one
+ * now use a plain grid `<div>`, as the other ten already did.
+ */
 export function Datum({
   label,
   children,
@@ -282,10 +297,10 @@ export function Datum({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-1 border-b border-rule-2 py-3">
-      <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{label}</span>
-      <span className="text-body-sm text-ink">{children}</span>
-    </div>
+    <dl className="flex flex-col gap-1 border-b border-rule-2 py-3">
+      <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{label}</dt>
+      <dd className="text-body-sm text-ink">{children}</dd>
+    </dl>
   );
 }
 

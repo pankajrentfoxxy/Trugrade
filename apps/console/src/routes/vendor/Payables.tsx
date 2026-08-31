@@ -295,7 +295,7 @@ export function VendorPayablesRoute(): React.JSX.Element {
               one thought, and each is prose-width — stacked full-bleed they left
               half the page empty beside a 60ch paragraph, which reads as a
               broken layout rather than as a deliberate measure. */}
-          <div className="grid items-start gap-5 lg:grid-cols-2">
+          <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-2">
           <Section
             title="Your statement"
             subtitle="Every deduction, every line, whether or not it is zero."

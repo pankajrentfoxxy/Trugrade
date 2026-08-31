@@ -300,7 +300,7 @@ export function ListingWizardRoute(): React.JSX.Element {
   });
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_280px]">
+    <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_280px]">
       <div className="order-2 lg:order-1">
         {/* Clicking a completed step is a jump inside one page, not a route, so
             the rail's hrefs are anchors and the handler does the move. */}

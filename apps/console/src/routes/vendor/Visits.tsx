@@ -728,7 +728,7 @@ export function VendorVisitDetailRoute(): React.JSX.Element {
         </div>
       )}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div>
           <Section title="Where this visit has got to">
             <div className="grid gap-x-6 md:grid-cols-2">

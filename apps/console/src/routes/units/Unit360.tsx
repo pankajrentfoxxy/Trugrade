@@ -285,7 +285,7 @@ export function Unit360Route(): React.JSX.Element {
         ]}
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid [&>*]:min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* `min-w-0` is load-bearing and its absence is invisible until 600px.
             A grid item's default `min-width` is `auto`, so this column refuses
             to shrink below the min-content of its widest child — the movement
@@ -343,7 +343,7 @@ export function Unit360Route(): React.JSX.Element {
                   </div>
                 </div>
 
-                <dl className="mt-5 grid gap-x-8 sm:grid-cols-2">
+                <div className="mt-5 grid gap-x-8 sm:grid-cols-2">
                   <Datum label="Inspected on">
                     {data.qc.inspectedAt ? (
                       onDateTime(data.qc.inspectedAt)
@@ -433,7 +433,7 @@ export function Unit360Route(): React.JSX.Element {
                       </span>
                     )}
                   </Datum>
-                </dl>
+                </div>
               </>
             ) : (
               <EmptyState
@@ -462,7 +462,7 @@ export function Unit360Route(): React.JSX.Element {
           >
             {data.commercial ? (
               <>
-                <dl className="grid gap-x-8 sm:grid-cols-2">
+                <div className="grid gap-x-8 sm:grid-cols-2">
                   <Datum label="Order">
                     <span className="flex flex-wrap items-center gap-2">
                       {canOpenOrders ? (
@@ -496,7 +496,7 @@ export function Unit360Route(): React.JSX.Element {
                   <Datum label="State of this line">
                     {humanise(data.commercial.lineStatus)}
                   </Datum>
-                </dl>
+                </div>
 
                 <div className="mt-5 rounded border border-rule bg-sheet-2 p-4">
                   <dl className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
@@ -545,7 +545,7 @@ export function Unit360Route(): React.JSX.Element {
                   </dl>
                 </div>
 
-                <dl className="mt-4 grid gap-x-8 sm:grid-cols-2">
+                <div className="mt-4 grid gap-x-8 sm:grid-cols-2">
                   <Datum label="Purchase order">
                     {data.commercial.poNumber === null ? (
                       <NotMeasured
@@ -572,7 +572,7 @@ export function Unit360Route(): React.JSX.Element {
                       ? 'Margin scheme — Rule 32(5), no input tax credit'
                       : 'Regular — input tax credit available to the buyer'}
                   </Datum>
-                </dl>
+                </div>
               </>
             ) : (
               <EmptyState
@@ -612,7 +612,7 @@ export function Unit360Route(): React.JSX.Element {
             title="After the sale"
             subtitle="Cover, and anything that came back."
           >
-            <dl className="grid gap-x-8 sm:grid-cols-2">
+            <div className="grid gap-x-8 sm:grid-cols-2">
               <Datum label="Warranty">
                 {data.warranty ? (
                   <span className="flex flex-wrap items-center gap-2">
@@ -650,7 +650,7 @@ export function Unit360Route(): React.JSX.Element {
                   <NotMeasured why="There is no warranty to apportion" label="Not applicable" />
                 )}
               </Datum>
-            </dl>
+            </div>
 
             <div className="mt-4">
               {data.returns.length > 0 ? (
@@ -680,7 +680,7 @@ export function Unit360Route(): React.JSX.Element {
                 <span className="font-mono tnum text-ink">{data.auditEntries}</span> audit{' '}
                 {data.auditEntries === 1 ? 'entry names' : 'entries name'} this machine. Open them
                 on{' '}
-                <Link className="text-ink underline underline-offset-4 hover:text-acc-ink" to="/audit-log">
+                <Link className="text-ink underline underline-offset-4 hover:text-acc-ink" to="/platform/audit-log">
                   the audit-log viewer
                 </Link>
                 .
@@ -717,7 +717,7 @@ export function Unit360Route(): React.JSX.Element {
             </>
           }
         >
-          <dl className="flex flex-col">
+          <div className="flex flex-col">
             <Datum label="Declared by the supply point">
               {gradeLabel(data.gradeDeclared)}
               {declaredDiffers && (
@@ -752,7 +752,7 @@ export function Unit360Route(): React.JSX.Element {
               {data.itcEligible ? 'Available to the buyer' : 'Nil on this machine'}
             </Datum>
             <Datum label="First recorded">{onDate(data.createdAt)}</Datum>
-          </dl>
+          </div>
 
           <p className="mt-4 text-body-sm text-ink-3">
             A+, A and B are all sellable, so the grade badge carries no verdict. The only verdict on

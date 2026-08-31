@@ -61,6 +61,15 @@ export function App(): React.JSX.Element {
           */}
           <Route path="/login" element={<LoginRoute />} />
           {/*
+            T43. **<Shell> is OUTSIDE the guard, on every route.** It used to be
+            inside, so a refused route rendered RequirePermission’s bare
+            paragraph with no header, no rail, no footer and no way back — on
+            all twenty guarded screens. Nesting it this way costs nothing (Shell
+            renders an empty rail for a principal it cannot read) and the vendor
+            barrel, whose elements already carry their own guard inside a Shell,
+            was the shape that showed it was right.
+          */}
+          {/*
             T34. `RequirePlatform` and not `RequirePermission`: the overview has
             no single permission, and gating it on one would hide it from staff
             who each have a real slice of it. See `OpsOverview.tsx`.
@@ -68,41 +77,41 @@ export function App(): React.JSX.Element {
           <Route
             path="/overview"
             element={
-              <RequirePlatform>
-                <Shell>
+              <Shell>
+                <RequirePlatform>
                   <OpsOverviewRoute />
-                </Shell>
-              </RequirePlatform>
+                </RequirePlatform>
+              </Shell>
             }
           />
           <Route
             path="/kyc"
             element={
-              <RequirePermission permission="kyc.application.read">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="kyc.application.read">
                   <ReviewQueueRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
           <Route
             path="/kyc/:orgId"
             element={
-              <RequirePermission permission="kyc.application.read">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="kyc.application.read">
                   <VendorReviewRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
           <Route
             path="/catalog"
             element={
-              <RequirePermission permission="catalog.sku.read">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="catalog.sku.read">
                   <CatalogTreeRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
           {/*
@@ -113,31 +122,31 @@ export function App(): React.JSX.Element {
           <Route
             path="/catalog/skus/:id"
             element={
-              <RequirePermission permission="catalog.sku.read">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="catalog.sku.read">
                   <SkuRecordRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
           <Route
             path="/catalog/condition-images"
             element={
-              <RequirePermission permission="catalog.condition_image.write">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="catalog.condition_image.write">
                   <ConditionImageCoverageRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
           <Route
             path="/catalog/sku-requests"
             element={
-              <RequirePermission permission="catalog.sku_request.review">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="catalog.sku_request.review">
                   <SkuRequestsRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
 
@@ -151,11 +160,11 @@ export function App(): React.JSX.Element {
           <Route
             path="/pricing/rules"
             element={
-              <RequirePermission permission="listing.price.override">
-                <Shell>
+              <Shell>
+                <RequirePermission permission="listing.price.override">
                   <PricingRulesRoute />
-                </Shell>
-              </RequirePermission>
+                </RequirePermission>
+              </Shell>
             }
           />
 
@@ -169,9 +178,9 @@ export function App(): React.JSX.Element {
               key={r.path}
               path={r.path}
               element={
-                <RequirePermission permission={r.permission}>
-                  <Shell>{r.element}</Shell>
-                </RequirePermission>
+                <Shell>
+                  <RequirePermission permission={r.permission}>{r.element}</RequirePermission>
+                </Shell>
               }
             />
           ))}
@@ -188,9 +197,9 @@ export function App(): React.JSX.Element {
               key={r.path}
               path={r.path}
               element={
-                <RequirePermission permission={r.permission}>
-                  <Shell>{r.element}</Shell>
-                </RequirePermission>
+                <Shell>
+                  <RequirePermission permission={r.permission}>{r.element}</RequirePermission>
+                </Shell>
               }
             />
           ))}
@@ -204,9 +213,9 @@ export function App(): React.JSX.Element {
               key={r.path}
               path={r.path}
               element={
-                <RequirePermission permission={r.permission}>
-                  <Shell>{r.element}</Shell>
-                </RequirePermission>
+                <Shell>
+                  <RequirePermission permission={r.permission}>{r.element}</RequirePermission>
+                </Shell>
               }
             />
           ))}
@@ -231,9 +240,9 @@ export function App(): React.JSX.Element {
               key={r.path}
               path={r.path}
               element={
-                <RequirePermission permission={r.permission}>
-                  <Shell>{r.element}</Shell>
-                </RequirePermission>
+                <Shell>
+                  <RequirePermission permission={r.permission}>{r.element}</RequirePermission>
+                </Shell>
               }
             />
           ))}

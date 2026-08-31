@@ -509,7 +509,7 @@ export function VendorCorrectionDetailRoute(): React.JSX.Element {
         ]}
       />
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div>
           <h2 className="text-h3 text-ink">What the inspection found</h2>
           <TickRule />
