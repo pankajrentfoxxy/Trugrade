@@ -22,7 +22,7 @@ interface ParsedSpec {
 export function parseSpecSummary(spec: string): ParsedSpec | null {
   const parts = spec.split(' · ').map((s) => s.trim());
   if (parts.length < 4) return null;
-  const [cpu, ramPart, storagePart, screen] = parts;
+  const [cpu, ramPart, storagePart, screen] = parts as [string, string, string, string];
   const ramMatch = /^(\d+)\s*GB$/i.exec(ramPart);
   const storageMatch = /^(\d+)\s*GB(?:\s+(\S+))?$/i.exec(storagePart);
   const ramLabel = ramMatch ? `${ramMatch[1]}GB RAM` : null;
