@@ -1,5 +1,5 @@
 import { randomUUID, randomBytes } from 'node:crypto';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AppConfig } from '../../src/shared/config';
 import { SystemClock } from '../../src/shared/clock';
@@ -111,9 +111,9 @@ const PLATFORM_PEOPLE: Person[] = [
  * was wrong. This clamps the story to the rules rather than loosening the rule
  * to fit the story.
  */
-const INSPECTED_AT =
-  "GREATEST(now() - interval '3 days', " +
-  '(SELECT min(effective_from)::timestamptz FROM qc.qc_tolerance_rule))';
+const INSPECTED_AT = Prisma.sql`
+  GREATEST(now() - interval '3 days',
+    (SELECT min(effective_from)::timestamptz FROM qc.qc_tolerance_rule))`;
 
 const VENDOR_PEOPLE: Person[] = [
   { email: 'owner@northgate.example', name: 'Harpreet Singh', role: 'VENDOR_OWNER', owner: true },

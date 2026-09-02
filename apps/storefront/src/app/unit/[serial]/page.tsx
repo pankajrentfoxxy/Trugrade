@@ -36,21 +36,17 @@
 import type { Metadata } from 'next';
 import {
   Barcode,
-  GradeBadge,
-  RecordHeader,
-  ScoreRing,
   SealChip,
   SidePanel,
-  StatusPill,
   ViewfinderFrame,
   type SealStatus,
 } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
-import type { Grade } from '@trugrade/contracts';
 import { getUnitPassport, type PassportResult, type UnitPassport } from '../../../lib/api';
 import { CategoryStrip } from '../../CategoryStrip';
 import { Areas } from './Areas';
 import { Hardware, NotMeasured, WipeCertificate } from './panels';
+import { UnitIdentityCard } from './UnitIdentityCard';
 
 /** The photograph links carry a 900-second signature. Nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
@@ -97,70 +93,7 @@ export default async function UnitPassportPage({
 
       <div className="body">
         <div className="wrap passport">
-          <RecordHeader
-            title={p.serialNumber}
-            subtitle={
-              <>
-                Opened at the supply point by our technician, measured, graded against the published
-                bands and sealed. This is that inspection &mdash; the machine&rsquo;s own, not a
-                sample of its model.
-              </>
-            }
-            status={
-              <>
-                {p.verdict && (
-                  <StatusPill
-                    tone={p.verdict === 'PASS' || p.verdict === 'PASS_WITH_NOTE' ? 'pass' : 'fail'}
-                    label={VERDICT_LABEL[p.verdict]}
-                  />
-                )}
-                {/* Neutral, always. A+, A and B are all sellable, and colouring
-                    a position on a scale would make the PASS beside it mean
-                    less. */}
-                {p.grade && <GradeBadge grade={p.grade as Grade} />}
-              </>
-            }
-            identifiers={[
-              {
-                label: 'Inspection score',
-                value:
-                  p.qcScore === null ? (
-                    <NotMeasured />
-                  ) : (
-                    <>
-                      {p.qcScore}
-                      <span className="denom"> / 100</span>
-                    </>
-                  ),
-              },
-              { label: 'Inspected', value: p.inspectedOn ?? <NotMeasured /> },
-              {
-                label: 'Certificate valid to',
-                value: p.validUntil ?? <NotMeasured />,
-              },
-              {
-                label: 'Seal',
-                value: p.seal ? p.seal.code : <span className="notmeasured">No seal recorded</span>,
-              },
-              {
-                label: 'Areas measured',
-                value: (
-                  <>
-                    {measured}
-                    <span className="denom"> of {p.areas.length}</span>
-                  </>
-                ),
-              },
-            ]}
-            action={
-              // The one amber control on this page. Everything else that is
-              // amber here is a measured value, which is the other thing the
-              // accent is allowed to mean.
-              <a className="sel" href={`/api/unit/${encodeURIComponent(p.serialNumber)}/report.pdf`}>
-                Printed report (PDF)
-              </a>
-            }
-          />
+          <UnitIdentityCard passport={p} measured={measured} />
 
           {/*
             An expired certificate is the loudest thing on the page when it
@@ -190,45 +123,40 @@ export default async function UnitPassportPage({
                     : 'Taken of this machine at inspection'
                 }
               >
-                {p.photos.length === 0 ? (
-                  <div className="empty">
-                    <h3>No photographs were kept for this inspection</h3>
-                    <p>
-                      The areas and the readings below are the record we hold. We are not going to
-                      show you a picture of another machine of the same model and let the brackets
-                      imply it is this one.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="shots">
-                    {p.photos.map((photo) => (
-                      <div className="shot" key={photo.angle}>
-                        {/* The brackets say "this unit was captured and
-                            identified", and the component prints the real serial
-                            underneath so the claim is checkable against the
-                            sticker on the lid. No scan line: this is a still. */}
-                        <ViewfinderFrame serial={p.serialNumber}>
-                          {/*
-                            A plain <img>, not next/image. The URL is an opaque
-                            signed token that expires in 900 seconds, so putting
-                            it through an image optimiser would cache a picture
-                            behind a key that stops resolving — and the optimiser
-                            would need the API host allow-listed to boot. The
-                            Next ESLint plugin is deliberately not installed here
-                            (see `eslint.config.js`), so there is no rule to
-                            disable.
-                          */}
-                          <img
-                            src={photo.url}
-                            alt={`${ANGLE_LABEL[photo.angle] ?? photo.angle} of unit ${p.serialNumber}, photographed at inspection`}
-                            loading="lazy"
-                          />
-                        </ViewfinderFrame>
-                        <span className="ang">{ANGLE_LABEL[photo.angle] ?? photo.angle}</span>
+                <details className="passport-acc">
+                  <summary>
+                    {p.photos.length > 0
+                      ? `Photographs · ${p.photos.length} angle${p.photos.length === 1 ? '' : 's'}`
+                      : 'No photographs kept'}
+                  </summary>
+                  <div className="passport-acc-body">
+                    {p.photos.length === 0 ? (
+                      <div className="empty">
+                        <h3>No photographs were kept for this inspection</h3>
+                        <p>
+                          The areas and the readings below are the record we hold. We are not going
+                          to show you a picture of another machine of the same model and let the
+                          brackets imply it is this one.
+                        </p>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="shots">
+                        {p.photos.map((photo) => (
+                          <div className="shot" key={photo.angle}>
+                            <ViewfinderFrame serial={p.serialNumber}>
+                              <img
+                                src={photo.url}
+                                alt={`${ANGLE_LABEL[photo.angle] ?? photo.angle} of unit ${p.serialNumber}, photographed at inspection`}
+                                loading="lazy"
+                              />
+                            </ViewfinderFrame>
+                            <span className="ang">{ANGLE_LABEL[photo.angle] ?? photo.angle}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </details>
               </Section>
 
               {/* --- THE TWELVE AREAS --------------------------------------- */}
@@ -258,7 +186,12 @@ export default async function UnitPassportPage({
                 heading="What the tool detected"
                 sub="Read off the machine, not off the listing"
               >
-                <Hardware hardware={p.hardware} />
+                <details className="passport-acc">
+                  <summary>Hardware readings from the tool</summary>
+                  <div className="passport-acc-body">
+                    <Hardware hardware={p.hardware} />
+                  </div>
+                </details>
               </Section>
 
               {/* --- THE SEAL ----------------------------------------------- */}
@@ -326,24 +259,20 @@ export default async function UnitPassportPage({
                   </>
                 }
               >
-                <div className="ringrow">
-                  {/* A measured value, which is the second thing amber is allowed
-                      to mean. A null score draws a dashed empty ring, not a
-                      zero-filled one. */}
-                  <ScoreRing value={p.qcScore} size={74} />
-                  <div className="ringtext">
-                    <b className="mono">
-                      {p.qcScore === null ? 'Not measured' : `${p.qcScore} / 100`}
-                    </b>
-                    <span>
-                      {p.qcScore === null
-                        ? 'No overall score was recorded for this machine.'
-                        : `Overall inspection score, from ${measured} of ${p.areas.length} areas measured.`}
-                    </span>
-                  </div>
-                </div>
-
                 <dl className="facts">
+                  <div>
+                    <dt>Inspection score</dt>
+                    <dd className="mono">
+                      {p.qcScore === null ? (
+                        <NotMeasured />
+                      ) : (
+                        <>
+                          {p.qcScore}
+                          <span className="denom"> / 100</span>
+                        </>
+                      )}
+                    </dd>
+                  </div>
                   <div>
                     <dt>Verdict</dt>
                     <dd className="mono">
@@ -363,6 +292,12 @@ export default async function UnitPassportPage({
                     <dd className="mono">
                       {p.validUntil ?? <NotMeasured />}
                       {p.expired && <span className="denom"> expired</span>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Seal</dt>
+                    <dd className="mono">
+                      {p.seal ? p.seal.code : <span className="notmeasured">No seal recorded</span>}
                     </dd>
                   </div>
                   <div>
@@ -389,11 +324,9 @@ export default async function UnitPassportPage({
                 </dl>
               </SidePanel>
 
-              <div className="tbl why">
-                <div className="tbh">
-                  <b>Why you can read this before you buy</b>
-                </div>
-                <div className="whybody">
+              <details className="passport-acc passport-why-acc">
+                <summary>Why you can read this before you buy</summary>
+                <div className="passport-acc-body whybody">
                   <p>
                     The pictures on a model page are of a machine at that grade, not of this one.
                     That is only fair if you can reach this page first &mdash; so every serial we
@@ -409,7 +342,7 @@ export default async function UnitPassportPage({
                     no number appears that was not read off this machine.
                   </p>
                 </div>
-              </div>
+              </details>
             </div>
           </div>
         </div>
@@ -444,11 +377,6 @@ function Section({
         <div className="shrow">
           <h2 id={`${id}-h`}>{heading}</h2>
           <span className="sub">{sub}</span>
-        </div>
-        <div className="tickrule" aria-hidden="true">
-          {Array.from({ length: 31 }, (_, i) => (
-            <i key={i} />
-          ))}
         </div>
       </div>
       {children}

@@ -134,7 +134,7 @@ function TopBar({
               {principal.orgType}
             </span>
           ) : null}
-          <ThemeToggle className="h-[38px] w-[38px] rounded border-chrome-line-2" />
+          <ThemeToggle className="h-[38px] min-w-[38px] rounded border-chrome-line-2" />
           <button
             type="button"
             onClick={() => void signOut()}

@@ -29,7 +29,8 @@ const preview: Preview = {
    * so a wrapper would get the default theme and every story would lie.
    *
    * `?globals=theme:light` sets it from a URL, which is how the screenshot pass
-   * captures both themes without clicking anything.
+   * captures both locked themes without clicking anything. Slate, olive and
+   * sand are preview palettes for comparison, not the locked pair.
    */
   globalTypes: {
     theme: {
@@ -39,6 +40,9 @@ const preview: Preview = {
         icon: 'circlehollow',
         items: [
           { value: 'dark', title: 'Dark' },
+          { value: 'slate', title: 'Slate' },
+          { value: 'olive', title: 'Olive' },
+          { value: 'sand', title: 'Sand' },
           { value: 'light', title: 'Light' },
         ],
         dynamicTitle: true,
@@ -63,7 +67,13 @@ const preview: Preview = {
   decorators: [
     (Story, context) => {
       const root = document.documentElement;
-      root.setAttribute('data-t', context.globals.theme === 'light' ? 'light' : 'dark');
+      const theme = String(context.globals.theme);
+      root.setAttribute(
+        'data-t',
+        theme === 'light' || theme === 'slate' || theme === 'olive' || theme === 'sand'
+          ? theme
+          : 'dark',
+      );
       // "default" is the absence of the attribute, same as an app that never
       // sets one — so the default path is the one that gets exercised.
       if (context.globals.density === 'default') root.removeAttribute('data-density');

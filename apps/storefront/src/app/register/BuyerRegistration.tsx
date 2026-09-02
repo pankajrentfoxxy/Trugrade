@@ -53,6 +53,7 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
       busy={ctx.busy}
       onContinue={(values) => ctx.continueFromAccount(values)}
       onFieldFocus={ctx.onFieldFocus}
+      skipValidation={ctx.skipValidation}
     />
   ),
   BUSINESS_PROFILE: (ctx) => (
@@ -69,6 +70,7 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
       onSaveDraft={ctx.saveDraft}
       onContinue={ctx.continueFrom}
       onFieldFocus={ctx.onFieldFocus}
+      skipValidation={ctx.skipValidation}
     />
   ),
   STATUTORY: (ctx) => (
@@ -83,6 +85,7 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
       onSaveDraft={ctx.saveDraft}
       onContinue={ctx.continueFrom}
       onFieldFocus={ctx.onFieldFocus}
+      skipValidation={ctx.skipValidation}
     />
   ),
   CONTACTS_ADDRESSES: (ctx) => (
@@ -94,6 +97,7 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
       onSaveDraft={ctx.saveDraft}
       onContinue={ctx.continueFrom}
       onFieldFocus={ctx.onFieldFocus}
+      skipValidation={ctx.skipValidation}
     />
   ),
   DOCUMENTS: (ctx) => (
@@ -104,6 +108,7 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
       onSaveDraft={ctx.saveDraft}
       onContinue={ctx.continueFrom}
       onFieldFocus={ctx.onFieldFocus}
+      skipValidation={ctx.skipValidation}
     />
   ),
 };

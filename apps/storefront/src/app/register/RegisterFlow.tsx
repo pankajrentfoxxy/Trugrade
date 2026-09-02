@@ -141,6 +141,11 @@ export interface StepContext {
     values: AccountValues,
     extras?: Record<string, unknown>,
   ) => Promise<Record<string, string> | null>;
+  /**
+   * When true, the step does not run its own checks. Typed as `false` in the
+   * shell input. The API still refuses a bad save — this only unblocks Continue.
+   */
+  skipValidation: boolean;
 }
 
 /** What the shell hands a review screen. `Review` in the buyer flow matches it. */
@@ -235,6 +240,22 @@ export function RegisterFlow({
   const [slaBreached, setSlaBreached] = React.useState(false);
   const [decision, setDecision] = React.useState<ReviewDecision | null>(null);
   const [isSubmittable, setIsSubmittable] = React.useState(false);
+  /**
+   * Type `true` (default) to keep every step check; type `false` to skip them.
+   * Held in sessionStorage so a reload does not flip it back on mid-walkthrough.
+   */
+  const [validateInput, setValidateInput] = React.useState('true');
+  const skipValidation = validateInput.trim().toLowerCase() === 'false';
+  const skipValidationRef = React.useRef(skipValidation);
+  skipValidationRef.current = skipValidation;
+  React.useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('tg-register-validate');
+      if (stored !== null) setValidateInput(stored);
+    } catch {
+      // A private window cannot remember the switch. The default stays `true`.
+    }
+  }, []);
   /**
    * The masked address a second-factor code went to, while one is outstanding.
    *
@@ -401,6 +422,16 @@ export function RegisterFlow({
   ): Promise<Record<string, string> | null> => {
     setBusy(true);
     setSaveFailure(null);
+    const skip = skipValidationRef.current;
+    const refused = (
+      fields: Record<string, string> | null,
+    ): Record<string, string> | null => {
+      if (!skip) return fields;
+      setTypedCompanyName(values.companyName);
+      setSaveFailure(null);
+      goTo('BUSINESS_PROFILE');
+      return null;
+    };
     try {
       if (!registered) {
         const created = await register(orgType, {
@@ -415,9 +446,11 @@ export function RegisterFlow({
           // a password that fails composition. Everything else is a banner, and
           // nothing typed is thrown away either way.
           if (Object.keys(created.fields).length === 0) setSaveFailure(created.message);
-          return Object.keys(created.fields).length > 0
-            ? created.fields
-            : { password: created.message };
+          return refused(
+            Object.keys(created.fields).length > 0
+              ? created.fields
+              : { password: created.message },
+          );
         }
         setRegistered(true);
         if (created.data.mfaRequired) {
@@ -446,7 +479,7 @@ export function RegisterFlow({
       const saved = await saveStep('ACCOUNT', draft, 100);
       if (!saved.ok) {
         setSaveFailure(saved.message);
-        return null;
+        return refused(null);
       }
       // Held locally as well: completing the step clears the server's copy, and
       // the review screen has nowhere else to read it back from.
@@ -456,7 +489,7 @@ export function RegisterFlow({
         const done = await completeStep('ACCOUNT');
         if (!done.ok) {
           setSaveFailure(done.message);
-          return null;
+          return refused(null);
         }
       }
 
@@ -521,20 +554,32 @@ export function RegisterFlow({
     completionPct: number,
   ): Promise<Record<string, string> | null> => {
     setBusy(true);
+    const next = steps.find((s) => s.stepOrder === (current?.stepOrder ?? 0) + 1);
+    const nextCode = next ? next.stepCode : REVIEW;
     try {
-      if (!(await saveDraft(stepCode, values, completionPct))) return null;
+      if (!(await saveDraft(stepCode, values, completionPct))) {
+        if (skipValidationRef.current) {
+          setAnswers((held) => ({ ...held, [stepCode]: values }));
+          setSaveFailure(null);
+          goTo(nextCode);
+        }
+        return null;
+      }
       if (current?.status !== 'COMPLETE') {
         const done = await completeStep(stepCode);
         if (!done.ok) {
           setSaveFailure(done.message);
+          if (skipValidationRef.current) {
+            setSaveFailure(null);
+            goTo(nextCode);
+          }
           return null;
         }
       }
       await reload();
       // After the last step there is no next one — the review screen is where
       // the flow goes, and it is a place in this client rather than a step.
-      const next = steps.find((s) => s.stepOrder === (current?.stepOrder ?? 0) + 1);
-      goTo(next ? next.stepCode : REVIEW);
+      goTo(nextCode);
       return null;
     } finally {
       setBusy(false);
@@ -648,6 +693,7 @@ export function RegisterFlow({
     saveDraft: (values, pct) => void saveDraft(currentCode, values, pct),
     continueFrom: (values, pct) => continueFrom(currentCode, values, pct),
     continueFromAccount,
+    skipValidation,
   };
 
   return (
@@ -682,6 +728,28 @@ export function RegisterFlow({
 
       <main className="flex flex-col gap-5 lg:max-w-[70ch]">
         <header className="flex flex-col gap-3">
+          <label className="flex flex-wrap items-center gap-2 text-label text-ink-3">
+            <span className="font-mono uppercase tracking-[0.13em]">validate</span>
+            <input
+              className="h-8 w-[5.5rem] rounded-sm border border-rule bg-sheet-2 px-2 font-mono text-body-sm text-ink"
+              value={validateInput}
+              onChange={(event) => {
+                const next = event.target.value;
+                setValidateInput(next);
+                try {
+                  sessionStorage.setItem('tg-register-validate', next);
+                } catch {
+                  // A private window cannot remember the switch.
+                }
+              }}
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="tg-register-validate-hint"
+            />
+            <span id="tg-register-validate-hint" className="text-ink-4">
+              Type true to check every step, or false to skip those checks.
+            </span>
+          </label>
           <div className="flex flex-wrap items-baseline gap-3">
             {reviewing ? (
               <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">

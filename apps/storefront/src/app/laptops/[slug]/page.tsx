@@ -29,18 +29,20 @@
 import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { GradeBadge, RecordHeader, RepresentativeImage, SidePanel } from '@trugrade/ui';
+import { RepresentativeImage, SidePanel } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import type { Grade } from '@trugrade/contracts';
 import { getOfferBoard, getSkuDetail, type OfferBoard, type SkuDetail } from '../../../lib/api';
 import { CategoryStrip } from '../../CategoryStrip';
 import { Board } from './Board';
-import { UnitList } from './UnitList';
+import { ProductCartScope } from './ProductCartScope';
+import { ProductIdentityCard } from './ProductIdentityCard';
+import { specLine } from './spec-rows';
+import { SupplyPointPicker } from './SupplyPointPicker';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
 
-const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 const GRADES = new Set(['A_PLUS', 'A', 'B']);
 
@@ -136,50 +138,22 @@ export default async function ProductPage({
 
       <div className="body">
         <div className="wrap">
-          <RecordHeader
-            title={`${sku.brandName} ${sku.modelName}`}
-            subtitle={specLine(sku)}
-            status={<GradeBadge grade={board.grade as Grade} />}
-            identifiers={[
-              { label: 'SKU', value: sku.skuCode },
-              { label: 'HSN', value: sku.hsnCode },
-              {
-                label: 'Sealed units',
-                value: `${board.unitsAvailable} at Grade ${GRADE_LABEL[board.grade] ?? board.grade}`,
-              },
-              {
-                label: 'Supply points',
-                value: `${board.supplyPoints}`,
-              },
-              {
-                // Named for what it is. This is our selling price at the cheapest
-                // supply point, before GST and before freight — the board below
-                // is where a landed figure lives, and the two must not be read
-                // as the same number.
-                label: 'From, before tax and delivery',
-                value: shown ? `₹${RUPEES.format(Number(shown.fromPrice))}` : 'Not priced',
-              },
-            ]}
-          />
+          <div className="protop">
+            <div className="protop-main">
+              <ProductIdentityCard
+                sku={sku}
+                board={board}
+                fromPrice={shown?.fromPrice ?? null}
+              />
 
-          <div className="rec">
-            <main className="evid">
-              {/* --- CONDITION, AT THIS GRADE ------------------------------- */}
-              <section aria-labelledby="cond">
+              <section aria-labelledby="cond" className="protop-grade">
                 <div className="sh">
                   <div className="shrow">
                     <h2 id="cond">What Grade {GRADE_LABEL[board.grade] ?? board.grade} looks like</h2>
                     <span className="sub">Photographed against the published grade bands</span>
                   </div>
-                  <div className="tickrule" aria-hidden="true">
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <i key={i} />
-                    ))}
-                  </div>
                 </div>
 
-                {/* The grade selector. Links, not a widget: the grade is URL
-                    state, and a colleague opening the link sees this grade. */}
                 <div className="gsel" role="group" aria-label="Inspected grade">
                   {board.grades.map((g) => {
                     const on = g.grade === board.grade;
@@ -192,9 +166,6 @@ export default async function ProductPage({
                           href(slug, {
                             ...query,
                             grade: g.grade,
-                            // A supply point selected at one grade holds nothing
-                            // at another, so the selection is dropped rather
-                            // than carried into a row that does not exist.
                             sp: undefined,
                             city: undefined,
                           }) as Route
@@ -210,36 +181,130 @@ export default async function ProductPage({
                   })}
                 </div>
 
-                <Gallery sku={sku} grade={board.grade} hasUnits={board.offers.length > 0} />
+                <details className="grade-gal-acc">
+                  <summary>
+                    Condition photographs · Grade {GRADE_LABEL[board.grade] ?? board.grade}
+                    {sku.images?.images?.length ? (
+                      <span className="grade-gal-count mono">
+                        {sku.images.images.length} frame{sku.images.images.length === 1 ? '' : 's'}
+                      </span>
+                    ) : null}
+                  </summary>
+                  <div className="grade-gal-acc-body">
+                    <Gallery sku={sku} grade={board.grade} hasUnits={board.offers.length > 0} />
+                  </div>
+                </details>
               </section>
 
-              {/* --- THE DECLARED SPECIFICATION ----------------------------- */}
-              <section aria-labelledby="spec">
+              {/*
+                Sits in the left column so it follows the grade accordion instead of
+                waiting for the deliver panel column to finish — that panel is taller
+                and was leaving a dead band above this section.
+              */}
+              <section aria-labelledby="board" className="protop-board" id="board">
                 <div className="sh">
                   <div className="shrow">
-                    <h2 id="spec">Specification</h2>
-                    <span className="sub">
-                      As catalogued, and checked against what the tool detected at inspection
-                    </span>
+                    <h2 id="board">Compare supply points</h2>
+                    <a className="sub ulink" href="#units">
+                      Pick a supply point to see its serials
+                    </a>
                   </div>
                 </div>
+
+                {board.offers.length > 0 && (
+                  <SupplyPointPicker
+                    offers={board.offers}
+                    initialSelected={selected}
+                    slug={slug}
+                    query={query}
+                  />
+                )}
+
                 <div className="tbl">
-                  <dl className="specs">
-                    {specRows(sku).map(([label, value]) => (
-                      <div key={label}>
-                        <dt>{label}</dt>
-                        <dd className="mono">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                  <div className="tbh">
+                    <b>
+                      {sku.brandName} {sku.modelName}
+                    </b>
+                    <span className="m">
+                      {specLine(sku)} · Grade {GRADE_LABEL[board.grade] ?? board.grade}
+                    </span>
+                    <div className="r">
+                      <span className="chipf on">
+                        {board.pincode ? `Landed to ${board.pincode}` : 'No pincode yet'}
+                      </span>
+                      <span className="chipf">
+                        {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {board.delivery.kind === 'NONE' ? (
+                    <div className="empty">
+                      <h3>
+                        {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'} hold
+                        this machine at Grade {GRADE_LABEL[board.grade] ?? board.grade}
+                      </h3>
+                      <p>
+                        A landed price is our price plus GST plus freight to your dock, and we will
+                        not quote you one figure and add to it later. Tell us where it is going and
+                        every row below fills in — the price, the inspection score, how often that
+                        source&rsquo;s declared grade survived ours, and what is in stock.
+                      </p>
+                      <p className="retry">
+                        <a className="ulink" href="#deliver">
+                          Enter a delivery pincode
+                        </a>
+                      </p>
+                    </div>
+                  ) : board.delivery.kind === 'UNSERVICEABLE' ? (
+                    <div className="empty err">
+                      <h3>We cannot deliver to {board.pincode} yet</h3>
+                      <p>{board.delivery.reason}</p>
+                      <p className="retry">
+                        <a className="ulink" href="#deliver">
+                          Try another pincode
+                        </a>{' '}
+                        or{' '}
+                        <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
+                          ask us to quote this lane
+                        </a>
+                        .
+                      </p>
+                    </div>
+                  ) : board.offers.length === 0 ? (
+                    <div className="empty">
+                      <h3>Nothing sealed at this grade right now</h3>
+                      <p>
+                        Every unit at Grade {GRADE_LABEL[board.grade] ?? board.grade} has been sold,
+                        or its inspection certificate has expired and it is out of the window until
+                        it is re-tested. The other grades above still have stock.
+                      </p>
+                    </div>
+                  ) : (
+                    <ProductCartScope>
+                      {regular.length > 0 && (
+                        <Board
+                          rows={regular}
+                          pool="REGULAR"
+                          caption={`${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${GRADE_LABEL[board.grade] ?? board.grade}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
+                        />
+                      )}
+                      {margin.length > 0 && (
+                        <Board
+                          rows={margin}
+                          pool="MARGIN"
+                          caption={`${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
+                        />
+                      )}
+                    </ProductCartScope>
+                  )}
                 </div>
               </section>
+            </div>
 
-            </main>
-
-            {/* --- THE ACTIONS PANEL --------------------------------------- */}
-            <div className="sidep" id="deliver">
+            <div className="sidep protop-deliver" id="deliver">
               <SidePanel
+                sticky={false}
                 title="Deliver to"
                 description="Freight and the GST split both depend on where this is going, so the prices follow your pincode."
                 footnote={
@@ -249,14 +314,8 @@ export default async function ProductPage({
                   </>
                 }
               >
-                {/* A plain GET form: the pincode is URL state, and this works
-                    with no JavaScript at all. */}
                 <form className="pinform" action={`/laptops/${encodeURIComponent(slug)}`} method="get">
                   {board.grade && <input type="hidden" name="grade" value={board.grade} />}
-                  {/* The grade and the selected supply point survive a change of
-                      destination: changing where it ships to is not a reason to
-                      lose the row the buyer was reading. Both halves of the
-                      supply-point key travel, for the reason the chips give. */}
                   {selected && (
                     <>
                       <input type="hidden" name="sp" value={selected.supplyPointCode} />
@@ -283,13 +342,7 @@ export default async function ProductPage({
                   <p id="pinhelp" className="fnote">
                     {askedPin && pincode === null
                       ? 'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
-                      : /*
-                          The transit band is printed only when a lane was
-                          actually priced. `etaDays` is 0 when none was, and a
-                          "0 days" delivery promise is a number we did not
-                          measure rendering as one we did.
-                        */
-                        board.delivery.kind === 'DELIVERABLE' && board.delivery.etaDays > 0
+                      : board.delivery.kind === 'DELIVERABLE' && board.delivery.etaDays > 0
                         ? `Prices below include GST and freight to ${board.pincode}. Carrier transit is ${board.delivery.etaDays} day${board.delivery.etaDays === 1 ? '' : 's'} once dispatched.`
                         : 'Six digits. We quote the real freight for the lane, not an average.'}
                   </p>
@@ -308,13 +361,6 @@ export default async function ProductPage({
                     <dt>GST</dt>
                     <dd className="mono">
                       18% · HSN {sku.hsnCode}
-                      {/*
-                        Which heads the tax lands under is read off a priced row,
-                        never guessed. With no row, an absent `isInterState` is
-                        falsy and would print "CGST + SGST" for a Delhi delivery
-                        that is inter-state — a missing value rendering as a
-                        confident wrong one.
-                      */}
                       {board.offers[0] && (
                         <span className="denom">
                           {' '}
@@ -339,218 +385,8 @@ export default async function ProductPage({
                   </div>
                 </dl>
               </SidePanel>
-
-              <div className="tbl why">
-                <div className="tbh">
-                  <b>Why these numbers exist</b>
-                </div>
-                <div className="whybody">
-                  <p>
-                    Every unit was opened at the supplier&rsquo;s warehouse by our technician,
-                    measured with {BRAND.qcProduct}, graded against the published bands and sealed.
-                    The score and the battery figure are readings, not descriptions.
-                  </p>
-                  <p>
-                    <b>Grade accuracy</b> is how often a source&rsquo;s declared grade survived our
-                    inspection, over every unit we have inspected from them — the denominator is
-                    printed with it, always.
-                  </p>
-                  <p>
-                    You are buying from {BRAND.legalEntity} — who supplies a machine is our
-                    business and how they perform is yours, which is why the board shows the second
-                    and never the first.
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/*
-        The board is full width, exactly as it is in
-        `docs/reference/homepage.html`. Ten supply points against ten columns do
-        not fit inside the evidence column of a two-column record, and a
-        comparison table whose Add button sits off the right-hand edge behind a
-        scrollbar is not a comparison table.
-      */}
-      <div className="board">
-        <div className="wrap">
-                {/* --- THE BOARD ---------------------------------------------- */}
-                <section aria-labelledby="board" id="board">
-                  <div className="sh">
-                    <div className="shrow">
-                      <h2 id="board">Compare supply points</h2>
-                      <span className="sub">
-                        One model, every source holding it, side by side
-                      </span>
-                    </div>
-                    <div className="tickrule" aria-hidden="true">
-                      {Array.from({ length: 31 }, (_, i) => (
-                        <i key={i} />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="tbl">
-                    <div className="tbh">
-                      <b>
-                        {sku.brandName} {sku.modelName}
-                      </b>
-                      <span className="m">
-                        {specLine(sku)} · Grade {GRADE_LABEL[board.grade] ?? board.grade}
-                      </span>
-                      <div className="r">
-                        <span className="chipf on">
-                          {board.pincode ? `Landed to ${board.pincode}` : 'No pincode yet'}
-                        </span>
-                        <span className="chipf">
-                          {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {board.delivery.kind === 'NONE' ? (
-                      <div className="empty">
-                        <h3>
-                          {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'} hold
-                          this machine at Grade {GRADE_LABEL[board.grade] ?? board.grade}
-                        </h3>
-                        <p>
-                          A landed price is our price plus GST plus freight to your dock, and we will
-                          not quote you one figure and add to it later. Tell us where it is going and
-                          every row below fills in — the price, the inspection score, how often that
-                          source&rsquo;s declared grade survived ours, and what is in stock.
-                        </p>
-                        <p className="retry">
-                          <a className="ulink" href="#deliver">
-                            Enter a delivery pincode
-                          </a>
-                        </p>
-                      </div>
-                    ) : board.delivery.kind === 'UNSERVICEABLE' ? (
-                      <div className="empty err">
-                        <h3>We cannot deliver to {board.pincode} yet</h3>
-                        <p>{board.delivery.reason}</p>
-                        <p className="retry">
-                          <a className="ulink" href="#deliver">
-                            Try another pincode
-                          </a>{' '}
-                          or{' '}
-                          <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
-                            ask us to quote this lane
-                          </a>
-                          .
-                        </p>
-                      </div>
-                    ) : board.offers.length === 0 ? (
-                      <div className="empty">
-                        <h3>Nothing sealed at this grade right now</h3>
-                        <p>
-                          Every unit at Grade {GRADE_LABEL[board.grade] ?? board.grade} has been sold,
-                          or its inspection certificate has expired and it is out of the window until
-                          it is re-tested. The other grades above still have stock.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {regular.length > 0 && (
-                          <Board
-                            rows={regular}
-                            pool="REGULAR"
-                            caption={`${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${GRADE_LABEL[board.grade] ?? board.grade}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
-                          />
-                        )}
-                        {margin.length > 0 && (
-                          <Board
-                            rows={margin}
-                            pool="MARGIN"
-                            caption={`${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
-                          />
-                        )}
-                        <div className="tnote">
-                          <b>The cheapest row is not the best-inspected one.</b> The board is sorted
-                          by landed price because that is the question a price comparison answers —
-                          the inspection score and the grade accuracy beside it are the other half,
-                          and they do not move in the same direction. A source below{' '}
-                          <span className="mono">10</span> inspected units shows how many it has
-                          instead of an average: a percentage computed on three machines would be our
-                          claim, not theirs. You can still buy it.
-                          {board.unpricedSupplyPoints > 0 && (
-                            <>
-                              {' '}
-                              <b className="mono">{board.unpricedSupplyPoints}</b> further supply
-                              point
-                              {board.unpricedSupplyPoints === 1 ? '' : 's'} hold this machine on a
-                              lane we could not price to {board.pincode}, so{' '}
-                              {board.unpricedSupplyPoints === 1 ? 'it is' : 'they are'} not shown
-                              rather than shown at a price that is missing its freight.
-                            </>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </section>
-
-                {/* --- THE SERIALS BEHIND ONE ROW ----------------------------- */}
-                {board.offers.length > 0 && (
-                  <section aria-labelledby="units">
-                    <div className="sh">
-                      <div className="shrow">
-                        <h2 id="units">The actual machines</h2>
-                        <span className="sub">
-                          Every serial on offer, with its inspection report — before you buy, no
-                          account needed
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* The supply point is keyed on code AND city. "Supply Point F"
-                        is one source in Noida and a different one in Faridabad,
-                        and a link carrying only the letter would land on whichever
-                        came first. */}
-                    <div className="gsel" role="group" aria-label="Supply point">
-                      {board.offers.map((o) => {
-                        const on =
-                          selected?.supplyPointCode === o.supplyPointCode &&
-                          selected?.city === o.city;
-                        return (
-                          <Link
-                            key={`${o.supplyPointCode}-${o.city}`}
-                            className={on ? 'chipf on' : 'chipf'}
-                            aria-current={on ? 'true' : undefined}
-                            // Both halves of the key travel. "Supply Point F" is
-                            // one source in Noida and a different one in
-                            // Faridabad, and a link carrying only the letter
-                            // would land on whichever came first.
-                            href={
-                              `${href(slug, { ...query, sp: o.supplyPointCode, city: o.city })}#units` as Route
-                            }
-                          >
-                            {o.label}
-                            <span className="c mono">
-                              {o.unitsAvailable} unit{o.unitsAvailable === 1 ? '' : 's'}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-
-                    {selected ? (
-                      <UnitList units={selected.units} label={selected.label} />
-                    ) : (
-                      <div className="empty">
-                        <h3>Pick a supply point to see its serials</h3>
-                        <p>
-                          Each one lists the machines it actually holds, and each serial opens the
-                          inspection report that machine was sealed with — the photographs, the twelve
-                          area results, the detected hardware and the wipe certificate.
-                        </p>
-                      </div>
-                    )}
-                  </section>
-                )}
         </div>
       </div>
     </>
@@ -665,33 +501,11 @@ function Gallery({
  * Pure helpers
  * ======================================================================== */
 
-function specLine(sku: SkuDetail): string {
-  return [
-    sku.cpuModel,
-    `${sku.ramGb} GB`,
-    `${sku.storageGb} GB ${sku.storageType.replace('_', ' ')}`,
-    `${sku.screenSizeIn}"`,
-  ].join(' · ');
-}
-
-function specRows(sku: SkuDetail): Array<[string, string]> {
-  return [
-    ['Processor', `${sku.cpuBrand} ${sku.cpuModel} · ${sku.cpuGeneration} gen`],
-    ['Memory', `${sku.ramGb} GB`],
-    ['Storage', `${sku.storageGb} GB ${sku.storageType.replace('_', ' ')}`],
-    ['Graphics', sku.gpuModel ? `${sku.gpuType} · ${sku.gpuModel}` : sku.gpuType],
-    [
-      'Screen',
-      `${sku.screenSizeIn}" ${sku.resolution}${sku.isTouch ? ' · touch' : ''}`,
-    ],
-    ['Operating system', sku.osSupported],
-    ['Series', `${sku.brandName} ${sku.seriesName}`],
-    ['SKU code', sku.skuCode],
-    ['HSN', sku.hsnCode],
-  ];
-}
-
-/** `(code, city)`, always — see the note beside the supply-point chips. */
+/**
+ * One chip per source on the board. Keyed on code AND city: "Supply Point F"
+ * is one source in Noida and a different one in Faridabad, and a link carrying
+ * only the letter would land on whichever came first.
+ */
 function selectedOffer(
   board: OfferBoard,
   code: string | null,

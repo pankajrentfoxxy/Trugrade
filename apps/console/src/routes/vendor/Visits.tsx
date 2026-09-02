@@ -11,7 +11,6 @@ import {
   SidePanel,
   Skeleton,
   StatusPill,
-  TickRule,
   type Column,
   type SealStatus,
   type StatusPillProps,
@@ -1174,7 +1173,6 @@ export function VendorVisitResultsRoute(): React.JSX.Element {
 
           <div className="flex flex-col gap-2">
             <h2 className="text-h3 text-ink">The count</h2>
-            <TickRule />
             <p className="max-w-prose text-body-sm text-ink-2">
               <span className="font-mono tnum text-ink">
                 {data.unitsPassed} of {data.unitsInspected}

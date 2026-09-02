@@ -61,9 +61,9 @@ Replace Instrument Sans and IBM Plex Sans with **Inter** + **IBM Plex Mono**:
 
 ## Task 4 - The QC motif utilities
 
-Add all seven to `packages/ui`, exactly as implemented in the reference file (§4 of the locked doc):
+Add all six to `packages/ui`, exactly as implemented in the reference file (§4 of the locked doc):
 
-`ViewfinderFrame` · `ScanBox` · `Barcode` · `TickRule` · `GridGround` · `LiveBlip` · `QrBlock`
+`ViewfinderFrame` · `ScanBox` · `Barcode` · `GridGround` · `LiveBlip` · `QrBlock`
 
 **Two hard rules:**
 - `ScanBox` and `LiveBlip` **must** respect `prefers-reduced-motion` - the reference file shows the media query.
@@ -137,7 +137,7 @@ Build it to the nine-block structure in §7, matching `docs/reference/homepage.h
 - [ ] Header and footer are visually identical in both themes
 - [ ] Every price, serial, score, count and percentage renders in IBM Plex Mono with tabular numerals
 - [ ] `GradeBadge` is neutral in every variant; `QcChip` is amber in every variant
-- [ ] All seven QC motifs exist in `packages/ui` with Storybook stories
+- [ ] All six QC motifs exist in `packages/ui` with Storybook stories
 - [ ] `ScanBox` and `LiveBlip` stop animating under `prefers-reduced-motion`
 - [ ] Search suggestions open on focus, group into three sections, close on `Escape`, and are keyboard navigable
 - [ ] A certificate ID in search routes to the verification page, not a product

@@ -4,40 +4,38 @@ import * as React from 'react';
 import { OfferGrid, type SupplyPointOffer } from '@trugrade/ui';
 import { MARGIN_ITC_LABEL, Money, type Grade } from '@trugrade/contracts';
 import type { SupplyPointOfferRow } from '../../../lib/api';
+import { useProductCart } from '../../../lib/use-product-cart';
 
 /**
  * The supply-point comparison board — `OfferGrid` from `packages/ui`, fed.
  *
- * It is a client component for one reason: `OfferGrid` and `OfferRow` are, and
- * `Money` is a class. A server component cannot hand a class instance across
- * the boundary — React serialises props — so the decimal strings the API sends
- * are parsed back into `Money` HERE, on the client side of the seam, and never
- * touched as floats on the way.
- *
- * **Nothing is sorted here.** The order is `compareOffers()` applied on the
- * server, where the paise live: landed price, then dispatch speed, then a stable
- * hash of a unit id. A second sort in the browser would be a second definition
- * of an order that has to be provably uncorrelated with vendor identity.
- *
- * **Nothing is filtered here either.** The row type is an allow-list with no
- * field for a vendor's name, GSTIN or org id, so there is nothing to hide; if a
- * vendor identifier ever reached this component the fix is in the endpoint, not
- * in a `delete` here.
+ * Adds to the active cart in place so the buyer can line up several supply
+ * points on one model without leaving the comparison.
  */
 export function Board({
   rows,
   caption,
   pool,
+  layout = 'cards',
 }: {
   rows: readonly SupplyPointOfferRow[];
   caption: string;
-  /**
-   * Which tax pool this grid is. MARGIN and REGULAR run as visually distinct
-   * pools (PHASE_05 Task 5): the input credit differs, so the rupees are not
-   * comparable line for line however similar they look.
-   */
   pool: 'REGULAR' | 'MARGIN';
+  layout?: 'responsive' | 'cards' | 'table';
 }): React.JSX.Element {
+  const { qtyFor, busyListingId, addListing, updateListingQty } = useProductCart();
+
+  const listingByOffer = React.useMemo(() => {
+    const map = new Map<string, SupplyPointOfferRow>();
+    for (const row of rows) {
+      map.set(`${row.supplyPointCode}-${row.city}`, row);
+    }
+    return map;
+  }, [rows]);
+
+  const resolveRow = (offer: SupplyPointOffer): SupplyPointOfferRow | undefined =>
+    listingByOffer.get(`${offer.supplyPointCode}-${offer.city}`);
+
   const offers: SupplyPointOffer[] = rows.map((r) => ({
     supplyPointCode: r.supplyPointCode,
     city: r.city,
@@ -54,9 +52,6 @@ export function Board({
     unitsAvailable: r.unitsAvailable,
     inspectedOn: r.inspectedOn ?? 'Not recorded',
     qcExpiresOn: r.qcExpiresOn ?? 'Not recorded',
-    // A certificate with no expiry on it is not a fresh one. Sending a large
-    // number would suppress the warning; sending 0 flags it, which is the safe
-    // direction for a missing date.
     qcExpiresInDays: r.qcExpiresInDays ?? 0,
     dispatchCommitment: r.dispatchCommitment,
   }));
@@ -76,18 +71,27 @@ export function Board({
         </p>
       )}
       <OfferGrid
+        layout={layout}
         offers={offers}
         caption={caption}
         itcExplainerHref="/gst#margin"
+        cartQtyFor={(offer) => {
+          const row = resolveRow(offer);
+          return row ? qtyFor(row.listingId) : null;
+        }}
+        cartBusyFor={(offer) => {
+          const row = resolveRow(offer);
+          return row ? busyListingId === row.listingId : false;
+        }}
         onAdd={(offer, quantity) => {
-          const row = rows.find(
-            (r) => r.supplyPointCode === offer.supplyPointCode && r.city === offer.city,
-          );
+          const row = resolveRow(offer);
           if (!row) return;
-          // The cart is T15. The route is the contract, so this goes where the
-          // cart will be rather than to an invented substitute — the same call
-          // T11 made when it linked here before this page existed.
-          window.location.href = `/cart?listing=${row.listingId}&qty=${quantity}`;
+          void addListing(row.listingId, quantity);
+        }}
+        onCartQtyChange={(offer, quantity) => {
+          const row = resolveRow(offer);
+          if (!row) return;
+          void updateListingQty(row.listingId, quantity);
         }}
       />
     </div>

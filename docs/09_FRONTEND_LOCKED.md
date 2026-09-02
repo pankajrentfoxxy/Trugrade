@@ -96,14 +96,13 @@ Base size **14px** (not 16px). This is a working tool with dense tables; 14px is
 
 ## 4. The QC motif set
 
-Seven devices. All functional; none decorative. Reuse them, do not invent new ones.
+Six devices. All functional; none decorative. Reuse them, do not invent new ones.
 
 | Motif | Class | Where | Rule |
 |---|---|---|---|
 | **Viewfinder brackets** | `.vf.tl/.tr/.bl/.br` | Every product image | Always with the real serial printed beneath |
 | **Scan line** | `.scanbox` | Live inspection feed | 3.6s sweep. **Must respect `prefers-reduced-motion`** |
 | **Barcode strip** | `.barcode` | Under the inspection feed | Encodes the seal code, shown beside it |
-| **Tick rule** | `.tickrule` | Under section headings | A measurement scale edge, 9px tall |
 | **Grid ground** | `.grid-bg` | Dark panels only | 22px, at `--chrome-line` opacity |
 | **Live blip** | `.blip` | Live counters, feed header | 1.6s pulse, reduced-motion safe |
 | **QR block** | `.qr` | Certificate verification | Real QR in production, never decorative |

@@ -7,7 +7,9 @@ import { ContactVerifier } from './ContactVerifier';
 import { HEARD_FROM } from './picklists';
 import {
   measurePassword,
+  MOBILE_PREFIX,
   toE164,
+  typeMobile,
   validateCompanyName,
   validateEmail,
   validateFullName,
@@ -69,7 +71,7 @@ const EMPTY: AccountValues = {
   fullName: '',
   companyName: '',
   email: '',
-  mobile: '',
+  mobile: MOBILE_PREFIX,
   password: '',
   heardFrom: '',
 };
@@ -81,7 +83,7 @@ function readDraft(answers: Record<string, unknown>): AccountValues {
     fullName: str('fullName'),
     companyName: str('companyName'),
     email: str('email'),
-    mobile: str('mobile'),
+    mobile: typeMobile(str('mobile')),
     password: '',
     heardFrom: str('heardFrom'),
   };
@@ -181,6 +183,8 @@ export interface StepAccountProps {
   extras?: React.ReactNode;
   /** Returns false to hold the submit. The caller renders its own messages. */
   validateExtras?: () => boolean;
+  /** When true, Continue does not run the step's own checks. */
+  skipValidation?: boolean;
 }
 
 export function StepAccount({
@@ -192,6 +196,7 @@ export function StepAccount({
   copy = BUYER_ACCOUNT_COPY,
   extras,
   validateExtras,
+  skipValidation = false,
 }: StepAccountProps): React.JSX.Element {
   const [values, setValues] = React.useState<AccountValues>(() =>
     Object.keys(answers).length > 0 ? readDraft(answers) : EMPTY,
@@ -217,18 +222,20 @@ export function StepAccount({
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const found: Record<string, string> = {};
-    const name = validateFullName(values.fullName);
-    if (name) found.fullName = name;
-    const company = validateCompanyName(values.companyName);
-    if (company) found.companyName = company;
-    if (!emailVerified) found.email = 'Verify this address before you continue.';
-    if (!mobileVerified) found.mobile = 'Verify this number before you continue.';
-    const weakness = strength.missing[0];
-    if (!registered && weakness) found.password = weakness;
+    if (!skipValidation) {
+      const name = validateFullName(values.fullName);
+      if (name) found.fullName = name;
+      const company = validateCompanyName(values.companyName);
+      if (company) found.companyName = company;
+      if (!emailVerified) found.email = 'Verify this address before you continue.';
+      if (!mobileVerified) found.mobile = 'Verify this number before you continue.';
+      const weakness = strength.missing[0];
+      if (!registered && weakness) found.password = weakness;
+    }
 
     // Both halves are checked before either refuses, so a submit never reports
     // the identity fields and then, on the next press, the extras.
-    const extrasOk = validateExtras ? validateExtras() : true;
+    const extrasOk = skipValidation || (validateExtras ? validateExtras() : true);
     if (Object.keys(found).length > 0 || !extrasOk) {
       setErrors(found);
       return;
@@ -302,7 +309,7 @@ export function StepAccount({
           hint="Indian mobile, stored as +91 followed by ten digits."
           value={values.mobile}
           onValueChange={(v) => {
-            set('mobile', v);
+            set('mobile', typeMobile(v));
             setMobileVerified(false);
           }}
           validate={validateMobile}

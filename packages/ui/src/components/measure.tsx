@@ -185,17 +185,6 @@ export function Barcode({ code, className }: { code: string; className?: string 
   );
 }
 
-/** A measurement scale edge, under a section heading. Purely a rule. */
-export function TickRule({ className }: { className?: string }): React.JSX.Element {
-  return (
-    <div className={cn('tickrule', className)} aria-hidden="true" data-testid="tickrule">
-      {Array.from({ length: 40 }, (_, i) => (
-        <i key={i} />
-      ))}
-    </div>
-  );
-}
-
 /** A live counter or feed header. The pulse stops under `prefers-reduced-motion`. */
 export function LiveBlip({ className }: { className?: string }): React.JSX.Element {
   return <i className={cn('blip', className)} aria-hidden="true" data-testid="blip" />;

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { SKU_IMPORT_COLUMNS, type SkuImportColumn } from '@trugrade/contracts';
-import { Button, EmptyState, Skeleton, StatusPill, Input, TickRule } from '@trugrade/ui';
+import { Button, EmptyState, Skeleton, StatusPill, Input } from '@trugrade/ui';
 import { PageHeader, Textarea } from '../lib/controls';
 import { useResource } from '../lib/useResource';
 
@@ -193,7 +193,6 @@ function RequestCard({
           {request.vendorName} · <span className="font-mono tnum">{request.ageHours}h</span> waiting
         </span>
       </header>
-      <TickRule />
 
       <div className="mt-4 grid gap-6 md:grid-cols-2">
         <section>

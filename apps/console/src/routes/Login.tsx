@@ -8,7 +8,6 @@ import {
   MfaChallenge,
   RateLimitNotice,
   StatusPill,
-  TickRule,
 } from '@trugrade/ui';
 import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/auth';
 
@@ -199,7 +198,6 @@ export function LoginRoute(): React.JSX.Element {
         {stage.k === 'refused' ? (
           <div className="flex flex-col gap-4" data-testid="login-suspended">
             <h1 className="mt-6 text-h1 text-ink">We cannot sign you in</h1>
-            <TickRule />
             <StatusPill className="self-start" tone="fail" label="Account closed to sign-in" />
             {/* Verbatim. Only the server knows whether this is the organisation
                 or the individual account, and paraphrasing loses the sentence
@@ -253,7 +251,6 @@ export function LoginRoute(): React.JSX.Element {
         ) : (
           <>
             <h1 className="mt-6 text-h1 text-ink">Sign in</h1>
-            <TickRule />
             <p className="mt-2 text-body-sm text-ink-2">
               {BRAND.name} staff and suppliers. Buyers sign in on the shop.
             </p>
@@ -328,7 +325,6 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
             ? 'You are signed in. Your application is still with our team.'
             : 'Your application is not finished'}
       </h1>
-      <TickRule />
       <StatusPill
         className="self-start"
         tone={rejected ? 'fail' : pending ? 'info' : 'warn'}

@@ -15,9 +15,9 @@
  * (Workbench draft).
  *
  * Four rules that stop this drifting:
- *   1. Amber means one of three things: a primary action, a measured value, or
- *      an active state. Nothing else. The moment it becomes a decorative wash,
- *      the QC score chip stops meaning anything.
+ *   1. The accent (#6BB1BE) means one of three things: a primary action, a
+ *      measured value, or an active state. Nothing else. The moment it becomes
+ *      a decorative wash, the QC score chip stops meaning anything.
  *   2. Grades are neutral. A+, A and B are all sellable — neutral chip, neutral
  *      border, ink text. Green and red are reserved for PASS and FAIL. A
  *      position on a scale is not a verdict.
@@ -34,9 +34,9 @@
     --chrome: #08090b;
     --chrome-2: #101317;
     --chrome-3: #1b1f26;
-    --on-chrome: #e6e9ee;
-    --on-chrome-2: #8d96a3;
-    --on-chrome-3: #616a77;
+    --on-chrome: #ffffff;
+    --on-chrome-2: rgba(255, 255, 255, 0.92);
+    --on-chrome-3: rgba(255, 255, 255, 0.72);
     --chrome-line: rgba(255, 255, 255, 0.08);
     --chrome-line-2: rgba(255, 255, 255, 0.17);
     --ground: #0b0d10;
@@ -49,13 +49,13 @@
     --ink-4: #5c6572;
     --rule: #252a32;
     --rule-2: #1e232a;
-    --acc: #ffb627;
-    --acc-dk: #e09a10;
+    --acc: #6bb1be;
+    --acc-dk: #5299a6;
     --acc-on: #0b0d10;
-    --acc-ink: #ffc84f;
-    --acc-wash: #241c08;
-    --acc-glow: rgba(255, 182, 39, 0.3);
-    --scan: rgba(255, 182, 39, 0.8);
+    --acc-ink: #a8dce4;
+    --acc-wash: #0d2a30;
+    --acc-glow: rgba(107, 177, 190, 0.3);
+    --scan: rgba(107, 177, 190, 0.8);
     --pass: #35c08a;
     --fail: #f0715c;
     --warn: #e0a53f;
@@ -63,15 +63,15 @@
   }
 
   :root[data-t='light'] {
-    /* chrome is unchanged — rule 3 */
-    --chrome: #08090b;
-    --chrome-2: #101317;
-    --chrome-3: #1b1f26;
-    --on-chrome: #e6e9ee;
-    --on-chrome-2: #8d96a3;
-    --on-chrome-3: #616a77;
-    --chrome-line: rgba(255, 255, 255, 0.08);
-    --chrome-line-2: rgba(255, 255, 255, 0.17);
+    /* Light chrome — soft wash paired with accent #6BB1BE (storefront default). */
+    --chrome: #e4f8fd;
+    --chrome-2: #d4f2fa;
+    --chrome-3: #b8e8f4;
+    --on-chrome: #101319;
+    --on-chrome-2: #3c444f;
+    --on-chrome-3: #68717f;
+    --chrome-line: rgba(16, 19, 25, 0.08);
+    --chrome-line-2: rgba(16, 19, 25, 0.14);
     --ground: #f0f1f3;
     --sheet: #ffffff;
     --sheet-2: #f7f8fa;
@@ -82,20 +82,135 @@
     --ink-4: #98a1af;
     --rule: #dde0e5;
     --rule-2: #ebedf0;
-    --acc: #ffb627;
-    --acc-dk: #e09a10;
+    --acc: #6bb1be;
+    --acc-dk: #5299a6;
     --acc-on: #0b0d10;
-    /* The ONLY token that differs in PURPOSE by theme: a darker amber, so
-       amber-coloured TEXT still passes contrast on white. Never use raw --acc
+    /* The ONLY token that differs in PURPOSE by theme: a darker teal, so
+       accent-coloured TEXT still passes contrast on white. Never use raw --acc
        as a text colour on a light surface. */
-    --acc-ink: #8a5a00;
-    --acc-wash: #fff6e3;
-    --acc-glow: rgba(255, 182, 39, 0.34);
-    --scan: rgba(224, 154, 16, 0.75);
+    --acc-ink: #1a5f6b;
+    --acc-wash: #eef7f9;
+    /* Storefront header/footer — #283341; hero/sell keep --chrome above. */
+    --storefront-chrome: #283341;
+    --storefront-chrome-2: #323f4f;
+    --storefront-chrome-3: #3a4959;
+    --storefront-chrome-line: rgba(255, 255, 255, 0.08);
+    --storefront-chrome-line-2: rgba(255, 255, 255, 0.16);
+    --storefront-on-chrome: #ffffff;
+    --storefront-on-chrome-2: rgba(255, 255, 255, 0.92);
+    --storefront-on-chrome-3: rgba(255, 255, 255, 0.72);
+    --acc-glow: rgba(107, 177, 190, 0.34);
+    --scan: rgba(82, 153, 166, 0.75);
+    --pass: #0f7048;
+    --pass-light: #42a877;
+    --pass-muted: #74c49a;
+    --fail: #c13527;
+    --warn: #9a620a;
+    --score-bar-warn: #d9910a;
+    --score-bar-warn-wash: #fdf0d4;
+    --shadow: 0 8px 26px rgba(16, 19, 25, 0.1);
+  }
+
+  /**
+   * Preview palettes — not locked. Dark and Light above remain the brand pair.
+   * These exist so a reviewer can click the header toggle and judge alternatives
+   * on a real page. Chrome is allowed to change here; that is the point of
+   * comparing a non-black header. The accent is teal #6BB1BE.
+   */
+  :root[data-t='slate'] {
+    --chrome: #1a2332;
+    --chrome-2: #222c3d;
+    --chrome-3: #2c384c;
+    --on-chrome: #e8eef6;
+    --on-chrome-2: #93a0b3;
+    --on-chrome-3: #6b788c;
+    --chrome-line: rgba(255, 255, 255, 0.08);
+    --chrome-line-2: rgba(255, 255, 255, 0.17);
+    --ground: #1e2836;
+    --sheet: #253041;
+    --sheet-2: #2c384c;
+    --sheet-3: #344257;
+    --ink: #e8eef6;
+    --ink-2: #a8b4c4;
+    --ink-3: #7d8b9c;
+    --ink-4: #5c6a7a;
+    --rule: #3a4658;
+    --rule-2: #323e4e;
+    --acc: #6bb1be;
+    --acc-dk: #5299a6;
+    --acc-on: #0b0d10;
+    --acc-ink: #a8dce4;
+    --acc-wash: #0d2a30;
+    --acc-glow: rgba(107, 177, 190, 0.3);
+    --scan: rgba(107, 177, 190, 0.8);
+    --pass: #35c08a;
+    --fail: #f0715c;
+    --warn: #e0a53f;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+
+  :root[data-t='olive'] {
+    --chrome: #1c2118;
+    --chrome-2: #252b1f;
+    --chrome-3: #303628;
+    --on-chrome: #eef0e6;
+    --on-chrome-2: #9aa08c;
+    --on-chrome-3: #727866;
+    --chrome-line: rgba(255, 255, 255, 0.08);
+    --chrome-line-2: rgba(255, 255, 255, 0.17);
+    --ground: #22281d;
+    --sheet: #2a3224;
+    --sheet-2: #323a2b;
+    --sheet-3: #3a4332;
+    --ink: #eef0e6;
+    --ink-2: #b4b8a4;
+    --ink-3: #8a8e7c;
+    --ink-4: #686c5c;
+    --rule: #3e4636;
+    --rule-2: #353c2e;
+    --acc: #6bb1be;
+    --acc-dk: #5299a6;
+    --acc-on: #0b0d10;
+    --acc-ink: #a8dce4;
+    --acc-wash: #0d2a30;
+    --acc-glow: rgba(107, 177, 190, 0.3);
+    --scan: rgba(107, 177, 190, 0.8);
+    --pass: #35c08a;
+    --fail: #f0715c;
+    --warn: #e0a53f;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+
+  :root[data-t='sand'] {
+    --chrome: #3d3428;
+    --chrome-2: #4a4032;
+    --chrome-3: #5a4e3c;
+    --on-chrome: #f4efe6;
+    --on-chrome-2: #c4b8a4;
+    --on-chrome-3: #9a8c76;
+    --chrome-line: rgba(255, 255, 255, 0.1);
+    --chrome-line-2: rgba(255, 255, 255, 0.2);
+    --ground: #f4efe6;
+    --sheet: #fbf7f0;
+    --sheet-2: #f3ece0;
+    --sheet-3: #ebe2d4;
+    --ink: #2a241c;
+    --ink-2: #5a5248;
+    --ink-3: #7a7266;
+    --ink-4: #9a9286;
+    --rule: #e4dcd0;
+    --rule-2: #ece6dc;
+    --acc: #6bb1be;
+    --acc-dk: #5299a6;
+    --acc-on: #0b0d10;
+    --acc-ink: #1a5f6b;
+    --acc-wash: #eef7f9;
+    --acc-glow: rgba(107, 177, 190, 0.34);
+    --scan: rgba(82, 153, 166, 0.75);
     --pass: #0f7048;
     --fail: #c13527;
     --warn: #9a620a;
-    --shadow: 0 8px 26px rgba(16, 19, 25, 0.1);
+    --shadow: 0 8px 26px rgba(42, 36, 28, 0.1);
   }
 
   :root {
@@ -226,7 +341,7 @@
 }
 
 /**
- * The seven QC motifs. `09_FRONTEND_LOCKED.md` §4, as implemented in
+ * The six QC motifs. `09_FRONTEND_LOCKED.md` §4, as implemented in
  * `docs/reference/homepage.html`.
  *
  * ONE RULE: a motif must carry information. A viewfinder bracket says *this
@@ -317,33 +432,14 @@
     background: var(--acc);
   }
 
-  /* 4. Tick rule — a measurement scale edge, under section headings. */
-  .tickrule {
-    display: flex;
-    gap: 3px;
-    align-items: flex-end;
-    height: 9px;
-    margin-top: 5px;
-  }
-  .tickrule i {
-    width: 1px;
-    background: var(--rule);
-    display: block;
-    height: 4px;
-  }
-  .tickrule i:nth-child(5n + 1) {
-    height: 9px;
-    background: var(--ink-4);
-  }
-
-  /* 5. Grid ground — dark panels only. */
+  /* 4. Grid ground — dark panels only. */
   .grid-bg {
     background-image: linear-gradient(var(--chrome-line) 1px, transparent 1px),
       linear-gradient(90deg, var(--chrome-line) 1px, transparent 1px);
     background-size: 22px 22px;
   }
 
-  /* 6. Live blip — live counters and the feed header. */
+  /* 5. Live blip — live counters and the feed header. */
   .blip {
     width: 6px;
     height: 6px;
@@ -364,7 +460,7 @@
     }
   }
 
-  /* 7. QR block — certificate verification. A real QR in production; this is
+  /* 6. QR block — certificate verification. A real QR in production; this is
         placeholder geometry only, and it must never be decorative. */
   .qr {
     width: 44px;
@@ -456,7 +552,7 @@
  *
  * `display:none` rather than the sr-only clip, deliberately: the hidden half
  * must be hidden from a screen reader too, or the button announces both
- * "Switch to light theme" and "Switch to dark theme".
+ * icons. The accessible name is the single "Cycle theme" label.
  * ------------------------------------------------------------------------- */
 .tg-in-dark,
 .tg-in-light {
@@ -467,9 +563,29 @@
 .tg-in-light {
   display: none;
 }
-:root[data-t='light'] .tg-in-dark {
+:root[data-t='light'] .tg-in-dark,
+:root[data-t='sand'] .tg-in-dark {
   display: none;
 }
-:root[data-t='light'] .tg-in-light {
+:root[data-t='light'] .tg-in-light,
+:root[data-t='sand'] .tg-in-light {
   display: inline-flex;
+}
+
+.tg-theme-now {
+  display: inline-flex;
+  align-items: center;
+}
+.tg-theme-name {
+  display: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+:root[data-t='dark'] .tg-theme-name--dark,
+:root[data-t='slate'] .tg-theme-name--slate,
+:root[data-t='olive'] .tg-theme-name--olive,
+:root[data-t='sand'] .tg-theme-name--sand,
+:root[data-t='light'] .tg-theme-name--light {
+  display: inline;
 }

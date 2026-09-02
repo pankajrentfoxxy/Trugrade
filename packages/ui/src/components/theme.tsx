@@ -16,10 +16,32 @@ import { cn } from '../lib/cn';
  * oversight: a B2B tool that silently flips because a laptop is in light mode
  * is a tool whose screenshots never match between two people looking at the
  * same order.
+ *
+ * Slate, olive and sand sit between those two so a reviewer can click through
+ * alternatives on the live page. They are not locked; Dark and Light still are.
  */
-export type Theme = 'dark' | 'light';
+export const THEMES = ['dark', 'slate', 'olive', 'sand', 'light'] as const;
+export type Theme = (typeof THEMES)[number];
+
+export const THEME_LABELS: Record<Theme, string> = {
+  dark: 'Dark',
+  slate: 'Slate',
+  olive: 'Olive',
+  sand: 'Sand',
+  light: 'Light',
+};
 
 export const THEME_STORAGE_KEY = 'tg-theme';
+
+const THEME_SET: ReadonlySet<string> = new Set(THEMES);
+
+export function isTheme(value: string | null | undefined): value is Theme {
+  return value !== null && value !== undefined && THEME_SET.has(value);
+}
+
+export function nextTheme(current: Theme): Theme {
+  return THEMES[(THEMES.indexOf(current) + 1) % THEMES.length]!;
+}
 
 /**
  * The pre-paint read, inlined into `<head>` before any stylesheet.
@@ -33,14 +55,28 @@ export const THEME_STORAGE_KEY = 'tg-theme';
  * The try/catch is not defensive dressing: `localStorage` throws outright in a
  * private window and in some embedded webviews, and an exception here would
  * abort the rest of the document head.
+ *
+ * Unknown stored values are ignored so a stale or hand-edited key cannot leave
+ * `data-t` pointing at a palette that does not exist.
  */
 export const THEME_PREPAINT_SCRIPT =
   `try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');` +
-  `if(t)document.documentElement.setAttribute('data-t',t)}catch(e){}`;
+  `if(t==='dark'||t==='light'||t==='slate'||t==='olive'||t==='sand')` +
+  `document.documentElement.setAttribute('data-t',t)}catch(e){}`;
+
+/**
+ * Storefront-only pre-paint read: always light for now. The full theme cycle
+ * (`ThemeToggle`, `THEME_PREPAINT_SCRIPT`) stays in the package for console and
+ * for when the storefront turns multi-theme back on.
+ */
+export const THEME_STOREFRONT_PREPAINT_SCRIPT =
+  `try{document.documentElement.setAttribute('data-t','light');` +
+  `localStorage.setItem('${THEME_STORAGE_KEY}','light')}catch(e){}`;
 
 export function readTheme(): Theme {
   if (typeof document === 'undefined') return 'dark';
-  return document.documentElement.getAttribute('data-t') === 'light' ? 'light' : 'dark';
+  const raw = document.documentElement.getAttribute('data-t');
+  return isTheme(raw) ? raw : 'dark';
 }
 
 export function applyTheme(next: Theme): void {
@@ -60,6 +96,8 @@ export function applyTheme(next: Theme): void {
  */
 export interface ThemeToggleProps {
   className?: string;
+  /** When true, render nothing — for routes locked to one theme for now. */
+  suppressed?: boolean;
 }
 
 /**
@@ -87,17 +125,21 @@ export interface ThemeToggleProps {
  * The click handler reads the live DOM instead of state, because the DOM is the
  * only thing that was ever the source of truth here.
  */
-export function ThemeToggle({ className }: ThemeToggleProps): React.JSX.Element {
+export function ThemeToggle({ className, suppressed = false }: ThemeToggleProps): React.JSX.Element {
   const toggle = (): void => {
-    applyTheme(readTheme() === 'light' ? 'dark' : 'light');
+    applyTheme(nextTheme(readTheme()));
   };
+
+  if (suppressed) {
+    return <></>;
+  }
 
   return (
     <button
       type="button"
       onClick={toggle}
       className={cn(
-        'inline-flex h-8 w-8 items-center justify-center rounded-sm',
+        'inline-flex h-8 min-w-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-2',
         'border border-chrome-line text-on-chrome-2',
         'transition-colors hover:text-on-chrome hover:border-chrome-line-2',
         className,
@@ -107,12 +149,18 @@ export function ThemeToggle({ className }: ThemeToggleProps): React.JSX.Element 
           reader user needs the action; the state is already on <html>. */}
       <span className="tg-in-dark">
         <MoonIcon />
-        <span className="sr-only">Switch to light theme</span>
       </span>
       <span className="tg-in-light">
         <SunIcon />
-        <span className="sr-only">Switch to dark theme</span>
       </span>
+      <span className="tg-theme-now" aria-hidden="true">
+        {THEMES.map((theme) => (
+          <span key={theme} className={`tg-theme-name tg-theme-name--${theme}`}>
+            {THEME_LABELS[theme]}
+          </span>
+        ))}
+      </span>
+      <span className="sr-only">Cycle theme</span>
     </button>
   );
 }

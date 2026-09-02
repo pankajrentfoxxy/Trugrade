@@ -23,7 +23,7 @@ import { BRAND } from '@trugrade/config/brand';
  * A failure returns null and the signed-out chrome. We cannot prove a session,
  * so we do not claim one.
  */
-async function currentUser(): Promise<{ orgType: string } | null> {
+async function currentUser(): Promise<{ orgType: string; fullName?: string } | null> {
   const jar = await cookies();
   const header = jar
     .getAll()
@@ -36,13 +36,17 @@ async function currentUser(): Promise<{ orgType: string } | null> {
       headers: { cookie: header },
       cache: 'no-store',
     });
-    return res.ok ? ((await res.json()) as { orgType: string }) : null;
+    return res.ok
+      ? ((await res.json()) as { orgType: string; fullName?: string })
+      : null;
   } catch {
     return null;
   }
 }
 
 import { SearchBar } from './SearchBar';
+import { AccountMenu } from './AccountMenu';
+import { CartNavLink } from './CartNavLink';
 
 /**
  * Blocks 1 and 2 of `09_FRONTEND_LOCKED.md` §7 — the utility bar and the
@@ -116,7 +120,7 @@ export async function SiteHeader({
             <a href="/qc/verify">Verify a certificate</a>
             <a href="/account/orders">Track order</a>
             <a href="/legal/grievance">Help</a>
-            <a href="/sell/register" style={{ color: 'var(--acc)', fontWeight: 600 }}>
+            <a href="/sell/register" className="util-promo">
               Sell on {BRAND.name} &rarr;
             </a>
           </div>
@@ -150,7 +154,7 @@ export async function SiteHeader({
           <SearchBar />
 
           <div className="hact">
-            <ThemeToggle className="h-9 w-9 border-chrome-line-2" />
+            <ThemeToggle suppressed className="h-9 min-w-9 border-chrome-line-2" />
             {/* `Link`, not `a`: this is an internal route, and a plain anchor
                 makes every visit a full document load — which also means
                 `/bulk`'s own loading state can never render. */}
@@ -162,15 +166,8 @@ export async function SiteHeader({
             </Link>
             {user ? (
               <>
-                <a className="hbtn hide-sm" href="/cart">
-                  <span>
-                    <small>Your</small>
-                    <strong>Cart</strong>
-                  </span>
-                </a>
-                <a className="hbtn solid" href="/account">
-                  Account
-                </a>
+                <CartNavLink />
+                <AccountMenu fullName={user.fullName} />
               </>
             ) : (
               <>

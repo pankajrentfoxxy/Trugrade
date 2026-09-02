@@ -10,7 +10,7 @@ import type { Request } from 'express';
 import { MFA_REQUIRED_ROLES, type Permission, type Role } from '@trugrade/contracts';
 import { ForbiddenError, UnauthenticatedError } from '../errors/domain-errors';
 import { RequestContextService, type Principal } from '../db/org-scope';
-import { TokenService } from './token.service';
+import { TokenService, type AccessTokenClaims } from './token.service';
 
 export const IS_PUBLIC = 'trugrade:public';
 export const REQUIRED_PERMISSIONS = 'trugrade:permissions';
@@ -66,7 +66,22 @@ export class AuthGuard implements CanActivate {
       throw new UnauthenticatedError();
     }
 
-    const claims = await this.tokens.verifyAccess(token);
+    // Best-effort, and that is the whole point: on a public route a token we
+    // cannot verify means "anonymous", never "refused".
+    //
+    // POST /auth/login is @Public(), and this used to throw before the isPublic
+    // check below ever ran — so a stale `tg_access` cookie refused the one
+    // request whose entire job is to replace it. Anyone whose session died while
+    // the cookie was still in the jar could not sign back in until the cookie
+    // aged out on its own, with nothing in the UI able to clear it.
+    let claims: AccessTokenClaims;
+    try {
+      claims = await this.tokens.verifyAccess(token);
+    } catch (e) {
+      if (isPublic) return true;
+      throw e;
+    }
+
     const principal: Principal = {
       userId: claims.sub,
       orgId: claims.org_id,

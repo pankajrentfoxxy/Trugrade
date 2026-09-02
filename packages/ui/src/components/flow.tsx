@@ -8,7 +8,6 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
 import { Stepper, type Step } from './navigation';
-import { TickRule } from './measure';
 
 /**
  * Archetype D — **Flow**: step rail + one step + a "why we ask" rail.
@@ -81,7 +80,6 @@ export function StepRail({
         <p className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
           <span className="tnum">{done}</span> of <span className="tnum">{steps.length}</span> done
         </p>
-        <TickRule />
       </div>
 
       <Stepper steps={steps} label={label} />
@@ -156,7 +154,6 @@ export function FormSection({
         {description ? (
           <span className="mt-1 block text-body-sm text-ink-2">{description}</span>
         ) : null}
-        <TickRule />
       </legend>
       {children}
     </fieldset>
@@ -215,7 +212,6 @@ export function WhyRail({
         <h2 id={headingId} className="text-h3 text-ink">
           {title}
         </h2>
-        <TickRule />
       </div>
 
       <dl className="flex flex-col gap-4">

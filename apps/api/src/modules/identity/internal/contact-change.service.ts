@@ -180,7 +180,7 @@ export class ContactChangeService {
       },
     });
 
-    const channel = field === 'EMAIL' ? 'EMAIL' : 'SMS';
+    const channel = field === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
     const oldCode = await this.otp.issue({
       target: current,
       purpose: 'CONTACT_CHANGE_OLD',
@@ -385,7 +385,7 @@ export class ContactChangeService {
     if (!oldAddress) return row;
     try {
       const receipt = await this.notifications.send({
-        channel: row.field === 'EMAIL' ? 'EMAIL' : 'SMS',
+        channel: row.field === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
         to: oldAddress,
         templateCode: ALERT_TEMPLATE,
         locale: 'en',

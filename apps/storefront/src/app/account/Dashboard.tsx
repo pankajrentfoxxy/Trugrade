@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { EmptyState, KpiRow, QueueList, Skeleton, TickRule, type Kpi } from '@trugrade/ui';
+import { EmptyState, KpiRow, QueueList, Skeleton, type Kpi } from '@trugrade/ui';
 import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../register/api';
 import { Deadline, inIst } from '../../lib/deadline';
@@ -65,7 +65,6 @@ export function Dashboard(): React.JSX.Element {
           What your organisation has on order with us, and the one thing on it that has a clock
           against it.
         </p>
-        <TickRule />
       </div>
 
       {phase.k === 'loading' ? (

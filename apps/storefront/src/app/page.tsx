@@ -1,7 +1,8 @@
 import { BRAND } from '@trugrade/config/brand';
-import { getOffers, getSearch, getStats } from '../lib/api';
+import { getSearch, getStats } from '../lib/api';
 import { CategoryStrip } from './CategoryStrip';
 import { FilterRail } from './FilterRail';
+import { SearchResultCard } from './search/SearchResultCard';
 import { SiteHeader } from './SiteHeader';
 
 /**
@@ -24,8 +25,6 @@ import { SiteHeader } from './SiteHeader';
  * stock is inspected.
  */
 export const revalidate = 60;
-
-const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 
 const PROCESS = [
   [
@@ -51,10 +50,11 @@ export default async function HomePage(): Promise<React.JSX.Element> {
   // beside each option on the homepage are the counts the results page will
   // honour. Two sources for one rail is how a facet starts promising stock that
   // the search behind it does not return.
-  const [stats, search, offers] = await Promise.all([getStats(), getSearch(''), getOffers()]);
+  const [stats, search] = await Promise.all([getStats(), getSearch('per=24')]);
 
   const inspected = stats?.unitsInspected ?? 0;
   const sellable = stats?.unitsSellable ?? 0;
+  const results = search?.results ?? [];
 
   return (
     <>
@@ -162,64 +162,11 @@ export default async function HomePage(): Promise<React.JSX.Element> {
                 </div>
               </div>
 
-              {/* 4c — PRODUCT GRID, or the truth about there being none. */}
-              {offers && offers.length > 0 ? (
-                <div className="pgrid">
-                  {offers.map((o) => (
-                    <div className="pc" key={`${o.skuId}-${o.grade}`}>
-                      <div className="im">
-                        {/* Viewfinder brackets, and the real serial beneath them.
-                            The brackets assert THIS UNIT WAS CAPTURED, so they
-                            only appear because sampleSerial is a serial we hold. */}
-                        <span className="vf tl" />
-                        <span className="vf tr" />
-                        <span className="vf bl" />
-                        <span className="vf br" />
-                        <span className="gr">{GRADE_LABEL[o.grade]}</span>
-                        <span className="qc">QC {o.avgQcScore}</span>
-                        <span className="sn">{o.sampleSerial}</span>
-                        <svg
-                          width="84"
-                          height="48"
-                          viewBox="0 0 150 80"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          aria-hidden="true"
-                        >
-                          <rect x="27" y="10" width="96" height="56" rx="3" />
-                          <path d="M12 70 h126 l-8 -4 H20 z" />
-                        </svg>
-                      </div>
-                      <div className="bd">
-                        <b>
-                          {o.brand} {o.model}
-                        </b>
-                        <span className="spec">{o.spec}</span>
-                        {/* The number no competitor can print, because printing
-                            it means having opened the machine. */}
-                        <span className="bat">
-                          BAT{' '}
-                          <i>
-                            <b style={{ width: `${o.batteryMin}%` }} />
-                          </i>{' '}
-                          {o.batteryMin}–{o.batteryMax}%
-                        </span>
-                        <div className="pr">
-                          ₹{Number(o.fromPrice).toLocaleString('en-IN')}{' '}
-                          <small>from · incl. GST</small>
-                        </div>
-                        <div className="meta">
-                          <span>
-                            {o.supplyPoints} supply point{o.supplyPoints === 1 ? '' : 's'}
-                          </span>
-                          <b>{o.unitsAvailable} units</b>
-                        </div>
-                      </div>
-                      <a className="cta" href="#board">
-                        Compare suppliers
-                      </a>
-                    </div>
+              {/* 4c — Rich cards from search (same component as /search). */}
+              {results.length > 0 ? (
+                <div className="pcclist">
+                  {results.map((r) => (
+                    <SearchResultCard key={`${r.skuId}-${r.grade}`} r={r} />
                   ))}
                 </div>
               ) : (
@@ -245,11 +192,6 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             <div className="shrow">
               <h2>Compare supply points on one screen</h2>
             </div>
-            <div className="tickrule" aria-hidden="true">
-              {Array.from({ length: 40 }, (_, i) => (
-                <i key={i} />
-              ))}
-            </div>
             <p>
               Ten suppliers, one model, one screen. Landed price to your pincode, average inspection
               score for that exact model, and how often their declared grade survived ours. Who they
@@ -269,18 +211,20 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         </div>
       </div>
 
-      {/* 6 — UTILITY STRIP: verify a certificate, and bulk requirement. */}
-      <div className="strip">
-        <div className="wrap">
+      {/* 6 — UTILITY STRIP: verify a certificate, and bulk requirement.
+          `.wrap.strip` is one box: the wrap centres it, the strip grid puts
+          the two cards side by side. A nested wrap used to be the only child
+          of the grid, so they stacked. */}
+      <div className="wrap strip">
           <div className="sbx">
             <div className="qr" role="img" aria-label="Certificate QR" />
-            <div className="qform">
+            <div>
               <h3>Verify a certificate</h3>
               <p>
                 Holding a machine with a seal on it? Enter the certificate ID or the serial and read
                 the report it shipped with.
               </p>
-              <form action="/verify">
+              <form className="qform" action="/verify">
                 <label className="sr-only" htmlFor="cert">
                   Certificate ID or serial
                 </label>
@@ -290,13 +234,13 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             </div>
           </div>
           <div className="sbx">
-            <div className="qform">
+            <div>
               <h3>Have a requirement list?</h3>
               <p>
                 Send the specification, quantity and grade. We tell you what is available now, at a
                 landed price for your pincode, and source the rest.
               </p>
-              <form action="/bulk">
+              <form className="qform" action="/bulk">
                 <label className="sr-only" htmlFor="req">
                   Requirement
                 </label>
@@ -305,20 +249,20 @@ export default async function HomePage(): Promise<React.JSX.Element> {
               </form>
             </div>
           </div>
-        </div>
       </div>
 
-      {/* 7 — PROCESS */}
-      <div className="proc">
-        <div className="wrap">
-          {PROCESS.map(([title, body], i) => (
-            <div className="pstep" key={title}>
-              <span className="mono">{String(i + 1).padStart(2, '0')}</span>
-              <h3>{title}</h3>
-              <p>{body}</p>
+      {/* 7 — PROCESS. `.wrap.proc` is the centred four-column rail; a nested
+          wrap used to be the only grid child, so the steps stacked. */}
+      <div className="wrap proc">
+        {PROCESS.map(([title, body], i) => (
+          <div className="pstep" key={title}>
+            <div className="pstep-mark">
+              <span className="n mono">{String(i + 1).padStart(2, '0')}</span>
             </div>
-          ))}
-        </div>
+            <h3>{title}</h3>
+            <p>{body}</p>
+          </div>
+        ))}
       </div>
 
       {/* 8 — SUPPLIER BAND. Chrome ground, grid. */}

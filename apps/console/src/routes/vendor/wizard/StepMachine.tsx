@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { Button, EmptyState, Input, Skeleton, TickRule, cn } from '@trugrade/ui';
+import { Button, EmptyState, Input, Skeleton, cn } from '@trugrade/ui';
 import { API, type SkuDetail, type SkuHit } from '../api';
 import type { WizardDraft } from './draft';
 
@@ -108,7 +108,6 @@ export function StepMachine({
   return (
     <div>
       <h2 className="text-h2 text-ink">Pick the machine</h2>
-      <TickRule />
       <p className="mt-2 max-w-prose text-body-sm text-ink-2">
         Search the master catalog by model or configuration. Every listing is against a SKU we
         already carry — that is what lets a buyer compare your machine with anyone else&rsquo;s.

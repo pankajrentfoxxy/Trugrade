@@ -4,26 +4,52 @@
  *
  * Brings up the compose stack, waits for it, applies migrations, seeds, and
  * starts every app. If a developer needs a README paragraph to get running, this
- * script has failed â€” so it does the waiting and the ordering, not the reader.
+ * script has failed  so it does the waiting and the ordering, not the reader.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, copyFileSync } from 'node:fs';
+import { existsSync, copyFileSync, readFileSync } from 'node:fs';
 
 const sh = (cmd, args, opts = {}) =>
   spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32', ...opts });
 
 const step = (msg) => console.log(`\n[34m>[0m ${msg}`);
 
+/**
+ * Prisma and Nest read process.env, not the repo-root file. Without this, migrate
+ * fails with P1012 on a machine that only has the documented root `.env`.
+ */
+function loadEnvFile(path) {
+  if (!existsSync(path)) return;
+  for (const raw of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    // File wins. An inherited SMTP_HOST=localhost from an older shell
+    // would otherwise keep Gmail creds in .env from ever reaching Nest.
+    process.env[key] = value;
+  }
+}
+
 // 1. .env files, created from the examples on first run.
 if (!existsSync('.env') && existsSync('.env.example')) {
   step('Creating .env from .env.example');
   copyFileSync('.env.example', '.env');
 }
+loadEnvFile('.env');
 
 // 2. Infrastructure, in two calls rather than one.
 //
 //    `up -d --wait` across the WHOLE file fails on this stack, and the message
-//    it printed â€” "Is Docker running?" â€” sends you to look at Docker, which is
+//    it printed  "Is Docker running?"  sends you to look at Docker, which is
 //    fine. The real cause is `minio-init`: a one-shot `mc` container that
 //    creates the bucket and exits 0. `--wait` waits for every service to become
 //    healthy, and a container that has already exited has no health to report,
@@ -47,14 +73,20 @@ if (
   process.exit(1);
 }
 
-// 3. Schema.
+// 3. Workspace packages. Seed and Nest resolve `@trugrade/contracts` from
+//    `dist/`, which is empty after a fresh clone until this runs.
+step('Building @trugrade/config and @trugrade/contracts');
+if (sh('pnpm', ['--filter', '@trugrade/config', 'build']).status !== 0) process.exit(1);
+if (sh('pnpm', ['--filter', '@trugrade/contracts', 'build']).status !== 0) process.exit(1);
+
+// 4. Schema.
 step('Applying migrations');
 if (sh('pnpm', ['--filter', '@trugrade/api', 'db:migrate']).status !== 0) process.exit(1);
 
 step('Generating the Prisma client');
 sh('pnpm', ['--filter', '@trugrade/api', 'db:generate']);
 
-// 4. Reference and persona data.
+// 5. Reference and persona data.
 step('Seeding');
 sh('pnpm', ['--filter', '@trugrade/api', 'db:seed']);
 

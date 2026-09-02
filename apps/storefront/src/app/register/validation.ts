@@ -92,14 +92,28 @@ export function workEmailNote(value: string): string | undefined {
   );
 }
 
+/** Shown in every empty mobile field so the country code is already there. */
+export const MOBILE_PREFIX = '+91 ';
+
+/** Empty, or only the country code — not a number yet. */
+export function isMobileBlank(value: string): boolean {
+  const compact = value.replace(/[\s-]/g, '');
+  return compact === '' || compact === '+' || compact === '91' || compact === '+91';
+}
+
+/** Keep `+91` in the box when the field is empty or the prefix is deleted. */
+export function typeMobile(value: string): string {
+  return isMobileBlank(value) ? MOBILE_PREFIX : value;
+}
+
 export function validateMobile(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return 'Enter the mobile number that receives the delivery updates.';
-  return normaliseMobile(trimmed) ? undefined : MOBILE_E164.message;
+  if (isMobileBlank(value)) return 'Enter the mobile number that receives the delivery updates.';
+  return normaliseMobile(value.trim()) ? undefined : MOBILE_E164.message;
 }
 
 /** `+919876543210`, the only form the server stores. Empty when it is not one yet. */
-export const toE164 = (value: string): string => normaliseMobile(value.trim()) ?? '';
+export const toE164 = (value: string): string =>
+  isMobileBlank(value) ? '' : (normaliseMobile(value.trim()) ?? '');
 
 /* ==========================================================================
  * Password — a meter that measures rather than decorates
@@ -485,7 +499,7 @@ export function validateCount(
  * move on until they invent one gets a fake number typed into it.
  */
 export function validateWhatsapp(value: string): string | undefined {
-  return value.trim().length === 0 ? undefined : validateMobile(value);
+  return isMobileBlank(value) ? undefined : validateMobile(value);
 }
 
 /* ==========================================================================

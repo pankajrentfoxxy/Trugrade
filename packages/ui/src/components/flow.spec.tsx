@@ -73,15 +73,6 @@ describe('FormSection', () => {
     expect(group).toHaveTextContent('As printed on the GST certificate.');
   });
 
-  it('carries the tick rule under the heading', () => {
-    render(
-      <FormSection title="Bank account">
-        <input aria-label="IFSC" />
-      </FormSection>,
-    );
-    expect(screen.getByTestId('form-section').querySelector('.tickrule')).toBeInTheDocument();
-  });
-
   it('renders no status when none was given, rather than a zero', () => {
     render(
       <FormSection title="Contacts">

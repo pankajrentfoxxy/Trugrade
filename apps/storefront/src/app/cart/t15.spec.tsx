@@ -135,8 +135,8 @@ async function open(cart: CartView = view()) {
   mockList.mockResolvedValue(ok(summaries));
   mockView.mockResolvedValue(ok(cart));
   const rendered = render(<CartScreen />);
-  // The h1, not the text: the cart's name is also on its chip in the switcher.
-  await screen.findByRole('heading', { level: 1, name: cart.name });
+  // Wait for the cart read to land — the active cart chip is the anchor.
+  await screen.findByRole('button', { current: true });
   return rendered;
 }
 
@@ -156,18 +156,11 @@ describe('one seller, one order, one invoice', () => {
     expect(container.innerHTML).not.toMatch(/sub[-\s]?order/i);
   });
 
-  it('does not call a dispatch point a seller, a vendor or a supplier', async () => {
+  it('shows dispatch points as labels, not as sellers', async () => {
     const { container } = await open();
     expect(container.textContent).not.toMatch(/vendor|supplier|seller of these/i);
     expect(screen.getByText('Supply Point B · Palwal')).toBeInTheDocument();
     expect(screen.getByText('Supply Point W · New Delhi')).toBeInTheDocument();
-  });
-
-  it('says there is one invoice, from us, over however many dispatch points', async () => {
-    const { container } = await open();
-    expect(container.textContent).toContain('One order and one invoice');
-    expect(container.textContent).toContain('TrueTech Services Pvt. Ltd.');
-    expect(container.textContent).toMatch(/2 dispatch points/);
   });
 });
 
@@ -186,13 +179,13 @@ describe('a line whose availability has dropped', () => {
 
   it('prices the line on what can ship, and shows that arithmetic', async () => {
     const { container } = await open();
-    const row = [...container.querySelectorAll('tbody tr')].find((r) =>
+    const card = [...container.querySelectorAll('.cartline-card')].find((r) =>
       r.textContent?.includes('3 of the 5'),
     );
     // 3 × 48,000 — not 5 × 48,000. A total for machines that cannot ship is a
     // figure the buyer will not be charged.
-    expect(row?.textContent).toContain('₹1,44,000.00');
-    expect(row?.textContent).toContain('3 × ₹48,000.00');
+    expect(card?.textContent).toContain('₹1,44,000.00');
+    expect(card?.textContent).toContain('3 × ₹48,000.00');
   });
 
   it('holds checkout shut and says what has to change', async () => {

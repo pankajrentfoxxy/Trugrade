@@ -446,6 +446,16 @@ export function StepCapability({
                 onToggle={() => toggleIn('brands', brand)}
               />
             ))}
+            <Chip
+              label="All"
+              selected={brands.length > 0 && brands.every((b) => values.brands.includes(b))}
+              onToggle={() =>
+                setAndSave(
+                  'brands',
+                  brands.every((b) => values.brands.includes(b)) ? [] : [...brands],
+                )
+              }
+            />
           </div>
         ) : (
           // Never fabricate data on a screen: with no answer from the catalogue

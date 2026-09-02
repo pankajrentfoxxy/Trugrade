@@ -294,18 +294,9 @@ describe('checkout — what it must not say', () => {
     expect(container.textContent).toContain('Supply Point F · Noida');
   });
 
-  it('promises no draft it does not write, and says what the hold really is', async () => {
+  it('hides the registration draft sentence on the step rail', async () => {
     await open(session());
-    // `StepRail` would otherwise close with "Nothing saved yet. Finish a step to
-    // save a draft." Checkout writes no draft at all; the hold is the only thing
-    // holding anything, and it releases whether or not this tab is open.
-    // Twice: the flow renders the rail collapsed for a phone and open for a
-    // desktop, and the note belongs to both.
-    expect(screen.getAllByText(/Nothing here is saved as a draft/)).toHaveLength(2);
-    // The package's own sentence is still in the DOM — it is hidden by
-    // `.checkoutrail > p:last-child` in `storefront.css`, and jsdom applies no
-    // stylesheet. What this can check is that the hook the rule binds to is on
-    // both rails: drop the class and the false promise comes back on screen.
+    expect(screen.queryByText(/Nothing here is saved as a draft/)).not.toBeInTheDocument();
     const rails = screen.getAllByTestId('step-rail');
     expect(rails).toHaveLength(2);
     for (const rail of rails) expect(rail).toHaveClass('checkoutrail');

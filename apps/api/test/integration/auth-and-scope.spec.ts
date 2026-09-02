@@ -7,13 +7,19 @@
  *      asserts the scope catches it anyway.
  *
  *   2. **Refresh-token rotation with reuse detection** (VR-059). A second use of
- *      an already-rotated token has no benign explanation, so it kills the whole
- *      family — logging the attacker out along with the victim, which is the
- *      correct trade.
+ *      an already-rotated token kills the whole family — logging the attacker out
+ *      along with the victim, which is the correct trade.
+ *
+ *      With one exception, which is the point of the pair of tests below: a use
+ *      that lands within `SESSION_POLICY.refreshGraceSeconds` of the rotation it
+ *      repeats DOES have a benign explanation — two tabs refreshing at once — and
+ *      is replayed rather than punished.
  */
 
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
+import type { ExecutionContext } from '@nestjs/common';
 import { permissionsFor, type Permission, type Role } from '@trugrade/contracts';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
@@ -25,6 +31,7 @@ import {
 } from '../../src/shared/db/org-scope';
 import { RedisService, LockService, RateLimiter } from '../../src/shared/redis/redis.service';
 import { TokenService } from '../../src/shared/auth/token.service';
+import { AuthGuard, Public } from '../../src/shared/auth/guards';
 import {
   ForbiddenError,
   RateLimitedError,
@@ -250,6 +257,44 @@ describe('VR-058 / VR-059 — tokens', () => {
     expect(second.sessionId).toBe(first.sessionId); // rotation, not a new login
   });
 
+  /**
+   * The benign half of VR-059, and the reason the rule needed a window at all.
+   *
+   * `GET /auth/session` is the only rotation point, so every concurrent page load
+   * races here: two tabs, or one provider mounting twice, both present the token
+   * the other just retired. Revoking for that signed a legitimate user out of an
+   * account they were actively using — and left them holding a freshly-set access
+   * cookie whose session had just been deleted, so they could not sign back in
+   * either.
+   */
+  it('two tabs refreshing at once both get the same tokens, rather than one killing the session', async () => {
+    const first = await issueFor();
+    const reissue = async (): Promise<{
+      orgType: 'VENDOR';
+      roles: Role[];
+      permissions: Permission[];
+    }> => ({
+      orgType: 'VENDOR',
+      roles: ['VENDOR_OWNER'],
+      permissions: [...permissionsFor(['VENDOR_OWNER'])],
+    });
+
+    // Both tabs present the identical cookie, because there is only one jar.
+    const [tabA, tabB] = await Promise.all([
+      tokens.rotate(first.refreshToken, reissue),
+      tokens.rotate(first.refreshToken, reissue),
+    ]);
+
+    // Identical responses are the point: whichever Set-Cookie the browser applies
+    // last, the cookie it keeps is one the server still recognises.
+    expect(tabB.refreshToken).toBe(tabA.refreshToken);
+    expect(tabB.sessionId).toBe(first.sessionId);
+    await expect(tokens.verifyAccess(tabA.accessToken)).resolves.toBeTruthy();
+
+    // And the session survives — the whole failure was that it did not.
+    await expect(tokens.rotate(tabA.refreshToken, reissue)).resolves.toBeTruthy();
+  });
+
   it('VR-059 — reusing a rotated refresh token revokes the entire family', async () => {
     const first = await issueFor();
     const second = await tokens.rotate(first.refreshToken, async () => ({
@@ -258,7 +303,13 @@ describe('VR-058 / VR-059 — tokens', () => {
       permissions: [...permissionsFor(['VENDOR_OWNER'])],
     }));
 
-    // The attacker replays the token we already retired.
+    // Past the grace window. Redis drops these on its own after
+    // SESSION_POLICY.refreshGraceSeconds; dropping them here is the same state
+    // without spending thirty seconds of test time on it.
+    const replayKeys = await redis.client.keys('rot:*');
+    if (replayKeys.length) await redis.client.del(...replayKeys);
+
+    // The attacker replays the token we retired minutes ago. No benign reading.
     await expect(
       tokens.rotate(first.refreshToken, async () => ({
         orgType: 'VENDOR',
@@ -288,6 +339,85 @@ describe('VR-058 / VR-059 — tokens', () => {
     expect(revoked).toBeGreaterThanOrEqual(2);
     await expect(tokens.verifyAccess(a.accessToken)).rejects.toThrow();
     await expect(tokens.verifyAccess(b.accessToken)).rejects.toThrow();
+  });
+
+  /**
+   * The other half of the lockout, and the reason it was unrecoverable.
+   *
+   * A dead session leaves a live `tg_access` cookie in the browser for up to the
+   * access TTL. `POST /auth/login` is `@Public()`, but the guard verified the
+   * token before it consulted that — so the cookie refused the one request that
+   * would have replaced it, and no action available in the UI could clear it.
+   */
+  describe('AuthGuard — a dead cookie must not be able to refuse a login', () => {
+    class PublicRoutes {
+      @Public()
+      login(): void {}
+    }
+    class GuardedRoutes {
+      board(): void {}
+    }
+
+    interface FakeRequest {
+      headers: Record<string, string>;
+      cookies: Record<string, string>;
+      principal?: Principal;
+    }
+
+    /** The two accessors `AuthGuard` actually reaches for, and nothing else. */
+    const contextFor = (target: 'public' | 'guarded', req: FakeRequest): ExecutionContext =>
+      ({
+        getHandler: () =>
+          target === 'public' ? PublicRoutes.prototype.login : GuardedRoutes.prototype.board,
+        getClass: () => (target === 'public' ? PublicRoutes : GuardedRoutes),
+        switchToHttp: () => ({ getRequest: () => req }),
+      }) as unknown as ExecutionContext;
+
+    const withCookie = (token: string): FakeRequest => ({
+      headers: {},
+      cookies: { tg_access: token },
+    });
+
+    let guard: AuthGuard;
+    beforeAll(() => {
+      guard = new AuthGuard(new Reflector(), tokens, ctx);
+    });
+
+    it('lets a login through while the browser still holds a revoked session cookie', async () => {
+      const issued = await issueFor();
+      await tokens.revokeSession(issued.sessionId);
+      // Exactly the state the bug left behind: signature-valid, unexpired, and
+      // naming a session that no longer exists.
+      await expect(tokens.verifyAccess(issued.accessToken)).rejects.toThrow(/session has ended/i);
+
+      await expect(
+        ctx.run({ requestId: 'test' }, () =>
+          guard.canActivate(contextFor('public', withCookie(issued.accessToken))),
+        ),
+      ).resolves.toBe(true);
+    });
+
+    it('still refuses that same cookie on a guarded route', async () => {
+      const issued = await issueFor();
+      await tokens.revokeSession(issued.sessionId);
+
+      await expect(
+        ctx.run({ requestId: 'test' }, () =>
+          guard.canActivate(contextFor('guarded', withCookie(issued.accessToken))),
+        ),
+      ).rejects.toThrow(UnauthenticatedError);
+    });
+
+    it('still resolves a principal on a public route when the token is good', async () => {
+      const issued = await issueFor();
+      const req = withCookie(issued.accessToken);
+
+      await expect(
+        ctx.run({ requestId: 'test' }, () => guard.canActivate(contextFor('public', req))),
+      ).resolves.toBe(true);
+      // The signed-in buyer browsing the storefront still gets their own prices.
+      expect(req.principal?.orgId).toBe(VENDOR_A);
+    });
   });
 });
 

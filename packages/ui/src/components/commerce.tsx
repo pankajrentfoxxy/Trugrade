@@ -6,6 +6,7 @@
 // client-only API into an RSC render and fails at request time rather than at
 // build time.
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import {
   Money,
   stateTaxLabel,
@@ -278,37 +279,63 @@ function QcExpiry({ offer }: { offer: SupplyPointOffer }): React.JSX.Element {
 interface OfferActionProps {
   offer: SupplyPointOffer;
   onAdd?: (quantity: number) => void;
+  /** When set, this offer is already in the buyer's cart at this quantity. */
+  cartQty?: number | null;
+  cartBusy?: boolean;
+  onCartQtyChange?: (quantity: number) => void;
   idPrefix: string;
-  /** See `OfferRowProps.emphasis`: only one row on a board carries the amber. */
   emphasis?: boolean;
 }
 
 function OfferAction({
   offer,
   onAdd,
+  cartQty = null,
+  cartBusy = false,
+  onCartQtyChange,
   idPrefix,
   emphasis,
 }: OfferActionProps): React.JSX.Element {
-  // Held as a string, like `CommissionReadout` holds a rupee amount: a field
-  // that snaps back to 1 the moment it is cleared makes the next keystroke
-  // append rather than replace, and the buyer adds thirteen laptops.
+  const inCart = cartQty !== null && cartQty > 0;
   const [quantity, setQuantity] = React.useState('1');
   const label = supplyPointLabel(offer.supplyPointCode, offer.city);
   const quantityId = `${idPrefix}-qty`;
-  const resolved = Math.min(Math.max(1, Math.floor(Number(quantity)) || 1), offer.unitsAvailable);
 
-  // A supply point with nothing sellable should never have reached this grid —
-  // `listing.v_sellable_unit` is the one definition and the API applies it. But
-  // an Add button that would put zero units in a cart is worse than a row that
-  // says so, so the state exists rather than being assumed away.
+  React.useEffect(() => {
+    if (inCart) setQuantity(String(cartQty));
+    else setQuantity('1');
+  }, [cartQty, inCart]);
+
+  const resolved = inCart
+    ? Math.min(Math.max(1, cartQty ?? 1), offer.unitsAvailable)
+    : Math.min(Math.max(1, Math.floor(Number(quantity)) || 1), offer.unitsAvailable);
+
+  function applyQty(next: number): void {
+    const clamped = Math.min(Math.max(0, next), offer.unitsAvailable);
+    if (inCart) {
+      onCartQtyChange?.(clamped);
+      return;
+    }
+    setQuantity(String(Math.max(1, clamped)));
+  }
+
   if (offer.unitsAvailable < 1) {
     return <span className="text-body-sm text-ink-2">No units available</span>;
   }
 
   return (
-    <span className="flex flex-wrap items-end gap-3">
-      <span className="flex flex-col gap-1">
-        <label htmlFor={quantityId} className="font-mono text-label uppercase tracking-[0.13em] text-ink-2">
+    <span className="flex items-center gap-2 whitespace-nowrap">
+      <span className="inline-flex h-9 items-stretch rounded border border-rule bg-sheet">
+        <button
+          type="button"
+          className="px-2 text-body-sm text-ink-2 hover:bg-sheet-2 disabled:cursor-not-allowed disabled:opacity-45"
+          aria-label={`Decrease quantity for ${label}`}
+          disabled={cartBusy || (!inCart && resolved <= 1)}
+          onClick={() => applyQty(resolved - 1)}
+        >
+          −
+        </button>
+        <label htmlFor={quantityId} className="sr-only">
           Qty
         </label>
         <input
@@ -317,19 +344,49 @@ function OfferAction({
           inputMode="numeric"
           min={1}
           max={offer.unitsAvailable}
-          value={quantity}
-          onChange={(event) => setQuantity(event.target.value)}
-          onBlur={() => setQuantity(String(resolved))}
-          className="h-11 w-20 rounded border border-rule bg-sheet px-3 text-body-sm tnum text-ink"
+          value={inCart ? String(resolved) : quantity}
+          disabled={cartBusy}
+          onChange={(event) => {
+            if (inCart) return;
+            setQuantity(event.target.value);
+          }}
+          onBlur={() => {
+            if (inCart) return;
+            setQuantity(String(resolved));
+          }}
+          onKeyDown={(event) => {
+            if (!inCart || event.key !== 'Enter') return;
+            event.preventDefault();
+            const parsed = Math.floor(Number(quantity));
+            if (Number.isInteger(parsed)) applyQty(parsed);
+          }}
+          className="w-10 border-x border-rule bg-transparent px-1 text-center text-body-sm tnum text-ink disabled:opacity-60"
         />
+        <button
+          type="button"
+          className="px-2 text-body-sm text-ink-2 hover:bg-sheet-2 disabled:cursor-not-allowed disabled:opacity-45"
+          aria-label={`Increase quantity for ${label}`}
+          disabled={cartBusy || resolved >= offer.unitsAvailable}
+          onClick={() => applyQty(resolved + 1)}
+        >
+          +
+        </button>
       </span>
-      <Button
-        variant={emphasis ? 'primary' : 'secondary'}
-        onClick={() => onAdd?.(resolved)}
-        aria-label={`Add ${label} to cart`}
-      >
-        Add to cart
-      </Button>
+      {inCart ? (
+        <span className="text-body-sm font-medium text-ink-2" aria-live="polite">
+          Added to cart
+        </span>
+      ) : (
+        <Button
+          variant={emphasis ? 'primary' : 'secondary'}
+          size="sm"
+          loading={cartBusy}
+          onClick={() => onAdd?.(resolved)}
+          aria-label={`Add ${label} to cart`}
+        >
+          Add to cart
+        </Button>
+      )}
     </span>
   );
 }
@@ -339,26 +396,139 @@ export interface OfferRowProps {
   /** A neutral "Lowest landed" note. Not a scarcity badge, and not a countdown. */
   lowestLanded?: boolean;
   onAdd?: (quantity: number) => void;
+  cartQty?: number | null;
+  cartBusy?: boolean;
+  onCartQtyChange?: (quantity: number) => void;
   itcExplainerHref?: string;
-  /**
-   * Whether THIS row carries the screen's primary action.
-   *
-   * The row used to hard-code `variant="primary"`, so a board of ten supply
-   * points painted ten amber buttons. CLAUDE.md allows ONE primary action per
-   * screen, and 09_FRONTEND_LOCKED is stricter about why: amber means a primary
-   * action, a measured value, or an active state, and "the moment it becomes a
-   * decorative wash, the QC score chip stops meaning anything". Ten amber
-   * buttons beside ten amber QC scores is exactly that wash — and it also tells
-   * the buyer nothing, because every row shouts equally.
-   *
-   * The reference implementation gives one row the amber and the rest a ghost,
-   * which is also the honest reading: the board has already sorted, so the top
-   * row is the one it is recommending.
-   *
-   * Defaults to false so a caller has to choose deliberately; a grid of rows
-   * that all forgot is quiet, not loud.
-   */
   emphasis?: boolean;
+}
+
+function PriceBreakupMenu({
+  offer,
+  itcExplainerHref,
+}: Pick<OfferRowProps, 'offer' | 'itcExplainerHref'>): React.JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const [coords, setCoords] = React.useState<{ top: number; left: number } | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const hideTimerRef = React.useRef<number | null>(null);
+  /** A click keeps the menu open until the trigger or the page is clicked again. */
+  const pinnedRef = React.useRef(false);
+  const menuId = React.useId();
+
+  const cancelHide = React.useCallback((): void => {
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const show = React.useCallback((): void => {
+    cancelHide();
+    setOpen(true);
+  }, [cancelHide]);
+
+  const hide = React.useCallback((): void => {
+    cancelHide();
+    pinnedRef.current = false;
+    setOpen(false);
+    setCoords(null);
+  }, [cancelHide]);
+
+  const scheduleHide = React.useCallback((): void => {
+    if (pinnedRef.current) return;
+    cancelHide();
+    hideTimerRef.current = window.setTimeout(() => {
+      setOpen(false);
+      setCoords(null);
+    }, 140);
+  }, [cancelHide]);
+
+  const toggle = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>): void => {
+      event.stopPropagation();
+      if (open && pinnedRef.current) {
+        hide();
+        return;
+      }
+      pinnedRef.current = true;
+      show();
+    },
+    [hide, open, show],
+  );
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) setCoords({ top: rect.bottom + 4, left: rect.left });
+  }, [open]);
+
+  React.useEffect(() => {
+    return () => cancelHide();
+  }, [cancelHide]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent): void {
+      if (event.key === 'Escape') hide();
+    }
+    function onPointer(event: MouseEvent): void {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      hide();
+    }
+    window.addEventListener('keydown', onKey);
+    const attach = window.setTimeout(() => {
+      window.addEventListener('click', onPointer);
+    }, 0);
+    return () => {
+      window.clearTimeout(attach);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('click', onPointer);
+    };
+  }, [hide, open]);
+
+  const panel =
+    open && coords && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={panelRef}
+            id={menuId}
+            role="dialog"
+            aria-label="Price break-up"
+            className="fixed z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded border border-rule bg-sheet shadow-lg"
+            style={{ top: coords.top, left: coords.left }}
+            onMouseEnter={show}
+            onMouseLeave={scheduleHide}
+          >
+            <PriceBreakup
+              className="border-0 shadow-none"
+              lines={offer.priceLines}
+              valuationMethod={offer.valuationMethod}
+              itcExplainerHref={itcExplainerHref}
+            />
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="text-body-sm text-acc-ink underline underline-offset-4"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={toggle}
+        onMouseEnter={show}
+        onMouseLeave={scheduleHide}
+      >
+        Price break-up
+      </button>
+      {panel}
+    </>
+  );
 }
 
 function PriceCell({
@@ -370,20 +540,9 @@ function PriceCell({
     <span className="flex flex-col gap-2">
       <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
       {lowestLanded && <span className="text-body-sm text-ink-2">Lowest landed</span>}
-      {/* A native disclosure: click-operated, keyboard-operable, and no hover
-          tooltip carrying information the buyer needs before purchase (1.4.13).
-          The whole break-up is behind it — never part of it. */}
-      <details className="text-body-sm">
-        <summary className="inline-flex min-h-11 cursor-pointer items-center text-acc-ink underline underline-offset-4">
-          Price break-up
-        </summary>
-        <PriceBreakup
-          className="mt-2"
-          lines={offer.priceLines}
-          valuationMethod={offer.valuationMethod}
-          itcExplainerHref={itcExplainerHref}
-        />
-      </details>
+      {/* A floating menu: the break-up overlays the board instead of expanding
+          the row. Click and hover both open it; Escape and outside click close. */}
+      <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
     </span>
   );
 }
@@ -400,6 +559,9 @@ export function OfferRow({
   offer,
   lowestLanded,
   onAdd,
+  cartQty,
+  cartBusy,
+  onCartQtyChange,
   itcExplainerHref,
   emphasis,
 }: OfferRowProps): React.JSX.Element {
@@ -428,7 +590,15 @@ export function OfferRow({
       </td>
       <td className="tg-cell text-ink">{offer.dispatchCommitment}</td>
       <td className="tg-cell">
-        <OfferAction offer={offer} onAdd={onAdd} idPrefix={id} emphasis={emphasis} />
+        <OfferAction
+          offer={offer}
+          onAdd={onAdd}
+          cartQty={cartQty}
+          cartBusy={cartBusy}
+          onCartQtyChange={onCartQtyChange}
+          idPrefix={id}
+          emphasis={emphasis}
+        />
       </td>
     </tr>
   );
@@ -445,6 +615,9 @@ export function OfferCard({
   offer,
   lowestLanded,
   onAdd,
+  cartQty,
+  cartBusy,
+  onCartQtyChange,
   itcExplainerHref,
   emphasis,
 }: OfferRowProps): React.JSX.Element {
@@ -453,29 +626,51 @@ export function OfferCard({
 
   const facts: Array<[string, React.ReactNode]> = [
     ['Grade', <GradeBadge key="g" grade={offer.grade} />],
-    ['Battery health', batteryRange(offer.batteryHealthPct)],
-    ['Total warranty', `${offer.totalWarrantyMonths} months`],
-    ['Units available', offer.unitsAvailable],
+    ['Battery', batteryRange(offer.batteryHealthPct)],
+    ['Warranty', `${offer.totalWarrantyMonths} mo`],
+    ['Units', offer.unitsAvailable],
     ['Inspected', <QcExpiry key="q" offer={offer} />],
     ['Dispatch', offer.dispatchCommitment],
   ];
 
   return (
-    <article className="tg-card flex flex-col gap-4 rounded-lg border border-rule bg-sheet">
-      <h3 className="font-sans text-h3 text-ink">
-        {supplyPointLabel(offer.supplyPointCode, offer.city)}
-      </h3>
-      <PriceCell offer={offer} lowestLanded={lowestLanded} itcExplainerHref={itcExplainerHref} />
-      <QualityCell quality={offer.quality} />
-      <dl className="flex flex-col gap-2">
+    <article className="tg-card offer-card flex flex-col gap-3 rounded-lg border border-rule bg-sheet">
+      <div className="offer-card-head flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-sans text-body font-semibold text-ink">
+            {supplyPointLabel(offer.supplyPointCode, offer.city)}
+          </h3>
+          <QualityCell quality={offer.quality} />
+        </div>
+        <div className="shrink-0 text-right">
+          <span className="block font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
+          {lowestLanded ? (
+            <span className="text-body-sm text-ink-2">Lowest landed</span>
+          ) : null}
+          <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
+        </div>
+      </div>
+
+      <dl className="offer-card-grid m-0 grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
         {facts.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between gap-4">
-            <dt className="text-body-sm text-ink-2">{label}</dt>
-            <dd className="text-body-sm text-ink">{value}</dd>
+          <div key={label} className="min-w-0">
+            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{label}</dt>
+            <dd className="mt-0.5 text-body-sm text-ink">{value}</dd>
           </div>
         ))}
       </dl>
-      <OfferAction offer={offer} onAdd={onAdd} idPrefix={id} emphasis={emphasis} />
+
+      <div className="offer-card-foot border-t border-rule-2 pt-3">
+        <OfferAction
+          offer={offer}
+          onAdd={onAdd}
+          cartQty={cartQty}
+          cartBusy={cartBusy}
+          onCartQtyChange={onCartQtyChange}
+          idPrefix={id}
+          emphasis={emphasis}
+        />
+      </div>
     </article>
   );
 }
@@ -500,7 +695,16 @@ export interface OfferGridProps {
    * first. Prices include GST and freight to 110020."
    */
   caption: string;
+  /**
+   * `responsive` — table from the `md` breakpoint up, cards below (default).
+   * `cards` — always cards; use when the board sits in a narrow column.
+   * `table` — always the wide comparison table.
+   */
+  layout?: 'responsive' | 'cards' | 'table';
   onAdd?: (offer: SupplyPointOffer, quantity: number) => void;
+  cartQtyFor?: (offer: SupplyPointOffer) => number | null;
+  cartBusyFor?: (offer: SupplyPointOffer) => boolean;
+  onCartQtyChange?: (offer: SupplyPointOffer, quantity: number) => void;
   itcExplainerHref?: string;
   className?: string;
 }
@@ -521,7 +725,11 @@ export interface OfferGridProps {
 export function OfferGrid({
   offers,
   caption,
+  layout = 'responsive',
   onAdd,
+  cartQtyFor,
+  cartBusyFor,
+  onCartQtyChange,
   itcExplainerHref,
   className,
 }: OfferGridProps): React.JSX.Element {
@@ -530,60 +738,78 @@ export function OfferGrid({
     null,
   );
   const isLowest = (offer: SupplyPointOffer) => lowest !== null && offer.landedPrice.eq(lowest);
+  const showTable = layout === 'table' || layout === 'responsive';
+  const showCards = layout === 'cards' || layout === 'responsive';
+
+  const rowProps = (offer: SupplyPointOffer) => ({
+    offer,
+    lowestLanded: isLowest(offer),
+    emphasis: Boolean(onAdd),
+    onAdd: onAdd ? (quantity: number) => onAdd(offer, quantity) : undefined,
+    cartQty: cartQtyFor?.(offer) ?? null,
+    cartBusy: cartBusyFor?.(offer) ?? false,
+    onCartQtyChange: onCartQtyChange ? (quantity: number) => onCartQtyChange(offer, quantity) : undefined,
+    itcExplainerHref,
+  });
 
   return (
-    <div className={className}>
+    <div className={className} data-layout={layout}>
       <div role="status" aria-live="polite" className="sr-only">
         {caption}
       </div>
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full border-collapse text-body-sm">
-          <caption className="sr-only">{caption}</caption>
-          <thead>
-            <tr className="border-b border-rule">
-              {OFFER_COLUMNS.map((column) => (
-                <th
-                  key={column}
-                  scope="col"
-                  className="tg-cell text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2"
-                >
-                  {column}
+      {showTable ? (
+        <div
+          className={cn(
+            'overflow-x-auto',
+            layout === 'responsive' && 'hidden md:block',
+            layout === 'table' && 'block',
+          )}
+        >
+          <table className="w-full border-collapse text-body-sm">
+            <caption className="sr-only">{caption}</caption>
+            <thead>
+              <tr className="border-b border-rule">
+                {OFFER_COLUMNS.map((column) => (
+                  <th
+                    key={column}
+                    scope="col"
+                    className="tg-cell text-left font-mono text-label uppercase tracking-[0.13em] text-ink-2"
+                  >
+                    {column}
+                  </th>
+                ))}
+                <th scope="col" className="tg-cell text-left">
+                  <span className="sr-only">Add to cart</span>
                 </th>
+              </tr>
+            </thead>
+            <tbody>
+              {offers.map((offer) => (
+                <OfferRow
+                  key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}
+                  {...rowProps(offer)}
+                />
               ))}
-              <th scope="col" className="tg-cell text-left">
-                <span className="sr-only">Add to cart</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {offers.map((offer, index) => (
-              <OfferRow
-                key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}
-                offer={offer}
-                lowestLanded={isLowest(offer)}
-                emphasis={index === 0}
-                onAdd={onAdd ? (quantity) => onAdd(offer, quantity) : undefined}
-                itcExplainerHref={itcExplainerHref}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
-      <ul className="flex flex-col gap-4 md:hidden">
-        {offers.map((offer, index) => (
-          <li key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}>
-            <OfferCard
-              offer={offer}
-              lowestLanded={isLowest(offer)}
-              emphasis={index === 0}
-              onAdd={onAdd ? (quantity) => onAdd(offer, quantity) : undefined}
-              itcExplainerHref={itcExplainerHref}
-            />
-          </li>
-        ))}
-      </ul>
+      {showCards ? (
+        <ul
+          className={cn(
+            'obrd-cards flex flex-col gap-4',
+            layout === 'responsive' && 'md:hidden',
+          )}
+        >
+          {offers.map((offer) => (
+            <li key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}>
+              <OfferCard {...rowProps(offer)} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

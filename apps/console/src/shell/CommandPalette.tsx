@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
-import { cn, TickRule } from '@trugrade/ui';
+import { cn } from '@trugrade/ui';
 import { useAuth } from '../lib/auth';
 import { rupees, UNIT_API, type ConsoleSearch } from '../routes/units/api';
 import { visibleGroups, type NavEntry } from './nav';
@@ -436,7 +436,6 @@ export function CommandPalette(): React.JSX.Element | null {
              -------------------------------------------------------------- */}
           {data && (
             <div className="border-t border-rule bg-sheet-2 px-4 py-3">
-              <TickRule />
               {/* Flattened to one sentence rather than one line per group. The
                   fact that matters is WHICH FIELDS were compared, not which
                   group each belongs to — six lines of that was a wall over the

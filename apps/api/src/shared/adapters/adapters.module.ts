@@ -17,9 +17,12 @@ import {
 import { ObjectUrlSigner } from './object-url';
 import {
   FakeBankVerification,
-  FakeGstinVerification,
+  // FakeGstinVerification,
   FakePanVerification,
 } from './fakes/kyc.fakes';
+import { ZohoGstinVerification } from './live/gstin.zoho';
+import { InteraktNotification } from './live/interakt.notification';
+import { SmtpNotification } from './live/smtp.notification';
 import {
   FakeEInvoice,
   FakeEwayBill,
@@ -59,10 +62,34 @@ const fakeProviders: Provider[] = [
   // Not a fake. Every adapter that hands a browser a URL mints it here, so the
   // route that resolves one and the store that issued it share a key.
   ObjectUrlSigner,
-  { provide: GstinVerificationPort, useClass: FakeGstinVerification },
+  {
+    provide: GstinVerificationPort,
+    inject: [AppConfig],
+    useFactory: (config: AppConfig): GstinVerificationPort =>
+      new ZohoGstinVerification(config),
+    // FakeGstinVerification — off for now so /register Verify hits Zoho.
+    // config.get('GST_VERIFY_API_URL')
+    //   ? new ZohoGstinVerification(config)
+    //   : new FakeGstinVerification(),
+  },
   { provide: PanVerificationPort, useClass: FakePanVerification },
   { provide: BankVerificationPort, useClass: FakeBankVerification },
-  { provide: NotificationPort, useClass: FakeNotification },
+  {
+    provide: NotificationPort,
+    inject: [AppConfig, NotificationOutbox],
+    useFactory: (config: AppConfig, outbox: NotificationOutbox): NotificationPort => {
+      const fake = new FakeNotification(outbox);
+      const live = config.get('NODE_ENV') !== 'test';
+      let port: NotificationPort = fake;
+      if (live && config.get('INTERAKT_API_KEY')) {
+        port = new InteraktNotification(config, port);
+      }
+      if (live && config.get('SMTP_USER')) {
+        port = new SmtpNotification(config, port);
+      }
+      return port;
+    },
+  },
   { provide: PaymentGatewayPort, useClass: FakePaymentGateway },
   { provide: VirtualAccountPort, useClass: FakeVirtualAccount },
   { provide: EwayBillPort, useClass: FakeEwayBill },
@@ -100,8 +127,15 @@ const fakeProviders: Provider[] = [
       inject: [AppConfig],
       useFactory: (config: AppConfig): string => {
         const mode = config.get('INTEGRATION_MODE');
+        const gst = 'zoho-books';
+        const mail =
+          config.get('SMTP_USER') && config.get('NODE_ENV') !== 'test' ? 'smtp' : 'fake';
+        const whatsapp =
+          config.get('INTERAKT_API_KEY') && config.get('NODE_ENV') !== 'test'
+            ? 'interakt'
+            : 'fake';
         new Logger('Adapters').log(
-          `INTEGRATION_MODE=${mode}${mode === 'mock' ? ' — every external call is a fake' : ''}`,
+          `INTEGRATION_MODE=${mode}${mode === 'mock' ? ' — every external call is a fake' : ''} · GSTIN=${gst} · EMAIL=${mail} · WHATSAPP_OTP=${whatsapp}`,
         );
         return mode;
       },

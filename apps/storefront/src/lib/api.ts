@@ -178,6 +178,31 @@ export interface SearchResult {
   /** Cities only. The supply-point code plus the city is all a buyer ever sees. */
   cities: string[];
   sampleSerial: string;
+  ramGb: number;
+  storageGb: number;
+  storageType: string;
+  cpuLine: string;
+  displayLine: string;
+}
+
+/** Stale ISR cache may omit fields added after deploy — never crash the card. */
+function normalizeSearchResult(raw: SearchResult): SearchResult {
+  return {
+    ...raw,
+    cities: raw.cities ?? [],
+    ramGb: raw.ramGb ?? 0,
+    storageGb: raw.storageGb ?? 0,
+    storageType: raw.storageType ?? '',
+    cpuLine: raw.cpuLine || raw.spec || 'Specification not available',
+    displayLine: raw.displayLine || '',
+  };
+}
+
+function normalizeSearchResponse(data: SearchResponse): SearchResponse {
+  return {
+    ...data,
+    results: data.results.map(normalizeSearchResult),
+  };
 }
 
 export interface SearchResponse {
@@ -206,7 +231,7 @@ export async function getSearch(qs: string): Promise<SearchResponse | null> {
       `${API_BASE}/public/search${qs ? `?${qs}` : ''}`,
       qs === '' ? { next: { revalidate: 30 } } : { cache: 'no-store' },
     );
-    return res.ok ? ((await res.json()) as SearchResponse) : null;
+    return res.ok ? normalizeSearchResponse((await res.json()) as SearchResponse) : null;
   } catch {
     return null;
   }

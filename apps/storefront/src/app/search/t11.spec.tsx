@@ -133,6 +133,11 @@ const RESULTS: SearchResult[] = [
     warrantyMonths: null,
     cities: ['Gurugram'],
     sampleSerial: 'TGD1003FCD',
+    ramGb: 16,
+    storageGb: 512,
+    storageType: 'NVME_SSD',
+    cpuLine: 'Intel Core i5-1135G7',
+    displayLine: '15.6" FHD (1920x1080)',
   },
   {
     // The machine nobody opened the battery report on.
@@ -152,6 +157,11 @@ const RESULTS: SearchResult[] = [
     warrantyMonths: null,
     cities: ['Gurugram'],
     sampleSerial: 'TGD50082E5',
+    ramGb: 8,
+    storageGb: 256,
+    storageType: 'NVME_SSD',
+    cpuLine: 'Intel Core i3-1115G4',
+    displayLine: '15.6" FHD (1920x1080)',
   },
 ];
 

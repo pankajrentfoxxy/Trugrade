@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
-import { TickRule } from './measure';
 
 /**
  * Archetype E — **Workspace**: a KPI row, then queues ordered by SLA breach.
@@ -226,7 +225,6 @@ export function QueueList({ items, label, className }: QueueListProps): React.JS
         <h2 id={headingId} className="text-h3 text-ink">
           {label}
         </h2>
-        <TickRule />
       </div>
 
       <ul className="flex flex-col gap-2" data-testid="queue-list">

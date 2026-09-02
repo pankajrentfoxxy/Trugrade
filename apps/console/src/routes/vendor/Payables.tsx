@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Button, DataBoard, EmptyState, StatusPill, TickRule, type Column } from '@trugrade/ui';
+import { Button, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
 import { Board, Datum, NotMeasured, PageHeader, Section, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import {
@@ -438,7 +438,6 @@ export function VendorPayablesRoute(): React.JSX.Element {
 
           <div className="mt-6">
             <h2 className="text-h3 text-ink">Every payable</h2>
-            <TickRule />
           </div>
 
           <div className="flex flex-wrap items-end gap-4">

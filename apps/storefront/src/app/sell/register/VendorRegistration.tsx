@@ -277,6 +277,7 @@ export function VendorRegistration({
           onSaveDraft={ctx.saveDraft}
           onContinue={ctx.continueFrom}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
       CAPABILITY: (ctx) => (

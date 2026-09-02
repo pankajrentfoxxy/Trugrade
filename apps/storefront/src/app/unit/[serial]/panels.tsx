@@ -101,7 +101,7 @@ export function Hardware({
   ];
 
   return (
-    <div className="tbl">
+    <div className="tbl hw-panel">
       <dl className="specs hw">
         {rows.map(([label, value]) => (
           <div key={label}>

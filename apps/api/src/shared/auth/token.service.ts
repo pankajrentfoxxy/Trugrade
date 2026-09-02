@@ -7,8 +7,8 @@ import { importPrivateKey, importPublicKey, signJwt, verifyJwt, type JwtClaims }
 import { SESSION_POLICY, type Permission, type Role } from '@trugrade/contracts';
 import { AppConfig } from '../config';
 import { ClockPort } from '../clock';
-import { RedisService } from '../redis/redis.service';
-import { UnauthenticatedError } from '../errors/domain-errors';
+import { RedisService, LockService } from '../redis/redis.service';
+import { RateLimitedError, UnauthenticatedError } from '../errors/domain-errors';
 
 export interface AccessTokenClaims extends JwtClaims {
   sub: string;
@@ -51,6 +51,26 @@ interface SessionRecord {
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
+/** `IssuedTokens` carries two `Date`s, which do not survive a Redis round trip. */
+const serializeIssued = (t: IssuedTokens): string =>
+  JSON.stringify({
+    ...t,
+    accessExpiresAt: t.accessExpiresAt.toISOString(),
+    refreshExpiresAt: t.refreshExpiresAt.toISOString(),
+  });
+
+const deserializeIssued = (json: string): IssuedTokens => {
+  const raw = JSON.parse(json) as Omit<IssuedTokens, 'accessExpiresAt' | 'refreshExpiresAt'> & {
+    accessExpiresAt: string;
+    refreshExpiresAt: string;
+  };
+  return {
+    ...raw,
+    accessExpiresAt: new Date(raw.accessExpiresAt),
+    refreshExpiresAt: new Date(raw.refreshExpiresAt),
+  };
+};
+
 @Injectable()
 export class TokenService implements OnModuleInit {
   private readonly logger = new Logger(TokenService.name);
@@ -61,6 +81,7 @@ export class TokenService implements OnModuleInit {
     private readonly config: AppConfig,
     private readonly clock: ClockPort,
     private readonly redis: RedisService,
+    private readonly locks: LockService,
   ) {}
 
   onModuleInit(): void {
@@ -203,6 +224,9 @@ export class TokenService implements OnModuleInit {
    * stolen token being used in parallel with the legitimate one, and there is no
    * benign explanation. Killing the family logs the attacker out along with the
    * victim, which is the correct trade.
+   *
+   * Except within `refreshGraceSeconds` of the rotation being repeated, which
+   * does have a benign explanation and a common one — see below.
    */
   async rotate(
     presented: string,
@@ -215,12 +239,69 @@ export class TokenService implements OnModuleInit {
     const [sessionId, raw] = presented.split('.', 2);
     if (!sessionId || !raw) throw new UnauthenticatedError(SESSION_POLICY.refreshReuseMessage);
 
+    /**
+     * Serialised per session, because everything below is a read-modify-write on
+     * one Redis key.
+     *
+     * Two tabs racing through it unserialised BOTH read the record before either
+     * writes, so both pass the hash check, both mint tokens, and the browser — one
+     * cookie jar — keeps whichever `Set-Cookie` landed last, which is not
+     * necessarily the one Redis ends up recognising. The next refresh then trips
+     * reuse detection and revokes a session nobody attacked.
+     *
+     * Holding the lock collapses that into the sequential case: the loser waits,
+     * re-reads, finds its token retired, and collects the replay entry.
+     */
+    try {
+      return await this.locks.withLocks([`lock:rot:${sessionId}`], () =>
+        this.rotateExclusively(sessionId, raw, reissue),
+      );
+    } catch (e) {
+      // `withLocks` speaks in stock-checkout terms; a renewal is not that. This
+      // is close to unreachable — the critical section is a lookup and three
+      // writes — but a wrong sentence on a login screen is worth two lines.
+      if (e instanceof RateLimitedError) {
+        throw new RateLimitedError(1, 'Your session is being renewed. Try that again in a moment.');
+      }
+      throw e;
+    }
+  }
+
+  private async rotateExclusively(
+    sessionId: string,
+    raw: string,
+    reissue: (session: { userId: string; orgId: string | null }) => Promise<{
+      orgType: 'VENDOR' | 'BUYER' | 'PLATFORM';
+      roles: Role[];
+      permissions: Permission[];
+    }>,
+  ): Promise<IssuedTokens> {
     const json = await this.redis.client.get(this.sessionKey(sessionId));
     if (!json) throw new UnauthenticatedError('Your session has ended. Please sign in again.');
 
     const record: SessionRecord = JSON.parse(json);
+    const presentedHash = sha256(raw);
 
-    if (record.currentRefreshHash !== sha256(raw)) {
+    if (record.currentRefreshHash !== presentedHash) {
+      // Before treating this as an attack, check whether it is the far more
+      // common benign case: two tabs — or one tab whose provider mounted twice —
+      // refreshing at the same instant, both presenting the token the other just
+      // retired. `GET /auth/session` is the rotation point, so every concurrent
+      // page load races here. Revoking the family for that logs a legitimate
+      // user out of an account they are actively using, and leaves them holding
+      // a freshly-set access cookie whose session no longer exists.
+      //
+      // So a rotation stays replayable for a few seconds: the loser of the race
+      // gets back the exact tokens the winner was issued. Identical responses
+      // mean the outcome no longer depends on which Set-Cookie the browser
+      // applies last, which is what makes this deterministic rather than merely
+      // less likely to break.
+      //
+      // Outside the window the original rule is untouched — a second use of a
+      // token we replaced minutes ago still has no benign explanation.
+      const replay = await this.redis.client.get(this.rotationKey(presentedHash));
+      if (replay) return deserializeIssued(replay);
+
       this.logger.warn(
         `Refresh token reuse detected on session ${sessionId} (family ${record.familyId}) — revoking the family.`,
       );
@@ -230,7 +311,7 @@ export class TokenService implements OnModuleInit {
 
     const fresh = await reissue({ userId: record.userId, orgId: record.orgId });
     // Same session id and family: rotation, not a new login.
-    return this.issue({
+    const issued = await this.issue({
       userId: record.userId,
       orgId: record.orgId,
       orgType: fresh.orgType,
@@ -242,6 +323,30 @@ export class TokenService implements OnModuleInit {
       userAgent: record.userAgent,
       ip: record.ip,
     });
+
+    /**
+     * The replay entry, keyed by the hash of the token just retired — so only a
+     * caller presenting that exact token can collect it, and it evaporates on
+     * its own.
+     *
+     * This does hold a refresh token in Redis in the clear for `refreshGraceSeconds`,
+     * which the session record deliberately never does. The trade is bounded and
+     * worth naming: an attacker who can read this key already has the session
+     * record next to it, and the entry outlives the race by seconds. Handing back
+     * a token we already issued to the legitimate holder is strictly less
+     * dangerous than the lockout the alternative causes.
+     *
+     * Nothing clears these on `revokeFamily`; they are inert once it runs, because
+     * every token they carry names a session id that has just been deleted.
+     */
+    await this.redis.client.set(
+      this.rotationKey(presentedHash),
+      serializeIssued(issued),
+      'EX',
+      SESSION_POLICY.refreshGraceSeconds,
+    );
+
+    return issued;
   }
 
   async revokeSession(sessionId: string): Promise<void> {
@@ -281,4 +386,6 @@ export class TokenService implements OnModuleInit {
   private sessionKey = (id: string): string => `sess:${id}`;
   private familyKey = (id: string): string => `fam:${id}`;
   private userKey = (id: string): string => `usess:${id}`;
+  /** Keyed by the RETIRED token's hash, so only its presenter can replay it. */
+  private rotationKey = (retiredHash: string): string => `rot:${retiredHash}`;
 }

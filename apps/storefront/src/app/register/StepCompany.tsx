@@ -90,6 +90,7 @@ export interface StepCompanyProps {
   onFieldFocus: (term: string) => void;
   /** Verbatim from the reviewer when this step was sent back. */
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepCompany({
@@ -100,6 +101,7 @@ export function StepCompany({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepCompanyProps): React.JSX.Element {
   const [values, setValues] = React.useState<CompanyValues>(() =>
     readCompanyDraft(answers, fallbackLegalName),
@@ -138,7 +140,7 @@ export function StepCompany({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    const found = check(values);
+    const found = skipValidation ? {} : check(values);
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;

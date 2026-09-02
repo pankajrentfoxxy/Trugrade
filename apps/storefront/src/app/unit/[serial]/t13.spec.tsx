@@ -98,7 +98,7 @@ const wipe = (): NonNullable<UnitPassport['wipeCertificate']> => ({
 
 describe('all twelve areas, including the ones nobody measured', () => {
   it('renders one row per area code, never one row per measured area', () => {
-    const { container } = render(<Areas areas={areas()} />);
+    const { container } = render(<Areas areas={areas()} layout="table" />);
     expect(container.querySelectorAll('tbody tr')).toHaveLength(12);
   });
 
@@ -112,14 +112,14 @@ describe('all twelve areas, including the ones nobody measured', () => {
   });
 
   it('says how many of the twelve were measured, with the denominator', () => {
-    const { container } = render(<Areas areas={areas()} />);
+    const { container } = render(<Areas areas={areas()} layout="table" />);
     expect(container.querySelector('caption')?.textContent).toContain('8 of 12 were measured');
   });
 });
 
 describe('an unmeasured area', () => {
   const rowFor = (area: string): HTMLElement => {
-    const { container } = render(<Areas areas={areas()} />);
+    const { container } = render(<Areas areas={areas()} layout="table" />);
     const row = [...container.querySelectorAll('tbody tr')].find(
       (r) => r.querySelector('.areaname')?.textContent === area,
     );

@@ -4,7 +4,6 @@ import * as React from 'react';
 import {
   Button,
   EmptyState,
-  GradeBadge,
   Input,
   PriceBreakup,
   Skeleton,
@@ -16,8 +15,14 @@ import {
   type WhyRailItem,
 } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
-import { Money, type Grade } from '@trugrade/contracts';
+import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../register/api';
+import {
+  BoxIcon,
+  ProductLineIdentity,
+  ProductLinePassRow,
+  SpecIcon,
+} from '../../lib/product-line-details';
 import { Countdown } from './Countdown';
 import {
   abandonCheckout,
@@ -69,8 +74,6 @@ type Phase =
   | { k: 'placed'; order: OrderConfirmation };
 
 const rupees = (decimal: string): string => Money.parse(decimal).format();
-
-const isGrade = (g: string): g is Grade => g === 'A_PLUS' || g === 'A' || g === 'B';
 
 const machines = (n: number): string => `${n} machine${n === 1 ? '' : 's'}`;
 
@@ -352,12 +355,10 @@ export function CheckoutFlow(): React.JSX.Element {
           </summary>
           <div className="border-t border-rule-2 p-4">
             <StepRail steps={rail} label="Checkout" className="checkoutrail static max-h-none" />
-            <HoldNote />
           </div>
         </details>
-        <div className="flex flex-col gap-3 max-lg:hidden">
+        <div className="max-lg:hidden">
           <StepRail steps={rail} label="Checkout" className="checkoutrail" />
-          <HoldNote />
         </div>
       </div>
 
@@ -374,10 +375,6 @@ export function CheckoutFlow(): React.JSX.Element {
             </span>
           </div>
           <h1 className="text-h1 text-ink">{STEPS[index]!.title}</h1>
-          <p className="max-w-[64ch] text-body-sm text-ink-2">
-            One order and one invoice, from {BRAND.legalEntity} We buy these exact machines on your
-            behalf and they ship to you.
-          </p>
         </header>
 
         {notice && (
@@ -485,67 +482,54 @@ export function CheckoutFlow(): React.JSX.Element {
 }
 
 /**
- * What the rail would otherwise say, made true.
- *
- * `StepRail`'s save state is registration's, and it promises a draft this flow
- * never writes. Checkout holds machines for twenty minutes and saves nothing;
- * a buyer who closes the tab loses the hold, not a form. Saying so is the whole
- * reason the component's own sentence is hidden rather than left to read
- * plausibly and wrongly.
- */
-function HoldNote(): React.JSX.Element {
-  return (
-    <p className="text-label text-ink-3">
-      Nothing here is saved as a draft. The machines are held for{' '}
-      <span className="font-mono tnum">20</span> minutes from the moment you started, and closing
-      this tab releases them.
-    </p>
-  );
-}
-
-/* ==========================================================================
  * Step 1 — review
  * ======================================================================== */
 
 function ReviewStep({ session }: { session: CheckoutSession }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-5" aria-label="What is held for you">
-      <p className="text-body-sm text-ink-2">
-        These are the exact machines held for you — by serial number, not by model. Nobody else can
-        buy them while the hold runs.
-      </p>
+    <section className="flex flex-col gap-4" aria-label="What is held for you">
       {session.lines.map((line) => (
-        <article key={line.offerId} className="rounded-lg border border-rule bg-sheet p-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-h3 text-ink">{line.title}</h2>
-              <p className="font-mono text-label text-ink-3">{line.specSummary}</p>
+        <article key={line.offerId} className="cartline-card checkoutline-card">
+          <div className="cartline-body">
+            <div className="cartline-main">
+              <ProductLineIdentity
+                title={line.title}
+                grade={line.grade}
+                specSummary={line.specSummary}
+                pass={
+                  <>
+                    <ProductLinePassRow icon={<SpecIcon kind="supply" />}>
+                      {line.dispatchPoint}
+                    </ProductLinePassRow>
+                    <ProductLinePassRow icon={<BoxIcon />}>
+                      <span className="mono">
+                        {machines(line.serials.length)} held
+                      </span>
+                    </ProductLinePassRow>
+                  </>
+                }
+              />
             </div>
-            <p className="font-mono text-data tnum text-ink">
-              {rupees(line.lineTotal)}
-              <span className="block text-label font-normal text-ink-4">
-                <span className="tnum">{line.qty}</span> × {rupees(line.unitPrice)}
-              </span>
-            </p>
+            <aside className="cartline-aside">
+              <div className="cartline-price money">
+                <span className="mono">{rupees(line.lineTotal)}</span>
+                <small>
+                  <span className="tnum">{line.qty}</span> × {rupees(line.unitPrice)}
+                </small>
+                <small>Line, before tax</small>
+              </div>
+            </aside>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            {isGrade(line.grade) ? (
-              <GradeBadge grade={line.grade} />
-            ) : (
-              <span className="font-mono text-label text-ink-4">Grade not recorded</span>
-            )}
-            <span className="font-mono text-label text-ink-3">{line.dispatchPoint}</span>
-          </div>
-          <dl className="mt-3 border-t border-rule-2 pt-3">
+          <dl className="checkoutline-serials">
             <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
               Serial numbers held <span className="tnum">({line.serials.length})</span>
             </dt>
-            <dd className="mt-2 flex flex-wrap gap-2">
+            <dd className="checkoutline-serial-list">
               {line.serials.map((serial) => (
                 <a
                   key={serial}
                   href={`/unit/${serial}`}
-                  className="rounded border border-rule bg-sheet-2 px-2 py-1 font-mono text-label tnum text-ink-2 hover:text-ink"
+                  className="checkoutline-serial mono"
                 >
                   {serial}
                 </a>
@@ -777,7 +761,7 @@ function SiteRadio({
  */
 function ReceivingDetails({ site }: { site: DeliverySite }): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-rule bg-sheet p-4">
+    <div className="rounded-lg border border-rule bg-sheet p-4 dark:border-acc">
       <h3 className="text-h3 text-ink">Receiving at {site.label ?? site.city}</h3>
       <dl className="mt-3 flex flex-col gap-2">
         <Fact label="Contact" value={site.contactName} />
@@ -864,6 +848,7 @@ function ReferenceStep({
             : 'Optional for your organisation. Up to 40 characters, because it has to fit on the invoice.'
         }
         error={errors.buyerPoNumber}
+        className={errors.buyerPoNumber ? undefined : 'dark:border-acc'}
         onChange={(e) => onPo(e.target.value)}
       />
 
@@ -874,6 +859,7 @@ function ReferenceStep({
         maxLength={60}
         placeholder="IT — Delhi office"
         hint="Optional. Carried to the invoice so a rollout across departments can be split afterwards."
+        className="dark:border-acc"
         onChange={(e) => onCostCentre(e.target.value)}
       />
     </section>

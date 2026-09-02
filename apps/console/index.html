@@ -16,7 +16,7 @@
       user would get a dark flash on every load. `test/prepaint.spec.ts` fails
       if this and the exported constant ever drift apart.
     -->
-    <script>try{var t=localStorage.getItem('tg-theme');if(t)document.documentElement.setAttribute('data-t',t)}catch(e){}</script>
+    <script>try{var t=localStorage.getItem('tg-theme');if(t==='dark'||t==='light'||t==='slate'||t==='olive'||t==='sand')document.documentElement.setAttribute('data-t',t)}catch(e){}</script>
     <title>Console</title>
   </head>
   <body>

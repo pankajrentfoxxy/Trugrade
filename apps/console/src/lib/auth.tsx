@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Navigate, useLocation } from 'react-router';
-import type { Permission } from '@trugrade/contracts';
+import { SESSION_POLICY, type Permission } from '@trugrade/contracts';
 
 export interface Principal {
   userId: string;
@@ -90,6 +90,34 @@ async function call(path: string, init?: RequestInit): Promise<unknown | AuthFai
 }
 
 /**
+ * One in-flight `/auth/session` at a time, and every caller shares it.
+ *
+ * That route is also the rotation point — there is no separate `/auth/refresh` —
+ * so two concurrent calls present the same refresh token and the loser looks
+ * exactly like a replay. `StrictMode` mounts the provider's effect twice in
+ * development and fires both, because the `cancelled` flag below suppresses the
+ * `setState`, never the request.
+ *
+ * The server tolerates that race now (`TokenService.rotate` replays a rotation
+ * for a few seconds), but sending one request instead of two is still correct.
+ * This only dedupes within one document; nothing here can dedupe across tabs,
+ * which is exactly why the server-side fix is the one that matters.
+ */
+let sessionInFlight: Promise<unknown | AuthFailure> | null = null;
+
+export function refreshSession(): Promise<unknown | AuthFailure> {
+  if (!sessionInFlight) {
+    const started = call('/api/auth/session');
+    sessionInFlight = started;
+    void started.finally(() => {
+      // Guard the identity: a later call may already have claimed the slot.
+      if (sessionInFlight === started) sessionInFlight = null;
+    });
+  }
+  return sessionInFlight;
+}
+
+/**
  * The console's session.
  *
  * The access token is never put in `localStorage`. It lives in the httpOnly
@@ -104,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const result = await call('/api/auth/session');
+      const result = await refreshSession();
       if (cancelled) return;
       setPrincipal(result && !('code' in (result as object)) ? (result as Principal) : null);
       setLoading(false);
@@ -113,6 +141,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Renew ahead of expiry, because nothing else does.
+   *
+   * The access cookie is set to `accessTtl - 30s` and there is no interceptor
+   * renewing it, so a tab left open simply starts 401ing at the fifteen-minute
+   * mark while the chrome goes on drawing a session that is gone. The user's
+   * instinct is to reload, and a reload used to be the thing that destroyed the
+   * session outright.
+   *
+   * Only a 401 clears the principal. A refresh that failed because the network
+   * blinked is not evidence that the session ended, and signing someone out over
+   * it would swap a silent failure for a rude one.
+   */
+  React.useEffect(() => {
+    if (!principal) return;
+    const everyMs = SESSION_POLICY.accessTtlSeconds * 0.8 * 1000;
+    const id = setInterval(() => {
+      void refreshSession().then((result) => {
+        if (result && 'code' in (result as object)) {
+          if ((result as AuthFailure).status === 401) setPrincipal(null);
+        }
+      });
+    }, everyMs);
+    return () => clearInterval(id);
+  }, [principal]);
 
   const value = React.useMemo<AuthState>(
     () => ({

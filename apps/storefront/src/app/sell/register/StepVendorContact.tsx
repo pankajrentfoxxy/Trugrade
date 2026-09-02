@@ -90,6 +90,8 @@ export function StepVendorContact({
     setErrors(({ [key as string]: _dropped, ...rest }) => rest);
   };
 
+  const allSelected = brands.length > 0 && brands.every((b) => extras.brands.includes(b));
+
   const toggleBrand = (brand: string): void => {
     setErrors(({ brands: _dropped, ...rest }) => rest);
     setExtras((v) => ({
@@ -98,6 +100,11 @@ export function StepVendorContact({
         ? v.brands.filter((b) => b !== brand)
         : [...v.brands, brand],
     }));
+  };
+
+  const toggleAllBrands = (): void => {
+    setErrors(({ brands: _dropped, ...rest }) => rest);
+    setExtras((v) => ({ ...v, brands: allSelected ? [] : [...brands] }));
   };
 
   const namedBrands = extras.brands.length + (extras.otherBrands.trim().length > 0 ? 1 : 0);
@@ -183,6 +190,7 @@ export function StepVendorContact({
                     onToggle={() => toggleBrand(brand)}
                   />
                 ))}
+                <Chip label="All" selected={allSelected} onToggle={toggleAllBrands} />
               </div>
             ) : (
               // Never fabricate data on a screen: with no answer from the

@@ -10,7 +10,6 @@ import {
   SidePanel,
   Skeleton,
   StatusPill,
-  TickRule,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import { NotMeasured } from '../../lib/controls';
@@ -236,7 +235,6 @@ export function RepriceRoute(): React.JSX.Element {
       <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div>
           <h2 className="text-h3 text-ink">The new amount</h2>
-          <TickRule />
           <p className="mt-2 max-w-prose text-body-sm text-ink-2">
             What you want in your account per machine, after everything. It replaces the current
             amount on every machine that is not already committed to an order.

@@ -241,7 +241,7 @@ async function auditToggle(page, path) {
   await page.goto(`${SITE}${path}`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(800);
   const before = await page.evaluate(() => document.documentElement.getAttribute('data-t'));
-  const btn = page.getByRole('button', { name: /Switch to (light|dark) theme/ }).first();
+  const btn = page.getByRole('button', { name: /Cycle theme|Switch to (light|dark) theme/ }).first();
   const count = await btn.count();
   if (count === 0) {
     record({ task: 'T42', route: path, kind: 'no-theme-toggle', detail: 'no theme toggle control found on this route' });

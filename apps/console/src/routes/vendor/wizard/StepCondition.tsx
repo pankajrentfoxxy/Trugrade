@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { GradeBadge, Input, RepresentativeImage, Skeleton, TickRule, cn } from '@trugrade/ui';
+import { GradeBadge, Input, RepresentativeImage, Skeleton, cn } from '@trugrade/ui';
 import { GRADES, type Grade } from '@trugrade/contracts';
 import { Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
@@ -250,7 +250,6 @@ function GradeReference({ skuId, grade }: { skuId: string; grade: Grade }): Reac
   return (
     <section className="mt-6">
       <h3 className="text-h3 text-ink">What a buyer sees at Grade {gradeLabel(grade)}</h3>
-      <TickRule />
       {error ? (
         <p className="mt-3 max-w-prose text-body-sm text-ink-2">
           {error}. Grade from the written definitions above rather than from memory — nothing about
@@ -307,7 +306,6 @@ export function StepCondition({
   return (
     <div>
       <h2 className="text-h2 text-ink">Declare the condition</h2>
-      <TickRule />
 
       {/* The three sentences PHASE_03 Task 3 step 2 requires on this screen, in
           plain words and above the fields rather than under them. Disclosure at

@@ -134,7 +134,14 @@ const ROWS: SupplyPointOfferRow[] = [
 ];
 
 const board = (rows: SupplyPointOfferRow[] = ROWS, pool: 'REGULAR' | 'MARGIN' = 'REGULAR') =>
-  render(<Board rows={rows} pool={pool} caption={`${rows.length} supply points, sorted by landed price, lowest first.`} />);
+  render(
+    <Board
+      rows={rows}
+      pool={pool}
+      layout="table"
+      caption={`${rows.length} supply points, sorted by landed price, lowest first.`}
+    />,
+  );
 
 /* ================================================================= the tests */
 

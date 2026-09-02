@@ -1,5 +1,4 @@
 import { BRAND } from '@trugrade/config/brand';
-import { TickRule } from '@trugrade/ui';
 
 /**
  * **ARCHETYPE F — Focus.** The frame every credential screen sits in.
@@ -43,7 +42,6 @@ export function AuthShell({
           </span>
         </a>
         <h1>{title}</h1>
-        <TickRule />
         <p className="authlede">{lede}</p>
         {children}
       </main>

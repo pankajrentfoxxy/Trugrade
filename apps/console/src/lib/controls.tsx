@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn, TickRule } from '@trugrade/ui';
+import { cn } from '@trugrade/ui';
 
 /**
  * The four things every console screen needs that `@trugrade/ui` does not ship.
@@ -182,7 +182,6 @@ export function PageHeader({
         {action && <div className="ml-auto flex flex-wrap items-center gap-3">{action}</div>}
       </div>
       {children && <p className="max-w-prose text-body-sm text-ink-2">{children}</p>}
-      <TickRule />
     </header>
   );
 }
@@ -266,7 +265,6 @@ export function Section({
         <h2 className="text-h3 text-ink">{title}</h2>
         {aside}
       </header>
-      <TickRule />
       {subtitle && <p className="mt-2 max-w-prose text-body-sm text-ink-2">{subtitle}</p>}
       <div className="mt-4">{children}</div>
     </section>

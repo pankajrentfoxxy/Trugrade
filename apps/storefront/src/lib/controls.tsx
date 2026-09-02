@@ -40,7 +40,7 @@ export function Select({
   const generated = React.useId();
   const selectId = id ?? generated;
   return (
-    <div className={cn('flex flex-col gap-2', className)}>
+    <div className={cn('flex w-full flex-col gap-2', className)}>
       <label htmlFor={selectId} className="text-body-sm font-medium text-ink-2">
         {label}
         {required && (
@@ -55,7 +55,7 @@ export function Select({
         required={required}
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined}
-        className={cn(CONTROL, 'h-11', error && 'border-fail')}
+        className={cn(CONTROL, 'h-11 w-full', error && 'border-fail')}
         {...props}
       >
         {options.map((o) => (

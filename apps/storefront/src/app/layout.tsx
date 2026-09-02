@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { BRAND } from '@trugrade/config/brand';
-import { THEME_PREPAINT_SCRIPT } from '@trugrade/ui';
+import { THEME_STOREFRONT_PREPAINT_SCRIPT } from '@trugrade/ui';
 import { SiteFooter } from './SiteFooter';
 import '@trugrade/ui/globals.css';
 import './globals.css';
@@ -20,12 +20,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
   return (
     <html
       lang="en"
-      data-t="dark"
+      data-t="light"
       data-density="comfortable"
-      // The pre-paint script below rewrites `data-t` before React ever runs, so
-      // on a light-theme browser the server's attribute and the client's differ
-      // by design. Without this, that difference is a hydration failure and the
-      // whole tree is thrown away and re-rendered on every page load.
+      // Pre-paint script forces light before hydration; suppressHydrationWarning
+      // covers any SSR/client attribute drift until the script runs.
       suppressHydrationWarning
     >
       <head>
@@ -36,13 +34,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
           rel="stylesheet"
         />
         {/*
-          The pre-paint theme read. This MUST be a blocking inline script in
-          <head>: by the time React hydrates, the wrong theme has already been
-          painted, and a light-theme user would get a dark flash on every
-          navigation. `dark` is the attribute on <html> above, so the default
-          costs nothing and only an opted-out user pays for this script.
+          Storefront is light-only for now. `THEME_STOREFRONT_PREPAINT_SCRIPT`
+          forces `data-t="light"` before first paint; `ThemeToggle` is
+          suppressed in the header until multi-theme returns.
         */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_PREPAINT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_STOREFRONT_PREPAINT_SCRIPT }} />
       </head>
       <body className="flex min-h-screen flex-col bg-ground text-ink-2">
         {/* The wrapper takes the slack so a short page — a one-panel step, an

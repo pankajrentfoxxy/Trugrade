@@ -13,7 +13,10 @@ import {
 } from './picklists';
 import {
   billingStateMatchesGstin,
+  isMobileBlank,
+  MOBILE_PREFIX,
   toE164,
+  typeMobile,
   validateCity,
   validateEmail,
   validateFullName,
@@ -114,7 +117,12 @@ export interface ContactsValues {
   delivery: DeliveryAddress[];
 }
 
-const emptyPerson = (): Person => ({ fullName: '', designation: '', email: '', mobile: '' });
+const emptyPerson = (): Person => ({
+  fullName: '',
+  designation: '',
+  email: '',
+  mobile: MOBILE_PREFIX,
+});
 
 const emptyPostal = (gstin = ''): BillingAddress => ({
   gstin,
@@ -136,7 +144,7 @@ const emptyDelivery = (): DeliveryAddress => ({
   key: nextKey(),
   label: '',
   contactName: '',
-  contactMobile: '',
+  contactMobile: MOBILE_PREFIX,
   landmark: '',
   gateInstructions: '',
   days: '',
@@ -158,7 +166,12 @@ export function readContactsDraft(
   const savedContacts = (answers.contacts ?? {}) as Record<string, Partial<Person>>;
   const contacts: Record<string, Person> = {};
   for (const role of CONTACT_ROLES) {
-    contacts[role.code] = { ...emptyPerson(), ...(savedContacts[role.code] ?? {}) };
+    const saved = savedContacts[role.code] ?? {};
+    contacts[role.code] = {
+      ...emptyPerson(),
+      ...saved,
+      mobile: typeMobile(typeof saved.mobile === 'string' ? saved.mobile : ''),
+    };
   }
 
   const savedBilling = Array.isArray(answers.billing)
@@ -175,7 +188,12 @@ export function readContactsDraft(
     : [];
   const delivery =
     savedDelivery.length > 0
-      ? savedDelivery.map((d) => ({ ...emptyDelivery(), ...d, key: nextKey() }))
+      ? savedDelivery.map((d) => ({
+          ...emptyDelivery(),
+          ...d,
+          key: nextKey(),
+          contactMobile: typeMobile(typeof d.contactMobile === 'string' ? d.contactMobile : ''),
+        }))
       : [emptyDelivery()];
 
   return { contacts, billing, delivery };
@@ -235,6 +253,7 @@ export interface StepContactsProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepContacts({
@@ -245,6 +264,7 @@ export function StepContacts({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepContactsProps): React.JSX.Element {
   const [values, setValues] = React.useState<ContactsValues>(() =>
     readContactsDraft(answers, gstins),
@@ -324,7 +344,7 @@ export function StepContacts({
     for (const role of CONTACT_ROLES) {
       const person = v.contacts[role.code]!;
       const touched =
-        person.fullName.trim() || person.email.trim() || person.mobile.trim();
+        person.fullName.trim() || person.email.trim() || !isMobileBlank(person.mobile);
       // An optional contact is either absent or complete. Half of one is a
       // number nobody answers and an escalation that goes nowhere.
       if (!role.required && !touched) continue;
@@ -376,7 +396,7 @@ export function StepContacts({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    const found = check(values);
+    const found = skipValidation ? {} : check(values);
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;
@@ -387,10 +407,13 @@ export function StepContacts({
       contacts: Object.fromEntries(
         Object.entries(values.contacts).map(([role, p]) => [
           role,
-          { ...p, mobile: p.mobile.trim() ? toE164(p.mobile) : '' },
+          { ...p, mobile: isMobileBlank(p.mobile) ? '' : toE164(p.mobile) },
         ]),
       ),
-      delivery: values.delivery.map((d) => ({ ...d, contactMobile: toE164(d.contactMobile) })),
+      delivery: values.delivery.map((d) => ({
+        ...d,
+        contactMobile: isMobileBlank(d.contactMobile) ? '' : toE164(d.contactMobile),
+      })),
     };
     const refusal = await onContinue(toDraft(normalised), 100);
     if (refusal) setErrors(refusal);
@@ -488,7 +511,7 @@ export function StepContacts({
                     persist(next);
                   }}
                   onChange={(e) => {
-                    setPerson(role.code, { mobile: e.target.value });
+                    setPerson(role.code, { mobile: typeMobile(e.target.value) });
                     clearError(`${role.code}.mobile`);
                   }}
                   error={errors[`${role.code}.mobile`]}
@@ -754,7 +777,7 @@ export function StepContacts({
                     persist(next);
                   }}
                   onChange={(e) => {
-                    setDelivery(address.key, { contactMobile: e.target.value });
+                    setDelivery(address.key, { contactMobile: typeMobile(e.target.value) });
                     clearError(`delivery.${address.key}.contactMobile`);
                   }}
                   error={at('contactMobile')}

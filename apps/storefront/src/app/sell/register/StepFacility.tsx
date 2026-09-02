@@ -20,7 +20,10 @@ import {
   stateName,
 } from '../../register/picklists';
 import {
+  isMobileBlank,
+  MOBILE_PREFIX,
   toE164,
+  typeMobile,
   validateCount,
   validateEmail,
   validateFullName,
@@ -113,8 +116,8 @@ const emptyContact = (): VendorContact => ({
   fullName: '',
   designation: '',
   email: '',
-  mobile: '',
-  whatsapp: '',
+  mobile: MOBILE_PREFIX,
+  whatsapp: MOBILE_PREFIX,
   language: '',
 });
 
@@ -165,8 +168,15 @@ export function readFacilityDraft(answers: Record<string, unknown>): FacilityVal
 
   const savedContacts = (answers.contacts ?? {}) as Record<string, Partial<VendorContact>>;
   const contacts: Record<string, VendorContact> = {};
-  for (const role of VENDOR_CONTACT_ROLES)
-    contacts[role.code] = { ...emptyContact(), ...(savedContacts[role.code] ?? {}) };
+  for (const role of VENDOR_CONTACT_ROLES) {
+    const saved = savedContacts[role.code] ?? {};
+    contacts[role.code] = {
+      ...emptyContact(),
+      ...saved,
+      mobile: typeMobile(typeof saved.mobile === 'string' ? saved.mobile : ''),
+      whatsapp: typeMobile(typeof saved.whatsapp === 'string' ? saved.whatsapp : ''),
+    };
+  }
 
   return { facilities, contacts };
 }
@@ -405,7 +415,8 @@ export function StepFacility({
 
     for (const role of VENDOR_CONTACT_ROLES) {
       const person = v.contacts[role.code]!;
-      const touched = person.fullName.trim() || person.email.trim() || person.mobile.trim();
+      const touched =
+        person.fullName.trim() || person.email.trim() || !isMobileBlank(person.mobile);
       // An optional contact is either absent or complete. Half of one is a
       // number nobody answers and an escalation that goes nowhere.
       if (!role.required && !touched) continue;
@@ -437,8 +448,8 @@ export function StepFacility({
           role,
           {
             ...p,
-            mobile: p.mobile.trim() ? toE164(p.mobile) : '',
-            whatsapp: p.whatsapp.trim() ? toE164(p.whatsapp) : '',
+            mobile: isMobileBlank(p.mobile) ? '' : toE164(p.mobile),
+            whatsapp: isMobileBlank(p.whatsapp) ? '' : toE164(p.whatsapp),
           },
         ]),
       ),
@@ -944,7 +955,7 @@ export function StepFacility({
                     persist(next);
                   }}
                   onChange={(e) => {
-                    setContact(role.code, { mobile: e.target.value });
+                    setContact(role.code, { mobile: typeMobile(e.target.value) });
                     clearError(`${role.code}.mobile`);
                   }}
                   error={errors[`${role.code}.mobile`]}
@@ -971,7 +982,7 @@ export function StepFacility({
                     persist(next);
                   }}
                   onChange={(e) => {
-                    setContact(role.code, { whatsapp: e.target.value });
+                    setContact(role.code, { whatsapp: typeMobile(e.target.value) });
                     clearError(`${role.code}.whatsapp`);
                   }}
                   error={errors[`${role.code}.whatsapp`]}
@@ -989,9 +1000,9 @@ export function StepFacility({
 
               {/* A missing value never renders as a provided one — and a
                   contact who answered both leaves no empty line behind. */}
-              {(person.whatsapp.trim() === '' || person.language === '') && (
+              {(isMobileBlank(person.whatsapp) || person.language === '') && (
                 <p className="text-body-sm text-ink-4">
-                  {person.whatsapp.trim() === '' && 'WhatsApp number not provided. '}
+                  {isMobileBlank(person.whatsapp) && 'WhatsApp number not provided. '}
                   {person.language === '' &&
                     'Preferred language not stated — we will write in English.'}
                 </p>

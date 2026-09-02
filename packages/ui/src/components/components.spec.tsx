@@ -299,6 +299,19 @@ describe('Input — a verified state shows the resolved entity, never just a tic
     render(<Input label="GSTIN" verifyState="verifying" />);
     expect(screen.getByLabelText('GSTIN')).toHaveAttribute('readonly');
   });
+
+  it('puts a field action on the same row as the box, not the label', () => {
+    render(
+      <Input
+        label="Work email"
+        hint="This becomes your sign-in address."
+        action={<button type="button">Send code</button>}
+      />,
+    );
+    const input = screen.getByLabelText('Work email');
+    const button = screen.getByRole('button', { name: 'Send code' });
+    expect(input.parentElement).toBe(button.parentElement?.parentElement);
+  });
 });
 
 describe('RepresentativeImage — the caption cannot be omitted', () => {

@@ -302,7 +302,7 @@ export class IdentityController {
     const issued = await this.otp.issue({
       target: body.value,
       purpose: 'REGISTRATION',
-      channel: body.channel === 'EMAIL' ? 'EMAIL' : 'SMS',
+      channel: body.channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
       templateCode: REGISTER_OTP_TEMPLATE,
       isProduction: this.config.isProduction,
     });
@@ -685,8 +685,10 @@ export class IdentityController {
       // the answer on the principal. Re-verifying the cookie here instead needed
       // a try/catch, and its failure arm had to guess — with the safe-LOOKING
       // guess (assume satisfied) failing open on the one field that must not.
+      const user = await this.identity.getUser(principal.userId);
       return {
         ...principalOf(principal),
+        fullName: user.fullName,
         mfaRequired: !principal.mfaSatisfied,
         accessToken: cookie(req, ACCESS_COOKIE),
       };
@@ -702,12 +704,14 @@ export class IdentityController {
     // just issued — including whether MFA is still outstanding — so it is read
     // back rather than reassembled from a second source.
     const claims = await this.tokens.verifyAccess(tokens.accessToken);
+    const user = await this.identity.getUser(claims.sub);
     return {
       userId: claims.sub,
       orgId: claims.org_id,
       orgType: claims.org_type,
       roles: claims.roles,
       permissions: claims.scope,
+      fullName: user.fullName,
       mfaRequired: !claims.mfa,
       accessToken: tokens.accessToken,
     };
@@ -781,7 +785,7 @@ export class IdentityController {
     const issued = await this.otp.issue({
       target,
       purpose: 'LOGIN',
-      channel: user.email ? 'EMAIL' : 'SMS',
+      channel: user.email ? 'EMAIL' : 'WHATSAPP',
       templateCode: LOGIN_OTP_TEMPLATE,
       refType: 'user_account',
       refId: user.userId,

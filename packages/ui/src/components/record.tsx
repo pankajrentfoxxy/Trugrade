@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
-import { TickRule } from './measure';
 
 /**
  * Archetype C — **Record**: identity header + evidence panel + actions panel.
@@ -99,8 +98,6 @@ export function RecordHeader({
           ))}
         </dl>
       ) : null}
-
-      <TickRule />
     </header>
   );
 }
@@ -157,7 +154,6 @@ export function SidePanel({
           {title}
         </h2>
         {description ? <p className="text-body-sm text-ink-2">{description}</p> : null}
-        <TickRule />
       </div>
 
       <div className="flex flex-col gap-3">{children}</div>

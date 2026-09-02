@@ -114,6 +114,12 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
    * IFSC → bank + branch, penny-drop → the name the bank actually holds.
    */
   verifyDetail?: React.ReactNode;
+  /**
+   * A control that belongs to the field itself — Send code, Verify, Remove.
+   * Rendered on the same row as the `<input>`, so it lines up with the box
+   * rather than with the label-and-hint stack around it.
+   */
+  action?: React.ReactNode;
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
@@ -124,15 +130,19 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
     mono,
     verifyState = 'idle',
     verifyDetail,
+    action,
     className,
     id,
     required,
+    type,
     ...props
   },
   ref,
 ) {
   const generated = React.useId();
   const inputId = id ?? generated;
+  const [revealed, setRevealed] = React.useState(false);
+  const isPassword = type === 'password';
   const describedBy = [
     hint && `${inputId}-hint`,
     error && `${inputId}-error`,
@@ -142,7 +152,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
     .join(' ');
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-full flex-col gap-2">
       <label htmlFor={inputId} className="text-body-sm font-medium text-ink-2">
         {label}
         {required && (
@@ -153,31 +163,56 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
         )}
       </label>
 
-      <input
-        ref={ref}
-        id={inputId}
-        required={required}
-        aria-invalid={Boolean(error) || verifyState === 'rejected' || undefined}
-        aria-describedby={describedBy || undefined}
-        readOnly={verifyState === 'verifying' || props.readOnly}
-        className={cn(
-          // placeholder:text-ink-3 — ink-4 measures 2.53:1, which fails both the
-          // text floor and the 3:1 floor for meaningful graphics.
-          'h-11 rounded border bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3',
-          'transition-colors',
-          // `tnum` and not just `font-mono`. CLAUDE.md: every number is IBM Plex
-          // Mono WITH tabular-nums, and this branch is what renders every GSTIN,
-          // PAN, CIN, Udyam, TAN, IFSC and pincode the product asks for. Without
-          // it a digit changing mid-field shifts the characters after it, which
-          // is exactly the jitter tabular figures exist to stop — most visible
-          // while someone types a 15-character GSTIN one character at a time.
-          mono && 'font-mono tnum uppercase tracking-wide',
-          error || verifyState === 'rejected' ? 'border-fail' : 'border-rule',
-          verifyState === 'verified' && 'border-pass',
-          className,
-        )}
-        {...props}
-      />
+      <div
+        className={
+          action ? 'flex w-full flex-col gap-3 sm:flex-row sm:items-center' : undefined
+        }
+      >
+        <div className={cn(isPassword && 'relative', (action || isPassword) && 'min-w-0 flex-1')}>
+          <input
+            ref={ref}
+            id={inputId}
+            type={isPassword ? (revealed ? 'text' : 'password') : type}
+            required={required}
+            aria-invalid={Boolean(error) || verifyState === 'rejected' || undefined}
+            aria-describedby={describedBy || undefined}
+            readOnly={verifyState === 'verifying' || props.readOnly}
+            className={cn(
+              // placeholder:text-ink-3 — ink-4 measures 2.53:1, which fails both the
+              // text floor and the 3:1 floor for meaningful graphics.
+              'h-11 w-full rounded border bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3',
+              'transition-colors',
+              // `tnum` and not just `font-mono`. CLAUDE.md: every number is IBM Plex
+              // Mono WITH tabular-nums, and this branch is what renders every GSTIN,
+              // PAN, CIN, Udyam, TAN, IFSC and pincode the product asks for. Without
+              // it a digit changing mid-field shifts the characters after it, which
+              // is exactly the jitter tabular figures exist to stop — most visible
+              // while someone types a 15-character GSTIN one character at a time.
+              mono && 'font-mono tnum uppercase tracking-wide',
+              error || verifyState === 'rejected' ? 'border-fail' : 'border-rule',
+              verifyState === 'verified' && 'border-pass',
+              className,
+              // After `className` so a caller passing `w-full` cannot stretch the
+              // box under the button and wrap it onto the next line.
+              action && 'min-w-0 flex-1',
+              isPassword && 'pr-12',
+            )}
+            {...props}
+          />
+          {isPassword ? (
+            <button
+              type="button"
+              aria-label={revealed ? 'Hide password' : 'Show password'}
+              aria-pressed={revealed}
+              onClick={() => setRevealed((open) => !open)}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-ink-2 hover:text-ink"
+            >
+              {revealed ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          ) : null}
+        </div>
+        {action ? <div className="flex shrink-0 flex-wrap items-center gap-3">{action}</div> : null}
+      </div>
 
       {hint && !error && (
         // --ink-2, not --ink-3: ink-3 measures 4.19:1 on the paper ground, and a
@@ -207,6 +242,35 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
     </div>
   );
 });
+
+function EyeIcon(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2.4 12S6 5.6 12 5.6 21.6 12 21.6 12 18 18.4 12 18.4 2.4 12 2.4 12Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function EyeOffIcon(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2.4 12S6 5.6 12 5.6 21.6 12 21.6 12 18 18.4 12 18.4 2.4 12 2.4 12Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M4 20 20 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 /* ==========================================================================
  * StatusPill — semantic colour, and never colour alone

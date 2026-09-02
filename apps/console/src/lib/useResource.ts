@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { refreshSession } from './auth';
 
 export interface Resource<T> {
   /** Null while loading *and* on failure — check `error` first. */
@@ -34,7 +35,17 @@ export function useResource<T>(url: string, failureLabel: string): Resource<T> {
     setError(null);
     void (async () => {
       try {
-        const res = await fetch(url, { credentials: 'include' });
+        let res = await fetch(url, { credentials: 'include' });
+        // The access cookie lapses fifteen minutes in while the refresh cookie is
+        // still good for weeks, so a board opened after that gap answers 401 with
+        // the means to fix itself sitting right there. Spend it once and retry —
+        // `refreshSession` is single-flight, so a screen with several of these
+        // does not turn one lapse into a burst of concurrent rotations.
+        if (res.status === 401) {
+          await refreshSession();
+          if (cancelled) return;
+          res = await fetch(url, { credentials: 'include' });
+        }
         if (!res.ok) throw new Error(`${failureLabel} (${res.status})`);
         const d = (await res.json()) as T;
         if (!cancelled) setData(d);

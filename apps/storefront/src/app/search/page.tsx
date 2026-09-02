@@ -17,13 +17,14 @@
  * connection ever sees.
  */
 import type { Metadata } from 'next';
-import { getSearch, type SearchResult } from '../../lib/api';
+import { getSearch } from '../../lib/api';
 import { CategoryStrip } from '../CategoryStrip';
 import { FilterRail } from '../FilterRail';
 import { Pager } from './Pager';
 import { ResultBar } from './ResultBar';
 import { SORTS } from './sorts';
 import { ResultsList } from './ResultsList';
+import { SearchResultCard } from './SearchResultCard';
 
 export const metadata: Metadata = {
   title: 'Search inspected laptops',
@@ -33,9 +34,6 @@ export const metadata: Metadata = {
 
 /** Board state is per-request by definition; a cached board is another board. */
 export const dynamic = 'force-dynamic';
-
-const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
-const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 
 /** Params the API does not read, so they never reach it as a filter. */
 const CLIENT_ONLY = new Set(['view', 'pin']);
@@ -129,9 +127,9 @@ export default async function SearchPage({
                 ) : view === 'list' ? (
                   <ResultsList results={data.results} sortLabel={sortLabel} />
                 ) : (
-                  <div className="pgrid">
+                  <div className="pcclist">
                     {data.results.map((r) => (
-                      <Card key={`${r.skuId}-${r.grade}`} r={r} />
+                      <SearchResultCard key={`${r.skuId}-${r.grade}`} r={r} />
                     ))}
                   </div>
                 )}
@@ -154,81 +152,5 @@ export default async function SearchPage({
         </div>
       </div>
     </>
-  );
-}
-
-/**
- * One result card — the reference's `.pc`, with its measurements.
- *
- * The viewfinder brackets assert THIS UNIT WAS CAPTURED AND IDENTIFIED, so they
- * are drawn around a real serial we hold. The QC chip is amber because a
- * measured value is one of the three things amber is allowed to mean; the grade
- * chip is neutral because A+, A and B are all sellable and a position on a scale
- * is not a verdict.
- */
-function Card({ r }: { r: SearchResult }): React.JSX.Element {
-  const measured = r.batteryMeasured > 0 && r.batteryMin !== null && r.batteryMax !== null;
-  return (
-    <div className="pc">
-      <div className="im">
-        <span className="vf tl" />
-        <span className="vf tr" />
-        <span className="vf bl" />
-        <span className="vf br" />
-        <span className="gr mono">{GRADE_LABEL[r.grade] ?? r.grade}</span>
-        {/* No score means no chip. A chip reading "QC 0" says we inspected it and
-            it scored nothing; the truth would be that we have no number. */}
-        {r.avgQcScore !== null && <span className="qc mono">QC {r.avgQcScore}</span>}
-        <span className="sn mono">{r.sampleSerial}</span>
-        <svg
-          width="84"
-          height="48"
-          viewBox="0 0 150 80"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <rect x="27" y="10" width="96" height="56" rx="3" />
-          <path d="M12 70 h126 l-8 -4 H20 z" />
-        </svg>
-      </div>
-      <div className="bd">
-        <b>
-          {r.brand} {r.model}
-        </b>
-        <span className="spec mono">{r.spec}</span>
-        {measured ? (
-          <span className="bat mono">
-            BAT{' '}
-            <i>
-              <b style={{ width: `${r.batteryMin}%` }} />
-            </i>{' '}
-            {r.batteryMin === r.batteryMax ? `${r.batteryMin}%` : `${r.batteryMin}–${r.batteryMax}%`}
-            <span className="denom">
-              {' '}
-              · {r.batteryMeasured} of {r.unitsAvailable}
-            </span>
-          </span>
-        ) : (
-          <span className="bat notmeasured">Battery not measured</span>
-        )}
-        <div className="pr mono">
-          ₹{RUPEES.format(r.fromPrice)} <small>from · incl. GST</small>
-        </div>
-        <div className="meta">
-          <span>
-            <b className="mono">{r.supplyPoints}</b> supply point{r.supplyPoints === 1 ? '' : 's'} ·{' '}
-            {r.cities.join(', ')}
-          </span>
-          {/* A stock count is a fact. It is never dressed as urgency — no
-              "only 2 left", no countdown (CCPA Dark Patterns 2023). */}
-          <b className="mono">{r.unitsAvailable} sealed</b>
-        </div>
-      </div>
-      <a className="cta" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
-        Compare suppliers
-      </a>
-    </div>
   );
 }

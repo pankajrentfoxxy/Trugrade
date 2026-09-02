@@ -80,6 +80,7 @@ export interface StepDocumentsProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepDocuments({
@@ -89,6 +90,7 @@ export function StepDocuments({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepDocumentsProps): React.JSX.Element {
   const [values, setValues] = React.useState<DocumentsValues>(() => readDocumentsDraft(answers));
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -121,13 +123,15 @@ export function StepDocuments({
     event.preventDefault();
     const found: Record<string, string> = {};
 
-    for (const missing of missingDocuments(BUYER_DOCUMENTS, docs))
-      found[missing.docType] =
-        `Upload the ${missing.docType.replace(/_/g, ' ').toLowerCase()} before you continue.`;
-    if (values.channels.length === 0)
-      found.channels =
-        'Choose at least one way to reach you. We have to be able to send an order confirmation.';
-    if (!values.language) found.language = 'Choose the language for messages we send you.';
+    if (!skipValidation) {
+      for (const missing of missingDocuments(BUYER_DOCUMENTS, docs))
+        found[missing.docType] =
+          `Upload the ${missing.docType.replace(/_/g, ' ').toLowerCase()} before you continue.`;
+      if (values.channels.length === 0)
+        found.channels =
+          'Choose at least one way to reach you. We have to be able to send an order confirmation.';
+      if (!values.language) found.language = 'Choose the language for messages we send you.';
+    }
 
     if (Object.keys(found).length > 0) {
       setErrors(found);

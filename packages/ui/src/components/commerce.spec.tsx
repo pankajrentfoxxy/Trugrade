@@ -11,7 +11,7 @@
 import * as React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import {
@@ -300,9 +300,11 @@ describe('OfferGrid — what the buyer is deciding on', () => {
 
   it('puts the whole break-up one click away, never part of it', async () => {
     render(<OfferGrid offers={[OFFERS[1] as SupplyPointOffer]} caption={CAPTION} />);
-    const disclosures = screen.getAllByText('Price break-up');
-    await userEvent.click(disclosures[0] as HTMLElement);
-    expect(screen.getAllByText(/Rule 32\(5\)/).length).toBeGreaterThan(0);
+    const trigger = screen.getAllByRole('button', { name: 'Price break-up' })[0] as HTMLElement;
+    await userEvent.click(trigger);
+    await waitFor(() => {
+      expect(screen.getAllByText(/Rule 32\(5\)/).length).toBeGreaterThan(0);
+    });
   });
 
   it('reports the quantity the buyer chose', async () => {
@@ -356,31 +358,25 @@ describe('OfferGrid — what the buyer is deciding on', () => {
     );
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  it('can force the card layout when the board sits in a narrow column', () => {
+    const { container } = render(
+      <OfferGrid offers={OFFERS} caption={CAPTION} layout="cards" onAdd={() => {}} />,
+    );
+    expect(container.querySelector('table')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('article')).toHaveLength(2);
+    expect(container.querySelector('[data-layout="cards"]')).toBeInTheDocument();
+  });
 });
 
-describe('OfferGrid — one primary action, not ten', () => {
-  /**
-   * The row used to hard-code variant="primary", so a board of ten supply points
-   * painted ten amber buttons. CLAUDE.md allows one primary action per screen,
-   * and 09_FRONTEND_LOCKED says why it matters: amber means a primary action, a
-   * measured value or an active state, and "the moment it becomes a decorative
-   * wash, the QC score chip stops meaning anything". Ten amber buttons beside
-   * ten amber QC scores is that wash — and it tells the buyer nothing, because
-   * every row shouts equally.
-   *
-   * Asserted as what a person sees — how many amber buttons are on screen —
-   * rather than that a prop exists.
-   */
-  it('gives the amber to exactly one row however many supply points there are', () => {
-    // Scoped to the table. OfferGrid renders BOTH a table and a card list and
-    // hides one with display:none per viewport — jsdom applies no CSS, so an
-    // unscoped query sees every row twice and "one primary" would read as two.
+describe('OfferGrid — add to cart actions', () => {
+  it('styles every add button as the primary action when the board can add to cart', () => {
     const { container } = render(
       <OfferGrid offers={OFFERS} caption={CAPTION} onAdd={() => {}} />,
     );
     const table = container.querySelector('table')!;
     const adds = within(table).getAllByRole('button', { name: /Add .* to cart/ });
     expect(adds.length).toBeGreaterThan(1);
-    expect(adds.filter((b) => b.className.includes('bg-acc'))).toHaveLength(1);
+    expect(adds.every((b) => b.className.includes('bg-acc'))).toBe(true);
   });
 });

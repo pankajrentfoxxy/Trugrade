@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -54,6 +55,14 @@ export const envSchema = z
 
     SMTP_HOST: z.string().default('localhost'),
     SMTP_PORT: z.coerce.number().int().default(1026),
+    SMTP_SECURE: boolish.default(false),
+    SMTP_USER: z.string().optional().default(''),
+    SMTP_PASS: z.string().optional().default(''),
+    SMTP_FROM: z.string().optional().default(''),
+
+    /** Interakt WhatsApp — phone OTP when set. Empty keeps the fake in dev/test. */
+    INTERAKT_API_KEY: z.string().optional().default(''),
+    INTERAKT_OTP_TEMPLATE: z.string().default('otp_verification'),
 
     JWT_PRIVATE_KEY_PATH: z.string().default('.keys/jwt.private.pem'),
     JWT_PUBLIC_KEY_PATH: z.string().default('.keys/jwt.public.pem'),
@@ -68,6 +77,19 @@ export const envSchema = z
     SESSION_COOKIE_DOMAIN: z.string().default('localhost'),
 
     INTEGRATION_MODE: z.enum(INTEGRATION_MODES).default('mock'),
+
+    /**
+     * Zoho Books GSTIN search. When the URL is set, Verify on /register and
+     * /sell/register calls it; when it is empty the fake stays in place.
+     */
+    GST_VERIFY_API_URL: z.string().optional().default(''),
+    GST_VERIFY_ORGANIZATION_ID: z.string().optional().default(''),
+    GST_VERIFY_REFERER: z.string().optional().default(''),
+    GST_VERIFY_ROLE_ID: z.string().optional().default(''),
+    GST_VERIFY_CSRF_TOKEN: z.string().optional().default(''),
+    GST_VERIFY_COOKIE: z.string().optional().default(''),
+    GST_VERIFY_ZB_SOURCE: z.string().optional().default('zbclient'),
+    GST_VERIFY_ZB_ASSET_VERSION: z.string().optional().default(''),
 
     SENTRY_DSN: z.string().optional(),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
@@ -142,7 +164,35 @@ function crossFieldIssues(source: NodeJS.ProcessEnv): string[] {
   return issues;
 }
 
+/**
+ * Turbo strict mode only forwards keys listed in turbo.json. SMTP / GST
+ * credentials live in the repo `.env` and would otherwise never reach Nest,
+ * so OTP mail stays on the fake even when the file is filled in.
+ */
+function applyRootEnvFile(): void {
+  const file = [join(process.cwd(), '.env'), join(process.cwd(), '..', '..', '.env')].find(
+    (path) => existsSync(path),
+  );
+  if (!file) return;
+  for (const raw of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  if (source === process.env) applyRootEnvFile();
   const parsed = envSchema.safeParse(source);
   const cross = crossFieldIssues(source);
 

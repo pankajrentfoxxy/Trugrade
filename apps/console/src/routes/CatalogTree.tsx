@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { EmptyState, Input, Skeleton, StatusPill, TickRule } from '@trugrade/ui';
+import { EmptyState, Input, Skeleton, StatusPill } from '@trugrade/ui';
 import { PageHeader } from '../lib/controls';
 import { useResource } from '../lib/useResource';
 import { useUrlState } from '../lib/urlState';
@@ -186,7 +186,6 @@ export function CatalogTreeRoute(): React.JSX.Element {
                         <h4 className="pt-2 font-mono text-label uppercase tracking-[0.13em] text-ink-2">
                           {model.name}
                         </h4>
-                        <TickRule className="mb-2" />
                         <ul>
                           {model.skus.map((sku) => (
                             <SkuRow key={sku.id} sku={sku} />

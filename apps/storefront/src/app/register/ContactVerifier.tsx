@@ -130,54 +130,50 @@ export function ContactVerifier({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <div className="min-w-0 flex-1">
-        <Input
-          className="w-full"
-          label={label}
-          hint={hint}
-          type={type}
-          inputMode={inputMode}
-          autoComplete={autoComplete}
-          placeholder={placeholder}
-          mono={mono}
-          required
-          value={value}
-          readOnly={phase === 'verified'}
-          onChange={(e) => {
-            onValueChange(e.target.value);
-            setLocalError(undefined);
-          }}
-          error={describedError}
-          verifyState={phase === 'verified' ? 'verified' : 'idle'}
-          verifyDetail={
-            phase === 'verified' ? (
-              <>
-                Verified. We sent a code to <span className="tnum">{sentTo ?? target}</span> and you
-                entered it.
-              </>
-            ) : undefined
-          }
-        />
-        </div>
-
-        {phase !== 'verified' && (
-          <Button
-            type="button"
-            variant="secondary"
-            className="sm:mt-7"
-            loading={phase === 'sending'}
-            disabledReason={
-              cooldown > 0 && phase === 'sent'
-                ? `You can ask for another code in ${cooldown} seconds.`
-                : undefined
-            }
-            onClick={() => void send()}
-          >
-            {phase === 'sent' ? 'Resend code' : 'Send code'}
-          </Button>
-        )}
-      </div>
+      <Input
+        className="w-full"
+        label={label}
+        hint={hint}
+        type={type}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        placeholder={placeholder}
+        mono={mono}
+        required
+        value={value}
+        readOnly={phase === 'verified'}
+        onChange={(e) => {
+          onValueChange(e.target.value);
+          setLocalError(undefined);
+        }}
+        error={describedError}
+        verifyState={phase === 'verified' ? 'verified' : 'idle'}
+        verifyDetail={
+          phase === 'verified' ? (
+            <>
+              Verified. We sent a code to <span className="tnum">{sentTo ?? target}</span> and you
+              entered it.
+            </>
+          ) : undefined
+        }
+        action={
+          phase !== 'verified' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              loading={phase === 'sending'}
+              disabledReason={
+                cooldown > 0 && phase === 'sent'
+                  ? `You can ask for another code in ${cooldown} seconds.`
+                  : undefined
+              }
+              onClick={() => void send()}
+            >
+              {phase === 'sent' ? 'Resend code' : 'Send code'}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {(phase === 'sent' || phase === 'verifying') && (
         <div className="flex flex-col gap-3 rounded border border-rule bg-sheet-2 p-4">

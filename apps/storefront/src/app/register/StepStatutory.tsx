@@ -506,6 +506,7 @@ export interface StepStatutoryProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepStatutory({
@@ -519,6 +520,7 @@ export function StepStatutory({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepStatutoryProps): React.JSX.Element {
   const [values, setValues] = React.useState<StatutoryValues>(() =>
     readStatutoryDraft(answers, fallbackLegalName, fields),
@@ -742,7 +744,7 @@ export function StepStatutory({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    const found = check();
+    const found = skipValidation ? {} : check();
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;
@@ -779,54 +781,51 @@ export function StepStatutory({
         title="PAN"
         description={copy.panDescription}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="min-w-0 flex-1">
-            <Input
-              className="w-full"
-              label="PAN"
-              mono
-              maxLength={10}
-              autoComplete="off"
-              required
-              hint={
-                panType
-                  ? `The fourth character says this PAN belongs to a ${panType.toLowerCase().replace(/_/g, ' ')}.`
-                  : 'Ten characters, as printed on the card — five letters, four digits, one letter.'
-              }
-              value={values.pan}
-              onFocus={() => onFieldFocus('PAN')}
-              onBlur={() => saveOnBlur()}
-              onChange={(e) => {
-                setError('pan', undefined);
-                retry.clear('pan');
-                setValues((v) => ({
-                  ...v,
-                  pan: e.target.value.toUpperCase(),
-                  panOutcome: null,
-                  panDeferred: false,
-                }));
-              }}
-              error={errors.pan}
-              // Not `verifyState="verifying"`: `Input` renders its own
-              // "Checking…" line, and the panel below already names the provider
-              // and says how long it usually takes. `readOnly` is the half of
-              // that state worth keeping — the value must not change mid-check.
-              readOnly={isChecking('pan')}
-              verifyState={values.panOutcome?.outcome === 'PASS' ? 'verified' : 'idle'}
-            />
-          </div>
-          {values.panOutcome?.outcome !== 'PASS' && !values.panDeferred && (
-            <Button
-              type="button"
-              variant="secondary"
-              className="sm:mt-7"
-              loading={isChecking('pan')}
-              onClick={verifyThePan}
-            >
-              Verify PAN
-            </Button>
-          )}
-        </div>
+        <Input
+          className="w-full"
+          label="PAN"
+          mono
+          maxLength={10}
+          autoComplete="off"
+          required
+          hint={
+            panType
+              ? `The fourth character says this PAN belongs to a ${panType.toLowerCase().replace(/_/g, ' ')}.`
+              : 'Ten characters, as printed on the card — five letters, four digits, one letter.'
+          }
+          value={values.pan}
+          onFocus={() => onFieldFocus('PAN')}
+          onBlur={() => saveOnBlur()}
+          onChange={(e) => {
+            setError('pan', undefined);
+            retry.clear('pan');
+            setValues((v) => ({
+              ...v,
+              pan: e.target.value.toUpperCase(),
+              panOutcome: null,
+              panDeferred: false,
+            }));
+          }}
+          error={errors.pan}
+          // Not `verifyState="verifying"`: `Input` renders its own
+          // "Checking…" line, and the panel below already names the provider
+          // and says how long it usually takes. `readOnly` is the half of
+          // that state worth keeping — the value must not change mid-check.
+          readOnly={isChecking('pan')}
+          verifyState={values.panOutcome?.outcome === 'PASS' ? 'verified' : 'idle'}
+          action={
+            values.panOutcome?.outcome !== 'PASS' && !values.panDeferred ? (
+              <Button
+                type="button"
+                variant="secondary"
+                loading={isChecking('pan')}
+                onClick={verifyThePan}
+              >
+                Verify PAN
+              </Button>
+            ) : undefined
+          }
+        />
 
         <CheckOutcome
           view={values.panOutcome}
@@ -882,47 +881,43 @@ export function StepStatutory({
               data-testid="gstin-row"
               className="flex flex-col gap-3 rounded-lg border border-rule bg-sheet p-4"
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                <div className="min-w-0 flex-1">
-                  <Input
-                    className="w-full"
-                    label={`GSTIN ${index + 1}`}
-                    mono
-                    maxLength={15}
-                    autoComplete="off"
-                    required
-                    hint="Fifteen characters from your registration certificate, e.g. 06ABCCE1234F6Z1."
-                    value={row.gstin}
-                    onFocus={() => onFieldFocus('Statutory')}
-                    onBlur={() => saveOnBlur()}
-                    onChange={(e) => editGstin(row.key, e.target.value)}
-                    error={errors[row.key]}
-                    readOnly={isChecking(row.key)}
-                    verifyState={passed ? 'verified' : 'idle'}
-                  />
-                </div>
-                {!passed && !row.deferred && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="sm:mt-7"
-                    loading={isChecking(row.key)}
-                    onClick={() => verifyRow(row)}
-                  >
-                    Verify
-                  </Button>
-                )}
-                {values.gstins.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="sm:mt-7"
-                    onClick={() => removeGstin(row.key)}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
+              <Input
+                className="w-full"
+                label={`GSTIN ${index + 1}`}
+                mono
+                maxLength={15}
+                autoComplete="off"
+                required
+                hint="Fifteen characters from your registration certificate, e.g. 06ABCCE1234F6Z1."
+                value={row.gstin}
+                onFocus={() => onFieldFocus('Statutory')}
+                onBlur={() => saveOnBlur()}
+                onChange={(e) => editGstin(row.key, e.target.value)}
+                error={errors[row.key]}
+                readOnly={isChecking(row.key)}
+                verifyState={passed ? 'verified' : 'idle'}
+                action={
+                  !passed && !row.deferred || values.gstins.length > 1 ? (
+                    <>
+                      {!passed && !row.deferred && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          loading={isChecking(row.key)}
+                          onClick={() => verifyRow(row)}
+                        >
+                          Verify
+                        </Button>
+                      )}
+                      {values.gstins.length > 1 && (
+                        <Button type="button" variant="ghost" onClick={() => removeGstin(row.key)}>
+                          Remove
+                        </Button>
+                      )}
+                    </>
+                  ) : undefined
+                }
+              />
 
               <CheckOutcome
                 view={row.outcome}

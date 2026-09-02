@@ -171,6 +171,11 @@ export interface SearchResult {
   warrantyMonths: number | null;
   cities: string[];
   sampleSerial: string;
+  ramGb: number;
+  storageGb: number;
+  storageType: string;
+  cpuLine: string;
+  displayLine: string;
 }
 
 /* ==========================================================================
@@ -347,6 +352,29 @@ const STORAGE_TYPE_LABEL: Readonly<Record<string, string>> = {
   EMMC: 'eMMC',
   HDD: 'Hard disk',
 };
+
+const RESOLUTION_PIXELS: Readonly<Record<string, string>> = {
+  HD: '1366x768',
+  FHD: '1920x1080',
+  QHD: '2560x1440',
+  UHD: '3840x2160',
+  RETINA: 'Retina',
+  WUXGA: '1920x1200',
+};
+
+function cpuLine(r: Pick<SearchRow, 'cpuFamily' | 'cpuModel'>): string {
+  if (/^i[3579]-/.test(r.cpuModel)) return `Intel Core ${r.cpuModel}`;
+  if (/^ryzen/i.test(r.cpuModel)) return `AMD ${r.cpuModel}`;
+  const isAmd = /ryzen|amd/i.test(r.cpuFamily);
+  const brand = isAmd ? 'AMD' : 'Intel';
+  return `${brand} ${r.cpuFamily} ${r.cpuModel}`.replace(/\s+/g, ' ').trim();
+}
+
+function displayLine(r: Pick<SearchRow, 'screenInch' | 'resolution'>): string {
+  const inch = r.screenInch % 1 === 0 ? String(r.screenInch) : r.screenInch.toFixed(1);
+  const px = RESOLUTION_PIXELS[r.resolution];
+  return px ? `${inch}" ${r.resolution} (${px})` : `${inch}" ${r.resolution}`;
+}
 
 export function buildFacets(
   rows: readonly SearchRow[],
@@ -599,6 +627,11 @@ function aggregate(rows: readonly SearchRow[]): SearchResult[] {
       warrantyMonths: first.warrantyMonths,
       cities: [...new Set(g.map((r) => r.city).filter((c): c is string => c !== null))].sort(),
       sampleSerial: g.map((r) => r.serial).sort()[0]!,
+      ramGb: first.ramGb,
+      storageGb: first.storageGb,
+      storageType: first.storageType,
+      cpuLine: cpuLine(first),
+      displayLine: displayLine(first),
     };
   });
 }

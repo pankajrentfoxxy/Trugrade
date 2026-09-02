@@ -24,8 +24,26 @@
    near-invisible dark one in dark theme. It belongs beside the token block in
    `packages/ui/src/globals.css`; it is here because that package is not this
    task's to change, and it is reported as a gap. */
-:root,:root[data-t="dark"]{color-scheme:dark}
-:root[data-t="light"]{color-scheme:light}
+:root,:root[data-t="dark"],:root[data-t="slate"],:root[data-t="olive"]{color-scheme:dark}
+:root[data-t="light"],:root[data-t="sand"]{color-scheme:light}
+
+/* Storefront chrome — light ice-cyan wash paired with accent #acc. Overrides the
+   locked dark chrome from globals for a light-only storefront. */
+html[data-t="light"],
+:root[data-t="light"] {
+  --chrome: #e4f8fd;
+  --chrome-2: #d4f2fa;
+  --chrome-3: #b8e8f4;
+  --on-chrome: #101319;
+  --on-chrome-2: #3c444f;
+  --on-chrome-3: #68717f;
+  --chrome-line: rgba(16, 19, 25, 0.08);
+  --chrome-line-2: rgba(16, 19, 25, 0.14);
+}
+:root[data-t="light"] header .wm .g,
+:root[data-t="light"] footer .wm .g {
+  color: var(--acc);
+}
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
 input,select{font-family:inherit}
@@ -62,12 +80,15 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
 .wm{font-weight:700;letter-spacing:-.04em;font-size:20px;line-height:1}
 .wm .g{color:var(--acc)}
 /* ============ UTILITY ============ */
-.util{background:var(--chrome);border-bottom:1px solid var(--chrome-line);font-size:12px;color:var(--on-chrome-2)}
+.util{background:var(--chrome);border-bottom:1px solid var(--chrome-line);font-size:12px;color:var(--on-chrome)}
 .util .wrap{display:flex;align-items:center;height:34px;gap:18px}
 .util .l,.util .r{display:flex;gap:18px;align-items:center}
 .util .r{margin-left:auto}
-.util a:hover{color:var(--on-chrome)}
-.util b{color:var(--acc);font-weight:600}
+.util a{color:var(--on-chrome)}
+.util a:hover{color:var(--on-chrome);opacity:.88}
+.util b{color:var(--on-chrome);font-weight:600}
+.util .util-promo{color:var(--on-chrome);font-weight:600}
+.util .util-promo:hover{color:var(--on-chrome);opacity:.88}
 .util .blip{margin-right:6px}
 /* ============ HEADER ============ */
 .head{background:var(--chrome);color:var(--on-chrome);position:relative;z-index:30}
@@ -102,18 +123,39 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
 .sugg .div{border-top:1px solid var(--rule-2)}
 .hact{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 .hbtn{display:flex;align-items:center;height:38px;padding:0 12px;border-radius:5px;font-size:13px;
-  color:var(--on-chrome-2);white-space:nowrap}
+  color:var(--on-chrome);white-space:nowrap}
 .hbtn:hover{background:var(--chrome-2)}
 .hbtn.solid{background:var(--acc);color:var(--acc-on);font-weight:700;padding:0 16px}
 .hbtn.solid:hover{background:var(--acc-dk)}
 .hbtn small{display:block;font-size:10px;color:var(--on-chrome-3);line-height:1.1}
 .hbtn strong{font-size:12.5px;font-weight:600;color:var(--on-chrome);line-height:1.2}
+.hcart{position:relative}
+.hcart-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+  background:var(--acc);color:var(--acc-on);font-size:10px;font-weight:700;line-height:18px;text-align:center;
+  pointer-events:none}
+.usermenu{position:relative;flex:0 0 auto}
+.uavatar{width:38px;height:38px;border-radius:999px;border:1px solid var(--chrome-line-2);
+  background:var(--chrome-2);color:var(--on-chrome);display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:700;cursor:pointer}
+.uavatar:hover,.usermenu:focus-within .uavatar{background:var(--chrome-3);color:var(--acc)}
+.usermenu-pop{position:absolute;top:100%;right:0;padding-top:6px;min-width:148px;opacity:0;
+  visibility:hidden;pointer-events:none;transition:opacity .12s ease,visibility .12s ease;z-index:60}
+.usermenu:hover .usermenu-pop,.usermenu:focus-within .usermenu-pop{opacity:1;visibility:visible;
+  pointer-events:auto}
+.usermenu-panel{background:var(--chrome-2);border:1px solid var(--chrome-line-2);border-radius:6px;
+  overflow:hidden;box-shadow:var(--shadow)}
+.usermenu-item{display:flex;align-items:center;width:100%;min-height:38px;padding:0 14px;
+  font-size:13px;font-weight:500;color:var(--on-chrome);text-align:left;background:none;border:0;
+  cursor:pointer;text-decoration:none}
+.usermenu-item:hover{background:var(--chrome-3);color:var(--on-chrome)}
+.usermenu-item:disabled{opacity:.6;cursor:default}
+.usermenu-pop .usermenu-panel{display:flex;flex-direction:column}
 .tgl{width:38px;height:38px;border-radius:5px;border:1px solid var(--chrome-line-2);display:flex;
-  align-items:center;justify-content:center;color:var(--on-chrome-2);flex:0 0 auto}
+  align-items:center;justify-content:center;color:var(--on-chrome);flex:0 0 auto}
 .tgl:hover{background:var(--chrome-2);color:var(--acc)}
 .tgl .sun{display:none}
-:root[data-t="light"] .tgl .sun{display:block}
-:root[data-t="light"] .tgl .moon{display:none}
+:root[data-t="light"] .tgl .sun,:root[data-t="sand"] .tgl .sun{display:block}
+:root[data-t="light"] .tgl .moon,:root[data-t="sand"] .tgl .moon{display:none}
 /* ============ CATEGORY STRIP ============ */
 .cats{background:var(--sheet);border-bottom:1px solid var(--rule);position:relative;z-index:20}
 .cats .wrap{display:flex;align-items:center;height:42px;overflow-x:auto}
@@ -245,6 +287,147 @@ summary:hover{background:var(--sheet-2)}
 .pc .cta{border-top:1px solid var(--rule-2);padding:9px 12px;font-size:12.5px;font-weight:600;
   text-align:center;color:var(--ink);background:var(--sheet-2)}
 .pc .cta:hover{background:var(--acc);color:var(--acc-on)}
+/* ---- SEARCH RESULT CARDS (rich list) ---- */
+.pcclist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pcclist .pcc-specs{grid-template-columns:1fr}
+/* ---- PRODUCT RECORD IDENTITY (laptop detail page) ---- */
+.pid{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.pid-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 18px;align-items:start;
+  padding:16px 18px;border-bottom:1px solid var(--rule-2)}
+.pid-main{min-width:0}
+.pid-title{margin:0 0 8px;font-size:20px;font-weight:600;line-height:1.2;color:var(--ink)}
+.pid-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-bottom:10px;
+  font-size:12px;color:var(--ink-2)}
+.pid-m-sep{color:var(--ink-4);font-weight:600}
+.pid-grade{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--sheet-2);color:var(--ink)}
+.pid-grade.tone-aplus{background:var(--pass);border-color:var(--pass);color:var(--sheet)}
+.pid-grade.tone-a{background:var(--pass-light);border-color:var(--pass-light);color:var(--ink)}
+.pid-grade.tone-b{background:var(--score-bar-warn-wash,var(--sheet-2));
+  border-color:var(--score-bar-warn,var(--warn));color:var(--ink)}
+.pid-m-score{display:inline-flex;align-items:center;gap:6px}
+.pid-m-bat{display:inline-flex;align-items:center;gap:5px}
+.pid-denom{font-size:11px;font-weight:500;color:var(--ink-4)}
+.pid-bar{display:block;height:5px;background:var(--rule);border-radius:3px;overflow:hidden;max-width:140px}
+.pid-bar-sm{max-width:52px;height:4px;margin:0;flex:0 0 auto}
+.pid-bar i{display:block;height:100%;border-radius:3px}
+.pid-bar i.tone-fail{background:var(--fail)}
+.pid-bar i.tone-warn{background:var(--score-bar-warn,var(--warn))}
+.pid-bar i.tone-b{background:var(--pass-muted)}
+.pid-bar i.tone-a{background:var(--pass-light)}
+.pid-bar i.tone-aplus{background:var(--pass)}
+.pid-battery{display:block;color:var(--ink-3);line-height:0}
+.pid-quick{display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:8px;font-size:13px;color:var(--ink-2)}
+.pid-quick span{display:inline-flex;align-items:center;gap:6px}
+.pid-quick svg{color:var(--ink-3);flex:0 0 auto}
+.pid-details{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.pid-detail{display:flex;align-items:flex-start;gap:8px}
+.pid-detail svg{color:var(--ink-3);flex:0 0 auto;margin-top:1px}
+.pid-aside{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0}
+.pid-thumb{width:84px;height:52px;display:flex;align-items:center;justify-content:center;
+  background:var(--sheet-2);border:1px solid var(--rule-2);border-radius:6px;color:var(--ink-4)}
+.pid-price{text-align:right;white-space:nowrap}
+.pid-price .mono{display:block;font-size:20px;font-weight:700;color:var(--ink);line-height:1.15}
+.pid-price small{display:block;margin-top:4px;font-size:10px;color:var(--ink-4);line-height:1.35}
+.pid-foot{display:flex;align-items:flex-start;gap:8px;padding:11px 18px;font-size:12.5px;color:var(--ink-2);
+  line-height:1.45;background:var(--sheet);border-bottom:1px solid var(--rule-2)}
+.pid-foot svg{color:var(--ink-3);flex:0 0 auto;margin-top:1px}
+.pid-spec{border-bottom:0;padding:0 18px 14px}
+.pid-spec summary{padding:12px 0 0;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;
+  display:flex;align-items:center;list-style:none;user-select:none}
+.pid-spec summary::-webkit-details-marker{display:none}
+.pid-spec summary::after{content:"";margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--ink-4);
+  border-bottom:1.5px solid var(--ink-4);transform:rotate(45deg);transition:transform .15s;flex-shrink:0}
+.pid-spec[open] summary::after{transform:rotate(-135deg)}
+.pid-spec summary:hover{color:var(--acc-ink)}
+.pid-spec-body{padding:0 0 4px}
+.pid-spec-note{margin:0 0 10px;font-size:11.5px;line-height:1.45;color:var(--ink-3)}
+.pid-spec-table{display:flex;flex-direction:column;gap:0}
+.pid-spec-table>div{display:flex;justify-content:space-between;gap:16px;align-items:baseline;
+  padding:9px 0;border-bottom:1px solid var(--rule-2)}
+.pid-spec-table>div:last-child{border-bottom:0}
+.pid-spec-table dt{flex:0 0 auto;font-size:12.5px;color:var(--ink-3)}
+.pid-spec-table dd{margin:0;flex:1 1 auto;min-width:0;font-size:13px;color:var(--ink);
+  font-variant-numeric:tabular-nums;text-align:right}
+.protop{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;margin-bottom:20px}
+.protop-main{min-width:0;display:flex;flex-direction:column;gap:16px}
+.protop-grade .sh{margin:0 0 10px}
+.grade-gal-acc{margin-top:4px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet);overflow:hidden}
+.grade-gal-acc summary{padding:12px 14px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;
+  display:flex;align-items:center;gap:10px;list-style:none;user-select:none}
+.grade-gal-acc summary::-webkit-details-marker{display:none}
+.grade-gal-acc summary::after{content:"";margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--ink-4);
+  border-bottom:1.5px solid var(--ink-4);transform:rotate(45deg);transition:transform .15s;flex-shrink:0}
+.grade-gal-acc[open] summary::after{transform:rotate(-135deg)}
+.grade-gal-acc summary:hover{color:var(--acc-ink)}
+.grade-gal-count{font-size:11px;font-weight:500;color:var(--ink-4)}
+.grade-gal-acc-body{padding:0 14px 14px;border-top:1px solid var(--rule-2)}
+.protop-board{min-width:0}
+.protop-board .sh{margin:0 0 12px}
+.protop-deliver{position:sticky;top:14px;min-width:0;align-self:start}
+.rec-solo{grid-template-columns:minmax(0,1fr);margin-top:0}
+.pcc{display:block;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;
+  overflow:hidden;color:inherit;text-decoration:none;transition:border-color .12s ease}
+.pcc:hover{border-color:var(--acc)}
+.pcc-mid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 16px;
+  align-items:start;padding:14px 16px;border-bottom:1px solid var(--rule-2)}
+.pcc-aside{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0}
+.pcc-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:8px}
+.pcc-title{font-size:16px;font-weight:600;color:var(--ink);line-height:1.25;margin:0}
+.pcc-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;color:var(--ink-2)}
+.pcc-m-sep{color:var(--ink-4);font-weight:600}
+.pcc-m-grade{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--sheet-2);color:var(--ink)}
+.pcc-m-grade.tone-aplus{background:var(--pass);border-color:var(--pass);color:var(--sheet)}
+.pcc-m-grade.tone-a{background:var(--pass-light);border-color:var(--pass-light);color:var(--ink)}
+.pcc-m-grade.tone-b{background:var(--score-bar-warn-wash,var(--sheet-2));
+  border-color:var(--score-bar-warn,var(--warn));color:var(--ink)}
+.pcc-m-score{display:inline-flex;align-items:center;gap:6px}
+.pcc-m-bat{display:inline-flex;align-items:center;gap:5px}
+.pcc-grade-pill{display:inline-flex;align-self:flex-start;font-size:11px;font-weight:700;
+  letter-spacing:.06em;background:var(--sheet-2);border:1px solid var(--rule);border-radius:999px;
+  padding:4px 10px;color:var(--ink)}
+.pcc-grade-pill.tone-aplus{background:var(--pass);border-color:var(--pass);color:var(--sheet)}
+.pcc-grade-pill.tone-a{background:var(--pass-light);border-color:var(--pass-light);color:var(--ink)}
+.pcc-grade-pill.tone-b{background:var(--score-bar-warn-wash,var(--sheet-2));
+  border-color:var(--score-bar-warn,var(--warn));color:var(--ink)}
+.pcc-denom{font-size:11px;font-weight:500;color:var(--ink-4)}
+.pcc-bar{display:block;height:5px;background:var(--rule);border-radius:3px;overflow:hidden;max-width:140px}
+.pcc-bar-sm{max-width:52px;height:4px;margin:0;flex:0 0 auto}
+.pcc-bar i{display:block;height:100%;border-radius:3px}
+.pcc-bar i.tone-fail{background:var(--fail)}
+.pcc-bar i.tone-warn{background:var(--score-bar-warn,var(--warn))}
+.pcc-bar i.tone-b{background:var(--pass-muted)}
+.pcc-bar i.tone-a{background:var(--pass-light)}
+.pcc-bar i.tone-aplus{background:var(--pass)}
+.pcc-battery{display:block;color:var(--ink-3);line-height:0}
+.pcc-battery-sm svg{display:block}
+.pcc-notmeasured{font-size:12px;color:var(--ink-4)}
+.pcc-thumb{width:84px;height:52px;display:flex;align-items:center;justify-content:center;
+  background:var(--sheet-2);border:1px solid var(--rule-2);border-radius:6px;color:var(--ink-4)}
+.pcc-body{min-width:0}
+.pcc-title{font-size:16px;font-weight:600;color:var(--ink);line-height:1.25}
+.pcc-quick{display:flex;flex-wrap:wrap;gap:12px 18px;font-size:13px;color:var(--ink-2)}
+.pcc-quick span{display:inline-flex;align-items:center;gap:6px}
+.pcc-quick svg{color:var(--ink-3);flex:0 0 auto}
+.pcc-details{display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.pcc-detail{display:flex;align-items:flex-start;gap:8px}
+.pcc-detail svg{color:var(--ink-3);flex:0 0 auto;margin-top:1px}
+.pcc-meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.pcc-price{text-align:right;white-space:nowrap;align-self:flex-end}
+.pcc-price .mono{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:700;color:var(--ink)}
+.pcc-price small{display:block;font-size:10px;color:var(--ink-4);margin-top:2px}
+.pcc-chev{font-size:22px;line-height:1;color:var(--ink-3);padding-left:4px}
+.pcc-specs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule-2)}
+.pcc-spec{display:flex;align-items:flex-start;gap:8px;background:var(--sheet);padding:11px 14px;
+  font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.pcc-spec svg{color:var(--ink-3);flex:0 0 auto;margin-top:1px}
+@media(max-width:900px){
+  .pcclist{grid-template-columns:1fr}
+  .pcc-head{flex-direction:column;align-items:flex-start;gap:6px}
+  .pcc-mid{grid-template-columns:minmax(0,1fr) auto}
+  .pcc-specs{grid-template-columns:1fr}
+}
 .loadmore{margin-top:14px;text-align:center}
 .loadmore button{border:1px solid var(--rule);background:var(--sheet);border-radius:6px;padding:10px 24px;
   font-size:13px;font-weight:600;color:var(--ink)}
@@ -300,7 +483,8 @@ tr.best td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 /* ---- STRIP + PROCESS + SELL ---- */
 .strip{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px}
 .sbx{background:var(--sheet);border:1px solid var(--rule);border-radius:7px;padding:18px;display:flex;gap:16px;align-items:center}
-.sbx h4{font-size:15px;margin-bottom:5px}
+.sbx > :not(.qr){flex:1;min-width:0}
+.sbx h3,.sbx h4{font-size:15px;margin-bottom:5px}
 .sbx p{margin:0 0 11px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .qform{display:flex;gap:6px;flex-wrap:wrap}
 .qform input{background:var(--sheet-2);border:1px solid var(--rule);border-radius:4px;padding:8px 10px;
@@ -308,12 +492,19 @@ tr.best td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .qform input::placeholder{color:var(--ink-4)}
 .qform button{background:var(--acc);color:var(--acc-on);font-weight:700;font-size:12.5px;padding:8px 14px;border-radius:4px}
 .proc{margin-top:28px;background:var(--sheet);border:1px solid var(--rule);border-radius:7px;
-  display:grid;grid-template-columns:repeat(4,1fr)}
-.pstep{padding:20px;border-right:1px solid var(--rule-2)}
-.pstep:last-child{border-right:0}
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.pstep{padding:20px 18px 22px;overflow:visible}
+.pstep-mark{display:flex;align-items:center;margin-bottom:10px;position:relative}
 .pstep .n{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--acc-ink);background:var(--acc-wash);
-  display:inline-block;padding:2px 7px;border-radius:3px;font-weight:700;margin-bottom:9px;letter-spacing:.08em}
-.pstep h4{font-size:14px;margin-bottom:5px}
+  display:inline-block;padding:2px 7px;border-radius:3px;font-weight:700;letter-spacing:.08em;flex-shrink:0;z-index:1}
+/* The rail that joins one step number to the next. Light uses --rule so it
+   stays a divider; dark uses --acc so the line is visible on --sheet. */
+.pstep:not(:last-child) .pstep-mark::after{content:"";flex:1;height:1px;margin-left:10px;margin-right:-18px;
+  background:var(--rule)}
+:root[data-t='dark'] .pstep:not(:last-child) .pstep-mark::after,
+:root[data-t='slate'] .pstep:not(:last-child) .pstep-mark::after,
+:root[data-t='olive'] .pstep:not(:last-child) .pstep-mark::after{background:var(--acc)}
+.pstep h3,.pstep h4{font-size:14px;margin:0 0 5px;color:var(--ink)}
 .pstep p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .sell{margin-top:28px;background:var(--chrome);border-radius:7px;padding:38px;overflow:hidden;
   display:grid;grid-template-columns:1fr 1fr;gap:38px;align-items:center;color:var(--on-chrome)}
@@ -324,19 +515,24 @@ tr.best td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .sf b{display:block;font-size:15px;color:var(--acc);margin-bottom:4px}
 .sf span{font-size:12.5px;color:var(--on-chrome-2);line-height:1.5}
 /* ---- FOOTER ---- */
-footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding:40px 0 20px;font-size:12.5px}
+footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:40px 0 20px;font-size:12.5px}
 .fg{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr 1fr;gap:28px;padding-bottom:28px;border-bottom:1px solid var(--chrome-line)}
 .fg .fgh{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--on-chrome-3);margin:0 0 11px;font-weight:500}
 .fg ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
-.fg a:hover{color:var(--on-chrome)}
-.fa p{margin:11px 0 0;max-width:34ch;line-height:1.55}
-.legal{margin-top:12px;font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--on-chrome-3);line-height:1.8}
-.fbot{padding-top:16px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;font-size:11.5px;color:var(--on-chrome-3)}
+.fg a{color:var(--on-chrome)}
+.fg a:hover{color:var(--on-chrome);opacity:.88}
+.fa p{margin:11px 0 0;max-width:34ch;line-height:1.55;color:var(--on-chrome-2)}
+.legal{margin-top:12px;font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--on-chrome-2);line-height:1.8}
+.legal a{color:var(--on-chrome)}
+.fbot{padding-top:16px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;font-size:11.5px;color:var(--on-chrome-2)}
 .pays{display:flex;gap:6px}
 .pays span{border:1px solid var(--chrome-line-2);border-radius:3px;padding:3px 8px;font-size:10px;
-  font-family:"IBM Plex Mono",monospace;letter-spacing:.05em}
-@media(max-width:1200px){.pgrid{grid-template-columns:repeat(3,1fr)}.proc{grid-template-columns:repeat(2,1fr)}}
+  font-family:"IBM Plex Mono",monospace;letter-spacing:.05em;color:var(--on-chrome-2)}
+@media(max-width:1200px){.pgrid{grid-template-columns:repeat(3,1fr)}.proc{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pstep:nth-child(2n) .pstep-mark::after{display:none}}
+@media(max-width:700px){.proc{grid-template-columns:1fr}
+  .pstep .pstep-mark::after{display:none}}
 /* `1fr` is `minmax(auto,1fr)`, and a grid item's automatic minimum is its
    MIN-CONTENT width — so a 1000px table inside it widened the whole
    document and the page itself scrolled sideways under a header that did
@@ -400,7 +596,6 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 /* The form itself is `packages/ui` components — Input, Button, OtpInput. What
    was here was a second, smaller set of field styles that only these two pages
    used, which is how one product ends up with two input designs. */
-.authcard .tickrule { margin-bottom: var(--s4); }
 @media (max-width: 900px) { .authwrap { grid-template-columns: 1fr; } .authside { display: none; } }
 @media (max-width: 700px) { .authcard { padding: var(--s7) var(--s5); } }
 
@@ -550,6 +745,13 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .gsel .chipf .c{font-size:10px;color:var(--ink-4);font-variant-numeric:tabular-nums}
 .gsel .chipf.on .c{color:var(--acc-on)}
 .gsel .chipf:hover{border-color:var(--acc)}
+.gsel button.chipf{cursor:pointer;font:inherit;text-align:left}
+/* Supply-point serial accordion — opens between chips and the board table. */
+.sp-acc{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease,margin .28s ease;
+  margin:0;scroll-margin-top:14px}
+.sp-acc.open{grid-template-rows:1fr;margin:0 0 14px}
+.sp-acc-inner{overflow:hidden;min-height:0}
+.sp-acc-panel{padding-top:2px}
 
 /* ---- condition gallery ---- */
 .gal{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -570,6 +772,17 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
    cells. */
 .obrd{padding:0 4px}
 .obrd table{min-width:1040px}
+.obrd[data-layout=cards]{padding:0}
+.obrd-cards{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:0}
+.obrd-cards>li+li{border-top:1px solid var(--rule-2)}
+.obrd-cards .offer-card{gap:10px;border:0;border-radius:0;padding:14px 16px;background:transparent}
+.obrd-cards .offer-card-head{align-items:flex-start}
+.obrd-cards .offer-card-grid{gap:10px 14px}
+.obrd-cards .offer-card-grid dt{font-size:10px}
+.obrd-cards .offer-card-grid dd{font-size:12.5px;font-variant-numeric:tabular-nums}
+.obrd-cards .offer-card-foot{padding-top:10px;margin-top:2px}
+.obrd-cards .offer-card-foot>span{flex-wrap:wrap}
+.obrd-cards .offer-card-head .text-right button{margin-left:auto;display:inline-block}
 .obrd td,.obrd th{padding:12px 12px}
 .obrd+.obrd{border-top:1px solid var(--rule)}
 .poolnote{margin:0;padding:12px 16px;background:var(--acc-wash);border-top:1px solid var(--rule);
@@ -601,6 +814,8 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .why b{color:var(--ink)}
 
 @media(max-width:1000px){
+  .protop{grid-template-columns:1fr}
+  .pid-body{grid-template-columns:minmax(0,1fr) auto}
   .rec{grid-template-columns:1fr}
   /* The panel stops being a rail and becomes the first block: on a phone the
      pincode is the first thing to answer, not the last. */
@@ -622,11 +837,46 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
  * ======================================================================== */
 
 /* The record's identity IS a serial, and every serial is mono with tabular
-   figures. `RecordHeader` takes `title` as a string, so the face is set here
-   rather than by wrapping the title in a span the component would not render. */
-.passport [data-testid='record-header'] h1{
+   figures. */
+.passport .uid-serial,.passport [data-testid='record-header'] h1{
   font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
   letter-spacing:.01em}
+.passport .uid{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;
+  overflow:hidden;margin-bottom:16px}
+.passport .uid-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 18px;
+  align-items:start;padding:16px 18px;border-bottom:1px solid var(--rule-2)}
+.passport .uid-main{min-width:0}
+.passport .uid-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:8px}
+.passport .uid-serial{margin:0;font-size:20px;font-weight:600;line-height:1.2;color:var(--ink)}
+.passport .uid-badges{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.passport .uid-sub{margin:0 0 12px;font-size:12.5px;line-height:1.55;color:var(--ink-2);max-width:62ch}
+.passport .uid-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin:0}
+.passport .uid-grid>div{min-width:0}
+.passport .uid-grid dt{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+.passport .uid-grid dd{margin:0;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
+.passport .uid-aside{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0;
+  text-align:right;max-width:180px}
+.passport .uid-score{display:flex;flex-direction:column;gap:2px}
+.passport .uid-score b{font-size:14px;color:var(--ink)}
+.passport .uid-score span{font-size:11.5px;line-height:1.45;color:var(--ink-3)}
+.passport .uid-aside .sel{white-space:nowrap}
+.passport .evid{gap:16px}
+.passport-acc{margin-top:0;border:1px solid var(--rule);border-radius:8px;background:var(--sheet);overflow:hidden}
+.passport-acc summary{padding:12px 14px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;
+  display:flex;align-items:center;gap:10px;list-style:none;user-select:none}
+.passport-acc summary::-webkit-details-marker{display:none}
+.passport-acc summary::after{content:"";margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--ink-4);
+  border-bottom:1.5px solid var(--ink-4);transform:rotate(45deg);transition:transform .15s;flex-shrink:0}
+.passport-acc[open] summary::after{transform:rotate(-135deg)}
+.passport-acc summary:hover{color:var(--acc-ink)}
+.passport-acc-body{padding:0 14px 14px;border-top:1px solid var(--rule-2)}
+.passport-acc-body .empty,.passport-acc-body .shots{margin-top:12px}
+.passport-why-acc{margin-top:0}
+.passport-why-acc .whybody{padding:0;border:0}
+.passport-why-acc .whybody p{font-size:12.5px;line-height:1.6;color:var(--ink-2);margin:0 0 10px}
+.passport-why-acc .whybody p:last-child{margin-bottom:0}
+.passport-why-acc .whybody b{color:var(--ink)}
 
 /* An expired certificate. `--warn`, not `--fail`: the machine did not fail, our
    claim about it went stale, and those must not look the same. */
@@ -655,6 +905,16 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .passport .shot .ang{font-size:11.5px;color:var(--ink-3)}
 
 /* --- the twelve areas --------------------------------------------------- */
+.passport .areas-cards{padding:0}
+.passport .area-cards{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:0}
+.passport .area-cards>li+li{border-top:1px solid var(--rule-2)}
+.passport .area-card{padding:12px 16px;background:transparent}
+.passport .area-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.passport .area-card-head h3{margin:0;font-size:13.5px;font-weight:600;color:var(--ink)}
+.passport .area-card-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:10px 14px;align-items:end}
+.passport .area-card-label{display:block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+.passport .area-card-barcell .ameter{max-width:100%}
 .passport .areas table{min-width:640px}
 .passport .areaname{color:var(--ink)}
 /* The bar is a measurement, so it is the accent — and there is no track drawn
@@ -675,16 +935,14 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   letter-spacing:normal;text-transform:none}
 
 /* --- detected hardware -------------------------------------------------- */
-/* One column: half these rows read "Not measured" and a two-column grid puts a
-   measured value beside an absent one where they scan as a pair. */
-.passport .specs.hw{grid-template-columns:1fr}
-.passport .specs.hw dd{min-width:180px}
+.passport .hw-panel{border:0;background:transparent;padding:0}
+.passport .specs.hw{grid-template-columns:repeat(2,minmax(0,1fr))}
+.passport .specs.hw dd{min-width:0;text-align:right}
 
 /* --- the seal ----------------------------------------------------------- */
-.passport .sealbody{display:flex;align-items:center;gap:16px;padding:16px;flex-wrap:wrap}
-/* The strip sits beside the code it encodes. On its own it would be decoration,
-   which is the one thing 09_FRONTEND_LOCKED §4 forbids a motif to be. */
-.passport .sealbody .barcode{flex:1;min-width:180px}
+.passport .sealbody{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px}
+.passport .sealbody .barcode{min-width:0;width:100%;max-width:none}
+.passport .sealcard .tnote{max-width:none;margin-top:0;width:100%;line-height:1.55}
 /* `.barcode i` is `--on-chrome-2`, which is a CHROME token: it is correct in the
    reference, where the strip lives in the dark hero, and it is a 2.9:1 grey on
    the light sheet this card sits on. Rescoped to working-surface tokens, the
@@ -705,10 +963,18 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 
 @media(max-width:1000px){
   .passport .shots{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .passport .uid-body{grid-template-columns:1fr}
+  .passport .uid-aside{flex-direction:row;flex-wrap:wrap;align-items:center;max-width:none;
+    justify-content:flex-start;text-align:left}
+  .passport .uid-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:640px){
   .passport .shots{grid-template-columns:1fr}
-  .passport .sealbody{gap:10px}
+  .passport .sealbody{grid-template-columns:1fr;gap:10px}
+  .passport .sealcode{justify-self:start}
+  .passport .area-card-grid{grid-template-columns:1fr}
+  .passport .specs.hw{grid-template-columns:1fr}
+  .passport .uid-grid{grid-template-columns:1fr}
 }
 
 /* ==========================================================================
@@ -870,14 +1136,29 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
  * unchanged; only what a cart has and a product page does not is below.
  * ========================================================================== */
 .cartpage>[data-testid="record-header"]{margin-top:20px}
+/* Lines on the left; order summary sticky on the right. */
+.cartlayout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;margin-top:16px}
+.cartlayout-lead{grid-column:1;min-width:0;display:flex;flex-direction:column;gap:20px}
+.cartlayout-lead .carttop{margin-top:0}
+.cartlayout-side{grid-column:2;grid-row:1;position:sticky;top:14px}
+.cartlayout-lines{min-width:0;display:flex;flex-direction:column;gap:28px}
+@media(max-width:1000px){
+  .cartlayout{grid-template-columns:1fr}
+  .cartlayout-side{grid-column:1;grid-row:1;position:static;order:-1}
+  .cartlayout-lead{order:1}
+}
 /* The named carts. `.gsel` is the grade selector's row; a cart chip carries a
    line count in the same slot the grade chips carry a unit count. */
-.cartsw{margin-top:16px;align-items:center}
-.cartsw .chipf{display:flex;flex-direction:column;gap:2px;padding:8px 12px;line-height:1.3;
-  text-align:left;cursor:pointer}
-.cartsw .chipf .c{font-size:10px;color:var(--ink-4);font-variant-numeric:tabular-nums}
+.carttop{display:flex;justify-content:flex-start;margin-top:16px}
+.cartsw{margin-top:0;justify-content:flex-start;flex-wrap:wrap}
+.cartwarn{margin:0 0 12px}
+.cartsw .chipf{display:inline-flex;flex-direction:row;align-items:baseline;gap:6px;padding:8px 12px;
+  line-height:1.3;white-space:nowrap;text-align:left;cursor:pointer}
+.cartsw .chipf .c{font-size:11px;color:var(--ink-4);font-variant-numeric:tabular-nums}
 .cartsw .chipf.on .c{color:var(--acc-on)}
 .cartsw .chipf:disabled{cursor:default;opacity:.6}
+.cartsw .cartnew{font-weight:600;color:var(--ink)}
+.cartsw .cartnew:hover{border-color:var(--acc)}
 .cartname{display:flex;gap:6px;align-items:center}
 .cartname input{height:38px;min-width:200px;background:var(--sheet-2);border:1px solid var(--rule);
   border-radius:5px;padding:0 10px;font-size:13px;color:var(--ink)}
@@ -889,13 +1170,47 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
   border-radius:5px;background:var(--sheet);font-size:13px;line-height:1.55;color:var(--ink-2)}
 .cartnotice.fail{border-left-color:var(--fail)}
 /* ---- the lines ---------------------------------------------------------- */
-.cartlines{padding:0 16px}
-.cartlines table{min-width:860px}
-/* Six columns of a comfortable-density table do not fit beside the actions
-   panel: 20px of inset per cell is 240px of padding, and the last column falls
-   off the right edge. Tightened to the same 12px T12's board uses, for the same
-   reason. The row height is untouched, so the density is still comfortable. */
-.cartlines td,.cartlines th{padding-left:12px;padding-right:12px}
+.cartlines{padding:0}
+.cartline-cards{margin:0;padding:0;list-style:none}
+.cartline-cards>li+li{border-top:1px solid var(--rule-2)}
+.cartline-card{padding:14px 16px;background:transparent}
+.cartline-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 18px;align-items:start}
+.cartline-main{min-width:0}
+.cartline-title{display:block;margin:0 0 8px;font-size:16px;font-weight:600;line-height:1.25;color:var(--ink)}
+.cartline-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-bottom:10px;font-size:12px;color:var(--ink-2)}
+.cartline-grade{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;
+  border:1px solid var(--rule)}
+.cartline-grade.tone-aplus{background:var(--pass);border-color:var(--pass);color:var(--sheet)}
+.cartline-grade.tone-a{background:var(--pass-light);border-color:var(--pass-light);color:var(--ink)}
+.cartline-grade.tone-b{background:var(--score-bar-warn-wash,var(--sheet-2));
+  border-color:var(--score-bar-warn,var(--warn));color:var(--ink)}
+.cartline-quick{display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:8px;font-size:13px;color:var(--ink-2)}
+.cartline-quick span{display:inline-flex;align-items:center;gap:6px}
+.cartline-quick svg{color:var(--ink-3);flex:0 0 auto}
+.cartline-details{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.cartline-detail{display:flex;align-items:flex-start;gap:8px}
+.cartline-detail svg{color:var(--ink-3);flex:0 0 auto;margin-top:1px}
+.cartline-fallback{margin:0 0 10px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.cartline-pass{display:flex;flex-direction:column;gap:5px;margin-bottom:0;font-size:13px;font-weight:500;color:var(--pass)}
+.cartline-pass-row{display:inline-flex;align-items:center;gap:7px}
+.cartline-pass svg{flex:0 0 auto;color:var(--pass)}
+.cartline-avail{margin-top:10px}
+.cartline-aside{display:flex;flex-direction:column;align-items:flex-end;gap:12px;flex-shrink:0;min-width:148px}
+.cartline-price{text-align:right;white-space:nowrap}
+.cartline-price .mono{display:block;font-size:18px;font-weight:700;color:var(--ink);line-height:1.15}
+.cartline-price small{display:block;margin-top:3px;font-size:10px;color:var(--ink-4);line-height:1.35}
+.cartline-field-label{display:block;margin-bottom:4px;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.cartline-qty-block{display:flex;flex-direction:column;align-items:flex-end;width:100%}
+.cartline-unit{text-align:right}
+.cartline-unit .mono{font-size:14px;font-weight:600;color:var(--ink)}
+.cartline-foot{display:flex;justify-content:flex-end;padding-top:10px;margin-top:10px;border-top:1px solid var(--rule-2)}
+.checkoutline-card{border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
+.checkoutline-serials{margin:0;padding:12px 16px 14px;border-top:1px solid var(--rule-2)}
+.checkoutline-serial-list{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0;padding:0;list-style:none}
+.checkoutline-serial{display:inline-block;padding:4px 8px;border:1px solid var(--rule);border-radius:4px;
+  background:var(--sheet-2);font-size:12px;color:var(--ink-2);text-decoration:none}
+.checkoutline-serial:hover{color:var(--ink);border-color:var(--acc)}
 .lgrade{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
 .lgrade .lmeta{font-size:10.5px;color:var(--ink-4)}
 .lavail{display:flex;flex-direction:column;gap:4px;min-width:210px;max-width:34ch;
@@ -911,37 +1226,35 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 /* The Update button stacks under the field rather than beside it: appearing
    beside it widens the column the moment a digit is typed, and the table starts
    scrolling sideways under the cursor. */
-.qtycell{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-.qtycell input{width:72px;height:38px;background:var(--sheet-2);border:1px solid var(--rule);
-  border-radius:5px;padding:0 8px;font-size:13.5px;color:var(--ink);text-align:right;
-  font-variant-numeric:tabular-nums}
+.qtycell{display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:100%}
+.qtystepper{display:inline-flex;align-items:stretch;height:38px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--sheet-2);overflow:hidden}
+.qtystep{display:flex;align-items:center;justify-content:center;min-width:36px;padding:0 10px;
+  font-size:16px;line-height:1;color:var(--ink-2);background:transparent}
+.qtystep:hover:not(:disabled){background:var(--sheet-3);color:var(--ink)}
+.qtystep:disabled{opacity:.45;cursor:not-allowed}
+.qtystepper input{width:52px;height:100%;border:0;border-left:1px solid var(--rule);border-right:1px solid var(--rule);
+  background:transparent;padding:0 6px;font-size:13.5px;color:var(--ink);text-align:center;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.qtystepper input::-webkit-outer-spin-button,.qtystepper input::-webkit-inner-spin-button{
+  -webkit-appearance:none;margin:0}
+.qtystepper input:focus{outline:none}
 .qtycell input:focus{border-color:var(--acc);outline:none}
 .cartlines .money small{color:var(--ink-4);font-variant-numeric:tabular-nums}
-/* The action column takes its own width and keeps it: the machine column will
-   otherwise eat the table and clip "Remove" to three letters. */
-.cartlines table th:last-child,.cartlines table td:last-child{width:1%;white-space:nowrap}
-.cartlines table td:last-child button{white-space:nowrap}
 /* ---- the panel ---------------------------------------------------------- */
 .cartgo{width:100%;justify-content:center;margin-top:4px}
+.cartmore{width:100%;justify-content:center;margin-top:8px}
 .checked{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
 .checked .ulink{background:none;border:0;padding:0;cursor:pointer;font-size:11px}
 .checked .ulink:disabled{opacity:.5;cursor:default}
 .sidep .facts .notmeasured{font-size:12px}
-/* 940 rather than a phone breakpoint: `.rec` goes single-column at 1000px, and
-   between there and a phone the six-column table is still wider than the page. */
-@media(max-width:940px){
-  /* The per-unit price column is dropped, not hidden information: the line
-     total already carries "5 × ₹52,000.00" underneath it, so the same figure is
-     on screen either way and the table stops overflowing by 400px. */
-  .cartlines{padding:0}
-  .cartlines table{min-width:600px}
-  .cartlines td,.cartlines th{padding-left:9px;padding-right:9px}
-  .cartlines th:nth-child(4),.cartlines td:nth-child(4){display:none}
-  .lavail{min-width:150px}
-}
 @media(max-width:640px){
   .cartsw{gap:6px}
   .cartname input{min-width:150px}
+  .cartline-body{grid-template-columns:1fr}
+  .cartline-aside{align-items:stretch;min-width:0}
+  .cartline-price,.cartline-unit{text-align:left}
+  .cartline-qty-block{align-items:flex-start}
 }
 
 /* ==========================================================================
@@ -1048,7 +1361,6 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 .wshead h1{font-size:clamp(21px,2.8vw,28px);line-height:1.18;font-weight:700;
   letter-spacing:-.022em;color:var(--ink)}
 .wshead p{margin:0;font-size:13.5px;line-height:1.6;color:var(--ink-2);max-width:74ch}
-.wshead .tickrule{margin-top:2px}
 
 /* The calm empty queue. Not an alert and not a nag: nothing waiting is the
    good outcome, and 03_UX_SPEC.md §3A.5 asks for it to read that way. */
@@ -1851,4 +2163,72 @@ footer{background:var(--chrome);color:var(--on-chrome-2);margin-top:40px;padding
 }
 .legaltbl tbody th[scope="row"] span{
   font-weight:400;font-size:13px;color:var(--ink-3);letter-spacing:normal;
+}
+
+/* Light storefront header/footer — explicit surfaces on --storefront-chrome
+   (#283341). Bundled CSS order can re-apply light --chrome on .util/.head. */
+html[data-t="light"] header .util,
+html[data-t="light"] header nav.head,
+html[data-t="light"] footer{
+  background:var(--storefront-chrome);
+  border-color:var(--storefront-chrome-line);
+  color:var(--storefront-on-chrome);
+}
+html[data-t="light"] header .util{
+  border-bottom:1px solid var(--storefront-chrome-line);
+}
+html[data-t="light"] header .util a,
+html[data-t="light"] header .util b,
+html[data-t="light"] header .util .util-promo,
+html[data-t="light"] header nav.head,
+html[data-t="light"] header nav.head .brand,
+html[data-t="light"] header nav.head a,
+html[data-t="light"] header .hbtn,
+html[data-t="light"] header .hbtn strong,
+html[data-t="light"] header .catbtn,
+html[data-t="light"] header .uavatar,
+html[data-t="light"] header .usermenu-item,
+html[data-t="light"] header .tgl{
+  color:var(--storefront-on-chrome);
+}
+html[data-t="light"] header .hbtn small{color:var(--storefront-on-chrome-3)}
+html[data-t="light"] header .hbtn:hover{background:var(--storefront-chrome-2)}
+html[data-t="light"] header .catbtn{
+  background:var(--storefront-chrome-3);
+  border:1px solid var(--storefront-chrome-line-2);
+}
+html[data-t="light"] header .catbtn:hover{background:var(--storefront-chrome-2)}
+html[data-t="light"] header .uavatar{
+  background:var(--storefront-chrome-2);
+  border-color:var(--storefront-chrome-line-2);
+}
+html[data-t="light"] header .uavatar:hover,
+html[data-t="light"] header .usermenu:focus-within .uavatar{
+  background:var(--storefront-chrome-3);
+  color:var(--storefront-on-chrome);
+}
+html[data-t="light"] header .usermenu-panel{
+  background:var(--storefront-chrome-2);
+  border-color:var(--storefront-chrome-line-2);
+  box-shadow:var(--shadow);
+}
+html[data-t="light"] header .usermenu-item:hover{
+  background:var(--storefront-chrome-3);
+  color:var(--storefront-on-chrome);
+}
+html[data-t="light"] footer .fa .wm,
+html[data-t="light"] footer .text-on-chrome,
+html[data-t="light"] footer a,
+html[data-t="light"] footer .fg a,
+html[data-t="light"] footer .fbot > span{color:var(--storefront-on-chrome)}
+html[data-t="light"] footer a:hover{color:var(--storefront-on-chrome);opacity:.88}
+html[data-t="light"] footer .fg .fgh{color:var(--storefront-on-chrome-3)}
+html[data-t="light"] footer .legal,
+html[data-t="light"] footer .fbot,
+html[data-t="light"] footer .fa p,
+html[data-t="light"] footer .text-on-chrome-3{color:var(--storefront-on-chrome-2)}
+html[data-t="light"] footer .fg{border-bottom-color:var(--storefront-chrome-line)}
+html[data-t="light"] footer .pays span{
+  border-color:var(--storefront-chrome-line-2);
+  color:var(--storefront-on-chrome-2);
 }

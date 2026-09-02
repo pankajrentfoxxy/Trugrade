@@ -354,6 +354,12 @@ export const TOTP_POLICY = Object.freeze({
 export const SESSION_POLICY = Object.freeze({
   accessTtlSeconds: 900, // VR-058, 15 min, RS256
   refreshTtlSeconds: 30 * 24 * 3600, // VR-059, 30 days, rotating
+  /**
+   * How long a rotation stays replayable, so two tabs refreshing at the same
+   * instant are not read as a stolen token. Long enough to cover a concurrent
+   * page load, far too short to be a useful window for an actual replay.
+   */
+  refreshGraceSeconds: 30,
   refreshReuseMessage: "For your security we've signed you out. Please sign in again.",
   loginFailuresPerEmail: 5, // VR-060
   loginFailuresPerIp: 20,

@@ -22,7 +22,7 @@ const css = readFileSync(join(__dirname, 'globals.css'), 'utf8');
 
 /** The dark block is `:root, :root[data-t='dark']`; light is its own block. */
 const DARK = css.slice(css.indexOf(':root,'), css.indexOf(":root[data-t='light']"));
-const LIGHT = css.slice(css.indexOf(":root[data-t='light']"), css.indexOf('html {'));
+const LIGHT = css.slice(css.indexOf(":root[data-t='light']"), css.indexOf(":root[data-t='slate']"));
 
 /**
  * Read a token out of one theme block, so a test cannot accidentally compare a
@@ -56,8 +56,8 @@ describe('the palette is Darkroom, and every earlier one is gone', () => {
     }
   });
 
-  it('is amber, and amber is the only accent family', () => {
-    expect(token(DARK, 'acc')).toBe('#ffb627');
+  it('is teal, and that is the only accent family', () => {
+    expect(token(DARK, 'acc')).toBe('#6bb1be');
     const accents = [...DARK.matchAll(/--acc[a-z-]*:/g)].map((m) => m[0]).sort();
     expect(accents).toEqual(['--acc-dk:', '--acc-glow:', '--acc-ink:', '--acc-on:', '--acc-wash:', '--acc:']);
   });
@@ -106,16 +106,16 @@ describe('WCAG 2.2 AA — the §9 pairs, in both themes', () => {
   });
 
   it('the primary button passes: acc-on on acc', () => {
-    // Identical in both themes — amber fill, near-black text.
+    // Identical in both themes — cyan fill, near-black text.
     expect(contrast(token(DARK, 'acc-on'), token(DARK, 'acc'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token(LIGHT, 'acc-on'), token(LIGHT, 'acc'))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('amber on the chrome passes, which is what makes the header usable', () => {
+  it('the accent on the chrome passes, which is what makes the header usable', () => {
     expect(contrast(token(DARK, 'acc'), token(DARK, 'chrome'))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('acc-ink on acc-wash passes in light, which is the amber-text-on-tint case', () => {
+  it('acc-ink on acc-wash passes in light, which is the accent-text-on-tint case', () => {
     expect(contrast(token(LIGHT, 'acc-ink'), token(LIGHT, 'acc-wash'))).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -173,8 +173,8 @@ describe('typography is an instrument, not a document', () => {
   });
 });
 
-describe('the seven QC motifs exist and the moving two stop moving', () => {
-  it.each(['.vf', '.scanbox', '.barcode', '.tickrule', '.grid-bg', '.blip', '.qr'])(
+describe('the six QC motifs exist and the moving two stop moving', () => {
+  it.each(['.vf', '.scanbox', '.barcode', '.grid-bg', '.blip', '.qr'])(
     '%s is defined',
     (cls) => {
       expect(css).toContain(`${cls} {`);

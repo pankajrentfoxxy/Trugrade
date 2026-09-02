@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Input, Skeleton, TickRule } from '@trugrade/ui';
+import { Input, Skeleton } from '@trugrade/ui';
 import { NotMeasured } from '../../../lib/controls';
 import { API, onDate, postJson, rupees, type PayoutPreview } from '../api';
 import type { WizardDraft } from './draft';
@@ -79,7 +79,6 @@ export function StepPrice({
   return (
     <div>
       <h2 className="text-h2 text-ink">What you want to receive</h2>
-      <TickRule />
       <p className="mt-2 max-w-prose text-body-sm text-ink-2">
         Enter the amount you want in your account per machine, after everything. That number is
         what we hold you to — it does not move for freight, for a buyer discount, or if we correct

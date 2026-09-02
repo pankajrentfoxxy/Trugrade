@@ -13,6 +13,7 @@ import {
   type Address,
 } from '@trugrade/ui';
 import { PINCODE, normaliseMobile } from '@trugrade/contracts';
+import { MOBILE_PREFIX, typeMobile } from '../../register/validation';
 import type { ApiFailure } from '../../register/api';
 import {
   addAddress,
@@ -300,7 +301,7 @@ const BLANK: NewAddress = {
   stateCode: '06',
   pincode: '',
   contactName: '',
-  contactMobile: '',
+  contactMobile: MOBILE_PREFIX,
   landmark: '',
   gateInstructions: '',
 };
@@ -458,7 +459,7 @@ function AddSite({
           inputMode="tel"
           hint="Indian mobile. We store it as +91XXXXXXXXXX."
           value={form.contactMobile}
-          onChange={(e) => set('contactMobile', e.target.value)}
+          onChange={(e) => set('contactMobile', typeMobile(e.target.value))}
           {...(fields.contactMobile ? { error: fields.contactMobile } : {})}
           required
         />

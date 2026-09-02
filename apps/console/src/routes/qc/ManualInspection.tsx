@@ -9,7 +9,6 @@ import {
   Skeleton,
   StatusPill,
   Stepper,
-  TickRule,
   type Step,
 } from '@trugrade/ui';
 import { Datum, Field, Section, Select, Textarea } from '../../lib/controls';
@@ -569,7 +568,6 @@ export function ManualInspectionRoute(): React.JSX.Element {
             <span className="tnum">{6 - outstandingParts(check.blockers)}</span> of{' '}
             <span className="tnum">6</span> ready
           </p>
-          <TickRule />
         </div>
         <Stepper
           label="This inspection"
