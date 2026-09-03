@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import type { Route } from 'next';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useProductCart } from '../../../lib/use-product-cart';
@@ -19,7 +20,7 @@ export function ViewCartDock(): React.JSX.Element | null {
 
   return (
     <div className="cartdock" role="status" aria-live="polite">
-      <Link className="cartdock-link pill acc" href={href}>
+      <Link className="cartdock-link pill acc" href={href as Route}>
         View cart
         <span className="cartdock-count mono tnum" aria-label={`${itemCount} in cart`}>
           {itemCount}
