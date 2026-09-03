@@ -157,9 +157,10 @@ describe('a vendor with nothing listed', () => {
     draw();
     expect(await screen.findByTestId('kpi-row')).toBeTruthy();
     expect(screen.queryByText('List your first stock')).toBeNull();
-    // No queue rows rather than two rows reading zero.
+    // No queue rows when nothing is waiting — and no filler copy either.
     expect(screen.queryByTestId('queue-list')).toBeNull();
-    expect(screen.getByText(/Nothing is waiting on you/i)).toBeTruthy();
+    expect(screen.queryByText(/Nothing is waiting on you/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'List stock' })).toBeTruthy();
   });
 });
 

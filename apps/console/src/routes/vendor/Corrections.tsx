@@ -14,7 +14,7 @@ import {
   type Column,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
-import { Board, Datum, NotMeasured, PageHeader, Select, Textarea } from '../../lib/controls';
+import { Board, Datum, NotMeasured, PageHeader, Section, Select, Textarea } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import {
   API,
@@ -134,6 +134,66 @@ function Machine({ c }: { c: GradeCorrection }): React.JSX.Element {
         )}
       </span>
     </>
+  );
+}
+
+/** Plain-language deadline for the header and KPI row. */
+function respondByLabel(c: GradeCorrection): React.ReactNode {
+  if (c.respondByAt === null) {
+    return (
+      <NotMeasured
+        why="The response window is not configured, so there is no date to show"
+        label="Not measured"
+      />
+    );
+  }
+  return <span className="font-mono tnum">{onDate(c.respondByAt)}</span>;
+}
+
+/** One sentence on what happens if they do nothing — shown before the form. */
+function IfYouDoNothing({ c }: { c: GradeCorrection }): React.JSX.Element {
+  if (!needsAnswer(c)) return <></>;
+  return (
+    <div className="correction-callout">
+      <p className="text-body-sm font-medium text-ink">If you do not answer</p>
+      <p className="mt-2 text-body-sm text-ink-2">
+        The machine is re-listed at Grade {gradeLabel(c.gradeCorrected)} and priced for that
+        grade. Your declared Grade {gradeLabel(c.gradeDeclared)} no longer applies.
+        {c.countsAgainstAccuracy
+          ? ' This correction counts against your grade-accuracy score until you dispute it and we uphold your side.'
+          : null}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The two grades side by side — the whole point of the screen in one glance.
+ *
+ * "We are prepared to claim" was accurate legally and opaque to a vendor reading
+ * it at 9pm. "We measured" is what happened.
+ */
+function GradeComparison({ c }: { c: GradeCorrection }): React.JSX.Element {
+  return (
+    <div className="correction-grade-compare">
+      <div className="correction-grade-card">
+        <p className="correction-grade-label">You declared</p>
+        <GradeBadge grade={c.gradeDeclared as Grade} variant="declared" />
+        <p className="mt-3 text-body-sm text-ink-2">What you told us before inspection.</p>
+      </div>
+      <div className="correction-grade-arrow" aria-hidden="true">
+        →
+      </div>
+      <div className="correction-grade-card correction-grade-card-measured">
+        <p className="correction-grade-label">We measured</p>
+        <GradeBadge
+          grade={c.gradeCorrected as Grade}
+          variant="corrected"
+          previousGrade={c.gradeDeclared as Grade}
+        />
+        <p className="mt-3 text-body-sm text-ink-2">What the technician recorded on site.</p>
+      </div>
+    </div>
   );
 }
 
@@ -448,7 +508,7 @@ export function VendorCorrectionDetailRoute(): React.JSX.Element {
       : '';
 
   return (
-    <div className="tg-stack">
+    <div className="tg-stack correction-record">
       <Breadcrumb
         items={[
           { label: 'Grade corrections', href: '/vendor/corrections' },
@@ -457,13 +517,17 @@ export function VendorCorrectionDetailRoute(): React.JSX.Element {
       />
 
       <RecordHeader
-        title="A grade correction on one machine"
+        title={c.serialNumber}
         subtitle={
           c.skuCode ? (
-            `${c.skuCode} — declared ${gradeLabel(c.gradeDeclared)}, inspected as ${gradeLabel(c.gradeCorrected)}.`
+            <>
+              {c.skuCode} — you declared Grade {gradeLabel(c.gradeDeclared)}; inspection found Grade{' '}
+              {gradeLabel(c.gradeCorrected)}.
+            </>
           ) : (
             <>
-              Declared {gradeLabel(c.gradeDeclared)}, inspected as {gradeLabel(c.gradeCorrected)}.{' '}
+              You declared Grade {gradeLabel(c.gradeDeclared)}; inspection found Grade{' '}
+              {gradeLabel(c.gradeCorrected)}.{' '}
               <NotMeasured
                 why="The catalog entry for this machine could not be read"
                 label="No SKU on record"
@@ -479,75 +543,91 @@ export function VendorCorrectionDetailRoute(): React.JSX.Element {
             previousGrade={c.gradeDeclared as Grade}
           />
         }
-        identifiers={[
-          { label: 'Serial', value: c.serialNumber },
-          {
-            label: 'Your ask',
-            value:
-              c.askBefore === null ? (
-                <NotMeasured
-                  why="No amount was recorded against this machine when the correction was raised"
-                  label="No amount"
-                />
-              ) : (
-                rupees(c.askBefore)
-              ),
-          },
-          {
-            label: 'Respond by',
-            value:
-              c.respondByAt === null ? (
-                <NotMeasured
-                  why="The response window is not configured, so there is no date to show"
-                  label="Not measured"
-                />
-              ) : (
-                onDate(c.respondByAt)
-              ),
-          },
-        ]}
       />
 
-      <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div>
-          <h2 className="text-h3 text-ink">What the inspection found</h2>
-          <p className="mt-3 max-w-prose text-body-sm text-ink-2">{c.reason}</p>
+      <div className="unit-kpi-grid">
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">You declared</p>
+          <p className="unit-kpi-value">Grade {gradeLabel(c.gradeDeclared)}</p>
+        </div>
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">We measured</p>
+          <p className="unit-kpi-value">Grade {gradeLabel(c.gradeCorrected)}</p>
+        </div>
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">Your ask</p>
+          <p className="unit-kpi-value font-mono tnum">
+            {c.askBefore === null ? (
+              <span className="font-sans text-ink-4">No amount recorded</span>
+            ) : (
+              rupees(c.askBefore)
+            )}
+          </p>
+        </div>
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">Grade accuracy</p>
+          <p className="unit-kpi-value text-body-sm font-normal">
+            {c.countsAgainstAccuracy
+              ? 'Counts until you dispute and we uphold you'
+              : 'Does not count — dispute upheld'}
+          </p>
+        </div>
+      </div>
 
-          <div className="mt-6 max-w-prose">
-            <Datum label="You declared">
-              <GradeBadge grade={c.gradeDeclared as Grade} variant="declared" />
-            </Datum>
-            <Datum label="We are prepared to claim">
-              <GradeBadge grade={c.gradeCorrected as Grade} />
-            </Datum>
-            <Datum label="Told you">{onDate(c.vendorNotifiedAt)}</Datum>
-            <Datum label="Counts against your grade accuracy">
-              {c.countsAgainstAccuracy ? (
-                <>
-                  Yes. This figure is published on the supply-point comparison buyers use. A dispute
-                  we uphold clears it; nothing else does.
-                </>
-              ) : (
-                <>No. A QC manager upheld your dispute, so it carries no mark.</>
-              )}
-            </Datum>
-            {c.vendorRespondedAt && (
-              <Datum label="You answered">
-                {onDate(c.vendorRespondedAt)}
-                {c.vendorResponse ? ` — ${RESPONSE_LABEL[c.vendorResponse]}` : ''}
+      <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex flex-col gap-5">
+          <Section
+            title="What changed"
+            subtitle="The grade you declared and the grade we measured after opening the machine."
+            className="!mt-0"
+          >
+            <GradeComparison c={c} />
+          </Section>
+
+          <Section
+            title="What the inspection found"
+            subtitle="The technician's own words — why the measured grade is lower than you declared."
+            className="!mt-0"
+          >
+            <div className="correction-reason">{c.reason}</div>
+          </Section>
+
+          <Section title="What happens next" subtitle="Deadlines and consequences." className="!mt-0">
+            <IfYouDoNothing c={c} />
+            <div className="mt-4 grid gap-x-6 md:grid-cols-2">
+              <Datum label="We told you">{onDate(c.vendorNotifiedAt)}</Datum>
+              <Datum label="Respond by">{respondByLabel(c)}</Datum>
+              <Datum label="Time left">
+                <Window c={c} />
               </Datum>
-            )}
-            {c.autoAppliedAt && (
-              <Datum label="Applied without an answer">{onDate(c.autoAppliedAt)}</Datum>
-            )}
-          </div>
+              <Datum label="Grade accuracy">
+                {c.countsAgainstAccuracy ? (
+                  <>
+                    Counts against your score on the supply-point comparison buyers see. Dispute and
+                    win — we clear it.
+                  </>
+                ) : (
+                  <>Does not count. A QC manager upheld your dispute.</>
+                )}
+              </Datum>
+              {c.vendorRespondedAt ? (
+                <Datum label="You answered">
+                  {onDate(c.vendorRespondedAt)}
+                  {c.vendorResponse ? ` — ${RESPONSE_LABEL[c.vendorResponse]}` : ''}
+                </Datum>
+              ) : null}
+              {c.autoAppliedAt ? (
+                <Datum label="Applied without an answer">{onDate(c.autoAppliedAt)}</Datum>
+              ) : null}
+            </div>
+          </Section>
         </div>
 
         <SidePanel
           title={answerable ? 'Your answer' : 'This one is settled'}
           description={
             answerable
-              ? 'Four answers, and they are equal. Disputing costs you nothing and a dispute we uphold clears the mark.'
+              ? 'Pick one of four equal options below, then send. Nothing is pre-selected.'
               : undefined
           }
           footnote={

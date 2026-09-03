@@ -327,6 +327,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'identity.user.read',
     'identity.user.write',
     'procurement.po.read_own',
+    'procurement.payable.read_own',
     'procurement.po.acknowledge',
     'platform.ticket.read',
     'platform.ticket.write',

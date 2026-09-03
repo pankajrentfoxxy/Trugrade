@@ -4,6 +4,7 @@ import {
   SKU_IMPORT_COLUMNS,
   UPLOAD_ALLOWED_MIME,
   gradeSchema,
+  paginationSchema,
   uuidSchema,
   type SkuImportColumn,
 } from '@trugrade/contracts';
@@ -91,6 +92,13 @@ export type CatalogSearchQueryDto = z.infer<typeof catalogSearchQuerySchema>;
  */
 export const skuDetailQuerySchema = z.object({ grade: gradeSchema.optional() });
 export type SkuDetailQueryDto = z.infer<typeof skuDetailQuerySchema>;
+
+/** Console catalog board — flat SKU list with search and brand filter. */
+export const catalogBoardQuerySchema = paginationSchema.extend({
+  q: z.string().trim().max(120).optional(),
+  brandId: uuidSchema.optional(),
+});
+export type CatalogBoardQueryDto = z.infer<typeof catalogBoardQuerySchema>;
 
 // ---------------------------------------------------------------------------
 // Condition images

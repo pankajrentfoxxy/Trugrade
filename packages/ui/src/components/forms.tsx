@@ -98,6 +98,121 @@ export function Chip({
 }
 
 /* ==========================================================================
+ * SelectTile — a multi-select option card (icon, title, description, indicator)
+ * ======================================================================== */
+
+export type SelectTileIndicator = 'radio' | 'checkbox';
+
+export interface SelectTileProps {
+  label: string;
+  description?: string;
+  icon?: React.ReactNode;
+  selected?: boolean;
+  onToggle?: () => void;
+  disabled?: boolean;
+  /** Radio circle for single-choice rows; square check for multi-select. */
+  indicator?: SelectTileIndicator;
+  className?: string;
+}
+
+function SelectTileIndicator({
+  selected,
+  indicator,
+}: {
+  selected: boolean;
+  indicator: SelectTileIndicator;
+}): React.JSX.Element {
+  if (indicator === 'checkbox') {
+    return (
+      <span
+        className={cn(
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded-xs border-2 transition-colors',
+          selected ? 'border-acc bg-acc text-acc-on' : 'border-rule-2 bg-sheet',
+        )}
+        aria-hidden
+      >
+        {selected ? (
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path
+              d="M2.5 6L5 8.5L9.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : null}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+        selected ? 'border-acc bg-acc' : 'border-rule-2 bg-transparent',
+      )}
+      aria-hidden
+    >
+      {selected ? <span className="h-2 w-2 rounded-full bg-acc-on" /> : null}
+    </span>
+  );
+}
+
+/**
+ * A tappable card for choosing one or many options from a short list.
+ *
+ * The whole row is the control (`aria-pressed`), with a visible indicator on the
+ * right so the pattern reads as "pick these" rather than "navigate somewhere".
+ */
+export function SelectTile({
+  label,
+  description,
+  icon,
+  selected = false,
+  onToggle,
+  disabled,
+  indicator = 'radio',
+  className,
+}: SelectTileProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={cn(
+        'flex min-h-11 w-full items-center gap-4 rounded-lg border p-4 text-left transition-colors',
+        selected
+          ? 'border-acc-dk bg-acc-wash'
+          : 'border-rule bg-sheet hover:border-ink-3',
+        disabled && 'cursor-not-allowed opacity-45',
+        className,
+      )}
+    >
+      {icon ? (
+        <span
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sheet-2 text-ink-2',
+            selected && 'text-acc-ink',
+          )}
+          aria-hidden
+        >
+          {icon}
+        </span>
+      ) : null}
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-body font-medium text-ink">{label}</span>
+        {description ? (
+          <span className="text-label leading-relaxed text-ink-3">{description}</span>
+        ) : null}
+      </span>
+      <SelectTileIndicator selected={selected} indicator={indicator} />
+    </button>
+  );
+}
+
+/* ==========================================================================
  * Checkbox — and the reason it has no `defaultChecked`
  * ======================================================================== */
 

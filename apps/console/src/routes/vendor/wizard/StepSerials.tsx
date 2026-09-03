@@ -446,8 +446,7 @@ export function StepSerials({
 
   return (
     <div>
-      <h2 className="text-h2 text-ink">Serial numbers</h2>
-      <p className="mt-2 max-w-prose text-body-sm text-ink-2">
+      <p className="max-w-prose text-body-sm text-ink-2">
         One serial per machine. We check each one against every live listing on the platform, so
         &ldquo;already listed&rdquo; appears here rather than after you submit.
       </p>

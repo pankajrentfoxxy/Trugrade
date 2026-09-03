@@ -53,52 +53,18 @@ import { ProviderProblem, isProviderProblem, useRetryLadder } from '../../regist
 export const WHY_DOCUMENTS_BANK: readonly WhyRailItem[] = [
   {
     term: 'Documents',
-    explanation: (
-      <>
-        <span className="block">
-          Every file is checked by its contents rather than its name, stripped of the location and
-          device data a phone photo carries, and shown only to the reviewer handling your
-          application.
-        </span>
-        <span className="mt-2 block">
-          We keep them for as long as the tax rules require us to hold the purchase invoices they
-          support.
-        </span>
-      </>
-    ),
+    explanation:
+      'Checked by contents, not filename. Shown only to your reviewer and kept for the tax retention period.',
   },
   {
     term: 'The payout account',
-    explanation: (
-      <>
-        <span className="block">
-          We send one rupee to the account and the bank tells us whose name is on it. That is the
-          whole check, and it costs you nothing — the rupee is ours.
-        </span>
-        <span className="mt-2 block">
-          The name that comes back is what matters. If the bank holds the account in a name that is
-          not your registered business, we will not pay into it, because a payout into somebody
-          else&rsquo;s account is not recoverable and the tax position on it is indefensible.
-        </span>
-      </>
-    ),
+    explanation:
+      'We send one rupee and the bank returns the account holder name. Payouts only go to an account in your business name.',
   },
   {
     term: 'The payout freeze',
-    explanation: (
-      <>
-        <span className="block">
-          When an account is set or changed, payouts to it are held for a fixed window and the
-          registered owner of this organisation is told on every channel we hold for them.
-        </span>
-        <span className="mt-2 block">
-          It is not a processing delay and there is no way to switch it off. The threat it exists
-          for is somebody with a stolen session pointing the payouts at their own account and
-          collecting the next run — the freeze buys a day, and the alert spends that day telling the
-          person who would notice.
-        </span>
-      </>
-    ),
+    explanation:
+      'New or changed accounts are frozen briefly and the organisation owner is notified — an anti-takeover control, not a processing delay.',
   },
 ];
 
@@ -179,6 +145,13 @@ const formatWhen = (iso: string): string =>
 /** The one key the retry ladder needs: there is one account on this step. */
 const BANK = 'bank';
 
+const labelNote = (text: string, note: string): React.ReactNode => (
+  <>
+    {text}{' '}
+    <span className="text-label font-normal text-ink-3">({note})</span>
+  </>
+);
+
 /* ==========================================================================
  * The outcome panel
  * ======================================================================== */
@@ -210,10 +183,7 @@ function BankOutcome({
         aria-live="polite"
       >
         <StatusPill className="self-start" tone="processing" label="Checking" />
-        <p className="text-body-sm text-ink-2">
-          Sending one rupee to the account and waiting for the bank to tell us whose it is. It
-          usually answers in a few seconds.
-        </p>
+        <p className="text-body-sm text-ink-2">One-rupee check with your bank. Usually a few seconds.</p>
       </div>
     );
   }
@@ -262,7 +232,7 @@ function BankOutcome({
           </dl>
         )}
         <p className="text-body-sm text-ink-2">
-          Correct the account and check it again.{' '}
+          Correct the details and check again.{' '}
           <span className="tnum text-ink">{view.attemptsRemaining}</span> of{' '}
           <span className="tnum text-ink">5</span> checks left today.
         </p>
@@ -301,9 +271,7 @@ function BankOutcome({
           )}
         </dl>
         <p className="text-body-sm text-ink-2">
-          One of the two is wrong. If the bank&rsquo;s version is right, enter it exactly as they
-          hold it; if the account belongs to somebody else, use your own — we cannot pay into an
-          account that is not in your name.
+          Enter the name exactly as the bank holds it, or use an account in your business name.
         </p>
       </div>
     );
@@ -331,10 +299,7 @@ function BankOutcome({
           </div>
         )}
       </dl>
-      <p className="text-body-sm text-ink-2">
-        Read the name above. If it is not the account you meant, change the number — this is the
-        account every payout will go to.
-      </p>
+      <p className="text-body-sm text-ink-2">Every payout goes to this account.</p>
     </div>
   );
 }
@@ -366,6 +331,7 @@ export interface StepDocumentsBankProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepDocumentsBank({
@@ -378,6 +344,7 @@ export function StepDocumentsBank({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepDocumentsBankProps): React.JSX.Element {
   const [values, setValues] = React.useState<BankValues>(() => {
     const draft = readBankDraft(answers);
@@ -514,18 +481,26 @@ export function StepDocumentsBank({
     event.preventDefault();
     const found: Record<string, string> = {};
 
-    for (const missing of missingDocuments(wanted, docs))
-      found[missing.docType] =
-        `Upload the ${missing.docType.replace(/_/g, ' ').toLowerCase()} before you continue.`;
+    if (!skipValidation) {
+      for (const missing of missingDocuments(wanted, docs))
+        found[missing.docType] =
+          `Upload the ${missing.docType.replace(/_/g, ' ').toLowerCase()} before you continue.`;
 
-    if (outcome?.outcome !== 'PASS')
-      found.bank =
-        outcome === null
-          ? 'Check the payout account before you continue. We send one rupee and the bank tells us whose account it is.'
-          : 'We can only take an account the bank confirms is yours. Correct it and check again.';
+      if (outcome?.outcome !== 'PASS')
+        found.bank =
+          outcome === null
+            ? 'Check the payout account before you continue. We send one rupee and the bank tells us whose account it is.'
+            : 'We can only take an account the bank confirms is yours. Correct it and check again.';
+    }
 
     if (Object.keys(found).length > 0) {
       setErrors((e) => ({ ...e, ...found }));
+      return;
+    }
+
+    if (skipValidation) {
+      const refused = await onContinue({ ...values }, 100);
+      if (refused) setErrors(refused);
       return;
     }
 
@@ -586,7 +561,8 @@ export function StepDocumentsBank({
       <DocumentChecklist
         wanted={wanted}
         title="Documents"
-        description="Clear photographs are fine — we do not need scans. Each file is checked by its contents, and anything we cannot read we will ask for again."
+        description=""
+        compactHints
         errors={errors}
         onClearError={clearError}
         onDocsChange={setDocs}
@@ -596,7 +572,6 @@ export function StepDocumentsBank({
 
       <FormSection
         title="The account we pay into"
-        description="Every purchase we make from you settles here. It has to be an account in the name of the entity that raises the invoice — the same one on the cancelled cheque above."
         status={
           verified ? (
             <StatusPill tone="pass" label="Bank confirmed" />
@@ -609,9 +584,8 @@ export function StepDocumentsBank({
       >
         <div className="flex flex-col gap-4" onFocus={() => onFieldFocus('The payout account')}>
           <Input
-            label="Account holder name"
+            label={labelNote('Account holder name', 'as the bank holds it')}
             required
-            hint="Exactly as the bank holds it, including any punctuation. We compare it with the name the bank sends back."
             value={values.accountHolderName}
             onChange={(e) => {
               clearError('accountHolderName');
@@ -627,7 +601,6 @@ export function StepDocumentsBank({
             required
             inputMode="numeric"
             autoComplete="off"
-            hint="9 to 18 digits. We store it encrypted and show only the last four afterwards."
             value={accountNumber}
             onChange={(e) => {
               clearError('accountNumber');
@@ -638,10 +611,9 @@ export function StepDocumentsBank({
           />
 
           <Input
-            label="IFSC"
+            label={labelNote('IFSC', '11 characters, fifth is zero')}
             mono
             required
-            hint="Eleven characters, from your cheque. The fifth one is a zero."
             value={values.ifsc}
             onChange={(e) => {
               clearError('ifsc');
@@ -672,9 +644,6 @@ export function StepDocumentsBank({
             >
               {outcome ? 'Check again' : 'Check this account'}
             </Button>
-            <p className="text-body-sm text-ink-3">
-              One rupee, from us. It is refunded and it costs you nothing.
-            </p>
           </div>
 
           <BankOutcome
@@ -701,69 +670,38 @@ export function StepDocumentsBank({
 
       {/* Said before the button is pressed, not after. A supplier who discovers
           the freeze from a payout that did not arrive rings support. */}
-      <FormSection
-        title="What happens when you save this account"
-        description="Three things, in this order, and none of them is optional."
-      >
-        <ol className="flex flex-col gap-3 text-body-sm text-ink-2">
-          <li className="flex gap-3">
-            <span className="font-mono text-data tnum text-ink-3">01</span>
-            <span>
-              We run the one-rupee check again ourselves, so what is written down is what the bank
-              said at the moment we wrote it.
-            </span>
-          </li>
-          <li className="flex gap-3">
-            <span className="font-mono text-data tnum text-ink-3">02</span>
-            <span>
-              <span className="text-ink">Payouts to this account are frozen for a set window.</span>{' '}
-              It applies every time an account is set or changed, it cannot be waived, and the
-              length is a platform setting we will show you the moment it is applied.
-            </span>
-          </li>
-          <li className="flex gap-3">
-            <span className="font-mono text-data tnum text-ink-3">03</span>
-            <span>
-              The registered owner of this organisation is told, on every channel we hold for them —
-              not only the one you are signed in on. If nobody can be reached, we refuse the change
-              rather than making it quietly.
-            </span>
-          </li>
-        </ol>
+      <p className="text-body-sm text-ink-3">
+        Save and continue re-checks the account, sets it for payouts, freezes it briefly, and
+        notifies the organisation owner.
+      </p>
 
-        {values.frozenUntil && (
-          <div className="flex flex-col gap-3 rounded border border-warn bg-sheet-2 p-4">
-            <StatusPill className="self-start" tone="warn" label="Payouts frozen" />
-            <dl className="flex flex-col gap-2 text-body-sm sm:flex-row sm:gap-8">
-              <div className="flex flex-col gap-1">
-                <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                  Frozen until
-                </dt>
-                <dd className="font-mono text-data tnum text-ink">
-                  {formatWhen(values.frozenUntil)}
-                </dd>
-              </div>
-              <div className="flex flex-col gap-1">
-                <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                  Owner told by
-                </dt>
-                <dd className="text-body-sm text-ink">
-                  {values.alertedVia.length > 0 ? (
-                    values.alertedVia.join(', ').toLowerCase()
-                  ) : (
-                    <span className="text-ink-4">Not recorded</span>
-                  )}
-                </dd>
-              </div>
-            </dl>
-            <p className="text-body-sm text-ink-2">
-              Nothing else about your application is held up by this. It only stops money moving to
-              a brand-new account before the person who owns this organisation has had a chance to
-              see that it changed.
-            </p>
-          </div>
-        )}
-      </FormSection>
+      {values.frozenUntil && (
+        <div className="flex flex-col gap-3 rounded border border-warn bg-sheet-2 p-4">
+          <StatusPill className="self-start" tone="warn" label="Payouts frozen" />
+          <dl className="flex flex-col gap-2 text-body-sm sm:flex-row sm:gap-8">
+            <div className="flex flex-col gap-1">
+              <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Frozen until
+              </dt>
+              <dd className="font-mono text-data tnum text-ink">
+                {formatWhen(values.frozenUntil)}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Owner told by
+              </dt>
+              <dd className="text-body-sm text-ink">
+                {values.alertedVia.length > 0 ? (
+                  values.alertedVia.join(', ').toLowerCase()
+                ) : (
+                  <span className="text-ink-4">Not recorded</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      )}
 
       {refusal && (
         <p role="alert" className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-fail">

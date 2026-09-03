@@ -141,6 +141,16 @@ export interface VendorUnitView {
   createdAt: Date;
 }
 
+/** One row from `listing.stock_movement`, as the unit's owner may read it. */
+export interface VendorUnitMovementView {
+  at: string;
+  fromStatus: string | null;
+  toStatus: string;
+  fromLocation: string | null;
+  toLocation: string | null;
+  reason: string | null;
+}
+
 export interface VendorImageView {
   id: string;
   fileKey: string;
@@ -660,6 +670,25 @@ export class ListingService implements IListingService {
 
   async listUnits(listingId: string): Promise<VendorUnitView[]> {
     return (await this.listings.findUnits(listingId)).map(toUnitView);
+  }
+
+  async listUnitMovements(
+    listingId: string,
+    unitId: string,
+  ): Promise<VendorUnitMovementView[]> {
+    const units = await this.listings.findUnits(listingId);
+    if (!units.some((u) => u.id === unitId)) {
+      throw new NotFoundError('unit', { listingId, unitId });
+    }
+    const rows = await this.listings.findUnitMovements(listingId, unitId);
+    return rows.map((r) => ({
+      at: r.occurredAt.toISOString(),
+      fromStatus: r.fromStatus,
+      toStatus: r.toStatus,
+      fromLocation: r.fromLocation,
+      toLocation: r.toLocation,
+      reason: r.reason,
+    }));
   }
 
   async removeUnit(listingId: string, unitId: string): Promise<void> {

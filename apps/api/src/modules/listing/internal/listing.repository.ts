@@ -890,6 +890,58 @@ export class ListingRepository {
    * the unit is on somebody's visit sheet, and deleting it would silently shrink
    * a job a technician is already travelling to.
    */
+  /**
+   * Every custody movement for one serial, oldest first.
+   *
+   * Org-scoped through the unit row — a vendor sees their machine's trail, never
+   * another vendor's, and nothing here names a buyer.
+   */
+  async findUnitMovements(
+    listingId: string,
+    unitId: string,
+  ): Promise<
+    Array<{
+      occurredAt: Date;
+      fromStatus: string | null;
+      toStatus: string;
+      fromLocation: string | null;
+      toLocation: string | null;
+      reason: string | null;
+    }>
+  > {
+    const { orgId, isPlatform } = this.orgPredicate();
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        occurred_at: Date;
+        from_status: string | null;
+        to_status: string;
+        from_location: string | null;
+        to_location: string | null;
+        reason: string | null;
+      }>
+    >`
+      SELECT m.occurred_at,
+             m.from_status::text AS from_status,
+             m.to_status::text AS to_status,
+             m.from_location,
+             m.to_location,
+             m.reason
+        FROM listing.stock_movement m
+        JOIN listing.unit u ON u.id = m.unit_id
+       WHERE m.unit_id = ${unitId}::uuid
+         AND u.listing_id = ${listingId}::uuid
+         AND (${isPlatform} OR u.vendor_org_id = ${orgId}::uuid)
+       ORDER BY m.occurred_at ASC, m.id ASC`;
+    return rows.map((r) => ({
+      occurredAt: r.occurred_at,
+      fromStatus: r.from_status,
+      toStatus: r.to_status,
+      fromLocation: r.from_location,
+      toLocation: r.to_location,
+      reason: r.reason,
+    }));
+  }
+
   async removeUnit(listingId: string, unitId: string): Promise<boolean> {
     const { orgId, isPlatform } = this.orgPredicate();
     return this.prisma.runInTransaction(async () => {

@@ -73,6 +73,14 @@ const EMPTY: VendorBusinessValues = {
  */
 const UNINCORPORATED = ['PROPRIETORSHIP', 'PARTNERSHIP'];
 
+/** Parenthetical note on the label row instead of a second line under the field. */
+const labelNote = (text: string, note: string): React.ReactNode => (
+  <>
+    {text}{' '}
+    <span className="text-label font-normal text-ink-3">({note})</span>
+  </>
+);
+
 export function readVendorBusinessDraft(
   answers: Record<string, unknown>,
   fallbackLegalName = '',
@@ -133,6 +141,7 @@ export interface StepVendorBusinessProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepVendorBusiness({
@@ -143,6 +152,7 @@ export function StepVendorBusiness({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepVendorBusinessProps): React.JSX.Element {
   const [values, setValues] = React.useState<VendorBusinessValues>(() =>
     readVendorBusinessDraft(answers, fallbackLegalName),
@@ -198,7 +208,7 @@ export function StepVendorBusiness({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    const found = check(values);
+    const found = skipValidation ? {} : check(values);
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;
@@ -232,8 +242,7 @@ export function StepVendorBusiness({
         }
       >
         <Input
-          label="Legal name"
-          hint="As registered. Include Pvt Ltd, LLP or the equivalent."
+          label={labelNote('Legal name', 'As registered. Include Pvt Ltd, LLP or the equivalent.')}
           required
           value={values.legalName}
           onFocus={() => onFieldFocus('Business')}
@@ -242,8 +251,7 @@ export function StepVendorBusiness({
           error={errors.legalName}
         />
         <Input
-          label="Trade name"
-          hint="Optional. The name you actually go by, if it differs."
+          label={labelNote('Trade name', 'Optional. The name you actually go by, if it differs.')}
           value={values.tradeName}
           onFocus={() => onFieldFocus('Business')}
           onBlur={saveOnBlur}
@@ -251,8 +259,10 @@ export function StepVendorBusiness({
           error={errors.tradeName}
         />
         <Select
-          label="Constitution"
-          hint="This decides what the next step asks for: a private limited company needs a CIN, an LLP an LLPIN, a proprietorship neither."
+          label={labelNote(
+            'Constitution',
+            'This decides what the next step asks for: a private limited company needs a CIN, an LLP an LLPIN, a proprietorship neither.',
+          )}
           required
           options={CONSTITUTIONS}
           value={values.constitution}
@@ -263,13 +273,13 @@ export function StepVendorBusiness({
         />
         {dateApplies && (
           <Input
-            label="Date of incorporation"
-            type="date"
-            hint={
+            label={labelNote(
+              'Date of incorporation',
               values.constitution
                 ? 'As printed on the certificate of incorporation.'
-                : 'Choose a constitution above first — a proprietorship is never asked for this.'
-            }
+                : 'Choose a constitution above first — a proprietorship is never asked for this.',
+            )}
+            type="date"
             value={values.incorporationDate}
             onFocus={() => onFieldFocus('Business')}
             onBlur={saveOnBlur}
@@ -279,10 +289,7 @@ export function StepVendorBusiness({
         )}
       </FormSection>
 
-      <FormSection
-        title="The operation"
-        description="What kind of supplier you are decides how we grade your stock and which of our buyers see it first."
-      >
+      <FormSection title="The operation">
         <Select
           label="What best describes you"
           required
@@ -304,8 +311,7 @@ export function StepVendorBusiness({
           error={errors.staffBand}
         />
         <Input
-          label="Website"
-          hint="Optional. acme.co.in is fine — you do not need to type https://."
+          label={labelNote('Website', 'Optional. acme.co.in is fine — you do not need to type https://.')}
           inputMode="url"
           value={values.website}
           onFocus={() => onFieldFocus('Business')}

@@ -2,21 +2,25 @@ import * as React from 'react';
 import { Link, useParams } from 'react-router';
 import {
   Breadcrumb,
+  cn,
   DataBoard,
   EmptyState,
   GradeBadge,
   RecordHeader,
   SealChip,
+  SidePanel,
   Skeleton,
   StatusPill,
-  Stepper,
+  Timeline,
   type Column,
   type Step,
+  type StepStatus,
+  type TimelineEvent,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import { Board, Datum, NotMeasured, PageHeader, Section } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, NO_DATE, gradeLabel, onDate, rupees, type VendorUnit } from './api';
+import { API, NO_DATE, gradeLabel, humanise, locationLabel, onDate, onDateTime, rupees, type VendorUnit, type VendorUnitMovement } from './api';
 
 /**
  * ARCHETYPE B (the list) and C (one serial). Board, then record.
@@ -124,6 +128,149 @@ function lifecycleSteps(unit: VendorUnit): Step[] {
   });
 }
 
+const LIFECYCLE_STATUS: Record<StepStatus, string | null> = {
+  complete: 'Complete',
+  current: 'In progress',
+  upcoming: 'Pending',
+  blocked: 'Blocked',
+};
+
+/** Lifecycle as a horizontal rail — same vocabulary as the listing wizard. */
+function UnitLifecycleRail({ unit }: { unit: VendorUnit }): React.JSX.Element {
+  const steps = lifecycleSteps(unit);
+
+  return (
+    <nav aria-label="Machine lifecycle" className="wizard-progress">
+      <ol className="wizard-progress-list">
+        {steps.map((step, i) => {
+          const n = i + 1;
+          const statusLabel = LIFECYCLE_STATUS[step.status];
+          return (
+            <li key={step.key} className="wizard-progress-item">
+              <div className="wizard-progress-step">
+                <div
+                  className="wizard-progress-hit"
+                  aria-current={step.status === 'current' ? 'step' : undefined}
+                >
+                  <span
+                    className={cn(
+                      'wizard-progress-circle',
+                      step.status === 'complete' && 'wizard-progress-circle-complete',
+                      step.status === 'current' && 'wizard-progress-circle-current',
+                      (step.status === 'upcoming' || step.status === 'blocked') &&
+                        'wizard-progress-circle-upcoming',
+                    )}
+                    aria-hidden="true"
+                  >
+                    {step.status === 'complete' ? (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path
+                          d="M2.5 7.2 5.5 10.2 11.5 3.8"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <span className="font-mono text-data tnum">{n}</span>
+                    )}
+                  </span>
+                  <span className="wizard-progress-copy">
+                    <span
+                      className={cn(
+                        'wizard-progress-title',
+                        step.status === 'current' ? 'text-ink' : 'text-ink-2',
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                    {statusLabel ? (
+                      <span
+                        className={cn(
+                          'wizard-progress-status',
+                          step.status === 'complete' && 'text-pass',
+                          step.status === 'current' && 'text-acc-ink',
+                          step.status === 'upcoming' && 'text-ink-3',
+                          step.status === 'blocked' && 'text-fail',
+                        )}
+                      >
+                        {statusLabel}
+                      </span>
+                    ) : null}
+                    {step.summary ? (
+                      <span className="mt-1 block text-body-sm text-ink-2">{step.summary}</span>
+                    ) : null}
+                    {step.blockers?.map((b) => (
+                      <span
+                        key={b}
+                        className="mt-2 block rounded border border-warn px-3 py-2 text-body-sm text-warn"
+                        role="status"
+                      >
+                        {b}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              </div>
+              {i < steps.length - 1 ? (
+                <span className="wizard-progress-line" aria-hidden="true" />
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+function movementTimeline(
+  movements: readonly VendorUnitMovement[],
+  currentLocation: string,
+): TimelineEvent[] {
+  if (movements.length === 0) {
+    return [
+      {
+        key: 'current',
+        action: `Currently ${locationLabel(currentLocation).toLowerCase()}`,
+        actor: 'Trugrade',
+        at: onDate(new Date().toISOString()),
+        current: true,
+        detail: 'No movements have been recorded for this serial yet.',
+      },
+    ];
+  }
+
+  return movements.map((m, i) => {
+    const last = i === movements.length - 1;
+    const action =
+      m.fromStatus === null
+        ? `First recorded as ${humanise(m.toStatus)}`
+        : `${humanise(m.fromStatus)} → ${humanise(m.toStatus)}`;
+
+    let detail: string | undefined;
+    if (m.toLocation) {
+      detail =
+        m.fromLocation === m.toLocation
+          ? `${locationLabel(m.toLocation)}, location unchanged`
+          : m.fromLocation
+            ? `${locationLabel(m.fromLocation)} → ${locationLabel(m.toLocation)}`
+            : locationLabel(m.toLocation);
+    }
+
+    return {
+      key: `${m.at}-${i}`,
+      action,
+      actor: 'Trugrade',
+      at: onDateTime(m.at),
+      dateTime: m.at,
+      ...(m.reason ? { reason: m.reason } : {}),
+      ...(detail ? { detail } : {}),
+      ...(last ? { current: true } : {}),
+    };
+  });
+}
+
 function useUnits(listingId: string | undefined): {
   data: VendorUnit[] | null;
   error: string | null;
@@ -191,7 +338,7 @@ function unitColumns(listingId: string | undefined): ReadonlyArray<Column<Vendor
       header: 'Sellable',
       cell: (u) => <span className="text-ink-2">{u.isSellable ? 'Yes' : 'No'}</span>,
     },
-    { key: 'location', header: 'Where', cell: (u) => <span className="text-ink-2">{u.location}</span> },
+    { key: 'location', header: 'Where', cell: (u) => <span className="text-ink-2">{locationLabel(u.location)}</span> },
     {
       key: 'ask',
       header: 'Your ask',
@@ -267,6 +414,10 @@ export function ListingUnitsRoute(): React.JSX.Element {
 export function UnitDetailRoute(): React.JSX.Element {
   const { id, unitId } = useParams();
   const { data, error } = useUnits(id);
+  const movements = useResource<VendorUnitMovement[]>(
+    API.listingUnitMovements(id ?? '', unitId ?? ''),
+    'Movement history unavailable',
+  );
   const unit = data?.find((u) => u.id === unitId);
 
   if (error) {
@@ -291,16 +442,29 @@ export function UnitDetailRoute(): React.JSX.Element {
 
   const halted = HALTED[unit.status];
   const validUntil = onDate(unit.qcValidUntil);
+  const timeline = movementTimeline(movements.data ?? [], unit.location);
+  const gradeVariant =
+    unit.gradeActual === null
+      ? 'declared'
+      : unit.gradeActual === unit.gradeDeclared
+        ? 'verified'
+        : 'corrected';
 
   return (
-    <div className="tg-stack">
+    <div className="tg-stack unit-record">
       <Breadcrumb
         items={[
           { label: 'Your stock', href: '/vendor/listings' },
           { label: 'Units', href: `/vendor/listings/${id}` },
-          { label: 'Machine' },
+          { label: unit.serialNumber },
         ]}
       />
+
+      {halted ? (
+        <div className="unit-alert" role="status">
+          <p className="text-body-sm text-ink">{halted}</p>
+        </div>
+      ) : null}
 
       <RecordHeader
         title={unit.serialNumber}
@@ -308,22 +472,46 @@ export function UnitDetailRoute(): React.JSX.Element {
         status={
           <StatusPill
             tone={halted ? 'warn' : unit.isSellable ? 'info' : 'processing'}
-            label={unit.status.replaceAll('_', ' ')}
+            label={humanise(unit.status)}
           />
         }
         identifiers={[
-          { label: 'Serial', value: unit.serialNumber },
-          { label: 'Where', value: unit.location },
+          { label: 'Where', value: locationLabel(unit.location) },
+          {
+            label: 'Sellable',
+            value: unit.isSellable ? 'Yes' : 'No',
+          },
+          {
+            label: 'Your ask',
+            value:
+              unit.vendorAskPrice === null ? (
+                <NotMeasured why="No price has been set on this machine" label="No price set" />
+              ) : (
+                rupees(unit.vendorAskPrice)
+              ),
+          },
+          {
+            label: 'Inspection valid to',
+            value:
+              validUntil === NO_DATE ? (
+                <NotMeasured
+                  why="There is no passed inspection on this machine"
+                  label="No inspection on record"
+                />
+              ) : (
+                validUntil
+              ),
+          },
         ]}
         secondaryActions={
           <>
             <GradeBadge
               grade={(unit.gradeActual ?? unit.gradeDeclared) as Grade}
-              variant={unit.gradeActual ? 'verified' : 'declared'}
+              variant={gradeVariant}
+              previousGrade={
+                gradeVariant === 'corrected' ? (unit.gradeDeclared as Grade) : undefined
+              }
             />
-            {/* The seal code is not on `VendorUnitView`, so the chip states the
-                fact the status carries and no more. Inventing a code here would
-                be worse than not showing one. */}
             <SealChip
               status={
                 unit.status === 'SEAL_BROKEN'
@@ -337,8 +525,90 @@ export function UnitDetailRoute(): React.JSX.Element {
         }
       />
 
-      <Section title="What we know about this machine">
-        <div className="grid gap-x-6 md:grid-cols-2">
+      <div className="unit-kpi-grid">
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">Location</p>
+          <p className="unit-kpi-value">{locationLabel(unit.location)}</p>
+        </div>
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">Grade</p>
+          <p className="unit-kpi-value">
+            {unit.gradeActual ? (
+              <>
+                {gradeLabel(unit.gradeActual)}
+                {unit.gradeActual !== unit.gradeDeclared ? (
+                  <span className="ml-2 font-normal text-ink-2">
+                    (declared {gradeLabel(unit.gradeDeclared)})
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-ink-2">Declared {gradeLabel(unit.gradeDeclared)}</span>
+            )}
+          </p>
+        </div>
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">Sellable</p>
+          <p className="unit-kpi-value">{unit.isSellable ? 'Yes' : 'No'}</p>
+        </div>
+        <div className="unit-kpi-tile">
+          <p className="unit-kpi-label">Your ask</p>
+          <p className="unit-kpi-value font-mono tnum">
+            {unit.vendorAskPrice === null ? (
+              <span className="font-sans text-ink-4">No price set</span>
+            ) : (
+              rupees(unit.vendorAskPrice)
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex flex-col gap-5">
+          <Section
+            title="Machine lifecycle"
+            subtitle="Where this serial is in the journey from declaration to delivery."
+            className="!mt-0"
+          >
+            <UnitLifecycleRail unit={unit} />
+          </Section>
+
+          <Section
+            title="Where this machine is"
+            subtitle="Every custody move, oldest first. The current location is marked on the latest entry."
+            className="!mt-0"
+          >
+            <div className="unit-location-banner">
+              <span className="unit-location-dot" aria-hidden="true" />
+              <div>
+                <p className="text-body-sm font-medium text-ink">Current location</p>
+                <p className="mt-1 text-body text-ink">{locationLabel(unit.location)}</p>
+              </div>
+            </div>
+            {movements.error ? (
+              <p className="text-body-sm text-fail" role="alert">
+                {movements.error}. The current location above is still accurate.
+              </p>
+            ) : !movements.data ? (
+              <Skeleton lines={4} />
+            ) : (
+              <Timeline events={timeline} label="Machine location history" />
+            )}
+          </Section>
+        </div>
+
+        <SidePanel
+          title="What we know"
+          description="Facts recorded against this serial. Nothing here can be edited — corrections go through grade correction or a fresh inspection."
+          footnote={
+            unit.payoutLocked ? (
+              <>
+                This machine&apos;s payout is locked — a purchase order has named it. Repricing applies
+                only to machines not yet committed.
+              </>
+            ) : undefined
+          }
+        >
           <Datum label="Declared">
             Grade {gradeLabel(unit.gradeDeclared)} on{' '}
             <span className="font-mono tnum">{onDate(unit.createdAt)}</span>
@@ -367,12 +637,22 @@ export function UnitDetailRoute(): React.JSX.Element {
               <span className="font-mono tnum">{rupees(unit.vendorAskPrice)}</span>
             )}
           </Datum>
-        </div>
-      </Section>
-
-      <Section title="Where this machine is">
-        <Stepper label="Machine lifecycle" steps={lifecycleSteps(unit)} />
-      </Section>
+          <div className="flex flex-col gap-2 pt-2">
+            <Link
+              className="text-body-sm text-acc-ink underline underline-offset-4"
+              to={`/vendor/listings/${id}`}
+            >
+              All machines on this listing
+            </Link>
+            <Link
+              className="text-body-sm text-acc-ink underline underline-offset-4"
+              to="/vendor/listings"
+            >
+              Back to your stock
+            </Link>
+          </div>
+        </SidePanel>
+      </div>
     </div>
   );
 }

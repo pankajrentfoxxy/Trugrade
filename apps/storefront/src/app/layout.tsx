@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { BRAND } from '@trugrade/config/brand';
 import { THEME_STOREFRONT_PREPAINT_SCRIPT } from '@trugrade/ui';
-import { SiteFooter } from './SiteFooter';
+import { FooterGate } from './FooterGate';
 import '@trugrade/ui/globals.css';
 import './globals.css';
 import './storefront.css';
@@ -62,7 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
           `/legal/**` documents reachable from anywhere. A published policy
           nothing links to is a policy nobody finds.
         */}
-        <SiteFooter />
+        <FooterGate />
       </body>
     </html>
   );

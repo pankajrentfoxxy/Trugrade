@@ -38,10 +38,10 @@ import { VendorReview } from './VendorReview';
  */
 const TAN_FIELD: FieldRequirement = {
   fieldCode: 'tan',
-  label: 'TAN',
+  label: 'TAN (optional)',
   required: false,
   helpText:
-    'Optional. Ten characters, e.g. DELT12345E. We use it on the TDS certificate that goes with your payout.',
+    'Ten characters, e.g. DELT12345E. We use it on the TDS certificate that goes with your payout.',
 };
 
 /**
@@ -71,15 +71,15 @@ const ASKED_EARLIER = ['incorporation_date'];
  * The seed is what should change. Until it does, this is the honest sentence.
  */
 const CORRECTED_PURPOSE_NOTES: Record<string, string> = {
+  CAPABILITY: '',
+  DOCUMENTS_BANK: '',
   AGREEMENT:
     'The vendor agreement, the grading policy, the data-wipe undertaking and the returns policy. Your acceptance is recorded against the version you were shown.',
 };
 
 const VENDOR_STATUTORY_COPY: StatutoryCopy = {
-  panDescription:
-    'The permanent account number of the entity we pay. TDS on every payout is deducted against it, so it has to be the entity that raises the invoice — not a director’s personal PAN.',
-  gstinDescription:
-    'Add every registration you will supply from. Each one is checked against the GST portal on its own, and the state it was issued in is where an e-way bill for that stock starts.',
+  panDescription: '',
+  gstinDescription: '',
   confirmConsequence:
     'Purchase orders raised against this GSTIN will carry the name above, and so will the payout advice. Confirming it is what lets us buy from you.',
   primaryTitle: 'Which registration do we buy from?',
@@ -223,10 +223,6 @@ export interface VendorRegistrationProps {
   grades: { grade: string; customerDescription: string }[] | null;
 }
 
-/** Step 1's answer, read back so step 4 does not ask for brands from scratch. */
-const listFrom = (answers: Record<string, unknown> | undefined, key: string): string[] =>
-  Array.isArray(answers?.[key]) ? (answers[key] as string[]) : [];
-
 export function VendorRegistration({
   definitions,
   brands,
@@ -239,9 +235,9 @@ export function VendorRegistration({
           answers={ctx.answers}
           registered={ctx.registered}
           busy={ctx.busy}
-          brands={brands ?? []}
           onContinue={(values, extras) => ctx.continueFromAccount(values, extras)}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
       BUSINESS_PROFILE: (ctx) => (
@@ -258,6 +254,7 @@ export function VendorRegistration({
           onSaveDraft={ctx.saveDraft}
           onContinue={ctx.continueFrom}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
       STATUTORY: (ctx) => (
@@ -285,17 +282,12 @@ export function VendorRegistration({
           answers={ctx.answers}
           brands={brands ?? []}
           grades={grades ?? []}
-          brandsFromStepOne={listFrom(ctx.allAnswers.ACCOUNT, 'brands')}
-          otherBrandsFromStepOne={
-            typeof ctx.allAnswers.ACCOUNT?.otherBrands === 'string'
-              ? (ctx.allAnswers.ACCOUNT.otherBrands as string)
-              : ''
-          }
           busy={ctx.busy}
           blockingReason={ctx.step?.blockingReason}
           onSaveDraft={ctx.saveDraft}
           onContinue={ctx.continueFrom}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
       FACILITY_CONTACTS: (ctx) => (
@@ -306,6 +298,7 @@ export function VendorRegistration({
           onSaveDraft={ctx.saveDraft}
           onContinue={ctx.continueFrom}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
       DOCUMENTS_BANK: (ctx) => (
@@ -321,6 +314,7 @@ export function VendorRegistration({
           onSaveDraft={ctx.saveDraft}
           onContinue={ctx.continueFrom}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
       AGREEMENT: (ctx) => (
@@ -332,6 +326,7 @@ export function VendorRegistration({
           onSaveDraft={ctx.saveDraft}
           onContinue={ctx.continueFrom}
           onFieldFocus={ctx.onFieldFocus}
+          skipValidation={ctx.skipValidation}
         />
       ),
     }),

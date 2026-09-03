@@ -103,7 +103,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
 export type VerifyState = 'idle' | 'verifying' | 'verified' | 'rejected';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
-  label: string;
+  label: React.ReactNode;
   hint?: string;
   error?: string;
   mono?: boolean;

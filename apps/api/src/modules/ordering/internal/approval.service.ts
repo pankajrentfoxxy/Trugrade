@@ -116,7 +116,7 @@ export interface ApprovalDecisionResult {
 }
 
 export interface ApprovalListQuery {
-  status: 'waiting' | 'decided' | 'all';
+  status: 'held' | 'waiting' | 'decided' | 'all';
   page: number;
   per: number;
 }
@@ -145,6 +145,7 @@ interface ApprovalRow {
 }
 
 const FACETS = [
+  { value: 'held', label: 'Held for approval' },
   { value: 'waiting', label: 'Waiting on you' },
   { value: 'decided', label: 'Decided' },
   { value: 'all', label: 'Everything' },
@@ -165,35 +166,42 @@ export class ApprovalService {
    * ------------------------------------------------------------------- */
 
   /**
-   * The approvals addressed to the person asking.
+   * The approval board.
    *
-   * Scoped twice and both are needed: `buyer_org_id` because an organisation's
-   * orders are its own, and `approver_user_id` because an inbox showing every
-   * approval in the company is not an inbox. Somebody else's pending approval is
-   * simply absent — the org-wide view of what is held is the dashboard's, and it
-   * already exists.
+   * `held` is org-wide — every live hold in the organisation, because that is
+   * what the dashboard's "Awaiting approval" count means and what a buyer who
+   * raised an order needs to see when they open Approvals. `waiting` is the
+   * personal inbox: only rows addressed to the person asking. Both scopes are
+   * needed; conflating them is how a count of two on Today becomes zero here.
    */
   async inbox(query: ApprovalListQuery): Promise<ApprovalInboxView> {
     const { orgId, userId } = this.approverPrincipal();
     const now = this.clock.now();
 
-    // Read whole and filtered here rather than in SQL: an inbox is one person's
-    // outstanding decisions, the facet counts are over the same set, and three
-    // round trips to count what is already in memory is the more expensive
-    // version of this. If an approver ever has thousands, this moves into SQL.
-    const rows = await this.rows({ orgId, approverUserId: userId });
+    // Read whole and filtered here rather than in SQL: facet counts are over
+    // sets already in memory, and three round trips to count what is already
+    // fetched is the more expensive version of this. If an org ever has
+    // thousands, this moves into SQL.
+    const mineRows = await this.rows({ orgId, approverUserId: userId });
+    const orgRows = await this.rows({ orgId });
     const decided = (r: ApprovalRow): boolean =>
       r.status !== 'PENDING' || r.expires_at.getTime() <= now.getTime();
 
-    const names = await this.namesFor(rows);
-    const matching = rows.filter((r) =>
-      query.status === 'waiting' ? !decided(r) : query.status === 'decided' ? decided(r) : true,
-    );
+    const sourceRows = query.status === 'held' ? orgRows : mineRows;
+    const names = await this.namesFor(sourceRows);
+    const matching = sourceRows.filter((r) => {
+      if (query.status === 'held' || query.status === 'waiting') return !decided(r);
+      if (query.status === 'decided') return decided(r);
+      return true;
+    });
 
     const per = query.per;
     const pages = Math.max(1, Math.ceil(matching.length / per));
     const page = Math.min(query.page, pages);
     const slice = matching.slice((page - 1) * per, page * per);
+
+    const heldCount = orgRows.filter((r) => !decided(r)).length;
+    const waitingCount = mineRows.filter((r) => !decided(r)).length;
 
     return {
       approvals: slice.map((r) => this.view(r, userId, names)),
@@ -204,11 +212,15 @@ export class ApprovalService {
       facets: FACETS.map((f) => ({
         ...f,
         count:
-          f.value === 'all'
-            ? rows.length
-            : rows.filter((r) => (f.value === 'waiting' ? !decided(r) : decided(r))).length,
+          f.value === 'held'
+            ? heldCount
+            : f.value === 'waiting'
+              ? waitingCount
+              : f.value === 'all'
+                ? mineRows.length
+                : mineRows.filter((r) => decided(r)).length,
       })),
-      waitingOnYou: rows.filter((r) => !decided(r)).length,
+      waitingOnYou: waitingCount,
     };
   }
 

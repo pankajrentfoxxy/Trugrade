@@ -175,6 +175,7 @@ export interface StepAgreementProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepAgreement({
@@ -185,6 +186,7 @@ export function StepAgreement({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepAgreementProps): React.JSX.Element {
   const [values, setValues] = React.useState<AgreementValues>(() => {
     const draft = readAgreementDraft(answers);
@@ -210,28 +212,30 @@ export function StepAgreement({
     event.preventDefault();
     const found: Record<string, string> = {};
 
-    for (const agreement of VENDOR_AGREEMENTS) {
-      if (values.accepted[agreement.code] !== true)
-        found[agreement.code] =
-          `We cannot buy from you without the ${agreement.label.toLowerCase()}. Read it and accept it, or tell us which part you cannot agree to.`;
+    if (!skipValidation) {
+      for (const agreement of VENDOR_AGREEMENTS) {
+        if (values.accepted[agreement.code] !== true)
+          found[agreement.code] =
+            `We cannot buy from you without the ${agreement.label.toLowerCase()}. Read it and accept it, or tell us which part you cannot agree to.`;
+      }
+      if (!values.signatoryName.trim())
+        found.signatoryName = 'Name the person accepting these. It goes on the record with the time.';
+      if (!values.pricingMode) found.pricingMode = 'Choose how you want your price to be set.';
+      if (commission) {
+        const rate = validateCommissionRate(values.commissionRate);
+        if (rate) found.commissionRate = rate;
+      }
+      if (!values.payoutCycle) found.payoutCycle = 'Choose how often you want to be paid.';
+      const threshold = validatePayoutThreshold(values.payoutThreshold, MIN_PAYOUT_THRESHOLD_INR);
+      if (threshold) found.payoutThreshold = threshold;
+      if (values.invoiceUploadRequired === null)
+        found.invoiceUploadRequired =
+          'Tell us whether you raise your own invoice or want us to self-bill. Both are real answers.';
+      if (values.channels.length === 0)
+        found.channels =
+          'Choose at least one way to reach you. We have to be able to send a purchase order.';
+      if (!values.language) found.language = 'Choose the language for messages we send you.';
     }
-    if (!values.signatoryName.trim())
-      found.signatoryName = 'Name the person accepting these. It goes on the record with the time.';
-    if (!values.pricingMode) found.pricingMode = 'Choose how you want your price to be set.';
-    if (commission) {
-      const rate = validateCommissionRate(values.commissionRate);
-      if (rate) found.commissionRate = rate;
-    }
-    if (!values.payoutCycle) found.payoutCycle = 'Choose how often you want to be paid.';
-    const threshold = validatePayoutThreshold(values.payoutThreshold, MIN_PAYOUT_THRESHOLD_INR);
-    if (threshold) found.payoutThreshold = threshold;
-    if (values.invoiceUploadRequired === null)
-      found.invoiceUploadRequired =
-        'Tell us whether you raise your own invoice or want us to self-bill. Both are real answers.';
-    if (values.channels.length === 0)
-      found.channels =
-        'Choose at least one way to reach you. We have to be able to send a purchase order.';
-    if (!values.language) found.language = 'Choose the language for messages we send you.';
 
     if (Object.keys(found).length > 0) {
       setErrors(found);

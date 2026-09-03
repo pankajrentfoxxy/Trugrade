@@ -87,6 +87,7 @@ export function ContactVerifier({
   const target = normalise ? normalise(value) : value.trim();
 
   const send = async (): Promise<void> => {
+    if (cooldown > 0 || phase === 'sending' || phase === 'verifying') return;
     const invalid = validate(value);
     if (invalid) {
       setLocalError(invalid);

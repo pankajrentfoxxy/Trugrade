@@ -23,8 +23,12 @@ type CartLineRef = { qty: number; itemId: string };
 export type ProductCartValue = {
   qtyFor: (listingId: string) => number | null;
   busyListingId: string | null;
+  itemCount: number;
+  cartId: string | null;
+  cartDockDismissed: boolean;
   addListing: (listingId: string, qty: number) => Promise<void>;
   updateListingQty: (listingId: string, qty: number) => Promise<void>;
+  dismissCartDock: () => void;
 };
 
 const ProductCartContext = React.createContext<ProductCartValue | null>(null);
@@ -41,15 +45,18 @@ function linesFromView(view: CartView): Map<string, CartLineRef> {
 
 function useProductCartState(): ProductCartValue {
   const [cartId, setCartId] = React.useState<string | null>(null);
+  const [itemCount, setItemCount] = React.useState(0);
   const [lines, setLines] = React.useState<Map<string, CartLineRef>>(() => new Map());
   const linesRef = React.useRef(lines);
   linesRef.current = lines;
   const [busyListingId, setBusyListingId] = React.useState<string | null>(null);
+  const [cartDockDismissed, setCartDockDismissed] = React.useState(false);
   const cartIdRef = React.useRef<string | null>(null);
   cartIdRef.current = cartId;
 
   const applyView = React.useCallback((view: CartView): void => {
     setCartId(view.id);
+    setItemCount(view.itemCount);
     rememberActiveCart(view.id);
     setLines(linesFromView(view));
     publishCartUpdate({ cartId: view.id, lineCount: view.itemCount });
@@ -59,12 +66,14 @@ function useProductCartState(): ProductCartValue {
     const list = await listCarts();
     if (!list.ok) {
       setCartId(null);
+      setItemCount(0);
       setLines(new Map());
       return;
     }
     const targetId = resolveTargetCartId(list.data, readActiveCartId());
     if (!targetId) {
       setCartId(null);
+      setItemCount(0);
       setLines(new Map());
       return;
     }
@@ -115,8 +124,10 @@ function useProductCartState(): ProductCartValue {
       }
       const result = await setCartLine(id, listingId, qty);
       setBusyListingId(null);
-      if (result.ok) applyView(result.data);
-      else if (result.status === 401) signInRedirect();
+      if (result.ok) {
+        applyView(result.data);
+        setCartDockDismissed(false);
+      } else if (result.status === 401) signInRedirect();
     },
     [applyView, ensureCart, signInRedirect],
   );
@@ -156,7 +167,20 @@ function useProductCartState(): ProductCartValue {
     [lines],
   );
 
-  return { qtyFor, busyListingId, addListing, updateListingQty };
+  const dismissCartDock = React.useCallback((): void => {
+    setCartDockDismissed(true);
+  }, []);
+
+  return {
+    qtyFor,
+    busyListingId,
+    itemCount,
+    cartId,
+    cartDockDismissed,
+    addListing,
+    updateListingQty,
+    dismissCartDock,
+  };
 }
 
 /** One cart scope for every comparison board on the product page. */

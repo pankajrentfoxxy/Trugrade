@@ -47,6 +47,14 @@ import { ProviderProblem, isProviderProblem, useRetryLadder } from './verificati
  * for the paragraph the right rail carries.
  */
 
+/** Parenthetical note on the label row instead of a second line under the field. */
+const labelNote = (text: string, note: string): React.ReactNode => (
+  <>
+    {text}{' '}
+    <span className="text-label font-normal text-ink-3">({note})</span>
+  </>
+);
+
 /* ==========================================================================
  * The "why we ask" copy this step contributes
  * ======================================================================== */
@@ -147,13 +155,17 @@ export const BUYER_STATUTORY_COPY: StatutoryCopy = {
 };
 
 let keySeed = 0;
-const nextKey = (): string => {
+/** Stable per row for the life of the screen. UUID avoids HMR resetting a module counter and colliding with rows already in state. */
+const newRowKey = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
   keySeed += 1;
   return `g${keySeed}`;
 };
 
 const emptyRow = (): GstinRow => ({
-  key: nextKey(),
+  key: newRowKey(),
   gstin: '',
   isPrimary: false,
   outcome: null,
@@ -174,7 +186,16 @@ export function readStatutoryDraft(
     // A resumed row keeps its recorded outcome, so a returning applicant sees
     // what was already verified rather than a blank form and a second round of
     // portal calls against their daily budget.
-    .map((r) => ({ ...emptyRow(), ...r, key: nextKey() }));
+    .map(
+      (r): GstinRow => ({
+        key: newRowKey(),
+        gstin: r.gstin,
+        isPrimary: r.isPrimary === true,
+        outcome: r.outcome ?? null,
+        confirmed: r.confirmed === true,
+        deferred: r.deferred === true,
+      }),
+    );
 
   return {
     legalName: str('legalName') || fallbackLegalName,
@@ -643,7 +664,7 @@ export function StepStatutory({
 
   /* ---------------------------------------------------------------- editing */
 
-  const saveOnBlur = (): void => persist(values);
+  const saveOnBlur = (): void => persist(latest.current);
 
   const setRow = (key: string, patch: Partial<GstinRow>): void =>
     setValues((v) => ({
@@ -659,26 +680,43 @@ export function StepStatutory({
   };
 
   const addGstin = (): void =>
-    setValues((v) => ({ ...v, gstins: [...v.gstins, emptyRow()] }));
+    setValues((v) => {
+      const next = { ...v, gstins: [...v.gstins, emptyRow()] };
+      persist(next);
+      return next;
+    });
 
   const removeGstin = (key: string): void => {
-    const rows = values.gstins.filter((r) => r.key !== key);
-    const next = { ...values, gstins: rows.length > 0 ? rows : [emptyRow()] };
-    setValues(next);
-    // Written through, not left to the next blur: a removed registration that
-    // comes back on reload is the same broken promise as a lost answer.
-    persist(next);
+    setValues((v) => {
+      const removed = v.gstins.find((r) => r.key === key);
+      let gstins = v.gstins.filter((r) => r.key !== key);
+      if (gstins.length === 0) gstins = [emptyRow()];
+      else if (removed?.isPrimary) {
+        gstins = gstins.map((r) => ({ ...r, isPrimary: false }));
+      }
+      const next = { ...v, gstins };
+      // Written through, not left to the next blur: a removed registration that
+      // comes back on reload is the same broken promise as a lost answer.
+      persist(next);
+      return next;
+    });
+    setError(key, undefined);
+    setError('primary', undefined);
+    retry.clear(key);
+    setChecking((c) => c.filter((k) => k !== key));
   };
 
   /** Exactly one primary, and never one nobody chose. */
   const makePrimary = (key: string): void => {
-    const next = {
-      ...values,
-      gstins: values.gstins.map((r) => ({ ...r, isPrimary: r.key === key })),
-    };
-    setValues(next);
+    setValues((v) => {
+      const next = {
+        ...v,
+        gstins: v.gstins.map((r) => ({ ...r, isPrimary: r.key === key })),
+      };
+      persist(next);
+      return next;
+    });
     setError('primary', undefined);
-    persist(next);
   };
 
   /* -------------------------------------------------------------- verifying */
@@ -783,16 +821,16 @@ export function StepStatutory({
       >
         <Input
           className="w-full"
-          label="PAN"
+          label={labelNote(
+            'PAN',
+            panType
+              ? `The fourth character says this PAN belongs to a ${panType.toLowerCase().replace(/_/g, ' ')}.`
+              : 'Ten characters, as printed on the card — five letters, four digits, one letter.',
+          )}
           mono
           maxLength={10}
           autoComplete="off"
           required
-          hint={
-            panType
-              ? `The fourth character says this PAN belongs to a ${panType.toLowerCase().replace(/_/g, ' ')}.`
-              : 'Ten characters, as printed on the card — five letters, four digits, one letter.'
-          }
           value={values.pan}
           onFocus={() => onFieldFocus('PAN')}
           onBlur={() => saveOnBlur()}
@@ -876,19 +914,17 @@ export function StepStatutory({
           const taxpayer = row.outcome ? resolvedGstin(row.outcome) : {};
           const passed = row.outcome?.outcome === 'PASS';
           return (
-            <div
-              key={row.key}
-              data-testid="gstin-row"
-              className="flex flex-col gap-3 rounded-lg border border-rule bg-sheet p-4"
-            >
+            <div key={row.key} data-testid="gstin-row" className="flex flex-col gap-3">
               <Input
                 className="w-full"
-                label={`GSTIN ${index + 1}`}
+                label={labelNote(
+                  `GSTIN ${index + 1}`,
+                  'Fifteen characters from your registration certificate, e.g. 06ABCCE1234F6Z1.',
+                )}
                 mono
                 maxLength={15}
                 autoComplete="off"
                 required
-                hint="Fifteen characters from your registration certificate, e.g. 06ABCCE1234F6Z1."
                 value={row.gstin}
                 onFocus={() => onFieldFocus('Statutory')}
                 onBlur={() => saveOnBlur()}

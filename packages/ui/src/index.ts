@@ -63,6 +63,9 @@ export {
 export {
   Chip,
   type ChipProps,
+  SelectTile,
+  type SelectTileProps,
+  type SelectTileIndicator,
   Checkbox,
   type CheckboxProps,
   Uploader,

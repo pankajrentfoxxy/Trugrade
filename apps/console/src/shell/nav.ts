@@ -173,13 +173,12 @@ export const NAV: readonly NavEntry[] = [
     group: 'Vendor',
     orgType: 'VENDOR',
   },
-  // T33. Same permission, and for the same reason the route is: there is no
-  // payable permission in ROLE_PERMISSIONS, and gating the link on something
-  // the API does not check is how a rail comes to offer a screen that 403s.
+  // T33. `procurement.payable.read_own` — FINANCE and OWNER only (§3B.4). The
+  // API refuses everyone else; the rail must not offer a link that 403s.
   {
     to: '/vendor/payables',
     label: 'Payables',
-    permission: 'procurement.po.read_own',
+    permission: 'procurement.payable.read_own',
     group: 'Vendor',
     orgType: 'VENDOR',
   },

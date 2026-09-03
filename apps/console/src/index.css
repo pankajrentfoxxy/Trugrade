@@ -1,5 +1,11 @@
 @import '@trugrade/ui/globals.css';
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,4 +20,682 @@
  */
 .tg-brandlock {
   --ink: var(--on-chrome);
+}
+
+/* Avatar account menu — same shape as the storefront header. */
+.usermenu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.uavatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--chrome-line-2);
+  background: var(--chrome-2);
+  color: var(--on-chrome);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.uavatar:hover,
+.usermenu:focus-within .uavatar {
+  background: var(--chrome-3);
+  color: var(--acc);
+}
+.usermenu-pop {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  padding-top: 6px;
+  min-width: 148px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease;
+  z-index: 60;
+}
+.usermenu:hover .usermenu-pop,
+.usermenu:focus-within .usermenu-pop {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.usermenu-panel {
+  background: var(--chrome-2);
+  border: 1px solid var(--chrome-line-2);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.usermenu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--on-chrome);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.usermenu-item:hover {
+  background: var(--chrome-3);
+  color: var(--on-chrome);
+}
+.usermenu-item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.usermenu-pop .usermenu-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sign-in. Two columns on desktop: the form, and a dark panel that says what
+   the product is — same shape as the storefront auth routes. */
+.authwrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.authcard {
+  padding: var(--s8) var(--s7);
+  max-width: 460px;
+  margin-inline: auto;
+  width: 100%;
+  align-self: center;
+  overflow-y: auto;
+}
+.authcard .brand {
+  color: var(--ink);
+}
+.authcard .wm .g {
+  color: var(--acc-ink);
+}
+.authwrap.solo {
+  grid-template-columns: 1fr;
+}
+.authwrap.solo .authcard {
+  max-width: 760px;
+}
+.authcard h1 {
+  margin: var(--s5) 0 var(--s2);
+  font-size: 26px;
+}
+.authlede {
+  color: var(--ink-2);
+  margin: 0 0 var(--s6);
+  max-width: 46ch;
+}
+.authside {
+  background: var(--chrome);
+  color: var(--on-chrome);
+  padding: var(--s8) var(--s7);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.authside h2 {
+  color: var(--on-chrome);
+  max-width: 18ch;
+  font-size: 30px;
+}
+.authside p {
+  color: var(--on-chrome-2);
+  max-width: 44ch;
+  margin-top: var(--s4);
+}
+@media (max-width: 900px) {
+  .authwrap {
+    grid-template-columns: 1fr;
+  }
+  .authside {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .authcard {
+    padding: var(--s7) var(--s5);
+  }
+}
+
+/* Listing wizard — horizontal progress and form card (archetype D). */
+.wizard-step-header {
+  display: flex;
+  gap: var(--s4);
+  align-items: flex-start;
+  padding-bottom: var(--s5);
+  border-bottom: 1px solid var(--rule);
+}
+.wizard-step-header-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.wizard-progress {
+  margin-top: var(--s6);
+}
+.wizard-progress-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wizard-progress-item {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.wizard-progress-step {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.wizard-progress-hit {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  cursor: default;
+}
+button.wizard-progress-hit {
+  cursor: pointer;
+}
+button.wizard-progress-hit:hover .wizard-progress-title {
+  color: var(--acc-ink);
+}
+.wizard-progress-circle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wizard-progress-circle-complete {
+  background: var(--pass);
+  color: var(--sheet);
+  border: 0;
+}
+.wizard-progress-circle-current {
+  background: var(--sheet);
+  color: var(--acc-ink);
+  border: 2px solid var(--acc);
+}
+.wizard-progress-circle-upcoming {
+  background: var(--sheet);
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+}
+.wizard-progress-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+.wizard-progress-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.wizard-progress-status {
+  font-size: 12px;
+  line-height: 1.3;
+}
+.wizard-progress-line {
+  flex: 1 1 24px;
+  min-width: 16px;
+  height: 1px;
+  background: var(--rule);
+  margin: 16px var(--s2) 0;
+}
+.wizard-form-card {
+  margin-top: var(--s6);
+  padding: var(--s6);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet);
+}
+.wizard-form-card h3 {
+  margin: 0 0 var(--s5);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wizard-form-card h4 {
+  margin: 0 0 var(--s4);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wizard-form-divider {
+  margin: var(--s6) 0;
+  border: 0;
+  border-top: 1px solid var(--rule-2);
+}
+.wizard-disclosure {
+  margin-top: var(--s5);
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet-2);
+}
+@media (max-width: 900px) {
+  .wizard-progress-item {
+    flex: 1 1 100%;
+  }
+  .wizard-progress-line {
+    display: none;
+  }
+}
+
+/* Compact "Why we ask" rail — secondary to the step form. */
+.wizard-why {
+  top: var(--s4);
+  max-width: 200px;
+}
+@media (max-width: 1023px) {
+  .wizard-why {
+    position: static;
+    max-width: none;
+  }
+}
+
+/* Unit record — archetype C layout for one serial. */
+.unit-record .unit-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s4);
+}
+.unit-kpi-tile {
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet);
+}
+.unit-kpi-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.unit-kpi-value {
+  margin: var(--s2) 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.unit-location-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s4);
+  margin-bottom: var(--s5);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet-2);
+}
+.unit-location-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-wash);
+}
+.unit-alert {
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--sheet);
+}
+@media (max-width: 900px) {
+  .unit-record .unit-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .unit-record .unit-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Grade correction record — archetype C, same KPI rhythm as unit record. */
+.correction-record .unit-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s4);
+}
+@media (max-width: 900px) {
+  .correction-record .unit-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .correction-record .unit-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.correction-grade-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s4);
+}
+.correction-grade-card {
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet);
+}
+.correction-grade-card-measured {
+  border-color: var(--acc);
+  background: var(--acc-wash);
+}
+.correction-grade-label {
+  margin: 0 0 var(--s3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.correction-grade-arrow {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-align: center;
+}
+.correction-reason {
+  padding: var(--s4) var(--s5);
+  border-left: 3px solid var(--acc);
+  border-radius: 0 8px 8px 0;
+  background: var(--sheet-2);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.correction-callout {
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet-2);
+}
+@media (max-width: 640px) {
+  .correction-grade-compare {
+    grid-template-columns: 1fr;
+    gap: var(--s3);
+  }
+  .correction-grade-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+/* Payables — archetype B with statement ledger and payment facts. */
+.payables-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s6) var(--s5);
+  border: 1px solid var(--acc);
+  border-radius: 12px;
+  background: var(--acc-wash);
+}
+.payables-hero-loading {
+  opacity: 0.85;
+}
+.payables-hero-main {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.payables-hero-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.payables-hero-amount {
+  margin: var(--s3) 0 0;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--acc-ink);
+}
+.payables-hero-sub {
+  margin: var(--s3) 0 0;
+  max-width: 52ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.payables-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+.payables-panel {
+  margin-top: 0 !important;
+}
+.payables-summary-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+.payables-empty-state {
+  padding: var(--s4);
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+  background: var(--sheet-2);
+}
+.payables-record .unit-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s4);
+}
+.payables-kpi-net {
+  border-color: var(--acc);
+  background: var(--acc-wash);
+}
+.payables-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.payables-ledger-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s5);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: var(--sheet);
+}
+.payables-ledger-deduct {
+  background: var(--sheet-2);
+}
+.payables-ledger-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.payables-ledger-hint {
+  margin: var(--s2) 0 0;
+  max-width: 42ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.payables-ledger-amount {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.payables-ledger-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s5);
+  background: var(--acc-wash);
+  border-top: 1px solid var(--acc);
+}
+.payables-facts {
+  display: grid;
+  gap: var(--s4);
+}
+.payables-facts-grid {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 768px) {
+  .payables-facts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1100px) {
+  .payables-facts-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.payables-fact {
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet-2);
+}
+.payables-fact-label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.payables-fact-value {
+  margin-top: var(--s2);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.payables-fact-detail {
+  margin: var(--s2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.payables-waiting {
+  display: block;
+  max-width: 36ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+@media (max-width: 900px) {
+  .payables-record .unit-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .payables-record .unit-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  .payables-ledger-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .payables-ledger-amount {
+    text-align: right;
+  }
+}
+
+/* Catalog board — flat SKU table with brand filter rail. */
+.catalog-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+.catalog-search {
+  max-width: 28rem;
+}
+.catalog-brand-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.catalog-brand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--sheet);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.catalog-brand-chip:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+.catalog-brand-chip-active {
+  border-color: var(--acc);
+  background: var(--acc-wash);
+  color: var(--ink);
+}
+.catalog-brand-chip .font-mono {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.catalog-brand-chip-active .font-mono {
+  color: var(--ink-2);
 }

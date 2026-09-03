@@ -214,7 +214,7 @@ async function open(first: CheckoutSession, steps = 0): Promise<void> {
   mockStart.mockResolvedValue(ok(first));
   mockQuote.mockResolvedValue(ok(first));
   render(<CheckoutFlow />);
-  await screen.findByRole('heading', { level: 1, name: 'Review what is held' });
+  await screen.findByRole('heading', { level: 1, name: 'GSTIN and billing' });
   for (let i = 0; i < steps; i += 1) {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -249,7 +249,7 @@ describe('checkout — the tax split before confirmation', () => {
   });
 
   it('never draws an unresolved split as one that came out at zero', async () => {
-    await open(unpriced(), 5);
+    await open(unpriced(), 4);
     await screen.findByRole('heading', { level: 1, name: 'Confirm' });
 
     expect(screen.getByText('The tax split is not resolved yet')).toBeInTheDocument();
@@ -265,7 +265,7 @@ describe('checkout — the tax split before confirmation', () => {
 
 describe('checkout — the primary action', () => {
   it('says on the screen why it is unavailable, not only in a tooltip', async () => {
-    await open(unpriced(), 5);
+    await open(unpriced(), 4);
     await screen.findByRole('heading', { level: 1, name: 'Confirm' });
     // `Button` puts `disabledReason` in `title`, which a touch or keyboard user
     // never reaches. The sentence has to be in the document text.
@@ -275,7 +275,7 @@ describe('checkout — the primary action', () => {
   });
 
   it('does not place an order when it has said the order cannot be placed', async () => {
-    await open(unpriced(), 5);
+    await open(unpriced(), 4);
     await screen.findByRole('heading', { level: 1, name: 'Confirm' });
     // `aria-disabled` leaves the handler live, so pressing it really does fire
     // the click — the guard is what must stop the request, and this attempts
@@ -289,9 +289,8 @@ describe('checkout — the primary action', () => {
 
 describe('checkout — what it must not say', () => {
   it('names no vendor anywhere on the screen, at any depth', async () => {
-    const { container } = { container: (await openReturning(session())).container };
+    const { container } = await openReturning(session());
     expect(findVendorIdentityLeaks(container.innerHTML, VENDOR)).toEqual([]);
-    expect(container.textContent).toContain('Supply Point F · Noida');
   });
 
   it('hides the registration draft sentence on the step rail', async () => {
@@ -308,6 +307,6 @@ async function openReturning(first: CheckoutSession): Promise<{ container: HTMLE
   mockStart.mockResolvedValue(ok(first));
   mockQuote.mockResolvedValue(ok(first));
   const rendered = render(<CheckoutFlow />);
-  await screen.findByRole('heading', { level: 1, name: 'Review what is held' });
+  await screen.findByRole('heading', { level: 1, name: 'GSTIN and billing' });
   return rendered;
 }

@@ -269,6 +269,10 @@ async function send<T>(method: string, url: string, body: unknown): Promise<T> {
 
 const postJson = <T,>(url: string, body: unknown): Promise<T> => send<T>('POST', url, body);
 
+function scrollToTop(): void {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 const CAPTION_MIN = 10;
 const caption = (captions: Record<string, string>, filename: string): string =>
   (captions[filename] ?? '').trim();
@@ -781,11 +785,33 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
   // In the URL: "the model whose shoot I am uploading" survives a reload and is
   // a link an ops person can send to whoever is holding the camera.
   const [openModel, setOpenModel] = useUrlState('model');
+  const uploadPanelRef = React.useRef<HTMLDivElement>(null);
 
   const { data, error } = useResource<ModelCoverage[]>(
     `/api/catalog/condition-images/coverage?v=${reload}`,
     'Coverage unavailable',
   );
+
+  function closeUpload(): void {
+    setOpenModel('');
+    scrollToTop();
+  }
+
+  function toggleUpload(modelId: string): void {
+    if (openModel === modelId) {
+      closeUpload();
+      return;
+    }
+    setOpenModel(modelId);
+  }
+
+  React.useEffect(() => {
+    if (!openModel) return;
+    const frame = requestAnimationFrame(() => {
+      uploadPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [openModel]);
 
   // Worst first. The screen exists to surface gaps, and a gap sorted below two
   // hundred complete models is a gap nobody sees until a buyer does.
@@ -813,7 +839,7 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
               size="sm"
               className="justify-start px-0"
               aria-expanded={openModel === row.model.modelId}
-              onClick={() => setOpenModel(openModel === row.model.modelId ? '' : row.model.modelId)}
+              onClick={() => toggleUpload(row.model.modelId)}
             >
               {openModel === row.model.modelId ? 'Close' : 'Add photographs'}
             </Button>
@@ -827,7 +853,7 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
       })),
       { key: 'coverage', header: 'Coverage', cell: (row: Row) => <CoverageCell row={row} /> },
     ],
-    [openModel, setOpenModel],
+    [openModel],
   );
 
   if (error) {
@@ -904,17 +930,25 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
         three densities — deliberately has no expansion slot for it to grow into.
       */}
       {open && (
-        <Section
-          title={`Add photographs · ${open.model.modelName}`}
-          subtitle={`${open.model.brandName} · ${open.model.seriesName}`}
-          aside={
-            <Button variant="ghost" size="sm" onClick={() => setOpenModel('')}>
-              Close
-            </Button>
-          }
-        >
-          <BulkUpload model={open.model} onCommitted={() => setReload((n) => n + 1)} />
-        </Section>
+        <div ref={uploadPanelRef} className="scroll-mt-20">
+          <Section
+            title={`Add photographs · ${open.model.modelName}`}
+            subtitle={`${open.model.brandName} · ${open.model.seriesName}`}
+            aside={
+              <Button variant="ghost" size="sm" onClick={closeUpload}>
+                Close
+              </Button>
+            }
+          >
+            <BulkUpload
+              model={open.model}
+              onCommitted={() => {
+                setReload((n) => n + 1);
+                scrollToTop();
+              }}
+            />
+          </Section>
+        </div>
       )}
     </div>
   );

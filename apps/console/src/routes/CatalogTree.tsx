@@ -1,25 +1,27 @@
 import * as React from 'react';
-import { Link } from 'react-router';
-import { EmptyState, Input, Skeleton, StatusPill } from '@trugrade/ui';
-import { PageHeader } from '../lib/controls';
+import { Link, useSearchParams } from 'react-router';
+import { DataBoard, EmptyState, Input, Pagination, Skeleton, StatusPill, type Column } from '@trugrade/ui';
+import { Board, PageHeader } from '../lib/controls';
 import { useResource } from '../lib/useResource';
-import { useUrlState } from '../lib/urlState';
 
 /**
- * ARCHETYPE B — Board. The filter is the rail; the tree is the table.
+ * ARCHETYPE B — Board. Filter rail + data table + row actions.
  * DENSITY: compact (admin), set on the app root by the shell.
+ *
+ * Pagination and search live in the URL and on the server. The nested tree
+ * endpoint remains for callers that need the whole hierarchy; this board reads
+ * `/api/catalog/board` one page at a time.
  */
 
 export interface CatalogSku {
   id: string;
-  /** Generated and immutable — shown in mono so it reads as an identifier, not a name. */
   skuCode: string;
   label: string;
   isActive: boolean;
-  /** Deprecating a SKU with live listings is blocked, so the count is the reason. */
   liveListingCount: number;
 }
 
+/** Kept for tests and any caller that still types the tree shape. */
 export interface CatalogModel {
   id: string;
   name: string;
@@ -38,67 +40,144 @@ export interface CatalogBrand {
   series: CatalogSeries[];
 }
 
-/**
- * Filter on the whole path rather than each level.
- *
- * Typing a model name has to keep its SKUs, and typing a brand has to keep
- * everything under it. Matching the joined path gives both without four nested
- * passes, and it is why searching "latitude 5420" and "dell 512" both work.
- */
-function filterBrands(brands: CatalogBrand[], query: string): CatalogBrand[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return brands;
-  const keep = (...parts: string[]): boolean => parts.join(' ').toLowerCase().includes(q);
-
-  return brands
-    .map((b) => ({
-      ...b,
-      series: b.series
-        .map((se) => ({
-          ...se,
-          models: se.models
-            .map((m) => ({
-              ...m,
-              skus: m.skus.filter((s) => keep(b.name, se.name, m.name, s.skuCode, s.label)),
-            }))
-            .filter((m) => m.skus.length > 0),
-        }))
-        .filter((se) => se.models.length > 0),
-    }))
-    .filter((b) => b.series.length > 0);
+interface CatalogBrandOption {
+  id: string;
+  name: string;
+  skuCount: number;
 }
 
-function SkuRow({ sku }: { sku: CatalogSku }): React.JSX.Element {
-  return (
-    <li className="flex flex-wrap items-center gap-3 border-b border-rule-2 py-2 pl-5">
-      {/* The code is the link, not a separate "view" action: it is the
-          identifier somebody is already reading, and fifty rows x one amber
-          link is fifty amber controls on a screen entitled to one. */}
-      <Link
-        to={`/catalog/skus/${sku.id}`}
-        className="font-mono text-data tnum text-ink-2 underline underline-offset-4 hover:text-ink"
-      >
-        {sku.skuCode}
-      </Link>
-      <span className="text-body-sm text-ink">{sku.label}</span>
-      {/* Deprecated is a state, not a verdict: neutral, never red. */}
-      {!sku.isActive && <StatusPill tone="neutral" label="Deprecated" />}
-      {sku.liveListingCount > 0 && (
-        <span className="ml-auto text-body-sm text-ink-3">
-          {sku.liveListingCount} live {sku.liveListingCount === 1 ? 'listing' : 'listings'}
-        </span>
-      )}
-    </li>
-  );
+interface CatalogRow {
+  brandId: string;
+  brandName: string;
+  seriesName: string;
+  modelName: string;
+  sku: CatalogSku;
 }
+
+interface CatalogPage {
+  rows: CatalogRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+const PAGE_SIZE = 25;
 
 export function CatalogTreeRoute(): React.JSX.Element {
-  const { data, error } = useResource<CatalogBrand[]>('/api/catalog/tree', 'Catalog unavailable');
-  // In the URL: "the Latitude corner of the catalog" has to be a link someone
-  // can paste, and the filter is the only state this board carries.
-  const [query, setQuery] = useUrlState('q');
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q') ?? '';
+  const brandId = params.get('brand') ?? '';
+  const page = Math.max(1, Number(params.get('page') ?? '1') || 1);
 
-  const brands = React.useMemo(() => filterBrands(data ?? [], query), [data, query]);
+  const boardQuery = new URLSearchParams({
+    page: String(page),
+    pageSize: String(PAGE_SIZE),
+  });
+  if (query.trim()) boardQuery.set('q', query.trim());
+  if (brandId) boardQuery.set('brandId', brandId);
+
+  const {
+    data: brands,
+    error: brandsError,
+  } = useResource<CatalogBrandOption[]>('/api/catalog/brands', 'Catalog brands unavailable');
+
+  const { data: board, error: boardError } = useResource<CatalogPage>(
+    `/api/catalog/board?${boardQuery.toString()}`,
+    'Catalog unavailable',
+  );
+
+  const error = brandsError ?? boardError;
+
+  function patchParams(mutate: (next: URLSearchParams) => void): void {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        mutate(next);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function setFilter(key: string, value: string): void {
+    patchParams((next) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+      if (key !== 'page') next.delete('page');
+    });
+  }
+
+  function setSearch(value: string): void {
+    patchParams((next) => {
+      if (value === '') next.delete('q');
+      else next.set('q', value);
+      next.delete('page');
+    });
+  }
+
+  function pickBrand(id: string): void {
+    patchParams((next) => {
+      if (id) next.set('brand', id);
+      else next.delete('brand');
+      next.delete('page');
+    });
+  }
+
+  const columns = React.useMemo<ReadonlyArray<Column<CatalogRow>>>(
+    () => [
+      {
+        key: 'path',
+        header: 'Machine',
+        cell: (r) => (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-body-sm font-medium text-ink">{r.modelName}</span>
+            <span className="text-body-sm text-ink-3">{`${r.brandName} · ${r.seriesName}`}</span>
+          </span>
+        ),
+      },
+      {
+        key: 'skuCode',
+        header: 'SKU',
+        cell: (r) => (
+          <Link
+            to={`/catalog/skus/${r.sku.id}`}
+            className="font-mono text-data tnum text-ink underline underline-offset-4 hover:text-acc-ink"
+          >
+            {r.sku.skuCode}
+          </Link>
+        ),
+      },
+      {
+        key: 'label',
+        header: 'Configuration',
+        cell: (r) => <span className="text-body-sm text-ink-2">{r.sku.label}</span>,
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        cell: (r) =>
+          r.sku.isActive ? (
+            <StatusPill tone="neutral" label="Active" />
+          ) : (
+            <StatusPill tone="neutral" label="Deprecated" />
+          ),
+      },
+      {
+        key: 'listings',
+        header: 'Live listings',
+        numeric: true,
+        cell: (r) =>
+          r.sku.liveListingCount > 0 ? (
+            <span className="font-mono tnum text-ink-2">
+              {`${r.sku.liveListingCount} live ${r.sku.liveListingCount === 1 ? 'listing' : 'listings'}`}
+            </span>
+          ) : (
+            <span className="text-ink-4">None</span>
+          ),
+      },
+    ],
+    [],
+  );
 
   if (error) {
     return (
@@ -108,18 +187,22 @@ export function CatalogTreeRoute(): React.JSX.Element {
       />
     );
   }
-  if (!data) return <Skeleton lines={8} />;
-  if (data.length === 0) {
+
+  if (!brands) {
+    return (
+      <div className="tg-stack catalog-board">
+        <PageHeader title="Catalog">Loading the catalog.</PageHeader>
+        <Skeleton lines={8} />
+      </div>
+    );
+  }
+
+  if (brands.length === 0) {
     return (
       <EmptyState
         title="The catalog is empty"
         body={
           <>
-            {/* There is no brand-create route and no brand-create endpoint. The
-                importer is what writes `catalog.brand`, `series` and `model`, on
-                the way to a SKU — so the empty state points at the thing that
-                exists rather than at a screen somebody would have to build to
-                make this sentence true. */}
             <span className="block">
               A vendor cannot list anything until a SKU exists to list it against, and there is no
               standalone &ldquo;add a brand&rdquo; step: brands, series and models are created by
@@ -136,68 +219,90 @@ export function CatalogTreeRoute(): React.JSX.Element {
     );
   }
 
-  const skuCount = brands.reduce(
-    (n, b) =>
-      n + b.series.reduce((m, se) => m + se.models.reduce((k, x) => k + x.skus.length, 0), 0),
-    0,
-  );
+  const totalSkus = brands.reduce((n, b) => n + b.skuCount, 0);
+  const pageCount = board ? Math.max(1, Math.ceil(board.total / board.pageSize)) : 1;
+  const filteredBySearch = query.trim() !== '';
+  const filteredByBrand = brandId !== '';
+  const filteredEmpty = board !== null && board.total === 0 && (filteredBySearch || filteredByBrand);
 
   return (
-    <div className="tg-stack">
+    <div className="tg-stack catalog-board">
       <PageHeader title="Catalog">
-        Brand, series, model, configuration. A vendor lists against a SKU and QC verifies against
-        its declared specification, which is why the last two levels stay separate.
+        Brand, series, model, configuration. Search or pick a brand — every SKU is one row, with
+        the full path visible so you can jump straight to the record.
       </PageHeader>
 
-      <div className="max-w-md">
-        <Input
-          label="Filter"
-          placeholder="Brand, model or SKU code"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+      <div className="catalog-toolbar">
+        <div className="catalog-search">
+          <Input
+            label="Search"
+            placeholder="Brand, model or SKU code"
+            value={query}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="catalog-brand-rail" role="group" aria-label="Filter by brand">
+          <button
+            type="button"
+            className={`catalog-brand-chip${brandId === '' ? ' catalog-brand-chip-active' : ''}`}
+            onClick={() => pickBrand('')}
+          >
+            All brands
+            <span className="font-mono tnum">{totalSkus}</span>
+          </button>
+          {brands.map((brand) => (
+            <button
+              key={brand.id}
+              type="button"
+              className={`catalog-brand-chip${brandId === brand.id ? ' catalog-brand-chip-active' : ''}`}
+              onClick={() => pickBrand(brand.id)}
+            >
+              {brand.name}
+              <span className="font-mono tnum">{brand.skuCount}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {brands.length === 0 ? (
+      {board === null ? (
+        <Skeleton lines={8} />
+      ) : filteredEmpty ? (
         <EmptyState
-          title={`Nothing matches “${query.trim()}”`}
+          title={
+            query.trim() ? `Nothing matches “${query.trim()}”` : 'Nothing matches this filter'
+          }
           body="The catalog is not empty — this filter is. Clear it to see everything, or ask ops whether the machine needs a SKU request."
         />
       ) : (
         <>
-          <p className="text-body-sm text-ink-3">
-            {skuCount} {skuCount === 1 ? 'SKU' : 'SKUs'} across {brands.length}{' '}
-            {brands.length === 1 ? 'brand' : 'brands'}
-          </p>
-          <div>
-            {brands.map((brand) => (
-              // <details> rather than a controlled accordion: the browser already
-              // handles the keyboard, the ARIA and the open state, and a filter
-              // that re-mounts the tree gets the open-by-default behaviour free.
-              <details key={brand.id} open className="border-b border-rule">
-                <summary className="cursor-pointer py-3 text-h3 text-ink">{brand.name}</summary>
-                {brand.series.map((series) => (
-                  <details key={series.id} open className="pl-4">
-                    <summary className="cursor-pointer py-2 text-body-sm text-ink-2">
-                      {series.name}
-                    </summary>
-                    {series.models.map((model) => (
-                      <div key={model.id} className="pb-3 pl-4">
-                        <h4 className="pt-2 font-mono text-label uppercase tracking-[0.13em] text-ink-2">
-                          {model.name}
-                        </h4>
-                        <ul>
-                          {model.skus.map((sku) => (
-                            <SkuRow key={sku.id} sku={sku} />
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </details>
-                ))}
-              </details>
-            ))}
-          </div>
+          <Board>
+            <DataBoard
+              caption={
+                filteredBySearch || filteredByBrand
+                  ? `${board.total} of ${totalSkus} SKUs match.`
+                  : `${board.total} ${board.total === 1 ? 'SKU' : 'SKUs'} across ${brands.length} ${brands.length === 1 ? 'brand' : 'brands'}.`
+              }
+              columns={columns}
+              rows={board.rows}
+              rowKey={(r) => r.sku.id}
+              empty={
+                <EmptyState
+                  title="Nothing on this page"
+                  body="This page is empty. Go back a page or clear your filters."
+                />
+              }
+            />
+          </Board>
+
+          {pageCount > 1 && (
+            <Pagination
+              page={page}
+              pageCount={pageCount}
+              onPage={(next) => setFilter('page', String(next))}
+              label="Catalog board pages"
+            />
+          )}
         </>
       )}
     </div>

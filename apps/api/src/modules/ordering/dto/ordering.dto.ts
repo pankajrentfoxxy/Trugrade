@@ -197,7 +197,7 @@ export type OrderListQueryDto = z.infer<typeof orderListQuerySchema>;
  * wants the history, not three tabs of it. The verdict is on every row.
  */
 export const approvalListQuerySchema = z.object({
-  status: z.enum(['waiting', 'decided', 'all']).default('waiting'),
+  status: z.enum(['held', 'waiting', 'decided', 'all']).default('held'),
   page: z.coerce.number().int().min(1).max(1000).default(1),
   per: z.coerce.number().int().min(5).max(50).default(10),
 });

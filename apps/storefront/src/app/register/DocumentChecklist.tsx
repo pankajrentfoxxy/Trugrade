@@ -121,6 +121,8 @@ export interface DocumentChecklistProps {
   onFieldFocus: (term: string) => void;
   /** Which "why we ask" entry the right rail should open on. */
   whyTerm: string;
+  /** Shorter upload hints — vendor step 6. */
+  compactHints?: boolean;
 }
 
 export function DocumentChecklist({
@@ -132,6 +134,7 @@ export function DocumentChecklist({
   onDocsChange,
   onFieldFocus,
   whyTerm,
+  compactHints = false,
 }: DocumentChecklistProps): React.JSX.Element {
   const [rules, setRules] = React.useState<DocumentTypeRule[] | null>(null);
   const [docs, setDocs] = React.useState<KycDocument[]>([]);
@@ -159,13 +162,17 @@ export function DocumentChecklist({
   }, [docs, onDocsChange]);
 
   const load = React.useCallback(async (): Promise<void> => {
-    const [types, existing] = await Promise.all([getDocumentTypes(), getDocuments()]);
+    const types = await getDocumentTypes();
     if (!types.ok) {
       setLoadFailure(types.message);
       return;
     }
     setLoadFailure(null);
     setRules(types.data);
+    // Best-effort: a returning applicant may have uploads already. During first
+    // registration there are none, and a 401 here must not block the step —
+    // uploads authenticate on their own when a file is chosen.
+    const existing = await getDocuments();
     if (existing.ok) setDocs(existing.data);
   }, []);
 
@@ -302,7 +309,11 @@ export function DocumentChecklist({
                 type="date"
                 mono
                 required
-                hint={`We can only accept one issued in the last ${rule.maxAgeDays} days, so we check the date before the file.`}
+                hint={
+                  compactHints
+                    ? `Issued in the last ${rule.maxAgeDays} days.`
+                    : `We can only accept one issued in the last ${rule.maxAgeDays} days, so we check the date before the file.`
+                }
                 value={dates[rule.docType] ?? ''}
                 onChange={(e) => setDates((d) => ({ ...d, [rule.docType]: e.target.value }))}
               />
@@ -310,32 +321,41 @@ export function DocumentChecklist({
             <Uploader
               label={`${rule.label}${w.required ? '' : ' — optional'}`}
               hint={
-                <>
-                  {w.purpose}{' '}
+                compactHints ? (
                   <span className="text-ink-3">
-                    {rule.acceptedMime
-                      .map((m) => m.replace('image/', '').replace('application/', ''))
-                      .join(', ')
-                      .toUpperCase()}
-                    , up to <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>,{' '}
-                    <span className="font-mono tnum">{rule.maxFiles}</span>{' '}
-                    {rule.maxFiles === 1 ? 'file' : 'files'} at most.
+                    {w.purpose} PDF or photo, max{' '}
+                    <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>
                     {rule.maxAgeDays !== null && (
                       <>
                         {' '}
-                        Issued in the last{' '}
-                        <span className="font-mono tnum">{rule.maxAgeDays}</span> days.
+                        · last <span className="font-mono tnum">{rule.maxAgeDays}</span> days
                       </>
                     )}
-                    {/* `requires_expiry` is in the rule table and there is no
-                        field on the upload route that carries an expiry date, so
-                        the screen says who reads it rather than showing a box
-                        that goes nowhere. Reported as an API gap. */}
-                    {rule.requiresExpiry && (
-                      <> A reviewer reads the validity date off the certificate itself.</>
-                    )}
                   </span>
-                </>
+                ) : (
+                  <>
+                    {w.purpose}{' '}
+                    <span className="text-ink-3">
+                      {rule.acceptedMime
+                        .map((m) => m.replace('image/', '').replace('application/', ''))
+                        .join(', ')
+                        .toUpperCase()}
+                      , up to <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>,{' '}
+                      <span className="font-mono tnum">{rule.maxFiles}</span>{' '}
+                      {rule.maxFiles === 1 ? 'file' : 'files'} at most.
+                      {rule.maxAgeDays !== null && (
+                        <>
+                          {' '}
+                          Issued in the last{' '}
+                          <span className="font-mono tnum">{rule.maxAgeDays}</span> days.
+                        </>
+                      )}
+                      {rule.requiresExpiry && (
+                        <> A reviewer reads the validity date off the certificate itself.</>
+                      )}
+                    </span>
+                  </>
+                )
               }
               accept={rule.acceptedMime.join(',')}
               maxSizeMb={Math.floor(rule.maxBytes / (1024 * 1024))}

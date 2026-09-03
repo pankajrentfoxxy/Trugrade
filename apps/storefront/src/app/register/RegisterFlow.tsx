@@ -213,7 +213,9 @@ export function RegisterFlow({
   const [phase, setPhase] = React.useState<Phase>(definitions ? 'checking' : 'unreachable');
   const [steps, setSteps] = React.useState<StepProgress[]>(() =>
     (definitions ?? []).map(asProgress).map((s) =>
-      purposeNotes?.[s.stepCode] ? { ...s, purposeNote: purposeNotes[s.stepCode]! } : s,
+      purposeNotes && s.stepCode in purposeNotes
+        ? { ...s, purposeNote: purposeNotes[s.stepCode]! }
+        : s,
     ),
   );
   const [currentCode, setCurrentCode] = React.useState<string>(
@@ -288,7 +290,9 @@ export function RegisterFlow({
     (list: StepProgress[]): StepProgress[] =>
       purposeNotes
         ? list.map((s) =>
-            purposeNotes[s.stepCode] ? { ...s, purposeNote: purposeNotes[s.stepCode]! } : s,
+            s.stepCode in purposeNotes
+              ? { ...s, purposeNote: purposeNotes[s.stepCode]! }
+              : s,
           )
         : list,
     [purposeNotes],
@@ -396,6 +400,38 @@ export function RegisterFlow({
     url.searchParams.set('step', code);
     window.history.replaceState(null, '', url);
   }, []);
+
+  const mainRef = React.useRef<HTMLElement>(null);
+
+  const scrollPageTop = React.useCallback((): void => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    } catch {
+      // jsdom does not implement scrollTo.
+    }
+  }, []);
+
+  // A long step leaves the viewport scrolled to the button. Land at the heading
+  // when the step changes or when Save and continue is clicked.
+  React.useEffect(() => {
+    scrollPageTop();
+  }, [currentCode, scrollPageTop]);
+
+  React.useEffect(() => {
+    const root = mainRef.current;
+    if (!root) return;
+    const onSubmit = (event: Event): void => {
+      if (event.target instanceof HTMLFormElement && root.contains(event.target)) {
+        scrollPageTop();
+      }
+    };
+    document.addEventListener('submit', onSubmit, true);
+    return () => document.removeEventListener('submit', onSubmit, true);
+  }, [scrollPageTop]);
+
+  React.useEffect(() => {
+    if (saveFailure) scrollPageTop();
+  }, [saveFailure, scrollPageTop]);
 
   const current = steps.find((s) => s.stepCode === currentCode);
 
@@ -726,7 +762,7 @@ export function RegisterFlow({
         </details>
       )}
 
-      <main className="flex flex-col gap-5 lg:max-w-[70ch]">
+      <main ref={mainRef} className="flex flex-col gap-5 lg:max-w-[70ch]">
         <header className="flex flex-col gap-3">
           <label className="flex flex-wrap items-center gap-2 text-label text-ink-3">
             <span className="font-mono uppercase tracking-[0.13em]">validate</span>

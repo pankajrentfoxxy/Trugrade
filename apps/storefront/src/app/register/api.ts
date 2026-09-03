@@ -608,6 +608,19 @@ export function uploadDocument(input: {
   documentDate?: string;
   onProgress?: (pct: number) => void;
 }): Promise<ApiResult<KycDocument>> {
+  return uploadDocumentOnce(input).then(async (first) => {
+    if (first.ok || first.status !== 401) return first;
+    const restored = await getSession();
+    return restored.ok ? uploadDocumentOnce(input) : first;
+  });
+}
+
+function uploadDocumentOnce(input: {
+  docType: string;
+  file: File;
+  documentDate?: string;
+  onProgress?: (pct: number) => void;
+}): Promise<ApiResult<KycDocument>> {
   return new Promise((resolve) => {
     const form = new FormData();
     form.append('docType', input.docType);

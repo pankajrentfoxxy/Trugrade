@@ -171,13 +171,15 @@ function GradePicker({
                   {byGrade.get(g) && (
                     <span className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-label uppercase tracking-[0.13em] text-ink-3">
                       <span>
-                        Battery <span className="tnum text-ink-2">
+                        Battery{' '}
+                        <span className="tnum text-ink-2">
                           {byGrade.get(g)?.minBatteryHealthPct}%
                         </span>{' '}
                         or better
                       </span>
                       <span>
-                        Cosmetic <span className="tnum text-ink-2">
+                        Cosmetic{' '}
+                        <span className="tnum text-ink-2">
                           {byGrade.get(g)?.minCosmeticScore}
                         </span>{' '}
                         of 100
@@ -249,7 +251,7 @@ function GradeReference({ skuId, grade }: { skuId: string; grade: Grade }): Reac
 
   return (
     <section className="mt-6">
-      <h3 className="text-h3 text-ink">What a buyer sees at Grade {gradeLabel(grade)}</h3>
+      <h4 className="text-body font-semibold text-ink">What a buyer sees at Grade {gradeLabel(grade)}</h4>
       {error ? (
         <p className="mt-3 max-w-prose text-body-sm text-ink-2">
           {error}. Grade from the written definitions above rather than from memory — nothing about
@@ -305,12 +307,10 @@ export function StepCondition({
 
   return (
     <div>
-      <h2 className="text-h2 text-ink">Declare the condition</h2>
-
       {/* The three sentences PHASE_03 Task 3 step 2 requires on this screen, in
           plain words and above the fields rather than under them. Disclosure at
           declaration time is worth more than an appeals process later. */}
-      <div className="mt-4 max-w-prose rounded-lg border border-rule bg-sheet-2 p-5">
+      <div className="wizard-disclosure">
         <p className="text-body text-ink">We will check this.</p>
         <p className="mt-3 text-body-sm text-ink-2">
           Every machine you list is inspected before it is sold. You are declaring what you believe
@@ -333,36 +333,62 @@ export function StepCondition({
 
       {draft.sku && <GradeReference skuId={draft.sku.skuId} grade={draft.grade} />}
 
-      <div className="mt-7 grid gap-x-7 gap-y-5 md:grid-cols-2">
-        <div className="flex flex-col gap-5">
-          <Select
-            label="Condition"
-            value={draft.conditionType}
-            options={opts(CONDITION)}
-            onChange={(e) => patch({ conditionType: e.target.value })}
-          />
-          <Select
-            label="Functional status"
-            value={draft.functionalStatus}
-            options={opts(FUNCTIONAL)}
-            onChange={(e) => patch({ functionalStatus: e.target.value })}
-          />
-          <Select
-            label="Battery health"
-            hint="A band, not a number — the inspection measures the number."
-            value={draft.batteryHealthBand}
-            options={opts(BATTERY)}
-            onChange={(e) => patch({ batteryHealthBand: e.target.value })}
-          />
+      <div className="wizard-form-card">
+        <h3>Tell us more about the condition</h3>
+
+        <div className="grid gap-x-7 gap-y-5 md:grid-cols-2">
+          <div className="flex flex-col gap-5">
+            <Select
+              label="Condition"
+              hint="Overall condition type — like new, refurbished, or used."
+              value={draft.conditionType}
+              options={opts(CONDITION)}
+              onChange={(e) => patch({ conditionType: e.target.value })}
+            />
+            <Select
+              label="Functional status"
+              hint="Does everything work as expected?"
+              value={draft.functionalStatus}
+              options={opts(FUNCTIONAL)}
+              onChange={(e) => patch({ functionalStatus: e.target.value })}
+            />
+            <Select
+              label="Repair history"
+              hint="Any previous repairs or replacements?"
+              value={draft.repairHistory}
+              options={opts(REPAIR)}
+              onChange={(e) => patch({ repairHistory: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-5">
+            <Select
+              label="Parts"
+              hint="Are all parts original and intact?"
+              value={draft.partsStatus}
+              options={opts(PARTS)}
+              onChange={(e) => patch({ partsStatus: e.target.value })}
+            />
+            <Select
+              label="Battery health"
+              hint="A band, not a number — the inspection measures the number."
+              value={draft.batteryHealthBand}
+              options={opts(BATTERY)}
+              onChange={(e) => patch({ batteryHealthBand: e.target.value })}
+            />
+            <Select
+              label="Data wipe"
+              hint="Has the device been securely wiped?"
+              value={draft.dataWipeStatus}
+              options={opts(WIPE)}
+              onChange={(e) => patch({ dataWipeStatus: e.target.value })}
+            />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-5">
-          <Select
-            label="Parts"
-            value={draft.partsStatus}
-            options={opts(PARTS)}
-            onChange={(e) => patch({ partsStatus: e.target.value })}
-          />
+        <hr className="wizard-form-divider" />
+
+        <div className="grid gap-x-7 gap-y-5 md:grid-cols-2">
           <Input
             label="Which parts were replaced"
             hint="Comma separated. Leave blank if all original."
@@ -378,73 +404,65 @@ export function StepCondition({
             }
           />
           <Select
-            label="Repair history"
-            value={draft.repairHistory}
-            options={opts(REPAIR)}
-            onChange={(e) => patch({ repairHistory: e.target.value })}
-          />
-          <Select
-            label="Data wipe"
-            value={draft.dataWipeStatus}
-            options={opts(WIPE)}
-            onChange={(e) => patch({ dataWipeStatus: e.target.value })}
+            label="Where we collect from"
+            hint="Drives the inspection visit and the pickup window."
+            value={draft.pickupLocationId}
+            options={[
+              {
+                value: '',
+                label: facilities.error ? 'Could not load your locations' : 'Choose a location',
+              },
+              ...(facilities.data ?? []).map((f) => ({
+                value: f.addressId,
+                label: `${f.label} · ${f.city} ${f.pincode}`,
+              })),
+            ]}
+            onChange={(e) => patch({ pickupLocationId: e.target.value })}
           />
         </div>
-      </div>
 
-      <h3 className="mt-9 text-h3 text-ink">The warranty you will stand behind</h3>
+        <hr className="wizard-form-divider" />
 
-      {/* Both warranty sentences Task 3 step 2 names. The second one is the
-          incentive, so it says where the vendor will see the effect. */}
-      <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-        We sell the customer a <strong>longer total term than you offer</strong> and fund the
-        difference ourselves — so what the buyer sees is not what you are committing to here. A{' '}
-        <strong>longer term from you earns you a better price</strong>, because it costs us less to
-        top up. Change the months below and watch the payout move on step 4.
-      </p>
+        <h4>The warranty you will stand behind</h4>
 
-      <div className="mt-5 grid max-w-3xl gap-5 md:grid-cols-2">
-        <Input
-          label="Your warranty, in months"
-          type="number"
-          min={0}
-          max={24}
-          hint="0 to 24. This is a commercial commitment we can recover against, not a note."
-          value={String(draft.vendorWarrantyMonths)}
-          onChange={(e) =>
-            patch({
-              vendorWarrantyMonths: Math.max(0, Math.min(24, Number(e.target.value) || 0)),
-            })
-          }
-        />
-        <Select
-          label="Manufacturer warranty remaining"
-          value={draft.oemWarrantyRemaining}
-          options={opts(OEM_WARRANTY)}
-          onChange={(e) => patch({ oemWarrantyRemaining: e.target.value })}
-        />
-        <Select
-          label="Returns window you offer"
-          value={draft.sellerWarranty}
-          options={opts(SELLER_WARRANTY)}
-          onChange={(e) => patch({ sellerWarranty: e.target.value })}
-        />
-        <Select
-          label="Where we collect from"
-          hint="Drives the inspection visit and the pickup window."
-          value={draft.pickupLocationId}
-          options={[
-            {
-              value: '',
-              label: facilities.error ? 'Could not load your locations' : 'Choose a location',
-            },
-            ...(facilities.data ?? []).map((f) => ({
-              value: f.addressId,
-              label: `${f.label} · ${f.city} ${f.pincode}`,
-            })),
-          ]}
-          onChange={(e) => patch({ pickupLocationId: e.target.value })}
-        />
+        {/* Both warranty sentences Task 3 step 2 names. The second one is the
+            incentive, so it says where the vendor will see the effect. */}
+        <p className="mb-5 max-w-prose text-body-sm text-ink-2">
+          We sell the customer a <strong>longer total term than you offer</strong> and fund the
+          difference ourselves — so what the buyer sees is not what you are committing to here. A{' '}
+          <strong>longer term from you earns you a better price</strong>, because it costs us less to
+          top up. Change the months below and watch the payout move on step 4.
+        </p>
+
+        <div className="grid gap-x-7 gap-y-5 md:grid-cols-2">
+          <Input
+            label="Your warranty, in months"
+            type="number"
+            min={0}
+            max={24}
+            hint="0 to 24. This is a commercial commitment we can recover against, not a note."
+            value={String(draft.vendorWarrantyMonths)}
+            onChange={(e) =>
+              patch({
+                vendorWarrantyMonths: Math.max(0, Math.min(24, Number(e.target.value) || 0)),
+              })
+            }
+          />
+          <Select
+            label="Manufacturer warranty remaining"
+            hint="OEM warranty still in effect, if any."
+            value={draft.oemWarrantyRemaining}
+            options={opts(OEM_WARRANTY)}
+            onChange={(e) => patch({ oemWarrantyRemaining: e.target.value })}
+          />
+          <Select
+            label="Returns window you offer"
+            hint="How long a buyer can return under your policy."
+            value={draft.sellerWarranty}
+            options={opts(SELLER_WARRANTY)}
+            onChange={(e) => patch({ sellerWarranty: e.target.value })}
+          />
+        </div>
       </div>
     </div>
   );

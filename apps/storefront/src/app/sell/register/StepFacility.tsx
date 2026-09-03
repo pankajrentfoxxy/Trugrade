@@ -259,6 +259,7 @@ export interface StepFacilityProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepFacility({
@@ -268,6 +269,7 @@ export function StepFacility({
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepFacilityProps): React.JSX.Element {
   const [values, setValues] = React.useState<FacilityValues>(() => readFacilityDraft(answers));
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -435,7 +437,7 @@ export function StepFacility({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    const found = check(values);
+    const found = skipValidation ? {} : check(values);
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;

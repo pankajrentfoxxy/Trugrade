@@ -695,19 +695,6 @@ export class OnboardingController {
   // Documents — buyer step 5, vendor step 6
   // -------------------------------------------------------------------------
 
-  /**
-   * What this applicant has to supply, and the rules each one is held to.
-   *
-   * The wizard needs this before it can render the step at all: the list is
-   * `kyc.document_type_rule` data, not a constant, so ops can add a document
-   * type without a release. A hard-coded list in the client is a list that goes
-   * stale silently and asks a vendor for a document we stopped needing.
-   */
-  @Get('documents/types')
-  documentTypes(): Promise<DocumentTypeRuleView[]> {
-    return this.documents.types();
-  }
-
   /** Everything this org has uploaded, with each one's review state. */
   @Get('documents')
   listDocuments(@CurrentUser() user: Principal): Promise<KycDocumentView[]> {
@@ -856,6 +843,7 @@ export class OnboardingLeadController {
     private readonly kyc: KycService,
     private readonly limiter: RateLimiter,
     private readonly ctx: RequestContextService,
+    private readonly documents: DocumentService,
   ) {}
 
   /**
@@ -884,6 +872,20 @@ export class OnboardingLeadController {
     @Query('orgType', new ZodValidationPipe(publicOrgTypeSchema)) orgType: 'VENDOR' | 'BUYER',
   ): Promise<StepDefinitionView[]> {
     return this.kyc.listStepDefinitions(orgType);
+  }
+
+  /**
+   * The document rule table, before the applicant has finished every prior step.
+   *
+   * Same posture as `steps/definitions`: nothing here is org-specific — label,
+   * age cap, file count — and the documents step cannot render without it. The
+   * authenticated routes below read and write this org's uploads; this one only
+   * tells the client what those uploads are held to.
+   */
+  @Get('documents/types')
+  @Public()
+  documentTypes(): Promise<DocumentTypeRuleView[]> {
+    return this.documents.types();
   }
 
   @Post('leads')

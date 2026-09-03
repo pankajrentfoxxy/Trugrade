@@ -61,6 +61,8 @@ export const API = {
   listings: '/api/vendor/listings',
   listing: (id: string) => `/api/vendor/listings/${id}`,
   listingUnits: (id: string) => `/api/vendor/listings/${id}/units`,
+  listingUnitMovements: (listingId: string, unitId: string) =>
+    `/api/vendor/listings/${listingId}/units/${unitId}/movements`,
   validateSerials: '/api/vendor/listings/serials/validate',
   /** The wizard's dry run. No listing exists yet, so it checks neither capacity nor status. */
   validateSerialsCsv: '/api/vendor/listings/serials/validate-csv',
@@ -295,6 +297,16 @@ export interface VendorUnit {
   qcPassedAt: IsoDate | null;
   qcValidUntil: IsoDate | null;
   createdAt: IsoDate;
+}
+
+/** One custody event from `listing.stock_movement`, oldest first in the API response. */
+export interface VendorUnitMovement {
+  at: IsoDate;
+  fromStatus: string | null;
+  toStatus: string;
+  fromLocation: string | null;
+  toLocation: string | null;
+  reason: string | null;
 }
 
 /**
@@ -739,6 +751,25 @@ export function onDateTime(iso: IsoDate | null | undefined): string {
 /** `A_PLUS` → `A+`, everywhere a grade is spoken rather than badged. */
 export function gradeLabel(grade: string): string {
   return grade === 'A_PLUS' ? 'A+' : grade;
+}
+
+/** `AWAITING_QC` → `Awaiting qc`. Same rule as ops and unit screens. */
+export function humanise(value: string): string {
+  const words = value.replace(/[._]/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+const LOCATION_LABEL: Record<string, string> = {
+  VENDOR: 'At your site',
+  TRANSIT: 'In transit',
+  HUB: 'At our hub',
+  BUYER: 'With the buyer',
+};
+
+/** Where the machine physically is, in words a vendor can act on. */
+export function locationLabel(code: string | null | undefined): string {
+  if (!code) return 'Not recorded';
+  return LOCATION_LABEL[code] ?? humanise(code);
 }
 
 /* ==========================================================================

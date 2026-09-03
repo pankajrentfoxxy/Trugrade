@@ -96,8 +96,12 @@ export function AddressFields({
         error={errors.line1}
       />
       <Input
-        label="Area or landmark"
-        hint="Optional."
+        label={
+          <>
+            Area or landmark{' '}
+            <span className="text-label font-normal text-ink-3">(optional)</span>
+          </>
+        }
         readOnly={readOnly}
         value={value.line2}
         onFocus={onFocus}

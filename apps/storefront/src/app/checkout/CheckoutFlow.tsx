@@ -17,12 +17,6 @@ import {
 import { BRAND } from '@trugrade/config/brand';
 import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../register/api';
-import {
-  BoxIcon,
-  ProductLineIdentity,
-  ProductLinePassRow,
-  SpecIcon,
-} from '../../lib/product-line-details';
 import { Countdown } from './Countdown';
 import {
   abandonCheckout,
@@ -46,11 +40,10 @@ import {
  */
 
 /* ==========================================================================
- * The six steps
+ * The five steps
  * ======================================================================== */
 
 const STEPS = [
-  { code: 'REVIEW', title: 'Review what is held' },
   { code: 'BILLING', title: 'GSTIN and billing' },
   { code: 'DELIVERY', title: 'Delivery site' },
   { code: 'REFERENCE', title: 'Your PO reference' },
@@ -102,7 +95,7 @@ function cartIdFromUrl(): string | null {
 export function CheckoutFlow(): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [session, setSession] = React.useState<CheckoutSession | null>(null);
-  const [step, setStep] = React.useState<StepCode>('REVIEW');
+  const [step, setStep] = React.useState<StepCode>('BILLING');
   const [busy, setBusy] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
@@ -282,12 +275,6 @@ export function CheckoutFlow(): React.JSX.Element {
 
     if (placed.ok) {
       setPhase({ k: 'placed', order: placed.data });
-      // The order is now a resource with a URL, and that URL is the
-      // confirmation screen (T17). Handing over rather than rendering a second
-      // copy of it here means one screen tells a buyer what they bought — and it
-      // is one they can bookmark, reload and send to their finance team, which a
-      // component holding a function's return value never could be.
-      window.location.assign(`/account/orders/${placed.data.orderNumber}`);
       return;
     }
     if (placed.status === 401) {
@@ -323,7 +310,6 @@ export function CheckoutFlow(): React.JSX.Element {
    * verify; the delivery contact's mobile is not repeated here.
    */
   const summaries: Partial<Record<StepCode, React.ReactNode>> = {
-    REVIEW: `${machines(session.unitsHeld)} held`,
     BILLING: session.gstProfiles.find((g) => g.id === gstProfileId)?.gstin,
     DELIVERY: (() => {
       const site = session.deliverySites.find((d) => d.id === deliveryAddressId);
@@ -383,7 +369,6 @@ export function CheckoutFlow(): React.JSX.Element {
           </p>
         )}
 
-        {step === 'REVIEW' && <ReviewStep session={session} />}
         {step === 'BILLING' && (
           <BillingStep
             session={session}
@@ -481,69 +466,8 @@ export function CheckoutFlow(): React.JSX.Element {
   );
 }
 
-/**
- * Step 1 — review
- * ======================================================================== */
-
-function ReviewStep({ session }: { session: CheckoutSession }): React.JSX.Element {
-  return (
-    <section className="flex flex-col gap-4" aria-label="What is held for you">
-      {session.lines.map((line) => (
-        <article key={line.offerId} className="cartline-card checkoutline-card">
-          <div className="cartline-body">
-            <div className="cartline-main">
-              <ProductLineIdentity
-                title={line.title}
-                grade={line.grade}
-                specSummary={line.specSummary}
-                pass={
-                  <>
-                    <ProductLinePassRow icon={<SpecIcon kind="supply" />}>
-                      {line.dispatchPoint}
-                    </ProductLinePassRow>
-                    <ProductLinePassRow icon={<BoxIcon />}>
-                      <span className="mono">
-                        {machines(line.serials.length)} held
-                      </span>
-                    </ProductLinePassRow>
-                  </>
-                }
-              />
-            </div>
-            <aside className="cartline-aside">
-              <div className="cartline-price money">
-                <span className="mono">{rupees(line.lineTotal)}</span>
-                <small>
-                  <span className="tnum">{line.qty}</span> × {rupees(line.unitPrice)}
-                </small>
-                <small>Line, before tax</small>
-              </div>
-            </aside>
-          </div>
-          <dl className="checkoutline-serials">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Serial numbers held <span className="tnum">({line.serials.length})</span>
-            </dt>
-            <dd className="checkoutline-serial-list">
-              {line.serials.map((serial) => (
-                <a
-                  key={serial}
-                  href={`/unit/${serial}`}
-                  className="checkoutline-serial mono"
-                >
-                  {serial}
-                </a>
-              ))}
-            </dd>
-          </dl>
-        </article>
-      ))}
-    </section>
-  );
-}
-
 /* ==========================================================================
- * Step 2 — GSTIN and billing
+ * Step 1 — GSTIN and billing
  * ======================================================================== */
 
 function BillingStep({
@@ -836,17 +760,12 @@ function ReferenceStep({
           identifier that gets read back digit by digit against an invoice. */}
       <Input
         id="po"
-        label="PO reference"
+        label={session.poRequired ? 'PO reference' : 'PO reference (optional)'}
         mono
         required={session.poRequired}
         value={poNumber}
         maxLength={40}
         placeholder="PO/2026/00417"
-        hint={
-          session.poRequired
-            ? 'Your organisation requires one on every order. Up to 40 characters, because it has to fit on the invoice.'
-            : 'Optional for your organisation. Up to 40 characters, because it has to fit on the invoice.'
-        }
         error={errors.buyerPoNumber}
         className={errors.buyerPoNumber ? undefined : 'dark:border-acc'}
         onChange={(e) => onPo(e.target.value)}
@@ -854,11 +773,10 @@ function ReferenceStep({
 
       <Input
         id="cc"
-        label="Cost centre"
+        label="Cost centre (optional)"
         value={costCentre}
         maxLength={60}
         placeholder="IT — Delhi office"
-        hint="Optional. Carried to the invoice so a rollout across departments can be split afterwards."
         className="dark:border-acc"
         onChange={(e) => onCostCentre(e.target.value)}
       />
@@ -1006,35 +924,6 @@ function ConfirmStep({
         </div>
       )}
 
-      {tax && priced && (
-        <div className="rounded-lg border border-rule bg-sheet p-4">
-          <h2 className="text-h3 text-ink">The tax split on this order</h2>
-          <p className="mt-2 text-body-sm text-ink-2">
-            Resolved from our registration in state{' '}
-            <span className="font-mono tnum">{tax.ourStateCode}</span> against the place of supply,{' '}
-            {tax.placeOfSupplyState} (<span className="font-mono tnum">{tax.placeOfSupplyStateCode}</span>
-            ). Check it before you confirm — after this there is an invoice.
-          </p>
-          <p className="mt-3 font-mono text-data text-ink">
-            {tax.interState ? (
-              <>
-                IGST at <span className="tnum">{tax.ratePct}%</span> —{' '}
-                <span className="tnum">{rupees(tax.igst)}</span>
-              </>
-            ) : (
-              <>
-                CGST at <span className="tnum">{tax.ratePct / 2}%</span> —{' '}
-                <span className="tnum">{rupees(tax.cgst)}</span>
-                {' · '}
-                {tax.stateTaxLabel} at <span className="tnum">{tax.ratePct / 2}%</span> —{' '}
-                <span className="tnum">{rupees(tax.sgst)}</span>
-              </>
-            )}
-          </p>
-          <p className="mt-2 text-label text-ink-3">{tax.basis}</p>
-        </div>
-      )}
-
       <p className="text-body-sm text-ink-2">
         {BRAND.legalEntity} is the seller on this order. We buy these exact serial numbers on your
         behalf and invoice you for them; there is one invoice and one seller.{' '}
@@ -1135,17 +1024,6 @@ function BreakUpPanel({ breakUp }: { breakUp: BreakUp | null }): React.JSX.Eleme
 
 function whyFor(step: StepCode, session: CheckoutSession): WhyRailItem[] {
   switch (step) {
-    case 'REVIEW':
-      return [
-        {
-          term: 'Why serial numbers',
-          explanation: 'Every machine here has been opened, tested and graded, and these are the exact ones held for you. Not "an A-grade of this model" — these ones. Each serial links to its own inspection report.',
-        },
-        {
-          term: 'Why a hold at all',
-          explanation: 'Nothing in a cart is reserved. From the moment you started checkout these machines are off sale to everyone else, for twenty minutes, so the price and the stock you are looking at cannot move underneath you.',
-        },
-      ];
     case 'BILLING':
       return [
         {
@@ -1287,31 +1165,58 @@ function Failed({ message }: { message: string }): React.JSX.Element {
 }
 
 /**
- * The order exists, and its own screen is `/account/orders/{orderNumber}` (T17).
- *
- * `place()` navigates there the moment the transaction commits, so this is only
- * ever on screen for the instant the browser takes to follow — and it is what a
- * buyer sees if that navigation is blocked or slow, which is why it carries the
- * order number and a link rather than a spinner. There is deliberately no second
- * rendering of the serials and the money here: two screens describing one order
- * is two places for them to disagree.
+ * The order exists at `/account/orders/{orderNumber}` (T17). This screen is the
+ * thank-you terminal — one headline, the order number, and a path to the record.
+ * The full break-up and serial list live on the order screen only; repeating them
+ * here is two places for the same figures to disagree.
  */
 function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
+  const awaiting = order.status === 'AWAITING_APPROVAL';
+  const units = order.serials.length;
+
   return (
-    <div className="flex max-w-[74ch] flex-col gap-4" role="status">
-      <StatusPill
-        tone={order.status === 'AWAITING_APPROVAL' ? 'warn' : 'neutral'}
-        label={order.status === 'AWAITING_APPROVAL' ? 'Awaiting approval' : 'Order placed'}
-      />
-      <h1 className="text-h1 text-ink">
-        Order <span className="font-mono tnum">{order.orderNumber}</span>
-      </h1>
-      <p className="text-body-sm text-ink-2">Opening your order…</p>
-      <p>
-        <a className="pill acc" href={`/account/orders/${order.orderNumber}`}>
-          Open order {order.orderNumber}
-        </a>
-      </p>
+    <div className="chdone" role="status" aria-live="polite">
+      <div className="chdone-card">
+        <div className="chdone-mark" aria-hidden="true">
+          ✓
+        </div>
+        <StatusPill
+          tone={awaiting ? 'warn' : 'info'}
+          label={awaiting ? 'Awaiting approval' : 'Order placed'}
+        />
+        <h1 className="text-h1 text-ink">
+          {awaiting
+            ? 'Thank you — we have sent this for approval'
+            : 'Thank you for ordering from us'}
+        </h1>
+        <p className="chdone-lede">
+          {awaiting
+            ? `${BRAND.name} has your request. Nothing is charged until your approver signs off, and the exact machines stay held while they decide.`
+            : `Your order is with ${BRAND.legalEntity}. We will pick and dispatch the exact serial numbers you held, and your GST invoice will follow.`}
+        </p>
+        <dl className="chdone-facts">
+          <div className="chdone-fact">
+            <dt>Order number</dt>
+            <dd className="font-mono tnum">{order.orderNumber}</dd>
+          </div>
+          <div className="chdone-fact">
+            <dt>Machines</dt>
+            <dd className="font-mono tnum">{machines(units)}</dd>
+          </div>
+          <div className="chdone-fact">
+            <dt>Landed price</dt>
+            <dd className="font-mono tnum">{rupees(order.grandTotal)}</dd>
+          </div>
+        </dl>
+        <div className="chdone-actions">
+          <a className="pill acc" href={`/account/orders/${order.orderNumber}`}>
+            View your order
+          </a>
+          <a className="pill wire chdonewire" href="/">
+            Browse laptops
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

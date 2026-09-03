@@ -14,6 +14,7 @@ import { ConditionImageService } from './internal/condition-image.service';
 import { SkuRequestService } from './internal/sku-request.service';
 import { SkuImportService } from './internal/sku-import.service';
 import { CatalogSearchService } from './internal/catalog-search.service';
+import { CatalogBoardRepository } from './internal/catalog-board.repository';
 
 /**
  * `IdentityModule` is imported for one thing: the SKU request review screen puts
@@ -39,6 +40,7 @@ import { CatalogSearchService } from './internal/catalog-search.service';
     SkuRequestService,
     SkuImportService,
     CatalogSearchService,
+    CatalogBoardRepository,
   ],
   exports: [CatalogService],
 })

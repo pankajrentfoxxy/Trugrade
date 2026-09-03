@@ -29,6 +29,11 @@ import { PrismaService } from '../../shared/db/prisma.service';
 import type { Principal } from '../../shared/db/org-scope';
 import { IdentityService } from '../identity';
 import { SkuRepository } from './internal/sku.repository';
+import {
+  CatalogBoardRepository,
+  type CatalogBoardPage,
+  type CatalogBrandOption,
+} from './internal/catalog-board.repository';
 import { ConditionImageService, type ModelCoverage } from './internal/condition-image.service';
 import { CONDITION_FILENAME_CONVENTION } from './internal/condition-image-filename';
 import { SkuRequestService, type NearMatch } from './internal/sku-request.service';
@@ -41,6 +46,7 @@ import {
 import {
   attachConditionImageSchema,
   bulkConditionImageSchema,
+  catalogBoardQuerySchema,
   catalogSearchQuerySchema,
   conditionImageUploadUrlSchema,
   importSkusSchema,
@@ -53,6 +59,7 @@ import {
   type AttachConditionImageDto,
   type BulkConditionImageDto,
   type CatalogSearchQueryDto,
+  type CatalogBoardQueryDto,
   type ConditionImageUploadUrlDto,
   type ImportSkusDto,
   type ReorderConditionImagesDto,
@@ -332,6 +339,7 @@ export class CatalogController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly skus: SkuRepository,
+    private readonly catalogBoard: CatalogBoardRepository,
     private readonly images: ConditionImageService,
     private readonly requests: SkuRequestService,
     private readonly importer: SkuImportService,
@@ -434,6 +442,33 @@ export class CatalogController {
       });
     }
     return [...brands.values()];
+  }
+
+  /**
+   * Brands with SKU counts — the filter rail on `/catalog`.
+   *
+   * Separate from the paginated board so changing pages does not re-fetch the
+   * chip list, and so an empty search still shows every brand to filter by.
+   */
+  @Get('brands')
+  @RequirePermissions('catalog.sku.read')
+  async brands(): Promise<CatalogBrandOption[]> {
+    return this.catalogBoard.listBrands();
+  }
+
+  /**
+   * Flat, paginated SKU board for the console.
+   *
+   * Search matches the whole path (brand, series, model, code, spec) server-side
+   * so the client does not walk an entire tree to page 1 of 400.
+   */
+  @Get('board')
+  @RequirePermissions('catalog.sku.read')
+  async listBoard(
+    @Query(new ZodValidationPipe(catalogBoardQuerySchema)) query: CatalogBoardQueryDto,
+  ): Promise<CatalogBoardPage> {
+    const { page, pageSize, q, brandId } = query;
+    return this.catalogBoard.listSkus({ q, brandId }, { page, pageSize });
   }
 
   /**

@@ -160,7 +160,7 @@ describe('CIN, Udyam and TAN', () => {
         constitution="PVT_LTD"
         fields={[
           ...VENDOR_CAPTURED,
-          { fieldCode: 'tan', label: 'TAN', required: false, helpText: 'Optional.' },
+          { fieldCode: 'tan', label: 'TAN (optional)', required: false, helpText: 'Ten characters, e.g. DELT12345E.' },
         ]}
         copy={COPY}
         busy={false}

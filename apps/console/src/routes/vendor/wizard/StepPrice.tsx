@@ -78,14 +78,7 @@ export function StepPrice({
 
   return (
     <div>
-      <h2 className="text-h2 text-ink">What you want to receive</h2>
-      <p className="mt-2 max-w-prose text-body-sm text-ink-2">
-        Enter the amount you want in your account per machine, after everything. That number is
-        what we hold you to — it does not move for freight, for a buyer discount, or if we correct
-        the grade after inspection. It is fixed when the purchase order is raised.
-      </p>
-
-      <div className="mt-6 grid max-w-2xl gap-7">
+      <div className="grid max-w-2xl gap-7">
         <div className="grid gap-5 sm:grid-cols-2">
           <Input
             label="Net payout per machine"

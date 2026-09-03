@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { Link, useLocation } from 'react-router';
 import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
-import { cn, Logo, ThemeToggle } from '@trugrade/ui';
+import { cn, Logo } from '@trugrade/ui';
 import { useAuth } from '../lib/auth';
+import { AccountMenu } from './AccountMenu';
 import { CommandPalette } from './CommandPalette';
-import { activeEntry, monogram, visibleGroups, type NavEntry } from './nav';
+import { activeEntry, visibleGroups, type NavEntry } from './nav';
 
 /**
  * The console frame. Not an archetype — it is the chrome every archetype hangs
@@ -21,75 +22,22 @@ import { activeEntry, monogram, visibleGroups, type NavEntry } from './nav';
  *     how `DataTable` and the token layer both find out.
  */
 
-const RAIL_KEY = 'tg-console-rail';
-
-/**
- * The rail's open state, remembered.
- *
- * Read lazily from `localStorage` so the first render is already correct — a
- * rail that expands one frame after paint is worse than one that never
- * collapsed. `localStorage` throws outright in a private window, so both ends
- * are guarded and an unreadable store simply means "open".
- */
-function useRailOpen(): [boolean, () => void] {
-  const [open, setOpen] = React.useState<boolean>(() => {
-    try {
-      return localStorage.getItem(RAIL_KEY) !== 'closed';
-    } catch {
-      return true;
-    }
-  });
-  const toggle = React.useCallback(() => {
-    setOpen((was) => {
-      const next = !was;
-      try {
-        localStorage.setItem(RAIL_KEY, next ? 'open' : 'closed');
-      } catch {
-        // A private window forgets the choice on reload. Better than throwing.
-      }
-      return next;
-    });
-  }, []);
-  return [open, toggle];
-}
-
-function RailToggle({ open, onClick }: { open: boolean; onClick: () => void }): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={open}
-      aria-controls="section-rail"
-      aria-label={open ? 'Collapse the section rail' : 'Expand the section rail'}
-      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded bg-chrome-3 text-on-chrome transition-colors hover:bg-chrome-2"
-    >
-      <span className="flex flex-col gap-[2.5px]" aria-hidden="true">
-        <b className="block h-[1.8px] w-[13px] rounded-xs bg-acc" />
-        <b className="block h-[1.8px] w-[13px] rounded-xs bg-acc" />
-        <b className="block h-[1.8px] w-[13px] rounded-xs bg-acc" />
-      </span>
-    </button>
-  );
-}
-
 /** The dark band. Identical in both themes — that is the point of it. */
 function TopBar({
   groups,
   activeGroup,
-  railOpen,
-  onToggleRail,
 }: {
   groups: [string, NavEntry[]][];
   activeGroup: string | undefined;
-  railOpen: boolean;
-  onToggleRail: () => void;
 }): React.JSX.Element {
-  const { principal, signOut } = useAuth();
+  const { principal } = useAuth();
+  // Vendors navigate in the section rail; repeating the group name in the top bar
+  // is a second door to the same place.
+  const sectionTabs = groups.filter(([group]) => group !== 'Vendor');
 
   return (
     <header className="tg-chrome sticky top-0 z-30 border-b border-chrome-line">
       <div className="mx-auto flex h-[62px] max-w-container items-center gap-3 px-5">
-        <RailToggle open={railOpen} onClick={onToggleRail} />
         {/*
           `Wordmark` paints "tru" with --ink, which is near-black under the light
           theme and therefore invisible on the chrome band. `.tg-brandlock`
@@ -100,48 +48,36 @@ function TopBar({
           <Logo size={26} />
         </Link>
 
-        <nav aria-label="Sections" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-          {groups.map(([group, entries]) => (
-            <Link
-              key={group}
-              // A group only exists because a link survived the filter, so the
-              // fallback is unreachable — and Landing is the honest destination
-              // if it ever is not.
-              to={entries[0]?.to ?? '/'}
-              aria-current={group === activeGroup ? 'true' : undefined}
-              className={cn(
-                'flex h-[38px] shrink-0 items-center rounded px-3 text-body-sm transition-colors',
-                group === activeGroup
-                  ? 'bg-chrome-2 text-acc'
-                  : 'text-on-chrome-2 hover:bg-chrome-2 hover:text-on-chrome',
-              )}
-            >
-              {group}
-            </Link>
-          ))}
-        </nav>
+        {/*
+          T35. §3C: the palette is the primary navigation for experienced ops
+          staff and the rail is the discoverable fallback — so it sits in the
+          chrome and is reachable with Ctrl+K from every screen. It renders
+          nothing without a principal.
+        */}
+        <CommandPalette />
+
+        {sectionTabs.length > 0 ? (
+          <nav aria-label="Sections" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+            {sectionTabs.map(([group, entries]) => (
+              <Link
+                key={group}
+                to={entries[0]?.to ?? '/'}
+                aria-current={group === activeGroup ? 'true' : undefined}
+                className={cn(
+                  'flex h-[38px] shrink-0 items-center rounded px-3 text-body-sm transition-colors',
+                  group === activeGroup
+                    ? 'bg-chrome-2 text-acc'
+                    : 'text-on-chrome-2 hover:bg-chrome-2 hover:text-on-chrome',
+                )}
+              >
+                {group}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/*
-            T35. §3C: the palette is the primary navigation for experienced ops
-            staff and the rail is the discoverable fallback — so it sits in the
-            chrome, beside the theme toggle, and is reachable with Ctrl+K from
-            every screen. It renders nothing without a principal.
-          */}
-          <CommandPalette />
-          {principal ? (
-            <span className="hidden font-mono text-label uppercase tracking-[0.13em] text-on-chrome-3 sm:inline">
-              {principal.orgType}
-            </span>
-          ) : null}
-          <ThemeToggle className="h-[38px] min-w-[38px] rounded border-chrome-line-2" />
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="flex h-[38px] items-center rounded px-3 text-body-sm text-on-chrome-2 transition-colors hover:bg-chrome-2 hover:text-on-chrome"
-          >
-            Sign out
-          </button>
+          {principal ? <AccountMenu fullName={principal.fullName} /> : null}
         </div>
       </div>
     </header>
@@ -152,35 +88,29 @@ function TopBar({
  * The section rail: the screens inside the section the top bar has you in.
  *
  * The two do not duplicate each other — the bar switches section, the rail moves
- * inside one. Collapsed it keeps a mono initial per screen so the section stays
- * navigable at 52px; under 900px it stops being a rail at all and becomes a
- * scrolling strip above the work.
+ * inside one. Under 900px it stops being a rail at all and becomes a scrolling
+ * strip above the work.
  */
 function SectionRail({
   group,
   entries,
   active,
-  open,
 }: {
   group: string;
   entries: NavEntry[];
   active: NavEntry | undefined;
-  open: boolean;
 }): React.JSX.Element {
   return (
     <aside
       id="section-rail"
       aria-label={group}
       className={cn(
-        'shrink-0 self-start overflow-hidden rounded-lg border border-rule bg-sheet',
+        'w-[212px] shrink-0 self-start overflow-hidden rounded-lg border border-rule bg-sheet',
         'max-[900px]:w-full max-[900px]:self-stretch',
-        open ? 'w-[212px]' : 'w-[56px]',
       )}
     >
       <div className="border-b border-rule bg-sheet-2 px-3 py-2 max-[900px]:hidden">
-        <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-          {open ? group : monogram(group)}
-        </span>
+        <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">{group}</span>
       </div>
       <nav className="flex flex-col gap-1 p-2 max-[900px]:flex-row max-[900px]:overflow-x-auto">
         {entries.map((n) => (
@@ -192,19 +122,9 @@ function SectionRail({
             className={cn(
               'flex items-center whitespace-nowrap rounded px-3 py-2 text-body-sm transition-colors',
               n === active ? 'bg-acc-wash text-acc-ink' : 'text-ink-2 hover:bg-sheet-2 hover:text-ink',
-              open ? '' : 'justify-center px-0 max-[900px]:px-3',
             )}
           >
-            {open ? (
-              n.label
-            ) : (
-              <>
-                <span className="font-mono text-data max-[900px]:hidden" aria-hidden="true">
-                  {monogram(n.label)}
-                </span>
-                <span className="sr-only max-[900px]:not-sr-only">{n.label}</span>
-              </>
-            )}
+            {n.label}
           </Link>
         ))}
       </nav>
@@ -292,7 +212,6 @@ function SiteFooter(): React.JSX.Element {
 export function Shell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const { principal } = useAuth();
   const { pathname } = useLocation();
-  const [railOpen, toggleRail] = useRailOpen();
 
   const groups = principal ? visibleGroups(principal) : [];
   const visible = groups.flatMap(([, entries]) => entries);
@@ -317,15 +236,10 @@ export function Shell({ children }: { children: React.ReactNode }): React.JSX.El
       >
         Skip to content
       </a>
-      <TopBar
-        groups={groups}
-        activeGroup={section?.[0]}
-        railOpen={railOpen}
-        onToggleRail={toggleRail}
-      />
+      <TopBar groups={groups} activeGroup={section?.[0]} />
       <div className="mx-auto flex w-full max-w-container gap-5 px-5 py-5 max-[900px]:flex-col max-[900px]:gap-3">
         {section ? (
-          <SectionRail group={section[0]} entries={section[1]} active={active} open={railOpen} />
+          <SectionRail group={section[0]} entries={section[1]} active={active} />
         ) : null}
         <main id="main" className="min-w-0 flex-1">
           {children}

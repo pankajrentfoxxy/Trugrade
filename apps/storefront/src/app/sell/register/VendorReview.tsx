@@ -82,12 +82,7 @@ const accountRows = (a: Record<string, unknown>): Row[] => [
   { label: 'Work email', value: str(a, 'email'), required: true, mono: true },
   { label: 'Mobile', value: str(a, 'mobile'), required: true, mono: true },
   { label: 'City you work from', value: str(a, 'city'), required: true },
-  {
-    label: 'Laptops a month',
-    value: labelOrBlank(MONTHLY_VOLUMES, str(a, 'monthlyVolume')),
-    required: true,
-  },
-  { label: 'Brands', value: list(a, 'brands').join(', ') },
+  { label: 'Laptops a month', value: labelOrBlank(MONTHLY_VOLUMES, str(a, 'monthlyVolume')), required: true },
   { label: 'How you found us', value: labelOrBlank(HEARD_FROM, str(a, 'heardFrom')) },
 ];
 
@@ -152,6 +147,13 @@ const capabilityRows = (a: Record<string, unknown>): Row[] => {
     {
       label: 'Categories',
       value: labelled(SUPPLY_CATEGORIES, list(a, 'categories')),
+      required: true,
+    },
+    {
+      label: 'Brands',
+      value: [list(a, 'brands').join(', '), str(a, 'otherBrands').trim()]
+        .filter((part) => part.length > 0)
+        .join('; '),
       required: true,
     },
     {

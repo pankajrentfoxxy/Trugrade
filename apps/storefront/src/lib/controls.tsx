@@ -32,7 +32,7 @@ export function Select({
   required,
   ...props
 }: {
-  label: string;
+  label: React.ReactNode;
   hint?: React.ReactNode;
   error?: string;
   options: readonly Option[];

@@ -334,16 +334,16 @@ export const SUPPLY_CATEGORIES = [
   {
     code: 'BUSINESS_LAPTOP',
     label: 'Business laptops',
-    note: 'ThinkPad, Latitude, EliteBook and the like. Most of what we sell.',
+    note: 'ThinkPad, Latitude, EliteBook and the like',
   },
   {
     code: 'WORKSTATION',
     label: 'Mobile workstations',
-    note: 'Quadro or RTX class. ThinkPad P, ZBook, Precision.',
+    note: 'Quadro or RTX class. ThinkPad P, ZBook, Precision',
   },
-  { code: 'CONSUMER', label: 'Consumer laptops', note: 'Inspiron, IdeaPad, Pavilion, Vivobook.' },
-  { code: 'MACBOOK', label: 'MacBook', note: 'Air and Pro, Intel or Apple silicon.' },
-  { code: 'CHROMEBOOK', label: 'Chromebook', note: 'Usually education fleets.' },
+  { code: 'CONSUMER', label: 'Consumer laptops', note: 'Inspiron, IdeaPad, Pavilion, Vivobook' },
+  { code: 'MACBOOK', label: 'MacBook', note: 'Air and Pro, Intel or Apple silicon' },
+  { code: 'CHROMEBOOK', label: 'Chromebook', note: 'Usually education fleets' },
 ] as const;
 
 /**
@@ -492,52 +492,47 @@ export const VENDOR_DOCUMENTS = [
   {
     docType: 'GST_CERTIFICATE',
     required: true,
-    purpose: 'The registration certificate for the GSTIN we raise purchase orders against.',
+    purpose: 'Primary GSTIN registration certificate.',
   },
   {
     docType: 'PAN_CARD',
     required: true,
-    purpose: 'The PAN of the entity we pay. TDS on every payout is deducted against it.',
+    purpose: 'Entity PAN for TDS on payouts.',
   },
   {
     docType: 'CANCELLED_CHEQUE',
     required: true,
-    purpose:
-      'It has to show the account number, the IFSC and the account holder name printed on it — the same account you enter below.',
+    purpose: 'Must match the account below.',
   },
   {
     docType: 'ADDRESS_PROOF',
     required: true,
-    purpose:
-      'For the registered office. A utility bill, a rent agreement or a property tax receipt.',
+    purpose: 'Registered office — utility bill, rent agreement or property tax.',
   },
   {
     docType: 'INCORPORATION',
     required: true,
-    purpose:
-      'Certificate of incorporation, partnership deed or the registration certificate for whatever the entity is.',
+    purpose: 'COI, partnership deed or registration certificate.',
   },
   {
     docType: 'SIGNATORY_ID',
     required: true,
-    purpose:
-      'Photo ID of the person signing on this account. Aadhaar, passport or driving licence.',
+    purpose: 'Photo ID of the authorised signatory.',
   },
   {
     docType: 'BOARD_RESOLUTION',
     required: true,
-    purpose: 'Authorising the signatory to contract on the company’s behalf.',
+    purpose: 'Authorising the signatory to contract.',
   },
   {
     docType: 'CPCB_EWASTE',
     required: false,
-    purpose:
-      'Optional. If you hold a CPCB e-waste authorisation, buyers with an ESG policy can filter for it.',
+    purpose: 'CPCB e-waste authorisation, if held.',
   },
   {
     docType: 'ISO_CERTIFICATE',
     required: false,
-    purpose: 'Optional. ISO 9001, 14001 or 27001. It shows on your supplier profile.',
+    purpose: 'ISO certificate for your profile, if held.',
   },
 ] as const;
 

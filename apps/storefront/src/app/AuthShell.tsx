@@ -5,9 +5,9 @@ import { BRAND } from '@trugrade/config/brand';
  *
  * One task, centred, and no navigation: there is no header, no search and no
  * category strip, because every one of them is an invitation to leave a screen
- * somebody arrived at deliberately. The Rule 4(2) legal footer is still there —
- * it is on every page by law, and it comes from the root layout rather than
- * from here.
+ * somebody arrived at deliberately. Sign-in omits the site footer so the form
+ * fills the viewport; other auth routes still carry the Rule 4(2) disclosure
+ * from the root layout.
  *
  * The right-hand panel is `--chrome` in both themes, the same dark brand ground
  * as the header and footer, so the page reads as Trugrade before a single word

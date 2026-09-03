@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
+  Button,
   EmptyState,
   KpiRow,
   QueueList,
@@ -81,6 +82,7 @@ function toQueue(
 }
 
 export function VendorDashboardRoute(): React.JSX.Element {
+  const navigate = useNavigate();
   const { data, error } = useResource<DashboardTiles>(
     API.dashboard,
     'Your dashboard is unavailable',
@@ -239,9 +241,9 @@ export function VendorDashboardRoute(): React.JSX.Element {
       <PageHeader
         title="Today"
         action={
-          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
+          <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
             List stock
-          </Link>
+          </Button>
         }
       >
         Your stock, then what is waiting on you — worst first.
@@ -249,15 +251,7 @@ export function VendorDashboardRoute(): React.JSX.Element {
 
       <KpiRow label="Your stock right now" items={kpis} />
 
-      {queues.length > 0 ? (
-        <QueueList label="Waiting on you" items={queues} />
-      ) : (
-        // Not an empty queue list with two zeroes in it. "Nothing is waiting" is
-        // a fact worth one line; two rows reading 0 are furniture.
-        <p className="text-body-sm text-ink-2">
-          Nothing is waiting on you. No inspections outstanding and no grade corrections open.
-        </p>
-      )}
+      {queues.length > 0 ? <QueueList label="Waiting on you" items={queues} /> : null}
     </div>
   );
 }

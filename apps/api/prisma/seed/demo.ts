@@ -117,6 +117,7 @@ const INSPECTED_AT = Prisma.sql`
 
 const VENDOR_PEOPLE: Person[] = [
   { email: 'owner@northgate.example', name: 'Harpreet Singh', role: 'VENDOR_OWNER', owner: true },
+  { email: 'finance@northgate.example', name: 'Rohit Mehta', role: 'VENDOR_FINANCE' },
   { email: 'ops@northgate.example', name: 'Meera Joshi', role: 'VENDOR_OPS' },
   { email: 'admin@northgate.example', name: 'Kavita Desai', role: 'VENDOR_ADMIN' },
 ];

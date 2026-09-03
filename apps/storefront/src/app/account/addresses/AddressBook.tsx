@@ -7,7 +7,6 @@ import {
   EmptyState,
   Input,
   RecordHeader,
-  SidePanel,
   Skeleton,
   StatusPill,
   type Address,
@@ -84,6 +83,13 @@ export function AddressBook(): React.JSX.Element {
 function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void> }): React.JSX.Element {
   const active = book.delivery.filter((a) => a.isActive);
   const retired = book.delivery.filter((a) => !a.isActive);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const editing =
+    book.delivery.find((a) => a.id === editingId && a.isActive) ?? null;
+
+  const startEdit = (id: string): void => {
+    setEditingId(id);
+  };
 
   return (
     <>
@@ -103,11 +109,9 @@ function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void
         ]}
       />
 
-      {/* Same override as the approval record: on a phone the sites you already
-          have come before the form for another one. */}
-      <div className="rec apprrec">
+      <div className="rec adrrec">
         <main className="evid">
-          <section aria-labelledby="delivery">
+          <section className="adrdelivery" aria-labelledby="delivery">
             <div className="sh">
               <div className="shrow">
                 <h2 id="delivery">Delivery sites</h2>
@@ -119,13 +123,31 @@ function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void
               </div>
             </div>
 
+            <AddSite
+              onAdded={onChanged}
+              first={active.length === 0}
+              blocked={editingId !== null}
+              onOpen={() => setEditingId(null)}
+            />
+
+            {editing !== null && (
+              <EditSite
+                address={editing}
+                onClose={() => setEditingId(null)}
+                onSaved={async () => {
+                  setEditingId(null);
+                  await onChanged();
+                }}
+              />
+            )}
+
             {active.length === 0 ? (
               <div className="empty">
                 <h3>No delivery site yet</h3>
                 <p>
-                  Checkout needs somewhere to send machines to. Add the first one on the right — the
-                  contact and the gate instruction go straight to the driver, so the more exact they
-                  are, the fewer failed deliveries.
+                  Checkout needs somewhere to send machines to. Open{' '}
+                  <b>Add a delivery site</b> above — the contact and the gate instruction go
+                  straight to the driver, so the more exact they are, the fewer failed deliveries.
                 </p>
               </div>
             ) : (
@@ -136,6 +158,8 @@ function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void
                     address={a}
                     canRetire={active.length > 1}
                     onChanged={onChanged}
+                    onEdit={() => startEdit(a.id)}
+                    editing={editingId === a.id}
                   />
                 ))}
               </div>
@@ -152,7 +176,14 @@ function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void
                 </p>
                 <div className="adrgrid">
                   {retired.map((a) => (
-                    <SiteCard key={a.id} address={a} canRetire={false} onChanged={onChanged} />
+                    <SiteCard
+                      key={a.id}
+                      address={a}
+                      canRetire={false}
+                      onChanged={onChanged}
+                      onEdit={() => undefined}
+                      editing={false}
+                    />
                   ))}
                 </div>
               </details>
@@ -187,10 +218,6 @@ function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void
             )}
           </section>
         </main>
-
-        <div className="sidep">
-          <AddSite onAdded={onChanged} first={active.length === 0} />
-        </div>
       </div>
     </>
   );
@@ -204,10 +231,14 @@ function SiteCard({
   address,
   canRetire,
   onChanged,
+  onEdit,
+  editing,
 }: {
   address: OrgAddress;
   canRetire: boolean;
   onChanged: () => Promise<void>;
+  onEdit: () => void;
+  editing: boolean;
 }): React.JSX.Element {
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
@@ -222,8 +253,9 @@ function SiteCard({
   };
 
   return (
-    <div className={address.isActive ? 'adrcard' : 'adrcard off'}>
+    <div className={address.isActive ? 'adrcard' : 'adrcard off'} data-editing={editing || undefined}>
       <AddressCard
+        className="adrcard-panel"
         address={asAddress(address)}
         badge={
           address.isDefault ? (
@@ -236,6 +268,9 @@ function SiteCard({
         actions={
           address.isActive ? (
             <>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={onEdit}>
+                Edit
+              </Button>
               {!address.isDefault && (
                 <Button
                   variant="secondary"
@@ -306,69 +341,203 @@ const BLANK: NewAddress = {
   gateInstructions: '',
 };
 
+function orgToForm(address: OrgAddress): NewAddress {
+  return {
+    label: address.label ?? '',
+    line1: address.line1,
+    line2: address.line2 ?? '',
+    city: address.city,
+    state: address.state,
+    stateCode: address.stateCode,
+    pincode: address.pincode,
+    contactName: address.contactName,
+    contactMobile: address.contactMobile,
+    landmark: address.landmark ?? '',
+    gateInstructions: address.gateInstructions ?? '',
+  };
+}
+
+function validateSiteForm(form: NewAddress): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!form.label.trim()) out.label = 'Give this site a name your team will recognise.';
+  if (form.line1.trim().length < 4) out.line1 = 'We need the street address, not just a number.';
+  if (!form.city.trim()) out.city = 'Which city is this site in?';
+  if (!PINCODE.pattern!.test(form.pincode.trim())) {
+    out.pincode = 'A pincode is six digits and never starts with a zero — 122002, for example.';
+  }
+  if (form.contactName.trim().length < 2) {
+    out.contactName = 'Who does the driver ask for when they arrive?';
+  }
+  if (normaliseMobile(form.contactMobile) === null) {
+    out.contactMobile =
+      'We need a ten-digit Indian mobile the driver can ring — 98123 45678, or +91 98123 45678.';
+  }
+  return out;
+}
+
+function sitePayload(form: NewAddress): NewAddress {
+  return {
+    ...form,
+    state: STATES.find((s) => s.code === form.stateCode)?.name ?? form.state,
+    line2: form.line2?.trim() || null,
+    landmark: form.landmark?.trim() || null,
+    gateInstructions: form.gateInstructions?.trim() || null,
+  };
+}
+
+function SiteFormFields({
+  form,
+  set,
+  fields,
+}: {
+  form: NewAddress;
+  set: (key: keyof NewAddress, value: string) => void;
+  fields: Record<string, string>;
+}): React.JSX.Element {
+  return (
+    <>
+      <Input
+        label="Name this site"
+        hint="What your own team calls it — “Gurugram office”, “Warehouse 2”."
+        value={form.label}
+        onChange={(e) => set('label', e.target.value)}
+        {...(fields.label ? { error: fields.label } : {})}
+        required
+      />
+      <Input
+        label="Address"
+        value={form.line1}
+        onChange={(e) => set('line1', e.target.value)}
+        {...(fields.line1 ? { error: fields.line1 } : {})}
+        required
+      />
+      <Input
+        label="Floor, unit or building"
+        hint="Optional."
+        value={form.line2 ?? ''}
+        onChange={(e) => set('line2', e.target.value)}
+      />
+      <Input
+        label="City"
+        value={form.city}
+        onChange={(e) => set('city', e.target.value)}
+        {...(fields.city ? { error: fields.city } : {})}
+        required
+      />
+
+      <label className="adrsel">
+        <span className="l">State</span>
+        <span className="d">The state decides the tax split on the invoice, not your GSTIN.</span>
+        <select value={form.stateCode} onChange={(e) => set('stateCode', e.target.value)}>
+          {STATES.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.name} · {s.code}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <Input
+        label="Pincode"
+        mono
+        inputMode="numeric"
+        maxLength={6}
+        value={form.pincode}
+        onChange={(e) => set('pincode', e.target.value.replace(/\D/g, ''))}
+        {...(fields.pincode ? { error: fields.pincode } : {})}
+        required
+      />
+      <Input
+        label="Who the driver asks for"
+        value={form.contactName}
+        onChange={(e) => set('contactName', e.target.value)}
+        {...(fields.contactName ? { error: fields.contactName } : {})}
+        required
+      />
+      <Input
+        label="Their mobile"
+        mono
+        inputMode="tel"
+        hint="Indian mobile. We store it as +91XXXXXXXXXX."
+        value={form.contactMobile}
+        onChange={(e) => set('contactMobile', typeMobile(e.target.value))}
+        {...(fields.contactMobile ? { error: fields.contactMobile } : {})}
+        required
+      />
+      <Input
+        label="Landmark"
+        hint="Optional, and it is what a driver actually navigates by."
+        value={form.landmark ?? ''}
+        onChange={(e) => set('landmark', e.target.value)}
+      />
+
+      <label className="adrsel">
+        <span className="l">Gate or security instruction</span>
+        <span className="d">
+          Shown to the driver word for word. “Goods gate is at the rear, ask for security desk 2.”
+        </span>
+        <textarea
+          rows={3}
+          maxLength={300}
+          value={form.gateInstructions ?? ''}
+          onChange={(e) => set('gateInstructions', e.target.value)}
+        />
+      </label>
+
+      <p className="adrmissing">
+        <b className="notmeasured">Receiving hours: not recorded</b>
+        <span>
+          We do not yet hold the hours a site will accept goods, so we cannot promise a driver
+          arrives inside them. Put them in the gate instruction and they reach the driver.
+        </span>
+      </p>
+    </>
+  );
+}
+
 function AddSite({
   onAdded,
   first,
+  blocked,
+  onOpen,
 }: {
   onAdded: () => Promise<void>;
   first: boolean;
+  blocked: boolean;
+  onOpen: () => void;
 }): React.JSX.Element {
+  const [open, setOpen] = React.useState(first);
   const [form, setForm] = React.useState<NewAddress>(BLANK);
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   const [fields, setFields] = React.useState<Record<string, string>>({});
   const [saved, setSaved] = React.useState<string | null>(null);
 
+  const title = first ? 'Add your first delivery site' : 'Add a delivery site';
+
+  React.useEffect(() => {
+    if (blocked) setOpen(false);
+  }, [blocked]);
+
   const set = (key: keyof NewAddress, value: string): void =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  /**
-   * The client's own refusals, in the server's words where they overlap.
-   *
-   * Validated here so somebody typing gets the sentence beside the field rather
-   * than after a round trip — but the server runs the identical constants from
-   * `@trugrade/contracts`, and it is the server's answer that binds.
-   */
-  const check = (): Record<string, string> => {
-    const out: Record<string, string> = {};
-    if (!form.label.trim()) out.label = 'Give this site a name your team will recognise.';
-    if (form.line1.trim().length < 4) out.line1 = 'We need the street address, not just a number.';
-    if (!form.city.trim()) out.city = 'Which city is this site in?';
-    if (!PINCODE.pattern!.test(form.pincode.trim())) {
-      out.pincode = 'A pincode is six digits and never starts with a zero — 122002, for example.';
-    }
-    if (form.contactName.trim().length < 2) {
-      out.contactName = 'Who does the driver ask for when they arrive?';
-    }
-    if (normaliseMobile(form.contactMobile) === null) {
-      out.contactMobile =
-        'We need a ten-digit Indian mobile the driver can ring — 98123 45678, or +91 98123 45678.';
-    }
-    return out;
-  };
-
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    const problems = check();
+    const problems = validateSiteForm(form);
     setFields(problems);
     if (Object.keys(problems).length > 0) return;
 
     setBusy(true);
     setFailure(null);
-    const result = await addAddress({
-      ...form,
-      state: STATES.find((s) => s.code === form.stateCode)?.name ?? form.state,
-      // Empty is what a form posts when nobody typed. It is not a landmark.
-      line2: form.line2?.trim() || null,
-      landmark: form.landmark?.trim() || null,
-      gateInstructions: form.gateInstructions?.trim() || null,
-    });
+    const result = await addAddress(sitePayload(form));
     setBusy(false);
 
     if (result.ok) {
       setSaved(result.data.label ?? result.data.city);
       setForm(BLANK);
       setFields({});
+      setOpen(false);
       await onAdded();
     } else {
       setFailure(result.message);
@@ -377,127 +546,126 @@ function AddSite({
   };
 
   return (
-    <SidePanel
-      title={first ? 'Add your first delivery site' : 'Add a delivery site'}
-      description="Everything below the address is what the driver is shown on the day. A landmark and a gate instruction are the difference between a delivery and a second attempt."
+    <details
+      className="adradd"
+      open={open && !blocked}
+      onToggle={(e) => {
+        const next = (e.target as HTMLDetailsElement).open;
+        setOpen(next);
+        if (next) onOpen();
+      }}
     >
+      <summary>{title}</summary>
+      <div className="adradd-body">
+        <p className="adradd-note">
+          Everything below the address is what the driver is shown on the day. A landmark and a gate
+          instruction are the difference between a delivery and a second attempt.
+        </p>
+        <form className="adrform" onSubmit={(e) => void submit(e)} noValidate>
+          {saved !== null && (
+            <p className="adrok" role="status">
+              <b>{saved}</b> is on your account and can be chosen at checkout.
+            </p>
+          )}
+          {failure !== null && (
+            <p className="adrfail" role="alert">
+              {failure}
+            </p>
+          )}
+
+          <SiteFormFields form={form} set={set} fields={fields} />
+
+          <Button type="submit" variant="primary" block loading={busy}>
+            Save this site
+          </Button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+function EditSite({
+  address,
+  onClose,
+  onSaved,
+}: {
+  address: OrgAddress;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}): React.JSX.Element {
+  const [form, setForm] = React.useState<NewAddress>(() => orgToForm(address));
+  const [busy, setBusy] = React.useState(false);
+  const [failure, setFailure] = React.useState<string | null>(null);
+  const [fields, setFields] = React.useState<Record<string, string>>({});
+  const panelRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    setForm(orgToForm(address));
+    setFields({});
+    setFailure(null);
+  }, [address]);
+
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [address.id]);
+
+  const set = (key: keyof NewAddress, value: string): void =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    const problems = validateSiteForm(form);
+    setFields(problems);
+    if (Object.keys(problems).length > 0) return;
+
+    setBusy(true);
+    setFailure(null);
+    const result = await updateAddress(address.id, sitePayload(form));
+    setBusy(false);
+
+    if (result.ok) await onSaved();
+    else {
+      setFailure(result.message);
+      setFields(result.fields);
+    }
+  };
+
+  const label = address.label ?? address.city;
+
+  return (
+    <div ref={panelRef} className="adradd-body adredit">
+      <div className="adredit-head">
+        <h3>Edit {label}</h3>
+        <button type="button" className="adredit-close" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+      <p className="adradd-note">
+        Changes here are what the driver sees on the next delivery to this site. Orders already
+        placed keep the address they were raised with.
+      </p>
       <form className="adrform" onSubmit={(e) => void submit(e)} noValidate>
-        {saved !== null && (
-          <p className="adrok" role="status">
-            <b>{saved}</b> is on your account and can be chosen at checkout.
-          </p>
-        )}
         {failure !== null && (
           <p className="adrfail" role="alert">
             {failure}
           </p>
         )}
 
-        <Input
-          label="Name this site"
-          hint="What your own team calls it — “Gurugram office”, “Warehouse 2”."
-          value={form.label}
-          onChange={(e) => set('label', e.target.value)}
-          {...(fields.label ? { error: fields.label } : {})}
-          required
-        />
-        <Input
-          label="Address"
-          value={form.line1}
-          onChange={(e) => set('line1', e.target.value)}
-          {...(fields.line1 ? { error: fields.line1 } : {})}
-          required
-        />
-        <Input
-          label="Floor, unit or building"
-          hint="Optional."
-          value={form.line2 ?? ''}
-          onChange={(e) => set('line2', e.target.value)}
-        />
-        <Input
-          label="City"
-          value={form.city}
-          onChange={(e) => set('city', e.target.value)}
-          {...(fields.city ? { error: fields.city } : {})}
-          required
-        />
+        <SiteFormFields form={form} set={set} fields={fields} />
 
-        <label className="adrsel">
-          <span className="l">State</span>
-          <span className="d">
-            The state decides the tax split on the invoice, not your GSTIN.
-          </span>
-          <select value={form.stateCode} onChange={(e) => set('stateCode', e.target.value)}>
-            {STATES.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name} · {s.code}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <Input
-          label="Pincode"
-          mono
-          inputMode="numeric"
-          maxLength={6}
-          value={form.pincode}
-          onChange={(e) => set('pincode', e.target.value.replace(/\D/g, ''))}
-          {...(fields.pincode ? { error: fields.pincode } : {})}
-          required
-        />
-        <Input
-          label="Who the driver asks for"
-          value={form.contactName}
-          onChange={(e) => set('contactName', e.target.value)}
-          {...(fields.contactName ? { error: fields.contactName } : {})}
-          required
-        />
-        <Input
-          label="Their mobile"
-          mono
-          inputMode="tel"
-          hint="Indian mobile. We store it as +91XXXXXXXXXX."
-          value={form.contactMobile}
-          onChange={(e) => set('contactMobile', typeMobile(e.target.value))}
-          {...(fields.contactMobile ? { error: fields.contactMobile } : {})}
-          required
-        />
-        <Input
-          label="Landmark"
-          hint="Optional, and it is what a driver actually navigates by."
-          value={form.landmark ?? ''}
-          onChange={(e) => set('landmark', e.target.value)}
-        />
-
-        <label className="adrsel">
-          <span className="l">Gate or security instruction</span>
-          <span className="d">
-            Shown to the driver word for word. “Goods gate is at the rear, ask for security desk 2.”
-          </span>
-          <textarea
-            rows={3}
-            maxLength={300}
-            value={form.gateInstructions ?? ''}
-            onChange={(e) => set('gateInstructions', e.target.value)}
-          />
-        </label>
-
-        {/* Asked for by the spec, and there is no column. Said rather than
-            offered — a field whose value we throw away is worse than none. */}
-        <p className="adrmissing">
-          <b className="notmeasured">Receiving hours: not recorded</b>
-          <span>
-            We do not yet hold the hours a site will accept goods, so we cannot promise a driver
-            arrives inside them. Put them in the gate instruction and they reach the driver.
-          </span>
-        </p>
-
-        <Button type="submit" variant="primary" block loading={busy}>
-          Save this site
-        </Button>
+        <div className="adrform-actions">
+          <Button type="button" variant="ghost" block disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" block loading={busy}>
+            Save changes
+          </Button>
+        </div>
       </form>
-    </SidePanel>
+    </div>
   );
 }
 
@@ -531,10 +699,7 @@ function BookSkeleton(): React.JSX.Element {
   return (
     <div className="oskel">
       <Skeleton className="h-32 w-full rounded-lg" />
-      <div className="oskelrec">
-        <Skeleton className="h-96 w-full rounded-lg" />
-        <Skeleton className="h-96 w-full rounded-lg" />
-      </div>
+      <Skeleton className="h-96 w-full rounded-lg" />
     </div>
   );
 }

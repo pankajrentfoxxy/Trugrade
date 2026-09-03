@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Button,
   Checkbox,
   DataBoard,
   EmptyState,
   GradeBadge,
+  Pagination,
   StatusPill,
   type Column,
 } from '@trugrade/ui';
@@ -70,6 +71,7 @@ const STATUSES = Object.keys(STATUS_TONE);
 const PAUSABLE = new Set(['ACTIVE', 'PARTIALLY_ACTIVE']);
 
 export function VendorListingsRoute(): React.JSX.Element {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const status = params.get('status') ?? '';
   const grade = params.get('grade') ?? '';
@@ -77,12 +79,14 @@ export function VendorListingsRoute(): React.JSX.Element {
   // filter like any other, so it shows in the rail, clears with the rest, and
   // survives being sent to a colleague.
   const corrected = params.get('corrected') === '1';
+  const page = Math.max(1, Number(params.get('page') ?? '1') || 1);
+  const pageSize = 50;
 
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(new Set());
   const [reloadKey, setReloadKey] = React.useState(0);
   const [actionError, setActionError] = React.useState<string | null>(null);
 
-  const query = new URLSearchParams({ page: '1', pageSize: '50' });
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) query.set('status', status);
   if (grade) query.set('grade', grade);
   if (corrected) query.set('corrected', '1');
@@ -99,6 +103,9 @@ export function VendorListingsRoute(): React.JSX.Element {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
+    // Any filter change returns to page 1: a kept page number on a smaller
+    // result set lands on an empty board that looks like a broken filter.
+    if (key !== 'page') next.delete('page');
     setParams(next, { replace: true });
     setSelected(new Set());
   }
@@ -253,6 +260,7 @@ export function VendorListingsRoute(): React.JSX.Element {
   }
 
   const rows = data?.rows ?? [];
+  const pageCount = data ? Math.ceil(data.total / data.pageSize) : 0;
   const selectedRows = rows.filter((r) => selected.has(r.id));
   const canPause = selectedRows.some((r) => PAUSABLE.has(r.status));
   const canResume = selectedRows.some((r) => r.status === 'PAUSED');
@@ -262,9 +270,9 @@ export function VendorListingsRoute(): React.JSX.Element {
       <PageHeader
         title="Your stock"
         action={
-          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
+          <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
             List stock
-          </Link>
+          </Button>
         }
       >
         Your declared grade, our corrected grade where one exists, and the inspection clock.
@@ -365,6 +373,15 @@ export function VendorListingsRoute(): React.JSX.Element {
         }
         />
       </Board>
+
+      {data && pageCount > 1 && (
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onPage={(next) => setFilter('page', String(next))}
+          label="Listing board pages"
+        />
+      )}
     </div>
   );
 }

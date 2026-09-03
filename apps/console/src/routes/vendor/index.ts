@@ -45,7 +45,11 @@ export interface VendorRoute {
    * disabled with its reason on the record screen, the same shape T31 used for
    * answering a grade correction.
    */
-  permission: 'listing.own.read' | 'listing.own.write' | 'procurement.po.read_own';
+  permission:
+    | 'listing.own.read'
+    | 'listing.own.write'
+    | 'procurement.po.read_own'
+    | 'procurement.payable.read_own';
   element: React.ReactNode;
 }
 
@@ -154,13 +158,11 @@ export const vendorRoutes: VendorRoute[] = [
     element: guarded('procurement.po.read_own', VendorPickListRoute),
   },
   {
-    // Guarded by the permission the API actually checks. The payables screen
-    // is §3B.4's FINANCE/OWNER screen; there is no payable permission in
-    // ROLE_PERMISSIONS to gate it on, so it rides on the purchase order's read
-    // whose money it restates. Recorded in the ledger as a deviation.
+    // §3B.4 — FINANCE and OWNER only. The API checks `procurement.payable.read_own`;
+    // gating on `procurement.po.read_own` let VENDOR_ADMIN see the link and 403.
     path: '/vendor/payables',
-    permission: 'procurement.po.read_own',
-    element: guarded('procurement.po.read_own', VendorPayablesRoute),
+    permission: 'procurement.payable.read_own',
+    element: guarded('procurement.payable.read_own', VendorPayablesRoute),
   },
   {
     path: '/vendor/sku-request',

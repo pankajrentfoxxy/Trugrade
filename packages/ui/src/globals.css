@@ -499,6 +499,26 @@
     color: var(--on-chrome);
   }
 
+  /**
+   * Light theme flips `--chrome` to a pale wash for working surfaces. Rebasing
+   * the chrome band to `--storefront-chrome` keeps header/footer dark — the same
+   * contract as `storefront.css` on `.util`, `.head` and `footer`.
+   */
+  html[data-t='light'] .tg-chrome {
+    --chrome: var(--storefront-chrome);
+    --chrome-2: var(--storefront-chrome-2);
+    --chrome-3: var(--storefront-chrome-3);
+    --chrome-line: var(--storefront-chrome-line);
+    --chrome-line-2: var(--storefront-chrome-line-2);
+    --on-chrome: var(--storefront-on-chrome);
+    --on-chrome-2: var(--storefront-on-chrome-2);
+    --on-chrome-3: var(--storefront-on-chrome-3);
+  }
+
+  html[data-t='light'] .tg-chrome .tg-brandlock {
+    --ink: var(--storefront-on-chrome);
+  }
+
   .tg-cell {
     padding-block: var(--d-row);
     padding-inline: var(--d-cell);

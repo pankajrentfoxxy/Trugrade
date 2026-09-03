@@ -19,6 +19,8 @@ export interface Principal {
    * console never infers an outstanding factor from a symptom.
    */
   mfaRequired: boolean;
+  /** From `GET /auth/session` — initials on the chrome avatar. */
+  fullName?: string | null;
 }
 
 /**

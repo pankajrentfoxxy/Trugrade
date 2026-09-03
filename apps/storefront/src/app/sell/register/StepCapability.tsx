@@ -1,10 +1,20 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Checkbox, Chip, FormSection, Input } from '@trugrade/ui';
+import { Button, Checkbox, Chip, FormSection, Input, SelectTile } from '@trugrade/ui';
 import { YesNo } from '../../register/YesNo';
 import { SOURCING_CHANNELS, SUPPLY_CATEGORIES } from '../../register/picklists';
+import { SupplyCategoryIcon } from '../../register/supply-category-icons';
+import { SourcingChannelIcon } from '../../register/sourcing-channel-icons';
 import { validateCount } from '../../register/validation';
+
+/** Parenthetical note on the label row instead of a second line under the field. */
+const labelNote = (text: string, note: string): React.ReactNode => (
+  <>
+    {text}{' '}
+    <span className="text-label font-normal text-ink-3">({note})</span>
+  </>
+);
 
 /**
  * Step 4 — Capability.
@@ -79,12 +89,7 @@ const EMPTY: CapabilityValues = {
 /** `A_PLUS` → `A+`. The catalogue's code is what a draft stores. */
 export const gradeLabel = (code: string): string => code.replace('_PLUS', '+').replace(/_/g, ' ');
 
-export function readCapabilityDraft(
-  answers: Record<string, unknown>,
-  /** Step 1's brands, used only when this step has never been saved. */
-  brandsFromStepOne: readonly string[] = [],
-  otherBrandsFromStepOne = '',
-): CapabilityValues {
+export function readCapabilityDraft(answers: Record<string, unknown>): CapabilityValues {
   const str = (key: string): string =>
     typeof answers[key] === 'string' ? (answers[key] as string) : '';
   const list = (key: string): string[] =>
@@ -100,17 +105,12 @@ export function readCapabilityDraft(
       : {};
   const bool = (key: string): boolean | null =>
     typeof answers[key] === 'boolean' ? (answers[key] as boolean) : null;
-  const started = Object.keys(answers).length > 0;
 
   return {
     ...EMPTY,
     categories: list('categories'),
-    // Carried, not invented: these are the applicant's own answer from step 1,
-    // and the screen says where they came from. Once this step has a draft of
-    // its own, that draft wins — including an empty one, which is a supplier
-    // who deliberately removed a brand.
-    brands: started ? list('brands') : [...brandsFromStepOne],
-    otherBrands: started ? str('otherBrands') : otherBrandsFromStepOne,
+    brands: list('brands'),
+    otherBrands: str('otherBrands'),
     monthlyCapacity: str('monthlyCapacity'),
     gradeMix: mix,
     priceBandMin: str('priceBandMin'),
@@ -193,9 +193,6 @@ export interface StepCapabilityProps {
   brands: readonly string[];
   /** The catalogue's grades, in its own order. Empty when it did not answer. */
   grades: readonly { grade: string; customerDescription: string }[];
-  /** Step 1's answers, so the brands are not asked from scratch a second time. */
-  brandsFromStepOne: readonly string[];
-  otherBrandsFromStepOne: string;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
   onContinue: (
     values: Record<string, unknown>,
@@ -204,23 +201,21 @@ export interface StepCapabilityProps {
   busy: boolean;
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
+  skipValidation?: boolean;
 }
 
 export function StepCapability({
   answers,
   brands,
   grades,
-  brandsFromStepOne,
-  otherBrandsFromStepOne,
   onSaveDraft,
   onContinue,
   busy,
   onFieldFocus,
   blockingReason,
+  skipValidation = false,
 }: StepCapabilityProps): React.JSX.Element {
-  const [values, setValues] = React.useState<CapabilityValues>(() =>
-    readCapabilityDraft(answers, brandsFromStepOne, otherBrandsFromStepOne),
-  );
+  const [values, setValues] = React.useState<CapabilityValues>(() => readCapabilityDraft(answers));
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const gradeCodes = React.useMemo(() => grades.map((g) => g.grade), [grades]);
@@ -271,6 +266,11 @@ export function StepCapability({
     if (v.categories.length === 0)
       found.categories =
         'Pick at least one category. This is what decides which stock enquiries reach you.';
+
+    const namedBrands = v.brands.length + (v.otherBrands.trim().length > 0 ? 1 : 0);
+    if (namedBrands === 0)
+      found.brands =
+        'Tell us at least one brand you deal in — pick from the list, or type the others in the box below.';
 
     const capacity = validateCount(v.monthlyCapacity, CAPACITY_RULE);
     if (capacity) found.monthlyCapacity = capacity;
@@ -331,7 +331,7 @@ export function StepCapability({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    const found = check(values);
+    const found = skipValidation ? {} : check(values);
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;
@@ -387,30 +387,29 @@ export function StepCapability({
       {/* ------------------------------------------------------- categories */}
       <FormSection
         title="What you supply"
-        description="Pick every category you regularly hold. It is a routing hint, not a restriction — you can list anything you actually have."
         status={
-          <>
+          <span className="normal-case tracking-normal text-acc-ink">
             <span className="tnum">{values.categories.length}</span> of{' '}
-            <span className="tnum">{SUPPLY_CATEGORIES.length}</span> categories
-          </>
+            <span className="tnum">{SUPPLY_CATEGORIES.length}</span> selected
+          </span>
         }
       >
         <div
           role="group"
           aria-label="Categories you supply"
           aria-describedby={errors.categories ? 'categories-error' : undefined}
-          className="flex flex-col gap-2"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
           onFocus={() => onFieldFocus('Capability')}
         >
           {SUPPLY_CATEGORIES.map((category) => (
-            <div key={category.code} className="flex flex-wrap items-baseline gap-3">
-              <Chip
-                label={category.label}
-                selected={values.categories.includes(category.code)}
-                onToggle={() => toggleIn('categories', category.code)}
-              />
-              <span className="text-body-sm text-ink-3">{category.note}</span>
-            </div>
+            <SelectTile
+              key={category.code}
+              label={category.label}
+              description={category.note}
+              icon={<SupplyCategoryIcon code={category.code} />}
+              selected={values.categories.includes(category.code)}
+              onToggle={() => toggleIn('categories', category.code)}
+            />
           ))}
         </div>
         {errors.categories && (
@@ -423,7 +422,6 @@ export function StepCapability({
       {/* ----------------------------------------------------------- brands */}
       <FormSection
         title="Brands you deal in"
-        description="Carried over from what you told us on step 1. Change it here if it is not right — this is the copy that routes enquiries."
         status={
           <>
             <span className="tnum">{namedBrands}</span> {namedBrands === 1 ? 'brand' : 'brands'}{' '}
@@ -436,6 +434,7 @@ export function StepCapability({
             className="flex flex-wrap gap-2"
             role="group"
             aria-label="Brands you deal in"
+            aria-describedby={errors.brands ? 'brands-error' : undefined}
             onFocus={() => onFieldFocus('Capability')}
           >
             {brands.map((brand) => (
@@ -466,21 +465,28 @@ export function StepCapability({
             match them up.
           </p>
         )}
+        {errors.brands && (
+          <p id="brands-error" role="alert" className="text-body-sm text-fail">
+            {errors.brands}
+          </p>
+        )}
         <Input
-          label="Any other brands"
-          hint="Optional. Comma-separated — anything not in the list above."
+          label={labelNote(
+            'Any other brands (optional)',
+            'Comma-separated — anything not in the list above.',
+          )}
           value={values.otherBrands}
           onFocus={() => onFieldFocus('Capability')}
           onBlur={saveOnBlur}
-          onChange={(e) => set('otherBrands', e.target.value)}
+          onChange={(e) => {
+            set('otherBrands', e.target.value);
+            setErrors(({ brands: _dropped, ...rest }) => rest);
+          }}
         />
       </FormSection>
 
       {/* --------------------------------------------------- volume and mix */}
-      <FormSection
-        title="How much, and of what quality"
-        description="The capacity sizes the enquiries we send you. The grade mix is what a buyer sees before they ever see a specific machine."
-      >
+      <FormSection title="How much, and of what quality">
         <Input
           label="Laptops you can supply in a month"
           mono
@@ -513,26 +519,38 @@ export function StepCapability({
               your stock yet. Your reviewer will pick this up.
             </p>
           ) : (
-            grades.map((grade) => (
-              <div key={grade.grade} className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-start">
-                <Input
-                  // Grades are neutral: A+, A and B are all sellable, and
-                  // nothing here is coloured by which one it is.
-                  label={`Grade ${gradeLabel(grade.grade)}`}
-                  mono
-                  inputMode="numeric"
-                  maxLength={3}
-                  value={values.gradeMix[grade.grade] ?? ''}
-                  onFocus={() => onFieldFocus('Grade mix')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => setGrade(grade.grade, e.target.value)}
-                />
-                <p className="text-body-sm text-ink-2 sm:pt-8">
-                  {shareOf(grade.grade)}{' '}
-                  <span className="text-ink-3">{grade.customerDescription}</span>
-                </p>
-              </div>
-            ))
+            grades.map((grade) => {
+              const inputId = `grade-mix-${grade.grade}`;
+              return (
+                <div
+                  key={grade.grade}
+                  className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-4 sm:gap-y-2"
+                >
+                  <label
+                    htmlFor={inputId}
+                    className="text-body-sm font-medium text-ink-2 sm:col-start-1 sm:row-start-1"
+                  >
+                    Grade {gradeLabel(grade.grade)}
+                  </label>
+                  <input
+                    id={inputId}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={3}
+                    autoComplete="off"
+                    value={values.gradeMix[grade.grade] ?? ''}
+                    onFocus={() => onFieldFocus('Grade mix')}
+                    onBlur={saveOnBlur}
+                    onChange={(e) => setGrade(grade.grade, e.target.value)}
+                    className="h-11 w-full rounded border border-rule bg-sheet px-4 font-mono text-body-sm tnum text-ink placeholder:text-ink-3 transition-colors sm:col-start-1 sm:row-start-2"
+                  />
+                  <p className="text-label leading-relaxed text-ink-3 sm:col-start-2 sm:row-start-2 sm:self-center">
+                    {shareOf(grade.grade)}{' '}
+                    <span className="text-ink-4">{grade.customerDescription}</span>
+                  </p>
+                </div>
+              );
+            })
           )}
           {grades.length > 0 && (
             <p id="grade-mix-total" className="text-body-sm text-ink-2">
@@ -560,10 +578,12 @@ export function StepCapability({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
-            label="Typical price, lowest"
+            label={labelNote(
+              'Typical price, lowest (optional)',
+              'Whole rupees per machine, as you would sell it to us.',
+            )}
             mono
             inputMode="numeric"
-            hint="Optional. Whole rupees per machine, as you would sell it to us."
             value={values.priceBandMin}
             onFocus={() => onFieldFocus('Capability')}
             onBlur={saveOnBlur}
@@ -571,10 +591,12 @@ export function StepCapability({
             error={errors.priceBandMin}
           />
           <Input
-            label="Typical price, highest"
+            label={labelNote(
+              'Typical price, highest (optional)',
+              'The top of the band, not your best-ever sale.',
+            )}
             mono
             inputMode="numeric"
-            hint="Optional. The top of the band, not your best-ever sale."
             value={values.priceBandMax}
             onFocus={() => onFieldFocus('Capability')}
             onBlur={saveOnBlur}
@@ -590,28 +612,30 @@ export function StepCapability({
       {/* --------------------------------------------------------- sourcing */}
       <FormSection
         title="Where your stock comes from"
-        description="Tick every channel you actually use. A corporate buy-back arrives with an asset register and a wipe obligation; an auction lot arrives with neither, and we underwrite the two differently."
+        description="Select all sources that apply to your stock"
         status={
-          <>
+          <span className="normal-case tracking-normal text-acc-ink">
             <span className="tnum">{values.sourcingChannels.length}</span> of{' '}
-            <span className="tnum">{SOURCING_CHANNELS.length}</span> ticked
-          </>
+            <span className="tnum">{SOURCING_CHANNELS.length}</span> selected
+          </span>
         }
       >
         <div
           role="group"
           aria-label="Sourcing channels"
           aria-describedby={errors.sourcingChannels ? 'sourcing-error' : undefined}
-          className="flex flex-col gap-3"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
           onFocus={() => onFieldFocus('Capability')}
         >
           {SOURCING_CHANNELS.map((channel) => (
-            <Checkbox
+            <SelectTile
               key={channel.code}
               label={channel.label}
-              consequence={channel.note}
-              checked={values.sourcingChannels.includes(channel.code)}
-              onChange={() => toggleIn('sourcingChannels', channel.code)}
+              description={channel.note}
+              icon={<SourcingChannelIcon code={channel.code} />}
+              indicator="checkbox"
+              selected={values.sourcingChannels.includes(channel.code)}
+              onToggle={() => toggleIn('sourcingChannels', channel.code)}
             />
           ))}
         </div>
@@ -623,19 +647,20 @@ export function StepCapability({
       </FormSection>
 
       {/* -------------------------------------------------------- what you do */}
-      <FormSection
-        title="What you do to a machine before it ships"
-        description="None of these is required to sell with us. What they change is how much of our own QC a unit needs and how fast it can be listed."
-      >
+      <FormSection title="What you do to a machine before it ships">
         <Checkbox
-          label="We test in-house"
-          consequence="Battery, keyboard, display and ports checked before the machine is offered. Our own QC still runs — this decides how much of it."
+          label={labelNote(
+            'We test in-house',
+            'Battery, keyboard, display and ports checked before the machine is offered. Our own QC still runs — this decides how much of it.',
+          )}
           checked={values.hasInhouseTesting}
           onChange={(v) => setAndSave('hasInhouseTesting', v)}
         />
         <Checkbox
-          label="We repair in-house"
-          consequence="Screens, keyboards and batteries replaced on site rather than sent out. It is what lets us route a repairable unit back to you instead of grading it down."
+          label={labelNote(
+            'We repair in-house',
+            'Screens, keyboards and batteries replaced on site rather than sent out. It is what lets us route a repairable unit back to you instead of grading it down.',
+          )}
           checked={values.hasInhouseRepair}
           onChange={(v) => setAndSave('hasInhouseRepair', v)}
         />
@@ -670,10 +695,7 @@ export function StepCapability({
       </FormSection>
 
       {/* -------------------------------------------------------- dropship */}
-      <FormSection
-        title="Dispatching direct to the customer"
-        description="We are the seller on the invoice, but we never hold the goods: when a customer orders, we buy that machine from you and it travels from your dock to theirs. This one answer decides whether that works."
-      >
+      <FormSection title="Dispatching direct to the customer">
         <YesNo
           legend="Can you dispatch directly to our customer?"
           name="can-dropship"

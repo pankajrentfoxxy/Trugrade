@@ -31,6 +31,7 @@ import {
   type AddUnitsOutcome,
   type VendorImageView,
   type VendorListingView,
+  type VendorUnitMovementView,
   type VendorUnitView,
 } from './listing.service';
 import type { ListingStatus, Page } from './internal/listing.repository';
@@ -380,6 +381,15 @@ export class ListingController {
   @RequirePermissions('listing.own.read')
   listUnits(@Param('id', new ZodValidationPipe(uuidSchema)) id: string): Promise<VendorUnitView[]> {
     return this.listings.listUnits(id);
+  }
+
+  @Get(':id/units/:unitId/movements')
+  @RequirePermissions('listing.own.read')
+  listUnitMovements(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('unitId', new ZodValidationPipe(uuidSchema)) unitId: string,
+  ): Promise<VendorUnitMovementView[]> {
+    return this.listings.listUnitMovements(id, unitId);
   }
 
   @Delete(':id/units/:unitId')

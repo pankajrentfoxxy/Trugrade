@@ -229,7 +229,22 @@ describe('no vendor screen shows the retail price', () => {
   });
 
   it('the per-unit lifecycle does not', async () => {
-    mockApi([[/listings\/l1\/units/, [UNIT]]]);
+    mockApi([
+      [
+        /listings\/l1\/units\/u1\/movements/,
+        [
+          {
+            at: '2026-09-03T10:16:01.874Z',
+            fromStatus: 'CREATED',
+            toStatus: 'AWAITING_QC',
+            fromLocation: 'VENDOR',
+            toLocation: 'VENDOR',
+            reason: 'Vendor submitted the listing; inspection requested.',
+          },
+        ],
+      ],
+      [/listings\/l1\/units/, [UNIT]],
+    ]);
     const { container } = render(
       <MemoryRouter initialEntries={['/vendor/listings/l1/units/u1']}>
         <Routes>

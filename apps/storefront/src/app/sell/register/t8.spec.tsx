@@ -34,8 +34,6 @@ function renderCapability(overrides: Partial<React.ComponentProps<typeof StepCap
       answers={{}}
       brands={['Dell', 'HP', 'Lenovo']}
       grades={GRADES}
-      brandsFromStepOne={[]}
-      otherBrandsFromStepOne=""
       onSaveDraft={noop}
       onContinue={accept}
       busy={false}
@@ -61,22 +59,17 @@ function renderFacility(overrides: Partial<React.ComponentProps<typeof StepFacil
 /* ============================================== r.4(9): nothing is pre-ticked */
 
 describe('nothing arrives ticked', () => {
-  it.each([
-    ['step 4', renderCapability],
-    ['step 5', renderFacility],
-  ])('%s renders no checkbox and no radio in a chosen state', (_label, mount) => {
-    const { container, unmount } = mount();
+  it('step 4 renders no checkbox, radio, chip, or SelectTile in a chosen state', () => {
+    const { container, unmount } = renderCapability();
 
     const checkboxes = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
     );
-    // Not a vacuous pass: both steps are full of them, and a step that
-    // rendered none would be a step that stopped asking.
-    expect(checkboxes.length).toBeGreaterThan(3);
+    // In-house test/repair only — sourcing channels use SelectTile with a
+    // checkbox-style indicator, not native inputs.
+    expect(checkboxes).toHaveLength(2);
     for (const box of checkboxes) {
       expect(box).not.toBeChecked();
-      // `defaultChecked` is the attribute an uncontrolled box would carry, and
-      // it is how a pre-ticked consent ships by accident.
       expect(box).not.toHaveAttribute('checked');
     }
 
@@ -84,8 +77,28 @@ describe('nothing arrives ticked', () => {
     expect(radios.length).toBeGreaterThan(1);
     for (const radio of radios) expect(radio).not.toBeChecked();
 
-    // Every toggle chip is a button with `aria-pressed`, and none is pressed.
-    // Step 5 has no chips at all, which is why this is a query and not a get.
+    // Categories, sourcing, and brand chips are all `aria-pressed` toggles.
+    expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+
+    unmount();
+  });
+
+  it('step 5 renders no checkbox and no radio in a chosen state', () => {
+    const { container, unmount } = renderFacility();
+
+    const checkboxes = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    );
+    expect(checkboxes.length).toBeGreaterThan(3);
+    for (const box of checkboxes) {
+      expect(box).not.toBeChecked();
+      expect(box).not.toHaveAttribute('checked');
+    }
+
+    const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+    expect(radios.length).toBeGreaterThan(1);
+    for (const radio of radios) expect(radio).not.toBeChecked();
+
     expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
 
     unmount();
@@ -101,13 +114,14 @@ describe('can_dropship', () => {
 
     // Everything else on the step, answered properly.
     fireEvent.click(screen.getByRole('button', { name: /Business laptops/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dell' }));
     fireEvent.change(screen.getByLabelText(/Laptops you can supply in a month/), {
       target: { value: '300' },
     });
     fireEvent.change(screen.getByLabelText('Grade A+'), { target: { value: '50' } });
     fireEvent.change(screen.getByLabelText('Grade A'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Grade B'), { target: { value: '20' } });
-    fireEvent.click(screen.getByLabelText(/Corporate buy-back/));
+    fireEvent.click(screen.getByRole('button', { name: /Corporate buy-back/i }));
     fireEvent.click(screen.getByLabelText(/we can send serials with the offer/i));
     fireEvent.change(screen.getByLabelText(/Lead time, in days/), { target: { value: '2' } });
 

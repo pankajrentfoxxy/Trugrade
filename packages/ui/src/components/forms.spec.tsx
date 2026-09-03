@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
-import { Checkbox, Chip, OtpInput, Uploader, formatFileSize, type UploadedFile } from './forms';
+import { Checkbox, Chip, OtpInput, SelectTile, Uploader, formatFileSize, type UploadedFile } from './forms';
 
 const stripComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -63,6 +63,24 @@ describe('Chip', () => {
       </>,
     );
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('SelectTile', () => {
+  it('is a toggle card carrying aria-pressed', async () => {
+    const onToggle = jest.fn();
+    render(
+      <SelectTile
+        label="Business laptops"
+        description="ThinkPad, Latitude, EliteBook and the like"
+        selected={false}
+        onToggle={onToggle}
+      />,
+    );
+    const tile = screen.getByRole('button', { name: /Business laptops/ });
+    expect(tile).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(tile);
+    expect(onToggle).toHaveBeenCalled();
   });
 });
 

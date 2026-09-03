@@ -86,6 +86,7 @@ export function MfaChallenge({
   };
 
   const resend = async (): Promise<void> => {
+    if (cooldown > 0 || busy) return;
     setError(undefined);
     const result = await onResend();
     if ('error' in result) {

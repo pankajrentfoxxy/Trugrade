@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Button, EmptyState, StepRail, WhyRail, type Step, type WhyRailItem } from '@trugrade/ui';
+import { Button, EmptyState, WhyRail, type Step, type WhyRailItem } from '@trugrade/ui';
 import { PageHeader } from '../../../lib/controls';
 import { API, postJson, rupees, type MoneyString, type VendorListing } from '../api';
 import { useDraft, type WizardDraft } from './draft';
@@ -8,6 +8,7 @@ import { StepMachine } from './StepMachine';
 import { StepCondition } from './StepCondition';
 import { StepSerials } from './StepSerials';
 import { StepPrice } from './StepPrice';
+import { WizardProgress, WizardStepHeader } from './WizardChrome';
 
 /**
  * ARCHETYPE D — Flow. Step rail + one step + a "why we ask" rail.
@@ -300,32 +301,8 @@ export function ListingWizardRoute(): React.JSX.Element {
   });
 
   return (
-    <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_280px]">
-      <div className="order-2 lg:order-1">
-        {/* Clicking a completed step is a jump inside one page, not a route, so
-            the rail's hrefs are anchors and the handler does the move. */}
-        <div
-          onClick={(e) => {
-            const anchor = (e.target as HTMLElement).closest('a[href^="#step-"]');
-            if (!anchor) return;
-            e.preventDefault();
-            const n = Number(anchor.getAttribute('href')?.replace('#step-', ''));
-            if (n >= 1 && n <= 4) patch({ step: n as WizardDraft['step'] });
-          }}
-        >
-          {/* The draft is written to `sessionStorage` on every patch, so "saved"
-              is a fact rather than a promise — but only once there is something
-              in it. An empty draft gets the rail's own "nothing saved yet",
-              which is the truth. */}
-          <StepRail
-            label="List stock"
-            steps={steps}
-            {...(draftStarted(draft) ? { savedAt: 'in this browser' } : {})}
-          />
-        </div>
-      </div>
-
-      <div className="order-1 lg:order-2">
+    <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_200px]">
+      <div>
         <PageHeader title="List stock">
           {/* The pivot of the whole model, said before the first field rather
               than after the last button: submitting requests an inspection. */}
@@ -333,18 +310,28 @@ export function ListingWizardRoute(): React.JSX.Element {
           machines go live only after they have been inspected and sealed.
         </PageHeader>
 
-      <div className="mt-7">
-        {draft.step === 1 && <StepMachine draft={draft} patch={patch} />}
-        {draft.step === 2 && <StepCondition draft={draft} patch={patch} />}
-        {draft.step === 3 && (
-          <StepSerials
-            serialText={draft.serialText}
-            brandName={draft.sku?.brandName}
-            onChange={(serialText, serials) => patch({ serialText, serials })}
+        <div className="mt-7">
+          <WizardStepHeader step={draft.step} />
+          <WizardProgress
+            steps={steps}
+            onStepClick={(n) => patch({ step: n as WizardDraft['step'] })}
           />
-        )}
-        {draft.step === 4 && <StepPrice draft={draft} patch={patch} />}
-      </div>
+          {draftStarted(draft) ? (
+            <p className="mt-3 text-body-sm text-ink-3">Draft saved in this browser.</p>
+          ) : null}
+
+          <div className="mt-6">
+            {draft.step === 1 && <StepMachine draft={draft} patch={patch} />}
+            {draft.step === 2 && <StepCondition draft={draft} patch={patch} />}
+            {draft.step === 3 && (
+              <StepSerials
+                serialText={draft.serialText}
+                brandName={draft.sku?.brandName}
+                onChange={(serialText, serials) => patch({ serialText, serials })}
+              />
+            )}
+            {draft.step === 4 && <StepPrice draft={draft} patch={patch} />}
+          </div>
 
       {result?.outcome === 'DECISION_REQUIRED' && (
         // Not a rejection. A vendor with eighteen machines who is silently
@@ -422,13 +409,11 @@ export function ListingWizardRoute(): React.JSX.Element {
           Discard this draft
         </Button>
       </div>
+        </div>
       </div>
 
-      {/* Below the step on anything under 1280px rather than squeezed beside it:
-          at 280px the explanations are three words a line, and a rail nobody can
-          read is worse than one that has moved. */}
-      <div className="order-3 lg:col-span-2 xl:col-span-1">
-        <WhyRail items={WHY[draft.step]} />
+      <div>
+        <WhyRail items={WHY[draft.step]} compact className="wizard-why" />
       </div>
     </div>
   );

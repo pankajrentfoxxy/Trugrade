@@ -1,14 +1,8 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { BRAND } from '@trugrade/config/brand';
-import {
-  Button,
-  Input,
-  Logo,
-  MfaChallenge,
-  RateLimitNotice,
-  StatusPill,
-} from '@trugrade/ui';
+import { Button, Input, MfaChallenge, RateLimitNotice, StatusPill } from '@trugrade/ui';
+import { AuthShell } from '../AuthShell';
 import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/auth';
 
 /**
@@ -43,6 +37,8 @@ import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/aut
 /** Where a supplier's application actually lives. The console does not host it. */
 const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? 'http://localhost:3000';
 
+const SIGN_IN_LEDE = `${BRAND.name} staff and suppliers. Buyers sign in on the shop.`;
+
 /** `org_status` values in which the application is with us rather than with them. */
 const WITH_US = ['KYC_SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED'];
 
@@ -69,6 +65,25 @@ const formatWhen = (iso: string): string =>
     hour: '2-digit',
     minute: '2-digit',
   });
+
+function applicationCopy(state: ApplicationState): { title: string; lede: string } {
+  if (state.status === 'REJECTED') {
+    return {
+      title: 'This account was not approved',
+      lede: 'The reviewer’s reason is below, exactly as they wrote it.',
+    };
+  }
+  if (WITH_US.includes(state.status)) {
+    return {
+      title: 'You are signed in. Your application is still with our team.',
+      lede: 'Nothing more is needed from you right now.',
+    };
+  }
+  return {
+    title: 'Your application is not finished',
+    lede: 'There are steps still to fill in. Nothing you have already typed has been lost.',
+  };
+}
 
 export function LoginRoute(): React.JSX.Element {
   const { signIn, requestMfaCode, verifyMfa, principal } = useAuth();
@@ -102,6 +117,20 @@ export function LoginRoute(): React.JSX.Element {
     }
   }, [principal, stage.k, navigate]);
 
+  /** Archetype F: one screen, no document scroll behind the form. */
+  React.useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, []);
+
   const refuse = (failure: AuthFailure): void => {
     setBusy(false);
     if (failure.code === 'RATE_LIMITED') {
@@ -110,9 +139,6 @@ export function LoginRoute(): React.JSX.Element {
       return;
     }
     setWait(null);
-    // 403 is the organisation, not the credentials: suspended, blacklisted,
-    // deactivated, or an account somebody has turned off. The server's sentence
-    // says which, and it is shown as written.
     if (failure.status === 403) {
       setStage({ k: 'refused', message: failure.message });
       return;
@@ -120,16 +146,6 @@ export function LoginRoute(): React.JSX.Element {
     setError(failure.message);
   };
 
-  /**
-   * Signing in is not the same as being able to work.
-   *
-   * A supplier whose KYC is still with a reviewer holds a perfectly valid
-   * session and a console full of screens that will refuse them. Asking for the
-   * application state costs one call and turns that into a sentence.
-   * `GET /onboarding/steps` is open only to the owner and admin roles, so a
-   * refusal means this person does not own the application — which is itself the
-   * answer, and the console is the right place for them.
-   */
   const afterSignIn = async (session: Principal): Promise<void> => {
     if (session.orgType === 'PLATFORM') {
       void navigate('/', { replace: true });
@@ -190,141 +206,120 @@ export function LoginRoute(): React.JSX.Element {
     </>
   );
 
+  const shell =
+    stage.k === 'refused'
+      ? {
+          title: 'We cannot sign you in',
+          lede: 'This account cannot be used to sign in right now.',
+          wide: false as const,
+        }
+      : stage.k === 'application'
+        ? { ...applicationCopy(stage.state), wide: true as const }
+        : { title: 'Sign in', lede: SIGN_IN_LEDE, wide: false as const };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ground px-5 py-11">
-      <div className="tg-card w-full max-w-xl rounded-lg border border-rule bg-sheet">
-        <Logo />
-
-        {stage.k === 'refused' ? (
-          <div className="flex flex-col gap-4" data-testid="login-suspended">
-            <h1 className="mt-6 text-h1 text-ink">We cannot sign you in</h1>
-            <StatusPill className="self-start" tone="fail" label="Account closed to sign-in" />
-            {/* Verbatim. Only the server knows whether this is the organisation
-                or the individual account, and paraphrasing loses the sentence
-                that says who to contact. */}
-            <p className="text-body text-ink">{stage.message}</p>
-            <p className="text-body-sm text-ink-3">
-              Nothing on the account was changed by this attempt.
-            </p>
-            <div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setError(null);
-                  setStage({ k: 'password' });
-                }}
-              >
-                Try a different account
-              </Button>
-            </div>
+    <AuthShell brandHref={STOREFRONT_URL} {...shell}>
+      {stage.k === 'refused' ? (
+        <div className="flex flex-col gap-3" data-testid="login-suspended">
+          <StatusPill className="self-start" tone="fail" label="Account closed to sign-in" />
+          <p className="text-body text-ink">{stage.message}</p>
+          <p className="text-body-sm text-ink-3">
+            Nothing on the account was changed by this attempt.
+          </p>
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setError(null);
+                setStage({ k: 'password' });
+              }}
+            >
+              Try a different account
+            </Button>
           </div>
-        ) : stage.k === 'application' ? (
-          <ApplicationPanel state={stage.state} />
-        ) : stage.k === 'mfa' ? (
-          <div className="mt-6 flex flex-col gap-5">
-            {notices}
-            <MfaChallenge
-              sentTo={stage.sentTo}
-              pillLabel="Second factor"
-              heading="One more code before you are in"
-              reason="This account can change where money is sent, so it needs a second factor every time — not only today."
-              className="border-0 bg-transparent p-0"
-              onVerify={async (code) => {
-                const result = await verifyMfa(code);
-                if (isFailure(result)) {
-                  if (result.code === 'RATE_LIMITED') {
-                    refuse(result);
-                    return undefined;
-                  }
-                  return result.message;
+        </div>
+      ) : stage.k === 'application' ? (
+        <ApplicationPanel state={stage.state} />
+      ) : stage.k === 'mfa' ? (
+        <div className="flex flex-col gap-4">
+          {notices}
+          <MfaChallenge
+            sentTo={stage.sentTo}
+            pillLabel="Second factor"
+            heading="One more code before you are in"
+            reason="This account can change where money is sent, so it needs a second factor every time — not only today."
+            className="border-0 bg-transparent p-0"
+            onVerify={async (code) => {
+              const result = await verifyMfa(code);
+              if (isFailure(result)) {
+                if (result.code === 'RATE_LIMITED') {
+                  refuse(result);
+                  return undefined;
                 }
-                await afterSignIn(result);
-                return undefined;
-              }}
-              onResend={async () => {
-                const sent = await requestMfaCode();
-                return isFailure(sent) ? { error: sent.message } : { sentTo: sent.sentTo };
-              }}
-            />
-          </div>
-        ) : (
-          <>
-            <h1 className="mt-6 text-h1 text-ink">Sign in</h1>
-            <p className="mt-2 text-body-sm text-ink-2">
-              {BRAND.name} staff and suppliers. Buyers sign in on the shop.
-            </p>
-
-            <form onSubmit={(e) => void onSubmit(e)} className="mt-6 flex flex-col gap-5">
-              {notices}
-              <Input label="Work email" name="email" type="email" required autoComplete="username" />
-              <Input
-                label="Password"
-                name="password"
-                type="password"
-                required
-                autoComplete="current-password"
-              />
-              {/* The one amber control on the screen. */}
-              <Button
-                type="submit"
-                variant="primary"
-                block
-                loading={busy}
-                {...(wait
-                  ? { disabledReason: 'Too many attempts. The wait above has to run out first.' }
-                  : {})}
+                return result.message;
+              }
+              await afterSignIn(result);
+              return undefined;
+            }}
+            onResend={async () => {
+              const sent = await requestMfaCode();
+              return isFailure(sent) ? { error: sent.message } : { sentTo: sent.sentTo };
+            }}
+          />
+        </div>
+      ) : (
+        <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+          {notices}
+          <Input label="Work email" name="email" type="email" required autoComplete="username" />
+          <Input
+            label="Password"
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            block
+            loading={busy}
+            {...(wait
+              ? { disabledReason: 'Too many attempts. The wait above has to run out first.' }
+              : {})}
+          >
+            Sign in
+          </Button>
+          <div className="flex flex-col gap-1 border-t border-rule-2 pt-3">
+            <a
+              className="text-body-sm text-acc-ink underline underline-offset-4"
+              href={`${STOREFRONT_URL}/forgot-password`}
+            >
+              Forgotten your password?
+            </a>
+            <p className="text-body-sm text-ink-3">
+              Applying to supply?{' '}
+              <a
+                className="text-acc-ink underline underline-offset-4"
+                href={`${STOREFRONT_URL}/sell/register`}
               >
-                Sign in
-              </Button>
-              <div className="flex flex-col gap-2 border-t border-rule-2 pt-4">
-                <a
-                  className="text-body-sm text-acc-ink underline underline-offset-4"
-                  href={`${STOREFRONT_URL}/forgot-password`}
-                >
-                  Forgotten your password?
-                </a>
-                <p className="text-body-sm text-ink-3">
-                  Applying to supply?{' '}
-                  <a
-                    className="text-acc-ink underline underline-offset-4"
-                    href={`${STOREFRONT_URL}/sell/register`}
-                  >
-                    Start an application
-                  </a>
-                  .
-                </p>
-              </div>
-            </form>
-          </>
-        )}
-      </div>
-    </div>
+                Start an application
+              </a>
+              .
+            </p>
+          </div>
+        </form>
+      )}
+    </AuthShell>
   );
 }
 
-/**
- * Signed in, and the organisation is not open for business yet.
- *
- * The application itself lives on the storefront — that is where every step was
- * filled in and where the review screen is — so this says where it stands and
- * hands them back to it rather than rebuilding a seven-step flow in the console.
- * A refusal prints the reviewer's own sentence, which `KycService.decide`
- * refuses to record without precisely because the applicant reads it.
- */
 function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Element {
   const rejected = state.status === 'REJECTED';
   const pending = WITH_US.includes(state.status);
 
   return (
-    <div className="flex flex-col gap-4" data-testid="login-application">
-      <h1 className="mt-6 text-h1 text-ink">
-        {rejected
-          ? 'This account was not approved'
-          : pending
-            ? 'You are signed in. Your application is still with our team.'
-            : 'Your application is not finished'}
-      </h1>
+    <div className="flex flex-col gap-3" data-testid="login-application">
       <StatusPill
         className="self-start"
         tone={rejected ? 'fail' : pending ? 'info' : 'warn'}
@@ -333,10 +328,10 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
 
       <p className="text-body text-ink-2">
         {rejected
-          ? 'The reviewer’s reason is below, exactly as they wrote it. If you believe it is wrong, reply to the email we sent and a person will look again.'
+          ? 'If you believe it is wrong, reply to the email we sent and a person will look again.'
           : pending
-            ? 'Nothing more is needed from you right now. Listing, pricing and payouts open the moment it is approved.'
-            : 'There are steps still to fill in. Nothing you have already typed has been lost.'}
+            ? 'Listing, pricing and payouts open the moment it is approved.'
+            : 'Open your application on the storefront to continue where you left off.'}
       </p>
 
       {state.decision && state.decision.decision !== 'APPROVE' && (
@@ -371,7 +366,6 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
               {state.slaDueAt ? (
                 formatWhen(state.slaDueAt)
               ) : (
-                // A promise we did not record is not a promise we can show.
                 <span className="text-ink-4">Not recorded</span>
               )}
             </dd>

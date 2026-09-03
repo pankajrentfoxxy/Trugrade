@@ -76,7 +76,8 @@ const inbox = (rows: ApprovalRow[]): ApprovalInbox => ({
   per: 10,
   pages: 1,
   facets: [
-    { value: 'waiting', label: 'Waiting on you', count: rows.length },
+    { value: 'held', label: 'Held for approval', count: rows.length },
+    { value: 'waiting', label: 'Waiting on you', count: rows.filter((r) => r.decidable).length },
     { value: 'decided', label: 'Decided', count: 0 },
     { value: 'all', label: 'Everything', count: rows.length },
   ],

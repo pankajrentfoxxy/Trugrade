@@ -36,12 +36,22 @@ const PER_PAGE = [10, 25, 50] as const;
  * result. Expired is neutral too, and the row says in words that nothing was
  * charged, because a deadline that passed is not a decision anybody took.
  */
-const PILL: Record<ApprovalRow['status'], { tone: 'pass' | 'fail' | 'neutral'; label: string }> = {
+const PILL: Record<
+  ApprovalRow['status'],
+  { tone: 'pass' | 'fail' | 'neutral'; label: string }
+> = {
   PENDING: { tone: 'neutral', label: 'Waiting on you' },
   APPROVED: { tone: 'pass', label: 'Approved' },
   REJECTED: { tone: 'fail', label: 'Declined' },
   EXPIRED: { tone: 'neutral', label: 'Window closed' },
 };
+
+function statusLabel(a: ApprovalRow, boardStatus: string): string {
+  if (a.status === 'PENDING' && boardStatus === 'held' && !a.decidable) {
+    return 'Held for approval';
+  }
+  return PILL[a.status].label;
+}
 
 type Phase =
   | { k: 'loading' }
@@ -109,7 +119,7 @@ export function ApprovalsBoard({ query }: { query: string }): React.JSX.Element 
   if (phase.k === 'error') return <Failed message={phase.message} />;
 
   const inbox = phase.k === 'ready' ? phase.inbox : null;
-  const status = params.get('status') ?? 'waiting';
+  const status = params.get('status') ?? 'held';
   const applied = [...params.entries()].filter(([k, v]) => !NOT_A_FILTER.has(k) && v !== '');
 
   return (
@@ -118,16 +128,20 @@ export function ApprovalsBoard({ query }: { query: string }): React.JSX.Element 
         {/* The heading follows the filter. "Orders waiting on you" over a board
             of settled ones is a false statement about somebody's money. */}
         <h1>
-          {status === 'waiting'
-            ? 'Orders waiting on you'
-            : status === 'decided'
-              ? 'Orders you have decided'
-              : 'Every order sent to you'}
+          {status === 'held'
+            ? 'Orders held for approval'
+            : status === 'waiting'
+              ? 'Orders waiting on you'
+              : status === 'decided'
+                ? 'Orders you have decided'
+                : 'Every order sent to you'}
         </h1>
         <p>
-          {status === 'waiting'
-            ? 'Each of these is an order somebody at your organisation has raised, with the machines already held off sale, waiting for you to say yes. Nothing has been charged and no order has been placed with a supply point until you do.'
-            : 'Every approval addressed to you, settled or not. A decision is kept after it is taken, with the reason you gave, because it is the record of who committed the spend.'}
+          {status === 'held'
+            ? 'Each of these is an order your organisation has raised, with the machines already held off sale, waiting for the named approver to sign off. Nothing has been charged and no order has been placed with a supply point until they do.'
+            : status === 'waiting'
+              ? 'Each of these is an order somebody at your organisation has raised, with the machines already held off sale, waiting for you to say yes. Nothing has been charged and no order has been placed with a supply point until you do.'
+              : 'Every approval addressed to you, settled or not. A decision is kept after it is taken, with the reason you gave, because it is the record of who committed the spend.'}
         </p>
       </div>
 
@@ -152,7 +166,11 @@ export function ApprovalsBoard({ query }: { query: string }): React.JSX.Element 
                   {status !== 'all' && (
                     <>
                       {' '}
-                      {status === 'waiting' ? 'still waiting on you' : 'already decided'}
+                      {status === 'held'
+                        ? 'held for approval'
+                        : status === 'waiting'
+                          ? 'still waiting on you'
+                          : 'already decided'}
                     </>
                   )}
                 </>
@@ -174,10 +192,12 @@ export function ApprovalsBoard({ query }: { query: string }): React.JSX.Element 
               <DataBoard
                 caption={
                   inbox === null
-                    ? 'Loading the approvals addressed to you.'
+                    ? status === 'held'
+                      ? 'Loading what your organisation has held for approval.'
+                      : 'Loading the approvals addressed to you.'
                     : `${inbox.approvals.length} approval${inbox.approvals.length === 1 ? '' : 's'} on this page of ${inbox.total}, soonest deadline first.`
                 }
-                columns={COLUMNS}
+                columns={columnsFor(status)}
                 rows={inbox?.approvals ?? []}
                 rowKey={(a) => a.id}
                 loading={inbox === null}
@@ -320,6 +340,37 @@ const COLUMNS: ReadonlyArray<Column<ApprovalRow>> = [
   },
 ];
 
+const columnsFor = (boardStatus: string): ReadonlyArray<Column<ApprovalRow>> =>
+  COLUMNS.map((col) =>
+    col.key === 'status'
+      ? {
+          ...col,
+          cell: (a) => (
+            <span className="obord">
+              <StatusPill tone={PILL[a.status].tone} label={statusLabel(a, boardStatus)} />
+              {a.status === 'PENDING' ? (
+                <span className="obdue">
+                  <Deadline expiresAt={a.expiresAt} />
+                </span>
+              ) : a.status === 'EXPIRED' ? (
+                <span className="obdue">
+                  closed {inIst(a.expiresAt)} · nothing charged
+                </span>
+              ) : (
+                <span className="obdue">
+                  {a.decidedAt === null ? (
+                    <span className="notmeasured">decision time not recorded</span>
+                  ) : (
+                    <>decided {inIst(a.decidedAt)}</>
+                  )}
+                </span>
+              )}
+            </span>
+          ),
+        }
+      : col,
+  );
+
 /* ==========================================================================
  * The rail
  * ======================================================================== */
@@ -399,9 +450,9 @@ function Rail({
         </details>
 
         <p className="fnote off">
-          An approval is addressed to one person. What is on this board is what was sent to you —
-          your colleagues&rsquo; approvals are theirs, and what your organisation has outstanding as
-          a whole is on <a href="/account">your account</a>.
+          <b>Held for approval</b> is everything your organisation has waiting on a signature.
+          <b> Waiting on you</b> is only the ones addressed to you — use that filter when you are
+          the named approver.
         </p>
 
         <div className="fdone">
@@ -435,6 +486,18 @@ function Rail({
  * otherwise would manufacture a task.
  */
 function Nothing({ status, onClear }: { status: string; onClear: () => void }): React.JSX.Element {
+  if (status === 'held') {
+    return (
+      <div className="empty calm">
+        <h3>Nothing held for approval</h3>
+        <p>
+          No order at your organisation is waiting on a signature right now. When one is, it
+          appears here with what it costs, who raised it, who must sign off, and how long the
+          machines are held for.
+        </p>
+      </div>
+    );
+  }
   if (status === 'waiting') {
     return (
       <div className="empty calm">

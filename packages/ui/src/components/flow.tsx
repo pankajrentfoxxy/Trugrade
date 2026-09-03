@@ -176,6 +176,8 @@ export interface WhyRailProps {
   title?: string;
   /** The term whose field currently has focus. Marks that entry as active. */
   activeTerm?: string;
+  /** Tighter rail for flows where the form is the primary surface. */
+  compact?: boolean;
   className?: string;
 }
 
@@ -195,6 +197,7 @@ export function WhyRail({
   items,
   title = 'Why we ask',
   activeTerm,
+  compact = false,
   className,
 }: WhyRailProps): React.JSX.Element {
   const headingId = React.useId();
@@ -203,34 +206,38 @@ export function WhyRail({
     <aside
       aria-labelledby={headingId}
       className={cn(
-        'tg-card sticky top-5 flex flex-col gap-4 rounded-lg border border-rule bg-sheet-2',
+        'tg-card sticky top-5 flex flex-col rounded-lg border border-rule bg-sheet-2',
+        compact ? 'gap-3 p-4' : 'gap-4',
         className,
       )}
       data-testid="why-rail"
     >
       <div className="flex flex-col gap-1">
-        <h2 id={headingId} className="text-h3 text-ink">
+        <h2 id={headingId} className={cn(compact ? 'text-body-sm font-semibold text-ink' : 'text-h3 text-ink')}>
           {title}
         </h2>
       </div>
 
-      <dl className="flex flex-col gap-4">
+      <dl className={cn('flex flex-col', compact ? 'gap-2.5' : 'gap-4')}>
         {items.map((item) => {
           const active = item.term === activeTerm;
           return (
             <div
               key={item.term}
-              className={cn('border-l-2 pl-4', active ? 'border-acc' : 'border-rule')}
+              className={cn('border-l-2', compact ? 'pl-3' : 'pl-4', active ? 'border-acc' : 'border-rule')}
             >
               <dt
                 className={cn(
-                  'text-body-sm font-medium',
+                  'font-medium',
+                  compact ? 'text-label leading-snug' : 'text-body-sm',
                   active ? 'text-ink' : 'text-ink-2',
                 )}
               >
                 {item.term}
               </dt>
-              <dd className="mt-1 text-body-sm text-ink-2">{item.explanation}</dd>
+              <dd className={cn(compact ? 'mt-0.5 text-label leading-snug text-ink-3' : 'mt-1 text-body-sm text-ink-2')}>
+                {item.explanation}
+              </dd>
             </div>
           );
         })}
