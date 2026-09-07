@@ -221,12 +221,14 @@ export interface VendorRegistrationProps {
    * splitting stock across a list this app invented.
    */
   grades: { grade: string; customerDescription: string }[] | null;
+  wrongAccountAction?: { href: string; label: string };
 }
 
 export function VendorRegistration({
   definitions,
   brands,
   grades,
+  wrongAccountAction,
 }: VendorRegistrationProps): React.JSX.Element {
   const renderers = React.useMemo<Record<string, (ctx: StepContext) => React.ReactNode>>(
     () => ({
@@ -352,6 +354,7 @@ export function VendorRegistration({
       renderers={renderers}
       whyFor={whyFor}
       wrongAccountBody="This form registers a supplier. You are signed in on a buyer account — sign out here if you also want to sell to us, and register the selling entity separately."
+      wrongAccountAction={wrongAccountAction}
       review={(ctx) => <VendorReview {...ctx} />}
     />
   );

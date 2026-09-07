@@ -4,6 +4,7 @@ import { AuthProvider, RequirePermission, useAuth } from './lib/auth';
 import { CatalogTreeRoute } from './routes/CatalogTree';
 import { ConditionImageCoverageRoute } from './routes/ConditionImageCoverage';
 import { LoginRoute } from './routes/Login';
+import { VendorRegisterRoute } from './routes/sell/VendorRegisterRoute';
 import { OpsOverviewRoute, RequirePlatform } from './routes/OpsOverview';
 import { ReviewQueueRoute } from './routes/ReviewQueue';
 import { PricingRulesRoute } from './routes/PricingRules';
@@ -60,6 +61,12 @@ export function App(): React.JSX.Element {
             sections you cannot reach yet is noise.
           */}
           <Route path="/login" element={<LoginRoute />} />
+          {/*
+            Vendor onboarding — archetype D, outside the shell. Suppliers land
+            here from the storefront "Sell on Trugrade" link; the form and every
+            /api/onboarding call stay on this origin so cookies remain first-party.
+          */}
+          <Route path="/sell/register" element={<VendorRegisterRoute />} />
           {/*
             T43. **<Shell> is OUTSIDE the guard, on every route.** It used to be
             inside, so a refused route rendered RequirePermission’s bare

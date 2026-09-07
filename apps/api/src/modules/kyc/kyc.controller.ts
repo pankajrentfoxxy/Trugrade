@@ -340,6 +340,21 @@ export class KycReviewController {
   }
 
   /**
+   * A short-lived signed URL so a reviewer can open what the applicant sent.
+   *
+   * Same posture as the applicant's own `GET /onboarding/documents/:id/url`: the
+   * bytes never travel through the API, and `file_key` stays off the wire.
+   */
+  @Get('orgs/:orgId/documents/:documentId/url')
+  @RequirePermissions('kyc.document.read')
+  documentUrl(
+    @Param('orgId', new ZodValidationPipe(uuidSchema)) orgId: string,
+    @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
+  ): Promise<{ url: string; expiresInSeconds: number }> {
+    return this.docs.downloadUrl(orgId, documentId);
+  }
+
+  /**
    * The reasons a document may be refused. Served, never hard-coded on a screen.
    *
    * Gated on `kyc.document.read` and not left public: the list is only useful to

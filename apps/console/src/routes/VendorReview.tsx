@@ -330,6 +330,7 @@ export function VendorReviewRoute(): React.JSX.Element {
             documents={docs.documents}
             error={docs.error}
             reasons={docs.reasons}
+            orgId={orgId}
             {...(orgId
               ? {
                   onReview: async (documentId, body) => {

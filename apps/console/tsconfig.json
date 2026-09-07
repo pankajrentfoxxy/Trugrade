@@ -6,5 +6,18 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src", "test", "vite.config.ts", "tailwind.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "vite.config.ts",
+    "tailwind.config.ts",
+    "../storefront/src/app/register",
+    "../storefront/src/app/sell/register"
+  ],
+  "exclude": [
+    "../storefront/src/app/register/**/*.spec.ts",
+    "../storefront/src/app/register/**/*.spec.tsx",
+    "../storefront/src/app/sell/register/**/*.spec.ts",
+    "../storefront/src/app/sell/register/**/*.spec.tsx"
+  ]
 }

@@ -183,6 +183,21 @@ describe('an applicant’s documents are not readable by everyone who can see th
     expect(JSON.stringify(res.body)).not.toContain('kyc/x/signatory');
     expect(JSON.stringify(res.body)).not.toContain('a'.repeat(64));
   });
+
+  it('lets a KYC reviewer open a document through a short-lived URL', async () => {
+    const res = await get(`/api/kyc/orgs/${orgId}/documents/${documentId}/url`, reviewerToken);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.url).toBe('string');
+    expect(res.body.url.length).toBeGreaterThan(0);
+    expect(res.body.expiresInSeconds).toBeGreaterThan(0);
+    expect(JSON.stringify(res.body)).not.toContain('kyc/x/signatory');
+  });
+
+  it('refuses OPS_MANAGER a document URL — same grant as the list', async () => {
+    const res = await get(`/api/kyc/orgs/${orgId}/documents/${documentId}/url`, opsToken);
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(res.body)).not.toContain(SECRET_FILENAME);
+  });
 });
 
 describe('a vendor is not a reviewer', () => {
@@ -190,6 +205,7 @@ describe('a vendor is not a reviewer', () => {
     ['/api/kyc/review-queue'],
     [`/api/kyc/review/${'99999999-0000-4000-8000-0000000000a1'}`],
     [`/api/kyc/orgs/${'99999999-0000-4000-8000-0000000000a1'}/documents`],
+    [`/api/kyc/orgs/${'99999999-0000-4000-8000-0000000000a1'}/documents/${'99999999-0000-4000-8000-0000000000d1'}/url`],
   ])('refuses a vendor on %s', async (route) => {
     const res = await get(route, vendorToken);
     expect(res.status).toBe(403);

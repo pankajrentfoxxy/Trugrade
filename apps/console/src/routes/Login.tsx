@@ -34,7 +34,10 @@ import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/aut
  * directory.
  */
 
-/** Where a supplier's application actually lives. The console does not host it. */
+/** Supplier registration lives on this console, not the storefront. */
+const sellRegisterPath = '/sell/register';
+
+/** Buyers shop here; the login wordmark still links out to them. */
 const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? 'http://localhost:3000';
 
 const SIGN_IN_LEDE = `${BRAND.name} staff and suppliers. Buyers sign in on the shop.`;
@@ -293,7 +296,7 @@ export function LoginRoute(): React.JSX.Element {
           <div className="flex flex-col gap-1 border-t border-rule-2 pt-3">
             <a
               className="text-body-sm text-acc-ink underline underline-offset-4"
-              href={`${STOREFRONT_URL}/forgot-password`}
+              href={`${import.meta.env.VITE_STOREFRONT_URL ?? 'http://localhost:3000'}/forgot-password`}
             >
               Forgotten your password?
             </a>
@@ -301,7 +304,7 @@ export function LoginRoute(): React.JSX.Element {
               Applying to supply?{' '}
               <a
                 className="text-acc-ink underline underline-offset-4"
-                href={`${STOREFRONT_URL}/sell/register`}
+                href={sellRegisterPath}
               >
                 Start an application
               </a>
@@ -331,7 +334,7 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
           ? 'If you believe it is wrong, reply to the email we sent and a person will look again.'
           : pending
             ? 'Listing, pricing and payouts open the moment it is approved.'
-            : 'Open your application on the storefront to continue where you left off.'}
+            : 'Open your application here to continue where you left off.'}
       </p>
 
       {state.decision && state.decision.decision !== 'APPROVE' && (
@@ -383,7 +386,7 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
           <Button
             type="button"
             variant="primary"
-            onClick={() => window.location.assign(`${STOREFRONT_URL}/sell/register`)}
+            onClick={() => window.location.assign(sellRegisterPath)}
           >
             Open your application
           </Button>

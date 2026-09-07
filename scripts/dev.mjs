@@ -92,7 +92,9 @@ sh('pnpm', ['--filter', '@trugrade/api', 'db:seed']);
 
 // 5. Everything else, in parallel, until Ctrl-C.
 step('Starting apps  (storefront :3000 - console :5173 - API :4000 - Mailpit :8026 - MinIO :9011)');
-const child = spawn('pnpm', ['turbo', 'run', 'dev', '--parallel'], {
+// Technician/Expo prompts for ports in non-interactive shells and adds little
+// to storefront work — run it separately when needed.
+const child = spawn('pnpm', ['turbo', 'run', 'dev', '--parallel', '--filter=!@trugrade/technician'], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });

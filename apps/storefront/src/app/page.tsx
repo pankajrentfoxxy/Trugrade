@@ -1,5 +1,6 @@
 import { BRAND } from '@trugrade/config/brand';
 import { getSearch, getStats } from '../lib/api';
+import { consoleSellRegisterUrl } from '../lib/console-url';
 import { CategoryStrip } from './CategoryStrip';
 import { FilterRail } from './FilterRail';
 import { SearchResultCard } from './search/SearchResultCard';
@@ -274,7 +275,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             a cycle you choose. No bidding, no marketplace fees, and your name never appears on the
             storefront.
           </p>
-          <a className="pill acc" href="/sell/register">
+          <a className="pill acc" href={consoleSellRegisterUrl()}>
             Apply to supply &rarr;
           </a>
         </div>

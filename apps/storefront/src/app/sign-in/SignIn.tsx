@@ -15,6 +15,7 @@ import {
 } from '../register/api';
 import { AuthShell } from '../AuthShell';
 import { ApplicationStatus, type StatusCopy } from '../register/review-parts';
+import { consoleSellRegisterUrl } from '../../lib/console-url';
 
 /**
  * **ARCHETYPE F — Focus.** One task, centred, no navigation.
@@ -92,7 +93,7 @@ const destinationFor = (orgType: string): string =>
 
 /** Where an unfinished application is picked up again. */
 const applicationFor = (orgType: string): string =>
-  orgType === 'VENDOR' ? '/sell/register' : '/register';
+  orgType === 'VENDOR' ? consoleSellRegisterUrl() : '/register';
 
 /**
  * The statuses that mean "your application is not finished", as opposed to "it
@@ -538,7 +539,7 @@ export function SignIn(): React.JSX.Element {
             — or{' '}
             <a
               className="text-ink-2 underline decoration-rule underline-offset-4 hover:text-ink hover:decoration-acc"
-              href="/sell/register"
+              href={consoleSellRegisterUrl()}
             >
               apply to supply
             </a>

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { ThemeToggle } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
+import { consoleSellRegisterUrl } from '../lib/console-url';
 
 /**
  * Who, if anyone, is signed in — read on the server from the request's own
@@ -120,7 +121,7 @@ export async function SiteHeader({
             <a href="/qc/verify">Verify a certificate</a>
             <a href="/account/orders">Track order</a>
             <a href="/legal/grievance">Help</a>
-            <a href="/sell/register" className="util-promo">
+            <a href={consoleSellRegisterUrl()} className="util-promo">
               Sell on {BRAND.name} &rarr;
             </a>
           </div>

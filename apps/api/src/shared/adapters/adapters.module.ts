@@ -81,7 +81,6 @@ const fakeProviders: Provider[] = [
       const fake = new FakeNotification(outbox);
       const live = config.get('NODE_ENV') !== 'test';
       let port: NotificationPort = fake;
-      console.log('live', config);
       if (live && config.get('INTERAKT_API_KEY')) {
         port = new InteraktNotification(config, port);
       }

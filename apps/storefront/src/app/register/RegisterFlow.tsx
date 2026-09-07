@@ -195,6 +195,8 @@ export interface RegisterFlowProps {
   whyFor?: (stepCode: string) => readonly WhyRailItem[];
   /** Shown when the signed-in session belongs to the other kind of account. */
   wrongAccountBody: string;
+  /** Where the wrong-account empty state sends the applicant. Defaults to the shop. */
+  wrongAccountAction?: { href: string; label: string };
   /** Absent until a flow has a review screen; the last step then has no next. */
   review?: (ctx: ReviewContext) => React.ReactNode;
 }
@@ -208,6 +210,7 @@ export function RegisterFlow({
   purposeNotes,
   whyFor,
   wrongAccountBody,
+  wrongAccountAction = { href: '/', label: 'Back to the shop' },
   review,
 }: RegisterFlowProps): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>(definitions ? 'checking' : 'unreachable');
@@ -677,8 +680,11 @@ export function RegisterFlow({
         title="You are already signed in, on a different kind of account"
         body={wrongAccountBody}
         action={
-          <Button variant="secondary" onClick={() => window.location.assign('/')}>
-            Back to the shop
+          <Button
+            variant="secondary"
+            onClick={() => window.location.assign(wrongAccountAction.href)}
+          >
+            {wrongAccountAction.label}
           </Button>
         }
       />

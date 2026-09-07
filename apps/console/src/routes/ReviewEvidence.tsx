@@ -315,6 +315,8 @@ export interface DocumentsPanelProps {
   /** A refusal from the API, already turned into a sentence. */
   error: string | null;
   reasons: readonly RejectionReason[];
+  /** Needed to mint a short-lived open link per row. */
+  orgId?: string;
   /** Absent when the signed-in reviewer may read documents but not settle them. */
   onReview?: (
     documentId: string,
@@ -322,10 +324,58 @@ export interface DocumentsPanelProps {
   ) => Promise<void>;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ViewDocumentCell({
+  orgId,
+  documentId,
+}: {
+  orgId: string;
+  documentId: string;
+}): React.JSX.Element {
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function open(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/kyc/orgs/${orgId}/documents/${documentId}/url`, {
+        credentials: 'include',
+      });
+      const body = (await res.json()) as { url?: string; error?: { message?: string } };
+      if (!res.ok || !body.url) {
+        throw new Error(body.error?.message ?? 'Could not open this file.');
+      }
+      window.open(body.url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="flex flex-col gap-1">
+      <Button variant="link" loading={busy} onClick={() => void open()}>
+        Open
+      </Button>
+      {error !== null && (
+        <span className="max-w-prose text-body-sm text-fail">{error}</span>
+      )}
+    </span>
+  );
+}
+
 export function DocumentsPanel({
   documents,
   error,
   reasons,
+  orgId,
   onReview,
 }: DocumentsPanelProps): React.JSX.Element {
   const [rejecting, setRejecting] = React.useState<KycDocument | null>(null);
@@ -388,6 +438,23 @@ export function DocumentsPanel({
           <span className="text-ink-4">Not scanned</span>
         ) : (
           <span className="text-ink-2">{d.avVerdict.toLowerCase()}</span>
+        ),
+    },
+    {
+      key: 'size',
+      header: 'Size',
+      cell: (d) => (
+        <span className="font-mono tnum text-ink-2">{formatBytes(d.sizeBytes)}</span>
+      ),
+    },
+    {
+      key: 'view',
+      header: 'File',
+      cell: (d) =>
+        orgId ? (
+          <ViewDocumentCell orgId={orgId} documentId={d.id} />
+        ) : (
+          <span className="text-ink-4">—</span>
         ),
     },
     {
@@ -454,7 +521,7 @@ export function DocumentsPanel({
           body="This applicant has not uploaded anything. They cannot be approved until they do — the checklist is on their own onboarding screen."
         />
       ) : (
-        <Board tableMinWidth={700}>
+        <Board tableMinWidth={860}>
           <DataBoard
             caption={`${documents.length} documents on this application.`}
             columns={columns}

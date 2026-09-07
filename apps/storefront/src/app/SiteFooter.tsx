@@ -1,6 +1,7 @@
 import type { Route } from 'next';
 import Link from 'next/link';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
+import { consoleSellRegisterUrl } from '../lib/console-url';
 
 /**
  * Block 9 of `09_FRONTEND_LOCKED.md` §7 — the five-column footer, built against
@@ -49,7 +50,7 @@ const SELL = [
   // T43: `/sell` was a 404 on every page. There is one supplier entry and it
   // is the registration flow; a second label for a route nobody built is not a
   // second door.
-  ['Become a supplier', '/sell/register'],
+  ['Become a supplier', consoleSellRegisterUrl()],
   ['Grading standard', '/legal/grading'],
 ] as const;
 
