@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ROLE_PERMISSIONS, type Permission, type Role } from '@trugrade/contracts';
+import { AppConfig } from '../../../shared/config';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { OrgScope, RequestContextService } from '../../../shared/db/org-scope';
 import { TokenService } from '../../../shared/auth/token.service';
@@ -151,6 +152,40 @@ export interface UpdateMemberInput {
   status?: 'ACTIVE' | 'SUSPENDED';
 }
 
+export interface RegisteredAddressView {
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+/** What the signed-in person may read about their own organisation — registration particulars. */
+export interface OrgProfileView {
+  fullName: string;
+  email: string | null;
+  mobile: string | null;
+  jobTitle: string | null;
+  orgType: 'BUYER' | 'VENDOR';
+  legalName: string;
+  tradeName: string | null;
+  constitution: string | null;
+  status: string;
+  website: string | null;
+  employeeCountBand: string | null;
+  annualTurnoverBand: string | null;
+  /** Buyer only — the code stored at registration. */
+  industry: string | null;
+  /** Vendor only — the category stored at registration. */
+  businessCategory: string | null;
+  gstin: string | null;
+  gstLegalName: string | null;
+  pan: string | null;
+  panName: string | null;
+  panVerified: boolean;
+  registeredAddress: RegisteredAddressView | null;
+}
+
 /* ========================================================================== */
 
 /** The roles a buying organisation may hold. Everything else is ours or a vendor's. */
@@ -176,7 +211,127 @@ export class AccountService {
     private readonly ctx: RequestContextService,
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
+    private readonly config: AppConfig,
   ) {}
+
+  /* ----------------------------------------------------------------------
+   * Profile
+   * ------------------------------------------------------------------- */
+
+  /**
+   * The organisation's own registration particulars — what was collected at
+   * sign-up and promoted into the ledger after verification.
+   *
+   * No `@RequirePermissions` on the route: every signed-in org member may read
+   * their own company name and GSTIN, including a viewer who holds neither
+   * `identity.user.read` nor `ordering.own.read`. Org scoping is still enforced
+   * here via `orgId()` — there is no org id on the request to tamper with.
+   *
+   * PAN is decrypted for the org's own row only. It never leaves this allow-list.
+   */
+  async profile(): Promise<OrgProfileView> {
+    const orgId = this.orgId();
+    const me = this.ctx.requirePrincipal();
+    const piiKey = this.config.get('PII_ENCRYPTION_KEY') ?? 'trugrade-local-pii-key';
+
+    const [row] = await this.prisma.$queryRaw<
+      Array<{
+        full_name: string;
+        email: string | null;
+        mobile: string | null;
+        job_title: string | null;
+        org_type: string;
+        legal_name: string;
+        trade_name: string | null;
+        constitution: string | null;
+        status: string;
+        website: string | null;
+        employee_count_band: string | null;
+        annual_turnover_band: string | null;
+        industry: string | null;
+        business_category: string | null;
+        gstin: string | null;
+        gst_legal_name: string | null;
+        pan: string | null;
+        pan_name: string | null;
+        pan_verified: boolean | null;
+        reg_line1: string | null;
+        reg_line2: string | null;
+        reg_city: string | null;
+        reg_state: string | null;
+        reg_pincode: string | null;
+      }>
+    >`
+      SELECT u.full_name, u.email, u.mobile, u.job_title,
+             o.org_type::text AS org_type, o.legal_name, o.trade_name,
+             o.constitution::text AS constitution, o.status::text AS status,
+             o.website, o.employee_count_band, o.annual_turnover_band,
+             bp.industry, vp.business_category,
+             g.gstin, g.legal_name_as_per_gst AS gst_legal_name,
+             CASE WHEN p.pan_enc IS NOT NULL
+                  THEN pgp_sym_decrypt(p.pan_enc, ${piiKey})::text
+                  ELSE NULL END AS pan,
+             p.name_as_per_pan AS pan_name,
+             p.verified AS pan_verified,
+             ra.line1 AS reg_line1, ra.line2 AS reg_line2,
+             ra.city AS reg_city, ra.state AS reg_state, ra.pincode AS reg_pincode
+        FROM identity.user_account u
+        JOIN identity.organization o ON o.id = u.org_id
+        LEFT JOIN customer.buyer_profile bp ON bp.org_id = o.id
+        LEFT JOIN vendor.vendor_profile vp ON vp.org_id = o.id
+        LEFT JOIN LATERAL (
+          SELECT gstin, legal_name_as_per_gst
+            FROM kyc.gst_profile
+           WHERE org_id = o.id
+           ORDER BY is_primary DESC, created_at ASC
+           LIMIT 1
+        ) g ON TRUE
+        LEFT JOIN kyc.pan_record p ON p.org_id = o.id
+        LEFT JOIN LATERAL (
+          SELECT line1, line2, city, state, pincode
+            FROM identity.org_address
+           WHERE org_id = o.id AND type = 'REGISTERED'::address_type AND is_active
+           ORDER BY created_at ASC
+           LIMIT 1
+        ) ra ON TRUE
+       WHERE u.id = ${me.userId}::uuid AND u.org_id = ${orgId}::uuid`;
+
+    if (!row) throw new NotFoundError('profile', { reason: 'signed_in_user_not_in_org' });
+
+    const orgType = row.org_type === 'VENDOR' ? 'VENDOR' : 'BUYER';
+
+    return {
+      fullName: row.full_name,
+      email: row.email,
+      mobile: row.mobile,
+      jobTitle: row.job_title,
+      orgType,
+      legalName: row.legal_name,
+      tradeName: row.trade_name,
+      constitution: row.constitution,
+      status: row.status,
+      website: row.website,
+      employeeCountBand: row.employee_count_band,
+      annualTurnoverBand: row.annual_turnover_band,
+      industry: row.industry,
+      businessCategory: row.business_category,
+      gstin: row.gstin,
+      gstLegalName: row.gst_legal_name,
+      pan: row.pan?.trim().toUpperCase() ?? null,
+      panName: row.pan_name,
+      panVerified: row.pan_verified ?? false,
+      registeredAddress:
+        row.reg_line1 && row.reg_city && row.reg_state && row.reg_pincode
+          ? {
+              line1: row.reg_line1,
+              line2: row.reg_line2,
+              city: row.reg_city,
+              state: row.reg_state,
+              pincode: row.reg_pincode,
+            }
+          : null,
+    };
+  }
 
   /* ----------------------------------------------------------------------
    * Addresses

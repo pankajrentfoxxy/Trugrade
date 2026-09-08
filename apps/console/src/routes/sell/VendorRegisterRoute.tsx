@@ -71,7 +71,7 @@ export function VendorRegisterRoute(): React.JSX.Element {
   }, [syncSession]);
 
   return (
-    <div className="min-h-full bg-bg">
+    <div className="min-h-full bg-ground text-ink-2">
       <header className="border-b border-rule bg-chrome px-6 py-4">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <Link to="/login" className="text-h3 text-on-chrome no-underline">

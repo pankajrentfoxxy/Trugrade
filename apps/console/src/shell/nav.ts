@@ -182,6 +182,13 @@ export const NAV: readonly NavEntry[] = [
     group: 'Vendor',
     orgType: 'VENDOR',
   },
+  {
+    to: '/vendor/profile',
+    label: 'Profile',
+    permission: 'listing.own.read',
+    group: 'Vendor',
+    orgType: 'VENDOR',
+  },
   // T40 and T41, derived from their own barrel for the reason the QC entries
   // are: that array already carries the label and the permission, and a second
   // copy of a permission string is the copy that goes stale. `orgType` keeps

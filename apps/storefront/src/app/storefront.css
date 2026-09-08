@@ -187,15 +187,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
 .ftag{display:inline-flex;align-items:center;gap:5px;font-size:11px;background:var(--acc-wash);
   border:1px solid var(--acc);color:var(--acc-ink);border-radius:4px;padding:3px 7px;font-weight:600}
 .ftag i{font-style:normal;opacity:.7}
-details{border-bottom:1px solid var(--rule-2)}
-details:last-child{border-bottom:0}
-summary{padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;
+.filters details{border-bottom:1px solid var(--rule-2)}
+.filters details:last-child{border-bottom:0}
+.filters summary{padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;
   display:flex;align-items:center;list-style:none;user-select:none}
-summary::-webkit-details-marker{display:none}
-summary::after{content:"";margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--ink-4);
-  border-bottom:1.5px solid var(--ink-4);transform:rotate(45deg);transition:transform .15s}
-details[open] summary::after{transform:rotate(-135deg)}
-summary:hover{background:var(--sheet-2)}
+.filters summary::-webkit-details-marker{display:none}
+.filters summary::after{content:"";flex-shrink:0;margin-left:auto;width:6px;height:6px;
+  border-right:1.5px solid var(--ink-4);border-bottom:1.5px solid var(--ink-4);
+  transform:rotate(45deg);transition:transform .15s}
+.filters details[open] summary::after{transform:rotate(-135deg)}
+.filters summary:hover{background:var(--sheet-2)}
 .fbody{padding:2px 14px 12px}
 .fopt{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;color:var(--ink-2);cursor:pointer}
 .fopt:hover{color:var(--ink)}

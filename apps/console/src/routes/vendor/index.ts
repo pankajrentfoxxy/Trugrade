@@ -13,6 +13,7 @@ import { VendorPayablesRoute } from './Payables';
 import { RepriceRoute } from './Reprice';
 import { SkuRequestRoute } from './SkuRequest';
 import { VendorVisitDetailRoute, VendorVisitResultsRoute, VendorVisitsRoute } from './Visits';
+import { VendorProfileRoute } from './Profile';
 import { ListingWizardRoute } from './wizard/Wizard';
 
 /**
@@ -163,6 +164,11 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/payables',
     permission: 'procurement.payable.read_own',
     element: guarded('procurement.payable.read_own', VendorPayablesRoute),
+  },
+  {
+    path: '/vendor/profile',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorProfileRoute),
   },
   {
     path: '/vendor/sku-request',

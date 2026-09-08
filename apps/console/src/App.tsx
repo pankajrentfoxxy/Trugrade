@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, RequirePermission, useAuth } from './lib/auth';
+import { ConsoleThemeSync } from './lib/console-theme';
 import { CatalogTreeRoute } from './routes/CatalogTree';
 import { ConditionImageCoverageRoute } from './routes/ConditionImageCoverage';
 import { LoginRoute } from './routes/Login';
@@ -54,6 +55,7 @@ export function App(): React.JSX.Element {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ConsoleThemeSync />
         <Routes>
           {/*
             The one route that is deliberately NOT in the shell: signing in is

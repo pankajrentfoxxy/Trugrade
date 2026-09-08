@@ -11,11 +11,9 @@
     />
     <!--
       Console pre-paint read. Verbatim copy of `THEME_CONSOLE_PREPAINT_SCRIPT`
-      from `@trugrade/ui` — dark by default, `light` is not honoured. Vite's
-      index.html cannot import a constant; `test/prepaint.spec.ts` fails if
-      this and the exported constant ever drift apart.
+      from `@trugrade/ui` — dark in the shell, light on /login and /sell/register.
     -->
-    <script>try{var t=localStorage.getItem('tg-console-theme')||localStorage.getItem('tg-theme');if(t==='dark'||t==='slate'||t==='olive'||t==='sand'){document.documentElement.setAttribute('data-t',t);if(!localStorage.getItem('tg-console-theme'))localStorage.setItem('tg-console-theme',t)}else{document.documentElement.setAttribute('data-t','dark');localStorage.setItem('tg-console-theme','dark')}}catch(e){}</script>
+    <script>try{var p=location.pathname;if(p==='/login'||p==='/sell/register'||p.indexOf('/sell/register/')===0){document.documentElement.setAttribute('data-t','light')}else{var t=localStorage.getItem('tg-console-theme')||localStorage.getItem('tg-theme');if(t==='dark'||t==='slate'||t==='olive'||t==='sand'){document.documentElement.setAttribute('data-t',t);if(!localStorage.getItem('tg-console-theme'))localStorage.setItem('tg-console-theme',t)}else{document.documentElement.setAttribute('data-t','dark');localStorage.setItem('tg-console-theme','dark')}}}catch(e){}</script>
     <title>Console</title>
   </head>
   <body>

@@ -344,3 +344,57 @@ describe('the people in the organisation', () => {
     expect(row!.status).toBe('ACTIVE');
   });
 });
+
+describe('the organisation profile', () => {
+  it('returns the signed-in person and their org statutory particulars', async () => {
+    await db.$executeRaw`
+      UPDATE identity.organization
+         SET trade_name = 'Acme Retail', constitution = 'PVT_LTD'::constitution_type,
+             employee_count_band = '51-200', website = 'https://acme.example'
+       WHERE id = ${orgId}::uuid`;
+    await db.$executeRaw`
+      INSERT INTO customer.buyer_profile (org_id, industry)
+      VALUES (${orgId}::uuid, 'IT_SERVICES')`;
+    await db.$executeRaw`
+      INSERT INTO kyc.gst_profile (org_id, gstin, legal_name_as_per_gst, state_code, status,
+                                   api_verified_at, is_primary)
+      VALUES (${orgId}::uuid, '06AAFFN1234K1Z5', 'Acme Retail Pvt Ltd', '06', 'ACTIVE', ${NOW}, TRUE)`;
+    await db.$executeRaw`
+      INSERT INTO kyc.pan_record (org_id, pan_enc, pan_last4, pan_hash, name_as_per_pan, verified)
+      VALUES (${orgId}::uuid, pgp_sym_encrypt('AAFFN1234K', 'trugrade-local-pii-key'), '234K',
+              ${randomUUID()}, 'Acme Retail Pvt Ltd', TRUE)`;
+    await db.$executeRaw`
+      INSERT INTO identity.org_address (id, org_id, type, line1, city, state, state_code, pincode,
+                                        contact_name, contact_mobile)
+      VALUES (${randomUUID()}::uuid, ${orgId}::uuid, 'REGISTERED'::address_type,
+              'Tower B, Cyber City', 'Gurugram', 'Haryana', '06', '122002',
+              'Deepak Verma', '+919812345678')`;
+
+    const profile = await asOwner(() => account.profile());
+    expect(profile.fullName).toBe('Deepak Verma');
+    expect(profile.email).toContain('@');
+    expect(profile.orgType).toBe('BUYER');
+    expect(profile.legalName).toBe('Acme Retail Pvt Ltd');
+    expect(profile.gstin).toBe('06AAFFN1234K1Z5');
+    expect(profile.pan).toBe('AAFFN1234K');
+    expect(profile.industry).toBe('IT_SERVICES');
+    expect(profile.registeredAddress?.city).toBe('Gurugram');
+  });
+
+  it('does not show another organisation profile to a neighbour', async () => {
+    const otherOrg = await makeOrganization({ org_type: 'BUYER', legal_name: 'Beta Ltd' }, db);
+    const otherUser = await makeUser(otherOrg, { full_name: 'Somebody Else' }, db);
+    await db.$executeRaw`
+      INSERT INTO kyc.gst_profile (org_id, gstin, legal_name_as_per_gst, state_code, status,
+                                   api_verified_at, is_primary)
+      VALUES (${otherOrg}::uuid, '07AABCB1234K1Z8', 'Beta Ltd', '07', 'ACTIVE', ${NOW}, TRUE)`;
+
+    const profile = await asOwner(() => account.profile());
+    expect(profile.legalName).toBe('Acme Retail Pvt Ltd');
+    expect(profile.gstin).not.toBe('07AABCB1234K1Z8');
+
+    const theirs = await as(otherUser, ['CUSTOMER_OWNER'], () => account.profile(), otherOrg);
+    expect(theirs.legalName).toBe('Beta Ltd');
+    expect(theirs.gstin).toBe('07AABCB1234K1Z8');
+  });
+});

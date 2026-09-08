@@ -86,14 +86,45 @@ export const THEME_STOREFRONT_PREPAINT_SCRIPT =
  * leave localhost looking nothing like production.
  */
 export const THEME_CONSOLE_PREPAINT_SCRIPT =
-  `try{var t=localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}')` +
+  `try{var p=location.pathname;` +
+  `if(p==='/login'||p==='/sell/register'||p.indexOf('/sell/register/')===0){` +
+  `document.documentElement.setAttribute('data-t','light')}` +
+  `else{var t=localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}')` +
   `||localStorage.getItem('${THEME_STORAGE_KEY}');` +
   `if(t==='dark'||t==='slate'||t==='olive'||t==='sand'){` +
   `document.documentElement.setAttribute('data-t',t);` +
   `if(!localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}'))` +
   `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}',t)}` +
   `else{document.documentElement.setAttribute('data-t','dark');` +
-  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','dark')}}catch(e){}`;
+  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','dark')}}}` +
+  `catch(e){}`;
+
+/** Archetype F routes — light working surfaces, dark brand panel on the right. */
+export const CONSOLE_AUTH_PATHS = ['/login', '/sell/register'] as const;
+
+export function isConsoleAuthPath(pathname: string): boolean {
+  return (
+    pathname === '/login' ||
+    pathname === '/sell/register' ||
+    pathname.startsWith('/sell/register/')
+  );
+}
+
+export function applyAuthLightTheme(): void {
+  document.documentElement.setAttribute('data-t', 'light');
+}
+
+export function restoreConsoleThemeFromStorage(): void {
+  try {
+    const raw =
+      localStorage.getItem(THEME_CONSOLE_STORAGE_KEY) ??
+      localStorage.getItem(THEME_STORAGE_KEY);
+    const theme = raw && CONSOLE_THEME_SET.has(raw) ? raw : 'dark';
+    document.documentElement.setAttribute('data-t', theme);
+  } catch {
+    document.documentElement.setAttribute('data-t', 'dark');
+  }
+}
 
 export function readTheme(): Theme {
   if (typeof document === 'undefined') return 'dark';

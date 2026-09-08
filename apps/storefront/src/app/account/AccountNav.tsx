@@ -28,6 +28,7 @@ import { usePathname } from 'next/navigation';
 
 const TABS: ReadonlyArray<{ href: string; label: string }> = [
   { href: '/account', label: 'Today' },
+  { href: '/account/profile', label: 'Profile' },
   { href: '/account/orders', label: 'Orders' },
   { href: '/account/approvals', label: 'Approvals' },
   { href: '/account/returns', label: 'Returns' },

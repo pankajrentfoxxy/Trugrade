@@ -109,6 +109,8 @@ body,
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
+  background: var(--ground);
+  color: var(--ink);
 }
 .authcard {
   padding: var(--s8) var(--s7);

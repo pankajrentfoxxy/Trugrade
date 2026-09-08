@@ -14,6 +14,7 @@ import {
   AccountService,
   type AddressBookView,
   type OrgAddressView,
+  type OrgProfileView,
   type TeamMemberView,
   type TeamView,
 } from './internal/account.service';
@@ -105,6 +106,22 @@ type UpdateMemberDto = z.infer<typeof updateMemberSchema>;
 @Controller('account')
 export class AccountController {
   constructor(private readonly account: AccountService) {}
+
+  // -------------------------------------------------------------------------
+  // Profile
+  // -------------------------------------------------------------------------
+
+  /**
+   * The organisation's own registration particulars.
+   *
+   * Authenticated org members only — no permission gate, because a viewer who
+   * may read orders should not be blocked from seeing the GSTIN on their own
+   * invoice. Org scoping is enforced in the service, not from request input.
+   */
+  @Get('profile')
+  profile(): Promise<OrgProfileView> {
+    return this.account.profile();
+  }
 
   // -------------------------------------------------------------------------
   // Addresses
