@@ -93,7 +93,13 @@ function Column({
       <ul>
         {links.map(([label, href]) => (
           <li key={href + label}>
-            <Link href={href as Route}>{label}</Link>
+            {href.startsWith('http') ? (
+              <a href={href} target="_blank" rel="noopener noreferrer">
+                {label}
+              </a>
+            ) : (
+              <Link href={href as Route}>{label}</Link>
+            )}
           </li>
         ))}
       </ul>

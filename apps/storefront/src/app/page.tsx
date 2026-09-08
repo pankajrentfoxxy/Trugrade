@@ -275,7 +275,12 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             a cycle you choose. No bidding, no marketplace fees, and your name never appears on the
             storefront.
           </p>
-          <a className="pill acc" href={consoleSellRegisterUrl()}>
+          <a
+            className="pill acc"
+            href={consoleSellRegisterUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Apply to supply &rarr;
           </a>
         </div>

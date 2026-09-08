@@ -121,7 +121,12 @@ export async function SiteHeader({
             <a href="/qc/verify">Verify a certificate</a>
             <a href="/account/orders">Track order</a>
             <a href="/legal/grievance">Help</a>
-            <a href={consoleSellRegisterUrl()} className="util-promo">
+            <a
+              href={consoleSellRegisterUrl()}
+              className="util-promo"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Sell on {BRAND.name} &rarr;
             </a>
           </div>

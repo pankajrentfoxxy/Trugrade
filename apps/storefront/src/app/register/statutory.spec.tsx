@@ -252,7 +252,7 @@ describe('adding and removing GSTIN rows', () => {
     expect(rows[2]).toHaveTextContent('GSTIN 3');
     expect(gstSection()).toHaveTextContent('0 of 3 confirmed');
 
-    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Remove' }));
+    fireEvent.click(within(rows[1]!).getByRole('button', { name: 'Remove' }));
 
     const after = screen.getAllByTestId('gstin-row');
     expect(after).toHaveLength(2);
@@ -270,7 +270,7 @@ describe('adding and removing GSTIN rows', () => {
     const rows = screen.getAllByTestId('gstin-row');
     expect(rows).toHaveLength(2);
 
-    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Remove' }));
+    fireEvent.click(within(rows[0]!).getByRole('button', { name: 'Remove' }));
 
     expect(screen.getAllByTestId('gstin-row')).toHaveLength(1);
     expect(gstSection()).toHaveTextContent('0 of 1 confirmed');

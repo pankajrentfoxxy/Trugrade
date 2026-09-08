@@ -540,6 +540,8 @@ export function SignIn(): React.JSX.Element {
             <a
               className="text-ink-2 underline decoration-rule underline-offset-4 hover:text-ink hover:decoration-acc"
               href={consoleSellRegisterUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
             >
               apply to supply
             </a>
