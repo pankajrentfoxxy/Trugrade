@@ -127,7 +127,7 @@ export function cookieOptionsForAudience(
   consoleUrl: string,
   isProduction: boolean,
 ): CookieOptions {
-  return {
+  const opts: CookieOptions = {
     httpOnly: true,
     // Lax rather than Strict: Strict drops the cookie on a plain link into the
     // console from an email, which reads to the user as a random signed-out
@@ -135,9 +135,11 @@ export function cookieOptionsForAudience(
     // CSRF case that matters.
     sameSite: 'lax',
     secure: isProduction,
-    domain: cookieDomainForAudience(audience, storefrontUrl, consoleUrl, isProduction),
     path: '/',
   };
+  const domain = cookieDomainForAudience(audience, storefrontUrl, consoleUrl, isProduction);
+  if (domain) opts.domain = domain;
+  return opts;
 }
 
 /** Buyers use the storefront; vendors and platform staff use the console. */

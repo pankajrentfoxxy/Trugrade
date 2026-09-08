@@ -434,6 +434,7 @@ export class IdentityController {
     });
 
     this.assertPortalAccess(req, user.orgType);
+    this.setSessionCookies(req, res, tokens);
     return {
       ...principalOf(user),
       mfaRequired,
@@ -1002,23 +1003,17 @@ export class IdentityController {
 
     // Pre-split dev cookies used Domain=localhost on the shared tg_* names.
     const legacyDomain = this.config.get('SESSION_COOKIE_DOMAIN');
+    if (!legacyDomain) return;
+
     const legacyOpts: CookieOptions = {
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
       path: '/',
+      domain: legacyDomain,
     };
-    const legacyWithDomain = legacyDomain ? { ...legacyOpts, domain: legacyDomain } : legacyOpts;
-
     res.clearCookie(STOREFRONT_ACCESS_COOKIE, legacyOpts);
     res.clearCookie(STOREFRONT_REFRESH_COOKIE, { ...legacyOpts, path: REFRESH_COOKIE_PATH });
-    if (legacyDomain) {
-      res.clearCookie(STOREFRONT_ACCESS_COOKIE, legacyWithDomain);
-      res.clearCookie(STOREFRONT_REFRESH_COOKIE, {
-        ...legacyWithDomain,
-        path: REFRESH_COOKIE_PATH,
-      });
-    }
   }
 
   /**

@@ -374,6 +374,23 @@ describe('a reset ends every session that was open at the time', () => {
 });
 
 describe('each portal accepts only the org type it serves', () => {
+  it('sets session cookies on a successful storefront login', async () => {
+    const cookies: string[] = [];
+    const res = {
+      cookie: (name: string) => {
+        cookies.push(name);
+      },
+      clearCookie: () => undefined,
+    } as unknown as Response;
+
+    await inRequest(() =>
+      controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), res),
+    );
+
+    expect(cookies).toContain('tg_access');
+    expect(cookies).toContain('tg_refresh');
+  });
+
   it('refuses a buyer signing in on the vendor console', async () => {
     const refusal = await thrown(() =>
       inRequest(() =>

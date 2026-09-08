@@ -76,9 +76,10 @@ export const envSchema = z
       .default(30 * 24 * 3600),
     /**
      * Deprecated — session cookies are scoped per client URL (storefront vs console).
-     * Kept only so existing dev `.env` files boot; ignored when setting cookies.
+     * Only used to clear legacy dev cookies that were set with an explicit domain.
+     * Leave unset in normal dev; do not set in production.
      */
-    SESSION_COOKIE_DOMAIN: z.string().optional().default('localhost'),
+    SESSION_COOKIE_DOMAIN: z.string().optional(),
 
     INTEGRATION_MODE: z.enum(INTEGRATION_MODES).default('mock'),
 
