@@ -33,7 +33,11 @@ export const THEME_LABELS: Record<Theme, string> = {
 
 export const THEME_STORAGE_KEY = 'tg-theme';
 
+/** Console persists here so a storefront `tg-theme=light` visit cannot bleed in. */
+export const THEME_CONSOLE_STORAGE_KEY = 'tg-console-theme';
+
 const THEME_SET: ReadonlySet<string> = new Set(THEMES);
+const CONSOLE_THEME_SET: ReadonlySet<string> = new Set(['dark', 'slate', 'olive', 'sand']);
 
 export function isTheme(value: string | null | undefined): value is Theme {
   return value !== null && value !== undefined && THEME_SET.has(value);
@@ -73,6 +77,24 @@ export const THEME_STOREFRONT_PREPAINT_SCRIPT =
   `try{document.documentElement.setAttribute('data-t','light');` +
   `localStorage.setItem('${THEME_STORAGE_KEY}','light')}catch(e){}`;
 
+/**
+ * Console pre-paint read: dark by default, light is not honoured.
+ *
+ * The generic `THEME_PREPAINT_SCRIPT` accepts `light`, which is correct for a
+ * page with `ThemeToggle` but wrong for the console, where dark is the product
+ * default and a stale `tg-theme=light` from manual testing would otherwise
+ * leave localhost looking nothing like production.
+ */
+export const THEME_CONSOLE_PREPAINT_SCRIPT =
+  `try{var t=localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}')` +
+  `||localStorage.getItem('${THEME_STORAGE_KEY}');` +
+  `if(t==='dark'||t==='slate'||t==='olive'||t==='sand'){` +
+  `document.documentElement.setAttribute('data-t',t);` +
+  `if(!localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}'))` +
+  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}',t)}` +
+  `else{document.documentElement.setAttribute('data-t','dark');` +
+  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','dark')}}catch(e){}`;
+
 export function readTheme(): Theme {
   if (typeof document === 'undefined') return 'dark';
   const raw = document.documentElement.getAttribute('data-t');
@@ -86,6 +108,16 @@ export function applyTheme(next: Theme): void {
   } catch {
     // A private window forgets the choice on reload. That is worse than
     // remembering it and better than throwing on click.
+  }
+}
+
+export function applyConsoleTheme(next: Theme): void {
+  const theme = CONSOLE_THEME_SET.has(next) ? next : 'dark';
+  document.documentElement.setAttribute('data-t', theme);
+  try {
+    localStorage.setItem(THEME_CONSOLE_STORAGE_KEY, theme);
+  } catch {
+    // Same trade-off as `applyTheme`.
   }
 }
 

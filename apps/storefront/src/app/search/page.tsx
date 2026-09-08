@@ -22,6 +22,7 @@ import { CategoryStrip } from '../CategoryStrip';
 import { FilterRail } from '../FilterRail';
 import { Pager } from './Pager';
 import { ResultBar } from './ResultBar';
+import { toApiQueryString, toQueryString } from './query';
 import { SORTS } from './sorts';
 import { ResultsList } from './ResultsList';
 import { SearchResultCard } from './SearchResultCard';
@@ -35,18 +36,6 @@ export const metadata: Metadata = {
 /** Board state is per-request by definition; a cached board is another board. */
 export const dynamic = 'force-dynamic';
 
-/** Params the API does not read, so they never reach it as a filter. */
-const CLIENT_ONLY = new Set(['view', 'pin']);
-
-function toQueryString(params: Record<string, string | string[] | undefined>): string {
-  const qs = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined) continue;
-    for (const v of Array.isArray(value) ? value : [value]) if (v !== '') qs.append(key, v);
-  }
-  return qs.toString();
-}
-
 export default async function SearchPage({
   searchParams,
 }: {
@@ -55,10 +44,7 @@ export default async function SearchPage({
   const params = await searchParams;
   const query = toQueryString(params);
 
-  const apiQuery = new URLSearchParams(query);
-  for (const key of CLIENT_ONLY) apiQuery.delete(key);
-
-  const data = await getSearch(apiQuery.toString());
+  const data = await getSearch(toApiQueryString(params));
 
   const view = params.view === 'list' ? 'list' : 'grid';
   const pincode = typeof params.pin === 'string' && params.pin !== '' ? params.pin : null;

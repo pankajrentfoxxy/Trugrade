@@ -146,12 +146,15 @@ export {
   THEMES,
   THEME_LABELS,
   THEME_STORAGE_KEY,
+  THEME_CONSOLE_STORAGE_KEY,
   THEME_PREPAINT_SCRIPT,
   THEME_STOREFRONT_PREPAINT_SCRIPT,
+  THEME_CONSOLE_PREPAINT_SCRIPT,
   isTheme,
   nextTheme,
   readTheme,
   applyTheme,
+  applyConsoleTheme,
 } from './components/theme';
 
 export {

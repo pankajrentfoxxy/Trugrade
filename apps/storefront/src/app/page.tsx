@@ -3,6 +3,8 @@ import { getSearch, getStats } from '../lib/api';
 import { consoleSellRegisterUrl } from '../lib/console-url';
 import { CategoryStrip } from './CategoryStrip';
 import { FilterRail } from './FilterRail';
+import { ResultBar } from './search/ResultBar';
+import { toApiQueryString, toQueryString } from './search/query';
 import { SearchResultCard } from './search/SearchResultCard';
 import { SiteHeader } from './SiteHeader';
 
@@ -25,7 +27,7 @@ import { SiteHeader } from './SiteHeader';
  * not exist is a scarcity device. The layout is complete and fills in the moment
  * stock is inspected.
  */
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 const PROCESS = [
   [
@@ -46,12 +48,23 @@ const PROCESS = [
   ],
 ] as const;
 
-export default async function HomePage(): Promise<React.JSX.Element> {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<React.JSX.Element> {
+  const params = await searchParams;
+  const query = toQueryString(params);
+  const sort = typeof params.sort === 'string' ? params.sort : 'price';
+
+  const apiQuery = new URLSearchParams(toApiQueryString(params));
+  if (!apiQuery.has('per')) apiQuery.set('per', '24');
+
   // The rail is fed from the same endpoint that feeds `/search`, so the counts
   // beside each option on the homepage are the counts the results page will
   // honour. Two sources for one rail is how a facet starts promising stock that
   // the search behind it does not return.
-  const [stats, search] = await Promise.all([getStats(), getSearch('per=24')]);
+  const [stats, search] = await Promise.all([getStats(), getSearch(apiQuery.toString())]);
 
   const inspected = stats?.unitsInspected ?? 0;
   const sellable = stats?.unitsSellable ?? 0;
@@ -146,22 +159,17 @@ export default async function HomePage(): Promise<React.JSX.Element> {
               </div>
 
               {/* 4b — RESULT BAR */}
-              <div className="rbar">
-                <span>
-                  <b className="mono">{sellable.toLocaleString('en-IN')}</b> inspected laptops
-                </span>
-                <div className="r">
-                  <label className="sr-only" htmlFor="sort">
-                    Sort
-                  </label>
-                  <select id="sort" defaultValue="price">
-                    <option value="price">Landed price, low to high</option>
-                    <option value="score">Inspection score</option>
-                    <option value="battery">Battery health</option>
-                    <option value="fast">Ships soonest</option>
-                  </select>
-                </div>
-              </div>
+              <ResultBar
+                basePath="/"
+                variant="home"
+                showViewToggle={false}
+                query={query}
+                total={sellable}
+                models={search?.models ?? 0}
+                pincode={null}
+                sort={sort}
+                view="grid"
+              />
 
               {/* 4c — Rich cards from search (same component as /search). */}
               {results.length > 0 ? (
