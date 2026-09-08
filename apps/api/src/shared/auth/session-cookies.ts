@@ -3,6 +3,9 @@ import type { CookieOptions, Request } from 'express';
 /** Which first-party client established or is presenting the session. */
 export type SessionAudience = 'storefront' | 'console';
 
+/** Org types that can appear in a session token. */
+export type PortalOrgType = 'VENDOR' | 'BUYER' | 'PLATFORM';
+
 export const STOREFRONT_ACCESS_COOKIE = 'tg_access';
 export const STOREFRONT_REFRESH_COOKIE = 'tg_refresh';
 export const CONSOLE_ACCESS_COOKIE = 'tg_co_access';
@@ -135,4 +138,28 @@ export function cookieOptionsForAudience(
     domain: cookieDomainForAudience(audience, storefrontUrl, consoleUrl, isProduction),
     path: '/',
   };
+}
+
+/** Buyers use the storefront; vendors and platform staff use the console. */
+export function isOrgTypeAllowedOnAudience(
+  orgType: PortalOrgType,
+  audience: SessionAudience,
+): boolean {
+  if (audience === 'storefront') return orgType === 'BUYER';
+  return orgType === 'VENDOR' || orgType === 'PLATFORM';
+}
+
+export function wrongPortalMessage(
+  orgType: PortalOrgType,
+  audience: SessionAudience,
+  storefrontUrl: string,
+  consoleUrl: string,
+): string {
+  if (audience === 'console' && orgType === 'BUYER') {
+    return `This account is for buyers. Sign in at ${storefrontUrl} to shop and manage orders.`;
+  }
+  if (audience === 'storefront' && (orgType === 'VENDOR' || orgType === 'PLATFORM')) {
+    return `This account is for vendors and staff. Sign in at ${consoleUrl} to manage your supplier account.`;
+  }
+  return 'This account cannot be used on this site.';
 }

@@ -12,7 +12,7 @@ import { ForbiddenError, UnauthenticatedError } from '../errors/domain-errors';
 import { RequestContextService, type Principal } from '../db/org-scope';
 import { AppConfig } from '../config';
 import { TokenService, type AccessTokenClaims } from './token.service';
-import { extractSessionAccessToken } from './session-cookies';
+import { extractSessionAccessToken, isOrgTypeAllowedOnAudience, resolveSessionAudience, wrongPortalMessage } from './session-cookies';
 
 export const IS_PUBLIC = 'trugrade:public';
 export const REQUIRED_PERMISSIONS = 'trugrade:permissions';
@@ -83,6 +83,26 @@ export class AuthGuard implements CanActivate {
     } catch (e) {
       if (isPublic) return true;
       throw e;
+    }
+
+    const audience = resolveSessionAudience(
+      req,
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+    );
+    if (!isOrgTypeAllowedOnAudience(claims.org_type, audience)) {
+      // Wrong-portal cookies must not authenticate public routes (e.g. login)
+      // and must not reach protected handlers.
+      if (isPublic) return true;
+      throw new ForbiddenError(
+        wrongPortalMessage(
+          claims.org_type,
+          audience,
+          this.config.get('STOREFRONT_URL'),
+          this.config.get('CONSOLE_URL'),
+        ),
+        { reason: 'wrong_portal' },
+      );
     }
 
     const principal: Principal = {

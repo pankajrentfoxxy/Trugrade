@@ -4,6 +4,7 @@ import { uuidSchema, type Permission, type Role } from '@trugrade/contracts';
 import { Public } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
+  ForbiddenError,
   RateLimitedError,
   UnauthenticatedError,
   ValidationError,
@@ -15,10 +16,12 @@ import {
   REFRESH_COOKIE_PATH,
   cookieNamesFor,
   cookieOptionsForAudience,
+  isOrgTypeAllowedOnAudience,
   readSessionCookie,
   resolveSessionAudience,
   STOREFRONT_ACCESS_COOKIE,
   STOREFRONT_REFRESH_COOKIE,
+  wrongPortalMessage,
   type SessionAudience,
 } from '../../shared/auth/session-cookies';
 import { AppConfig } from '../../shared/config';
@@ -386,6 +389,7 @@ export class IdentityController {
     await this.limiter.consume(REGISTER_LIMIT, ctx?.ip ?? 'unknown');
 
     await this.assertContactsVerified(body.email, body.mobile);
+    this.assertPortalAccess(req, body.orgType);
 
     await this.identity.createOrganizationWithOwner({
       orgType: body.orgType,
@@ -403,6 +407,7 @@ export class IdentityController {
       userAgent: ctx?.userAgent,
     });
 
+    this.assertPortalAccess(req, user.orgType);
     this.setSessionCookies(req, res, tokens);
     return {
       ...principalOf(user),
@@ -428,7 +433,7 @@ export class IdentityController {
       userAgent: ctx?.userAgent,
     });
 
-    this.setSessionCookies(req, res, tokens);
+    this.assertPortalAccess(req, user.orgType);
     return {
       ...principalOf(user),
       mfaRequired,
@@ -511,6 +516,7 @@ export class IdentityController {
       userAgent: ctx?.userAgent,
     });
 
+    this.assertPortalAccess(req, user.orgType);
     this.setSessionCookies(req, res, tokens);
     return {
       ...principalOf(user),
@@ -702,12 +708,24 @@ export class IdentityController {
     if (!presented) throw new UnauthenticatedError();
 
     const tokens = await this.identity.refresh(presented);
+    const claims = await this.tokens.verifyAccess(tokens.accessToken);
+    if (!isOrgTypeAllowedOnAudience(claims.org_type, this.sessionAudience(req))) {
+      this.clearSessionCookies(req, res);
+      throw new ForbiddenError(
+        wrongPortalMessage(
+          claims.org_type,
+          this.sessionAudience(req),
+          this.config.get('STOREFRONT_URL'),
+          this.config.get('CONSOLE_URL'),
+        ),
+        { reason: 'wrong_portal' },
+      );
+    }
     this.setSessionCookies(req, res, tokens);
 
     // The rotated access token is the authoritative description of the session
     // just issued — including whether MFA is still outstanding — so it is read
     // back rather than reassembled from a second source.
-    const claims = await this.tokens.verifyAccess(tokens.accessToken);
     const user = await this.identity.getUser(claims.sub);
     return {
       userId: claims.sub,
@@ -834,6 +852,9 @@ export class IdentityController {
     await this.tokens.markMfaSatisfied(principal.sessionId);
 
     const tokens = await this.identity.refresh(presented);
+    const claims = await this.tokens.verifyAccess(tokens.accessToken);
+    this.assertPortalAccess(req, claims.org_type);
+
     this.setSessionCookies(req, res, tokens);
 
     await this.audit.record({
@@ -909,6 +930,20 @@ export class IdentityController {
       req,
       this.config.get('STOREFRONT_URL'),
       this.config.get('CONSOLE_URL'),
+    );
+  }
+
+  private assertPortalAccess(req: Request, orgType: OrgType): void {
+    const audience = this.sessionAudience(req);
+    if (isOrgTypeAllowedOnAudience(orgType, audience)) return;
+    throw new ForbiddenError(
+      wrongPortalMessage(
+        orgType,
+        audience,
+        this.config.get('STOREFRONT_URL'),
+        this.config.get('CONSOLE_URL'),
+      ),
+      { reason: 'wrong_portal' },
     );
   }
 

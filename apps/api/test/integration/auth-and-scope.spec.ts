@@ -373,9 +373,14 @@ describe('VR-058 / VR-059 — tokens', () => {
         switchToHttp: () => ({ getRequest: () => req }),
       }) as unknown as ExecutionContext;
 
-    const withCookie = (token: string): FakeRequest => ({
-      headers: {},
-      cookies: { tg_access: token },
+    const withCookie = (
+      token: string,
+      audience: 'storefront' | 'console' = 'console',
+    ): FakeRequest => ({
+      headers: {
+        origin: audience === 'console' ? 'http://localhost:5173' : 'http://localhost:3000',
+      },
+      cookies: { [audience === 'console' ? 'tg_co_access' : 'tg_access']: token },
     });
 
     let guard: AuthGuard;
@@ -418,8 +423,18 @@ describe('VR-058 / VR-059 — tokens', () => {
       await expect(
         ctx.run({ requestId: 'test' }, () => guard.canActivate(contextFor('public', req))),
       ).resolves.toBe(true);
-      // The signed-in buyer browsing the storefront still gets their own prices.
+      // The signed-in vendor browsing the console still gets their own data.
       expect(req.principal?.orgId).toBe(VENDOR_A);
+    });
+
+    it('refuses a vendor session on a guarded storefront route', async () => {
+      const issued = await issueFor();
+
+      await expect(
+        ctx.run({ requestId: 'test' }, () =>
+          guard.canActivate(contextFor('guarded', withCookie(issued.accessToken, 'storefront'))),
+        ),
+      ).rejects.toThrow(ForbiddenError);
     });
   });
 });

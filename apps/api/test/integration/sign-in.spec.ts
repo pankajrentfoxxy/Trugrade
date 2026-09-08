@@ -74,6 +74,8 @@ const PASSWORD = 'Vermilion-Ledger-88!';
 const fakeRequest = (origin = 'http://localhost:3000'): Request =>
   ({ headers: { origin }, cookies: {} }) as unknown as Request;
 
+const fakeConsoleRequest = (): Request => fakeRequest('http://localhost:5173');
+
 const fakeResponse = (): Response =>
   ({ cookie: () => undefined, clearCookie: () => undefined }) as unknown as Response;
 
@@ -137,7 +139,10 @@ beforeEach(async () => {
   outbox.clear();
   clock.advanceTo(new Date('2026-08-27T06:00:00.000Z'));
 
-  orgId = await makeOrganization({ legal_name: 'Harbourpoint Devices Pvt Ltd' }, raw);
+  orgId = await makeOrganization(
+    { legal_name: 'Harbourpoint Devices Pvt Ltd', org_type: 'BUYER' },
+    raw,
+  );
   userId = await makeUser(orgId, { email: KNOWN, full_name: 'Ishaan Malhotra' }, raw);
   await passwords.setPassword(userId, PASSWORD, { email: KNOWN });
   await identity.assignRole(userId, 'CUSTOMER_OWNER');
@@ -365,6 +370,43 @@ describe('a reset ends every session that was open at the time', () => {
       controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse()),
     );
     expect(still.userId).toBe(userId);
+  });
+});
+
+describe('each portal accepts only the org type it serves', () => {
+  it('refuses a buyer signing in on the vendor console', async () => {
+    const refusal = await thrown(() =>
+      inRequest(() =>
+        controller.login(
+          { email: KNOWN, password: PASSWORD },
+          fakeConsoleRequest(),
+          fakeResponse(),
+        ),
+      ),
+    );
+    expect(refusal).toBeInstanceOf(ForbiddenError);
+    expect(refusal.message).toContain('buyers');
+  });
+
+  it('refuses a vendor signing in on the buyer storefront', async () => {
+    const vendorOrg = await makeOrganization(
+      { legal_name: 'Northwind Refurb Pvt Ltd', org_type: 'VENDOR' },
+      raw,
+    );
+    const vendorEmail = 'owner@northwind.example';
+    const vendorUser = await makeUser(vendorOrg, { email: vendorEmail }, raw);
+    await passwords.setPassword(vendorUser, PASSWORD, { email: vendorEmail });
+    await identity.assignRole(vendorUser, 'VENDOR_OWNER');
+    await raw.$executeRaw`
+      UPDATE identity.organization SET status = 'VERIFIED' WHERE id = ${vendorOrg}::uuid`;
+
+    const refusal = await thrown(() =>
+      inRequest(() =>
+        controller.login({ email: vendorEmail, password: PASSWORD }, fakeRequest(), fakeResponse()),
+      ),
+    );
+    expect(refusal).toBeInstanceOf(ForbiddenError);
+    expect(refusal.message).toContain('vendors and staff');
   });
 });
 

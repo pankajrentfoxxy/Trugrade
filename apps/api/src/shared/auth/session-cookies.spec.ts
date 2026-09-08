@@ -4,7 +4,9 @@ import {
   STOREFRONT_ACCESS_COOKIE,
   cookieNamesFor,
   extractSessionAccessToken,
+  isOrgTypeAllowedOnAudience,
   resolveSessionAudience,
+  wrongPortalMessage,
 } from './session-cookies';
 
 const STOREFRONT = 'http://localhost:3000';
@@ -79,5 +81,23 @@ describe('extractSessionAccessToken', () => {
       CONSOLE,
     );
     expect(token).toBe('header-token');
+  });
+});
+
+describe('portal access', () => {
+  it('allows buyers on the storefront only', () => {
+    expect(isOrgTypeAllowedOnAudience('BUYER', 'storefront')).toBe(true);
+    expect(isOrgTypeAllowedOnAudience('BUYER', 'console')).toBe(false);
+  });
+
+  it('allows vendors and platform staff on the console only', () => {
+    expect(isOrgTypeAllowedOnAudience('VENDOR', 'console')).toBe(true);
+    expect(isOrgTypeAllowedOnAudience('PLATFORM', 'console')).toBe(true);
+    expect(isOrgTypeAllowedOnAudience('VENDOR', 'storefront')).toBe(false);
+  });
+
+  it('names the correct sign-in URL in the refusal', () => {
+    expect(wrongPortalMessage('BUYER', 'console', STOREFRONT, CONSOLE)).toContain(STOREFRONT);
+    expect(wrongPortalMessage('VENDOR', 'storefront', STOREFRONT, CONSOLE)).toContain(CONSOLE);
   });
 });
