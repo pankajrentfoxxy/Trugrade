@@ -13,6 +13,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 // Also loaded by `jest.setup.ts` at runtime; imported here so `tsc --noEmit`
 // sees the matcher augmentation, which the setup file is outside `include` for.
 import '@testing-library/jest-dom';
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
+}));
+
 import { BuyerRegistration } from './BuyerRegistration';
 import type { StepDefinition } from './api';
 

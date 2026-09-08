@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Button, Input, MfaChallenge, RateLimitNotice, StatusPill } from '@trugrade/ui';
 import {
   getOnboarding,
+  getSession,
   login,
   requestMfaCode,
   sendLoginCode,
@@ -90,6 +91,11 @@ function safeNext(): string | null {
 
 const destinationFor = (orgType: string): string =>
   orgType === 'BUYER' ? (safeNext() ?? '/') : CONSOLE_URL;
+
+/** Leave sign-in without leaving it in history — back must not return here. */
+const leaveSignIn = (url: string): void => {
+  window.location.replace(url);
+};
 
 /** Where an unfinished application is picked up again. */
 const applicationFor = (orgType: string): string =>
@@ -186,6 +192,7 @@ export function SignIn(): React.JSX.Element {
   const [error, setError] = React.useState<string | null>(null);
   const [wait, setWait] = React.useState<Wait | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [booting, setBooting] = React.useState(true);
 
   /**
    * Every refusal lands here, so there is exactly one place that decides what a
@@ -208,51 +215,88 @@ export function SignIn(): React.JSX.Element {
   };
 
   /**
-   * What happens after the server says yes.
+   * Where an existing session goes — on mount and after a fresh sign-in.
    *
-   * The organisation's status decides where they go, and it is asked for rather
-   * than assumed: an approved buyer goes to the shop, an unfinished application
-   * goes back to its own flow, and anything in between gets a screen that says
-   * where it stands. `GET /onboarding/steps` is only open to the owner and admin
-   * roles, so a refusal there is not an error — it means this person is not the
-   * one who fills the application in, and the destination is right for them.
+   * `restore` evicts every signed-in visitor from this URL (including via the
+   * back button). `fresh` may stay on the outcome panel once, then still
+   * replaces history when it sends someone onward.
    */
-  const afterSignIn = async (session: SessionView): Promise<void> => {
-    if (session.mfaRequired) {
-      const sent = await requestMfaCode();
-      if (!sent.ok) {
-        refuse(sent);
+  const routeSession = React.useCallback(
+    async (session: SessionView, mode: 'fresh' | 'restore'): Promise<void> => {
+      if (session.mfaRequired) {
+        const sent = await requestMfaCode();
+        if (!sent.ok) {
+          refuse(sent);
+          return;
+        }
+        setBusy(false);
+        setBooting(false);
+        setStage({ k: 'mfa', sentTo: sent.data.sentTo });
         return;
       }
+
+      if (session.orgType === 'INTERNAL') {
+        leaveSignIn(CONSOLE_URL);
+        return;
+      }
+
+      const onboarding = await getOnboarding();
+
+      if (mode === 'restore') {
+        if (!onboarding.ok) {
+          leaveSignIn(destinationFor(session.orgType));
+          return;
+        }
+        const status = onboarding.data.status;
+        if (status === 'VERIFIED') {
+          leaveSignIn(destinationFor(session.orgType));
+          return;
+        }
+        if (UNFINISHED.includes(status)) {
+          leaveSignIn(applicationFor(session.orgType));
+          return;
+        }
+        leaveSignIn(session.orgType === 'BUYER' ? '/account' : CONSOLE_URL);
+        return;
+      }
+
+      if (!onboarding.ok) {
+        leaveSignIn(destinationFor(session.orgType));
+        return;
+      }
+
+      const status = onboarding.data.status;
+      if (status === 'VERIFIED') {
+        leaveSignIn(destinationFor(session.orgType));
+        return;
+      }
+      if (UNFINISHED.includes(status)) {
+        leaveSignIn(applicationFor(session.orgType));
+        return;
+      }
+
       setBusy(false);
-      setStage({ k: 'mfa', sentTo: sent.data.sentTo });
-      return;
-    }
+      setBooting(false);
+      setStage({ k: 'outcome', orgType: session.orgType, data: onboarding.data });
+    },
+    [],
+  );
 
-    if (session.orgType === 'INTERNAL') {
-      window.location.assign(CONSOLE_URL);
-      return;
-    }
-
-    const onboarding = await getOnboarding();
-    if (!onboarding.ok) {
-      window.location.assign(destinationFor(session.orgType));
-      return;
-    }
-
-    const status = onboarding.data.status;
-    if (status === 'VERIFIED') {
-      window.location.assign(destinationFor(session.orgType));
-      return;
-    }
-    if (UNFINISHED.includes(status)) {
-      window.location.assign(applicationFor(session.orgType));
-      return;
-    }
-
-    setBusy(false);
-    setStage({ k: 'outcome', orgType: session.orgType, data: onboarding.data });
-  };
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const session = await getSession();
+      if (cancelled) return;
+      if (!session.ok) {
+        setBooting(false);
+        return;
+      }
+      await routeSession(session.data, 'restore');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [routeSession]);
 
   /* ---------------------------------------------------------------- actions */
 
@@ -276,10 +320,18 @@ export function SignIn(): React.JSX.Element {
       refuse(result);
       return;
     }
-    await afterSignIn(result.data);
+    await routeSession(result.data, 'fresh');
   };
 
   /* ----------------------------------------------------------------- render */
+
+  if (booting) {
+    return (
+      <Shell>
+        <p className="text-body text-ink-2">Checking your session…</p>
+      </Shell>
+    );
+  }
 
   const notices = (
     <>
@@ -368,7 +420,7 @@ export function SignIn(): React.JSX.Element {
           onVerify={async (code) => {
             const result = await verifyMfa(code);
             if (!result.ok) return result.message || result.fields.code;
-            await afterSignIn(result.data);
+            await routeSession(result.data, 'fresh');
             return undefined;
           }}
           onResend={async () => {
@@ -408,7 +460,7 @@ export function SignIn(): React.JSX.Element {
                 }
                 return result.message || result.fields.code;
               }
-              await afterSignIn(result.data);
+              await routeSession(result.data, 'fresh');
               return undefined;
             }}
             onResend={async () => {

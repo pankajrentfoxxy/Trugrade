@@ -275,12 +275,11 @@ export class IdentityController {
   //
   //   1. **Cost.** Every call sends an SMS we pay for. `OtpService` caps a
   //      single target; `REGISTER_OTP_IP_LIMIT` caps a caller walking a list.
-  //   2. **Enumeration.** Neither route looks the address up, so neither can
-  //      leak whether it is registered. The response is assembled from the
-  //      request and the clock, and nothing else.
-  //
-  // Whether the address is already in use is answered by `POST /auth/register`,
-  // to someone who has just proved they can read that mailbox.
+  //   2. **Enumeration on login.** `login/otp` and `password/forgot` never look
+  //      the address up — a known-address answer would be a supplier directory.
+  //      Registration is different: the applicant is trying to *create* an
+  //      account, so `sendRegistrationOtp` refuses an address that is already
+  //      taken before it sends a code they cannot use.
 
   /**
    * Send a six-digit code to a work email or an Indian mobile.
@@ -298,6 +297,8 @@ export class IdentityController {
   ): Promise<RegistrationOtpResponse> {
     const ctx = this.ctx.get();
     await this.limiter.consume(REGISTER_OTP_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    await this.identity.assertRegistrationContactAvailable(body.channel, body.value);
 
     const issued = await this.otp.issue({
       target: body.value,

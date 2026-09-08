@@ -17,7 +17,6 @@ import { EventBus } from '../../shared/events';
 import { RateLimiter } from '../../shared/redis/redis.service';
 import { TokenService, type IssuedTokens } from '../../shared/auth/token.service';
 import {
-  ConflictError,
   ForbiddenError,
   NotFoundError,
   UnauthenticatedError,
@@ -253,6 +252,56 @@ export class IdentityService implements IIdentityService {
    * VR-031 / VR-033. Checked before the transaction so the message names the
    * field, and again by the database's unique indexes so a race cannot slip past.
    */
+  private static readonly EMAIL_REGISTERED =
+    'This email is already registered. Sign in instead, or use a different address.';
+
+  private static readonly MOBILE_REGISTERED =
+    'This mobile number is already registered. Sign in instead, or use a different number.';
+
+  /**
+   * Checked when an applicant asks for a registration OTP. Unlike login routes,
+   * naming the collision here is deliberate: they are trying to create an account,
+   * and learning the address is taken before they prove the mailbox saves a form
+   * full of typing.
+   */
+  async assertRegistrationContactAvailable(
+    channel: 'EMAIL' | 'MOBILE',
+    value: string,
+  ): Promise<void> {
+    if (channel === 'EMAIL') {
+      const email = normaliseEmail(value);
+      if (!email) return;
+
+      const found = await this.prisma.$queryRaw<Array<{ email: string | null }>>`
+        SELECT email::text AS email FROM identity.user_account
+        WHERE lower(email::text) = lower(${email})
+          AND status <> 'DEACTIVATED'
+        LIMIT 1`;
+
+      if (found[0]?.email) {
+        throw new ValidationError(IdentityService.EMAIL_REGISTERED, {
+          value: IdentityService.EMAIL_REGISTERED,
+        });
+      }
+      return;
+    }
+
+    const mobile = normaliseMobile(value);
+    if (!mobile) return;
+
+    const found = await this.prisma.$queryRaw<Array<{ mobile: string | null }>>`
+      SELECT mobile FROM identity.user_account
+      WHERE mobile = ${mobile}
+        AND status <> 'DEACTIVATED'
+      LIMIT 1`;
+
+    if (found[0]?.mobile) {
+      throw new ValidationError(IdentityService.MOBILE_REGISTERED, {
+        value: IdentityService.MOBILE_REGISTERED,
+      });
+    }
+  }
+
   private async assertContactAvailable(email: string, mobile: string): Promise<void> {
     const clash = await this.prisma.$queryRaw<
       Array<{ email: string | null; mobile: string | null }>
@@ -268,13 +317,13 @@ export class IdentityService implements IIdentityService {
     // Name the one that actually collided. "Already registered" against the wrong
     // field sends people to support.
     if (found.email && found.email.toLowerCase() === email.toLowerCase()) {
-      throw new ConflictError(
-        'This email is already registered. Sign in instead, or use a different address.',
-      );
+      throw new ValidationError(IdentityService.EMAIL_REGISTERED, {
+        email: IdentityService.EMAIL_REGISTERED,
+      });
     }
-    throw new ConflictError(
-      'This mobile number is already registered. Sign in instead, or use a different number.',
-    );
+    throw new ValidationError(IdentityService.MOBILE_REGISTERED, {
+      mobile: IdentityService.MOBILE_REGISTERED,
+    });
   }
 
   /**

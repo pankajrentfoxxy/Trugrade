@@ -49,7 +49,9 @@ const respond = (reply: Reply): Response =>
   }) as unknown as Response;
 
 beforeEach(() => {
-  replies = {};
+  replies = {
+    '/api/auth/session': refusal('UNAUTHENTICATED', WRONG, 401),
+  };
   global.fetch = jest.fn((input: RequestInfo | URL) => {
     const url = String(input);
     const key = Object.keys(replies).find((k) => url.endsWith(k));
@@ -73,6 +75,7 @@ const WRONG = 'That email or password is not right.';
 /** One attempt, mounted and torn down, so the two runs cannot see each other. */
 async function signInWith(email: string, password: string): Promise<string> {
   const { container, unmount } = render(<SignIn />);
+  await waitFor(() => screen.getByRole('button', { name: 'Use a password instead' }));
   fireEvent.click(screen.getByRole('button', { name: 'Use a password instead' }));
   fireEvent.change(screen.getByLabelText(/Work email/), { target: { value: email } });
   fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: password } });
@@ -157,6 +160,7 @@ describe('r.4(9) — nothing arrives ticked', () => {
     };
 
     const code = render(<SignIn />);
+    await waitFor(() => screen.getByRole('button', { name: 'Use a password instead' }));
     // Stage one: the address.
     expect(boxes(code.container).filter((b) => b.checked)).toHaveLength(0);
 
@@ -206,6 +210,7 @@ describe('a wait is rendered as the wait it is', () => {
     replies['/api/auth/login'] = LIMITED;
 
     render(<SignIn />);
+    await waitFor(() => screen.getByRole('button', { name: 'Use a password instead' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use a password instead' }));
     fireEvent.change(screen.getByLabelText(/Work email/), {
       target: { value: 'procurement@acme.example' },
@@ -246,6 +251,7 @@ describe('a wait is rendered as the wait it is', () => {
     };
 
     render(<SignIn />);
+    await waitFor(() => screen.getByRole('button', { name: 'Use a password instead' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use a password instead' }));
     fireEvent.change(screen.getByLabelText(/Work email/), {
       target: { value: 'procurement@acme.example' },
@@ -272,6 +278,7 @@ describe('a suspended organisation is told what happened, in the server’s word
     replies['/api/auth/login'] = refusal('FORBIDDEN', SUSPENDED, 403);
 
     render(<SignIn />);
+    await waitFor(() => screen.getByRole('button', { name: 'Use a password instead' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use a password instead' }));
     fireEvent.change(screen.getByLabelText(/Work email/), {
       target: { value: 'owner@acme.example' },

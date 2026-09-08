@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Button,
   EmptyState,
@@ -226,6 +227,13 @@ export function RegisterFlow({
   );
   const [answers, setAnswers] = React.useState<Record<string, Record<string, unknown>>>({});
   const [registered, setRegistered] = React.useState(false);
+  const router = useRouter();
+
+  /** Re-read server chrome — `SiteHeader` is SSR and does not see new cookies until this runs. */
+  const markSignedIn = React.useCallback((): void => {
+    setRegistered(true);
+    router.refresh();
+  }, [router]);
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [saveFailure, setSaveFailure] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -355,7 +363,7 @@ export function RegisterFlow({
         return;
       }
 
-      setRegistered(true);
+      markSignedIn();
       // Idempotent, and safe on every mount — which is how it is meant to be
       // called. The client should not have to know whether registration or a
       // constitution change already materialised these rows.
@@ -491,7 +499,7 @@ export function RegisterFlow({
               : { password: created.message },
           );
         }
-        setRegistered(true);
+        markSignedIn();
         if (created.data.mfaRequired) {
           // Not an error and not a step: the account exists, and the answers on
           // screen are held until the factor lands rather than being written to
@@ -552,6 +560,7 @@ export function RegisterFlow({
     const pending = pendingAccount.current;
     pendingAccount.current = null;
     await startOnboarding();
+    router.refresh();
     if (pending) {
       await continueFromAccount(pending.values, pending.extras);
       return;
