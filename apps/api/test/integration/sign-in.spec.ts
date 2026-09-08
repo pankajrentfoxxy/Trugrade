@@ -25,7 +25,7 @@
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
@@ -71,6 +71,9 @@ const UNKNOWN = 'nobody@harbourpoint.example';
 const PASSWORD = 'Vermilion-Ledger-88!';
 
 /** Express only ever gets cookies set on it here; nothing reads the response. */
+const fakeRequest = (origin = 'http://localhost:3000'): Request =>
+  ({ headers: { origin }, cookies: {} }) as unknown as Request;
+
 const fakeResponse = (): Response =>
   ({ cookie: () => undefined, clearCookie: () => undefined }) as unknown as Response;
 
@@ -219,12 +222,12 @@ describe('a pre-session code route must not be able to say whether an address ha
 
     const onKnown = await thrown(() =>
       inRequest(() =>
-        controller.verifyLoginCode({ email: KNOWN, code: '000000' }, fakeResponse()),
+        controller.verifyLoginCode({ email: KNOWN, code: '000000' }, fakeRequest(), fakeResponse()),
       ),
     );
     const onUnknown = await thrown(() =>
       inRequest(() =>
-        controller.verifyLoginCode({ email: UNKNOWN, code: '000000' }, fakeResponse()),
+        controller.verifyLoginCode({ email: UNKNOWN, code: '000000' }, fakeRequest(), fakeResponse()),
       ),
     );
 
@@ -251,7 +254,7 @@ describe('signing in with a code is the same sign-in, not a shortcut around it',
   it('issues a session for the right account', async () => {
     const code = await codeFor(KNOWN);
     const session = await inRequest(() =>
-      controller.verifyLoginCode({ email: KNOWN, code }, fakeResponse()),
+      controller.verifyLoginCode({ email: KNOWN, code }, fakeRequest(), fakeResponse()),
     );
 
     expect(session.userId).toBe(userId);
@@ -265,7 +268,7 @@ describe('signing in with a code is the same sign-in, not a shortcut around it',
       UPDATE identity.organization SET status = 'SUSPENDED' WHERE id = ${orgId}::uuid`;
 
     const refusal = await thrown(() =>
-      inRequest(() => controller.verifyLoginCode({ email: KNOWN, code }, fakeResponse())),
+      inRequest(() => controller.verifyLoginCode({ email: KNOWN, code }, fakeRequest(), fakeResponse())),
     );
     expect(refusal).toBeInstanceOf(ForbiddenError);
     expect(refusal.message).toContain('suspended');
@@ -273,7 +276,7 @@ describe('signing in with a code is the same sign-in, not a shortcut around it',
     // And the password path says the identical thing, because it is the identical
     // code. Two copies of "is this organisation suspended" is one copy too many.
     const byPassword = await thrown(() =>
-      inRequest(() => controller.login({ email: KNOWN, password: PASSWORD }, fakeResponse())),
+      inRequest(() => controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse())),
     );
     expect(byPassword.message).toBe(refusal.message);
   });
@@ -303,7 +306,7 @@ describe('a reset ends every session that was open at the time', () => {
   it('signs the intruder out along with the owner, and clears the lockout', async () => {
     // A live session, exactly as a signed-in tab would hold one.
     const before = await inRequest(() =>
-      controller.login({ email: KNOWN, password: PASSWORD }, fakeResponse()),
+      controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse()),
     );
     expect(before.userId).toBe(userId);
 
@@ -312,7 +315,7 @@ describe('a reset ends every session that was open at the time', () => {
     // that sent them here.
     for (let i = 0; i < 5; i += 1) {
       await thrown(() =>
-        inRequest(() => controller.login({ email: KNOWN, password: `Wrong-${i}!` }, fakeResponse())),
+        inRequest(() => controller.login({ email: KNOWN, password: `Wrong-${i}!` }, fakeRequest(), fakeResponse())),
       );
     }
 
@@ -324,13 +327,13 @@ describe('a reset ends every session that was open at the time', () => {
 
     // The old password no longer opens anything…
     const stale = await thrown(() =>
-      inRequest(() => controller.login({ email: KNOWN, password: PASSWORD }, fakeResponse())),
+      inRequest(() => controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse())),
     );
     expect(stale.message).toBe('That email or password is not right.');
 
     // …the new one does, on the first attempt, with no wait…
     const after = await inRequest(() =>
-      controller.login({ email: KNOWN, password: NEW_PASSWORD }, fakeResponse()),
+      controller.login({ email: KNOWN, password: NEW_PASSWORD }, fakeRequest(), fakeResponse()),
     );
     expect(after.userId).toBe(userId);
 
@@ -359,7 +362,7 @@ describe('a reset ends every session that was open at the time', () => {
 
     // And the password is untouched.
     const still = await inRequest(() =>
-      controller.login({ email: KNOWN, password: PASSWORD }, fakeResponse()),
+      controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse()),
     );
     expect(still.userId).toBe(userId);
   });

@@ -28,7 +28,7 @@ export const envSchema = z
     API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
     STOREFRONT_URL: z.string().url().default('http://localhost:3000'),
-    CONSOLE_URL: z.string().url().default('http://localhost:3001'),
+    CONSOLE_URL: z.string().url().default('http://localhost:5173'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
     DATABASE_URL: z.string().min(1),
@@ -74,7 +74,11 @@ export const envSchema = z
       .number()
       .int()
       .default(30 * 24 * 3600),
-    SESSION_COOKIE_DOMAIN: z.string().default('localhost'),
+    /**
+     * Deprecated — session cookies are scoped per client URL (storefront vs console).
+     * Kept only so existing dev `.env` files boot; ignored when setting cookies.
+     */
+    SESSION_COOKIE_DOMAIN: z.string().optional().default('localhost'),
 
     INTEGRATION_MODE: z.enum(INTEGRATION_MODES).default('mock'),
 

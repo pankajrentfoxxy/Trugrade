@@ -222,6 +222,8 @@ export interface VendorRegistrationProps {
    */
   grades: { grade: string; customerDescription: string }[] | null;
   wrongAccountAction?: { href: string; label: string };
+  /** Console passes `syncSession` so the chrome sees cookies after step 1. */
+  onSessionEstablished?: () => void;
 }
 
 export function VendorRegistration({
@@ -229,6 +231,7 @@ export function VendorRegistration({
   brands,
   grades,
   wrongAccountAction,
+  onSessionEstablished,
 }: VendorRegistrationProps): React.JSX.Element {
   const renderers = React.useMemo<Record<string, (ctx: StepContext) => React.ReactNode>>(
     () => ({
@@ -356,6 +359,7 @@ export function VendorRegistration({
       wrongAccountBody="This form registers a supplier. You are signed in on a buyer account — sign out here if you also want to sell to us, and register the selling entity separately."
       wrongAccountAction={wrongAccountAction}
       review={(ctx) => <VendorReview {...ctx} />}
+      onSessionEstablished={onSessionEstablished}
     />
   );
 }

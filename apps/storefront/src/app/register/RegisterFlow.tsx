@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Button,
   EmptyState,
@@ -200,6 +199,11 @@ export interface RegisterFlowProps {
   wrongAccountAction?: { href: string; label: string };
   /** Absent until a flow has a review screen; the last step then has no next. */
   review?: (ctx: ReviewContext) => React.ReactNode;
+  /**
+   * Called once a session exists — storefront passes `router.refresh()` so
+   * `SiteHeader` re-reads cookies; the console omits it.
+   */
+  onSessionEstablished?: () => void;
 }
 
 export function RegisterFlow({
@@ -213,6 +217,7 @@ export function RegisterFlow({
   wrongAccountBody,
   wrongAccountAction = { href: '/', label: 'Back to the shop' },
   review,
+  onSessionEstablished,
 }: RegisterFlowProps): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>(definitions ? 'checking' : 'unreachable');
   const [steps, setSteps] = React.useState<StepProgress[]>(() =>
@@ -227,13 +232,11 @@ export function RegisterFlow({
   );
   const [answers, setAnswers] = React.useState<Record<string, Record<string, unknown>>>({});
   const [registered, setRegistered] = React.useState(false);
-  const router = useRouter();
 
-  /** Re-read server chrome — `SiteHeader` is SSR and does not see new cookies until this runs. */
   const markSignedIn = React.useCallback((): void => {
     setRegistered(true);
-    router.refresh();
-  }, [router]);
+    onSessionEstablished?.();
+  }, [onSessionEstablished]);
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [saveFailure, setSaveFailure] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -560,7 +563,7 @@ export function RegisterFlow({
     const pending = pendingAccount.current;
     pendingAccount.current = null;
     await startOnboarding();
-    router.refresh();
+    onSessionEstablished?.();
     if (pending) {
       await continueFromAccount(pending.values, pending.extras);
       return;

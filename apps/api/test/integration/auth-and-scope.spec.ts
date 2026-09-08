@@ -379,8 +379,11 @@ describe('VR-058 / VR-059 — tokens', () => {
     });
 
     let guard: AuthGuard;
-    beforeAll(() => {
-      guard = new AuthGuard(new Reflector(), tokens, ctx);
+    let config: AppConfig;
+    beforeAll(async () => {
+      const mod = await Test.createTestingModule({ imports: [ConfigModule] }).compile();
+      config = mod.get(AppConfig);
+      guard = new AuthGuard(new Reflector(), tokens, ctx, config);
     });
 
     it('lets a login through while the browser still holds a revoked session cookie', async () => {

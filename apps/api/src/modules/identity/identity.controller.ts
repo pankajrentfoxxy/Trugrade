@@ -10,6 +10,17 @@ import {
 } from '../../shared/errors/domain-errors';
 import { RequestContextService } from '../../shared/db/org-scope';
 import { TokenService, type IssuedTokens } from '../../shared/auth/token.service';
+import {
+  ACCESS_COOKIE_SKEW_SECONDS,
+  REFRESH_COOKIE_PATH,
+  cookieNamesFor,
+  cookieOptionsForAudience,
+  readSessionCookie,
+  resolveSessionAudience,
+  STOREFRONT_ACCESS_COOKIE,
+  STOREFRONT_REFRESH_COOKIE,
+  type SessionAudience,
+} from '../../shared/auth/session-cookies';
 import { AppConfig } from '../../shared/config';
 import { ClockPort } from '../../shared/clock';
 import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.service';
@@ -122,19 +133,6 @@ const REGISTER_OTP_TEMPLATE = 'AUTH_REGISTER_OTP';
  * second caller. A controller re-implementing any of them would be a second copy
  * of a security rule, which is much the same as not having one.
  */
-
-const ACCESS_COOKIE = 'tg_access';
-const REFRESH_COOKIE = 'tg_refresh';
-
-/**
- * The refresh cookie is scoped to the only paths that may present it. A cookie
- * sent on every API call leaks through every logging proxy and every mis-scoped
- * subresource; this one rides along on four routes.
- */
-const REFRESH_COOKIE_PATH = '/api/auth';
-
-/** Absorbs request latency, so the browser never sends a token the server has just aged out. */
-const ACCESS_COOKIE_SKEW_SECONDS = 30;
 
 /** Free-form per `NotificationPort`; the template body itself lives with the provider. */
 const LOGIN_OTP_TEMPLATE = 'AUTH_LOGIN_OTP';
@@ -379,6 +377,7 @@ export class IdentityController {
   @HttpCode(201)
   async register(
     @Body(new ZodValidationPipe(registerSchema)) body: RegisterDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionResponse> {
     const ctx = this.ctx.get();
@@ -404,7 +403,7 @@ export class IdentityController {
       userAgent: ctx?.userAgent,
     });
 
-    this.setSessionCookies(res, tokens);
+    this.setSessionCookies(req, res, tokens);
     return {
       ...principalOf(user),
       mfaRequired,
@@ -418,6 +417,7 @@ export class IdentityController {
   @HttpCode(200)
   async login(
     @Body(new ZodValidationPipe(loginSchema)) body: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionResponse> {
     const ctx = this.ctx.get();
@@ -428,7 +428,7 @@ export class IdentityController {
       userAgent: ctx?.userAgent,
     });
 
-    this.setSessionCookies(res, tokens);
+    this.setSessionCookies(req, res, tokens);
     return {
       ...principalOf(user),
       mfaRequired,
@@ -492,6 +492,7 @@ export class IdentityController {
   @HttpCode(200)
   async verifyLoginCode(
     @Body(new ZodValidationPipe(loginOtpVerifySchema)) body: LoginOtpVerifyDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionResponse> {
     const ctx = this.ctx.get();
@@ -510,7 +511,7 @@ export class IdentityController {
       userAgent: ctx?.userAgent,
     });
 
-    this.setSessionCookies(res, tokens);
+    this.setSessionCookies(req, res, tokens);
     return {
       ...principalOf(user),
       mfaRequired,
@@ -687,19 +688,21 @@ export class IdentityController {
       // a try/catch, and its failure arm had to guess — with the safe-LOOKING
       // guess (assume satisfied) failing open on the one field that must not.
       const user = await this.identity.getUser(principal.userId);
+      const names = cookieNamesFor(this.sessionAudience(req));
       return {
         ...principalOf(principal),
         fullName: user.fullName,
         mfaRequired: !principal.mfaSatisfied,
-        accessToken: cookie(req, ACCESS_COOKIE),
+        accessToken: readSessionCookie(req, names.access),
       };
     }
 
-    const presented = cookie(req, REFRESH_COOKIE);
+    const names = cookieNamesFor(this.sessionAudience(req));
+    const presented = readSessionCookie(req, names.refresh);
     if (!presented) throw new UnauthenticatedError();
 
     const tokens = await this.identity.refresh(presented);
-    this.setSessionCookies(res, tokens);
+    this.setSessionCookies(req, res, tokens);
 
     // The rotated access token is the authoritative description of the session
     // just issued — including whether MFA is still outstanding — so it is read
@@ -732,8 +735,9 @@ export class IdentityController {
   @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
     const principal = this.ctx.principal;
-    const presented = cookie(req, REFRESH_COOKIE);
-    this.clearSessionCookies(res);
+    const names = cookieNamesFor(this.sessionAudience(req));
+    const presented = readSessionCookie(req, names.refresh);
+    this.clearSessionCookies(req, res);
 
     if (principal) {
       await this.identity.logout(principal.sessionId, principal.userId);
@@ -821,7 +825,8 @@ export class IdentityController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionResponse> {
     const principal = this.requirePrincipal();
-    const presented = cookie(req, REFRESH_COOKIE);
+    const names = cookieNamesFor(this.sessionAudience(req));
+    const presented = readSessionCookie(req, names.refresh);
     if (!presented) throw new UnauthenticatedError();
 
     const user = await this.identity.getUser(principal.userId);
@@ -829,7 +834,7 @@ export class IdentityController {
     await this.tokens.markMfaSatisfied(principal.sessionId);
 
     const tokens = await this.identity.refresh(presented);
-    this.setSessionCookies(res, tokens);
+    this.setSessionCookies(req, res, tokens);
 
     await this.audit.record({
       action: 'identity.mfa.verified',
@@ -899,14 +904,35 @@ export class IdentityController {
   // Cookies
   // -------------------------------------------------------------------------
 
-  private setSessionCookies(res: Response, tokens: IssuedTokens): void {
+  private sessionAudience(req: Request): SessionAudience {
+    return resolveSessionAudience(
+      req,
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+    );
+  }
+
+  private setSessionCookies(req: Request, res: Response, tokens: IssuedTokens): void {
+    const audience = this.sessionAudience(req);
+    const names = cookieNamesFor(audience);
+    const baseOpts = cookieOptionsForAudience(
+      audience,
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+      this.config.isProduction,
+    );
+
+    // localhost shares one host across ports; clear the other jar and any legacy
+    // cookies that used the shared name before audience split landed.
+    this.clearOtherAudienceCookies(res, audience);
+
     const accessTtl = this.config.get('JWT_ACCESS_TTL_SECONDS');
-    res.cookie(ACCESS_COOKIE, tokens.accessToken, {
-      ...this.cookieOptions(),
+    res.cookie(names.access, tokens.accessToken, {
+      ...baseOpts,
       maxAge: Math.max(1, accessTtl - ACCESS_COOKIE_SKEW_SECONDS) * 1000,
     });
-    res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
-      ...this.cookieOptions(),
+    res.cookie(names.refresh, tokens.refreshToken, {
+      ...baseOpts,
       path: REFRESH_COOKIE_PATH,
       maxAge: this.config.get('JWT_REFRESH_TTL_SECONDS') * 1000,
     });
@@ -917,25 +943,47 @@ export class IdentityController {
    * a deletion on name, domain and path, so a mismatch here leaves the cookie
    * exactly where it was and the logout only appears to have worked.
    */
-  private clearSessionCookies(res: Response): void {
-    res.clearCookie(ACCESS_COOKIE, this.cookieOptions());
-    res.clearCookie(REFRESH_COOKIE, { ...this.cookieOptions(), path: REFRESH_COOKIE_PATH });
+  private clearSessionCookies(req: Request, res: Response): void {
+    this.clearAudienceCookies(res, this.sessionAudience(req));
   }
 
-  private cookieOptions(): CookieOptions {
-    return {
+  private clearAudienceCookies(res: Response, audience: SessionAudience): void {
+    const names = cookieNamesFor(audience);
+    const baseOpts = cookieOptionsForAudience(
+      audience,
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+      this.config.isProduction,
+    );
+    res.clearCookie(names.access, baseOpts);
+    res.clearCookie(names.refresh, { ...baseOpts, path: REFRESH_COOKIE_PATH });
+  }
+
+  private clearOtherAudienceCookies(res: Response, current: SessionAudience): void {
+    const other = current === 'storefront' ? 'console' : 'storefront';
+    this.clearAudienceCookies(res, other);
+
+    if (this.config.isProduction) return;
+
+    // Pre-split dev cookies used Domain=localhost on the shared tg_* names.
+    const legacyDomain = this.config.get('SESSION_COOKIE_DOMAIN');
+    const legacyOpts: CookieOptions = {
       httpOnly: true,
-      // Lax rather than Strict: Strict drops the cookie on a plain link into the
-      // console from an email, which reads to the user as a random signed-out
-      // state. Lax still withholds it from every cross-site POST, which is the
-      // CSRF case that matters.
       sameSite: 'lax',
-      // Never `secure` in development — a cookie the browser refuses to send
-      // over http://localhost is a login that silently does not work.
-      secure: this.config.isProduction,
-      domain: this.config.get('SESSION_COOKIE_DOMAIN'),
+      secure: false,
       path: '/',
     };
+    const legacyWithDomain = legacyDomain ? { ...legacyOpts, domain: legacyDomain } : legacyOpts;
+
+    res.clearCookie(STOREFRONT_ACCESS_COOKIE, legacyOpts);
+    res.clearCookie(STOREFRONT_REFRESH_COOKIE, { ...legacyOpts, path: REFRESH_COOKIE_PATH });
+    if (legacyDomain) {
+      res.clearCookie(STOREFRONT_ACCESS_COOKIE, legacyWithDomain);
+      res.clearCookie(STOREFRONT_REFRESH_COOKIE, {
+        ...legacyWithDomain,
+        path: REFRESH_COOKIE_PATH,
+      });
+    }
   }
 
   /**
@@ -980,9 +1028,6 @@ export class IdentityController {
     return principal;
   }
 }
-
-const cookie = (req: Request, name: string): string | undefined =>
-  (req as Request & { cookies?: Record<string, string> }).cookies?.[name];
 
 /**
  * One builder for both sources of truth — the decoded token on a warm request,

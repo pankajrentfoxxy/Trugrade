@@ -14,7 +14,17 @@ export default defineConfig({
     port: 5173,
     // The API is same-origin in production behind the edge; proxying in dev
     // keeps cookies first-party so the auth path is identical in both.
-    proxy: { '/api': { target: 'http://localhost:4000', changeOrigin: true } },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('x-trugrade-audience', 'console');
+          });
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

@@ -4,6 +4,8 @@ import { BRAND } from '@trugrade/config/brand';
 import { Skeleton } from '@trugrade/ui';
 import type { StepDefinition } from '../../../../storefront/src/app/register/api';
 import { VendorRegistration } from '../../../../storefront/src/app/sell/register/VendorRegistration';
+import { useAuth } from '../../lib/auth';
+import { AccountMenu } from '../../shell/AccountMenu';
 
 /**
  * ARCHETYPE D — Flow. Step rail, one step, "why we ask" rail.
@@ -50,6 +52,7 @@ async function loadBootstrap(): Promise<Bootstrap> {
 }
 
 export function VendorRegisterRoute(): React.JSX.Element {
+  const { principal, syncSession } = useAuth();
   const [bootstrap, setBootstrap] = React.useState<Bootstrap | null>(null);
 
   React.useEffect(() => {
@@ -63,6 +66,10 @@ export function VendorRegisterRoute(): React.JSX.Element {
     };
   }, []);
 
+  const handleSessionEstablished = React.useCallback((): void => {
+    void syncSession();
+  }, [syncSession]);
+
   return (
     <div className="min-h-full bg-bg">
       <header className="border-b border-rule bg-chrome px-6 py-4">
@@ -70,12 +77,22 @@ export function VendorRegisterRoute(): React.JSX.Element {
           <Link to="/login" className="text-h3 text-on-chrome no-underline">
             tru<span className="text-acc">grade</span>
           </Link>
-          <p className="text-body-sm text-on-chrome/70">
-            Already have an account?{' '}
-            <Link to="/login" className="text-acc underline underline-offset-4">
-              Sign in
-            </Link>
-          </p>
+          {principal ? (
+            <div className="flex items-center gap-4">
+              <p className="text-body-sm text-on-chrome/70">
+                Signed in as{' '}
+                <span className="text-on-chrome">{principal.fullName?.trim() || 'you'}</span>
+              </p>
+              <AccountMenu fullName={principal.fullName} />
+            </div>
+          ) : (
+            <p className="text-body-sm text-on-chrome/70">
+              Already have an account?{' '}
+              <Link to="/login" className="text-acc underline underline-offset-4">
+                Sign in
+              </Link>
+            </p>
+          )}
         </div>
       </header>
 
@@ -95,6 +112,7 @@ export function VendorRegisterRoute(): React.JSX.Element {
             brands={bootstrap.brands}
             grades={bootstrap.grades}
             wrongAccountAction={{ href: '/login', label: 'Back to sign in' }}
+            onSessionEstablished={handleSessionEstablished}
           />
         )}
       </main>

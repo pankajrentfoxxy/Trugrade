@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import type { WhyRailItem } from '@trugrade/ui';
 import type { StepDefinition } from './api';
 import { RegisterFlow, type StepContext } from './RegisterFlow';
@@ -124,6 +125,8 @@ export function BuyerRegistration({
 }: {
   definitions: StepDefinition[] | null;
 }): React.JSX.Element {
+  const router = useRouter();
+
   return (
     <RegisterFlow
       definitions={definitions}
@@ -134,6 +137,7 @@ export function BuyerRegistration({
       whyFor={(code) => WHY[code] ?? []}
       wrongAccountBody="This form creates a buyer account. Vendor and staff accounts are managed in the console. Sign out here if you need to register a second organisation."
       review={(ctx) => <Review {...ctx} />}
+      onSessionEstablished={() => router.refresh()}
     />
   );
 }

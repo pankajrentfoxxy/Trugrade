@@ -49,6 +49,8 @@ interface AuthState {
   requestMfaCode: () => Promise<{ sentTo: string } | AuthFailure>;
   verifyMfa: (code: string) => Promise<Principal | AuthFailure>;
   signOut: () => Promise<void>;
+  /** Re-read session cookies into React state — after registration, sign-out, etc. */
+  syncSession: () => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthState | null>(null);
@@ -206,6 +208,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       signOut: async () => {
         await call('/api/auth/logout', { method: 'POST' });
         setPrincipal(null);
+      },
+      syncSession: async () => {
+        const result = await refreshSession();
+        if (result && 'code' in (result as object)) {
+          if ((result as AuthFailure).status === 401) setPrincipal(null);
+          return;
+        }
+        setPrincipal(result as Principal);
       },
     }),
     [principal, loading],

@@ -10,7 +10,9 @@ import type { Request } from 'express';
 import { MFA_REQUIRED_ROLES, type Permission, type Role } from '@trugrade/contracts';
 import { ForbiddenError, UnauthenticatedError } from '../errors/domain-errors';
 import { RequestContextService, type Principal } from '../db/org-scope';
+import { AppConfig } from '../config';
 import { TokenService, type AccessTokenClaims } from './token.service';
+import { extractSessionAccessToken } from './session-cookies';
 
 export const IS_PUBLIC = 'trugrade:public';
 export const REQUIRED_PERMISSIONS = 'trugrade:permissions';
@@ -47,6 +49,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
     private readonly ctx: RequestContextService,
+    private readonly config: AppConfig,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -111,12 +114,11 @@ export class AuthGuard implements CanActivate {
   }
 
   private extractToken(req: Request): string | undefined {
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) return header.slice(7);
-    // The storefront keeps the access token in a cookie so an XSS cannot read it
-    // out of JS memory; the console uses the Authorization header.
-    const cookie = (req as Request & { cookies?: Record<string, string> }).cookies?.['tg_access'];
-    return cookie;
+    return extractSessionAccessToken(
+      req as Request & { cookies?: Record<string, string> },
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+    );
   }
 }
 
