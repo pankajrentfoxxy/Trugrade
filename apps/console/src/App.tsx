@@ -4,6 +4,7 @@ import { AuthProvider, RequirePermission, useAuth } from './lib/auth';
 import { ConsoleThemeSync } from './lib/console-theme';
 import { CatalogTreeRoute } from './routes/CatalogTree';
 import { ConditionImageCoverageRoute } from './routes/ConditionImageCoverage';
+import { ForgotPasswordRoute } from './routes/ForgotPasswordRoute';
 import { LoginRoute } from './routes/Login';
 import { VendorRegisterRoute } from './routes/sell/VendorRegisterRoute';
 import { OpsOverviewRoute, RequirePlatform } from './routes/OpsOverview';
@@ -63,6 +64,7 @@ export function App(): React.JSX.Element {
             sections you cannot reach yet is noise.
           */}
           <Route path="/login" element={<LoginRoute />} />
+          <Route path="/forgot-password" element={<ForgotPasswordRoute />} />
           {/*
             Vendor onboarding — archetype D, outside the shell. Suppliers land
             here from the storefront "Sell on Trugrade" link; the form and every

@@ -78,33 +78,20 @@ export const THEME_STOREFRONT_PREPAINT_SCRIPT =
   `localStorage.setItem('${THEME_STORAGE_KEY}','light')}catch(e){}`;
 
 /**
- * Console pre-paint read: dark by default, light is not honoured.
- *
- * The generic `THEME_PREPAINT_SCRIPT` accepts `light`, which is correct for a
- * page with `ThemeToggle` but wrong for the console, where dark is the product
- * default and a stale `tg-theme=light` from manual testing would otherwise
- * leave localhost looking nothing like production.
+ * Console pre-paint read: light everywhere. Working surfaces stay light after
+ * sign-in; header and footer remain dark chrome in both themes.
  */
 export const THEME_CONSOLE_PREPAINT_SCRIPT =
-  `try{var p=location.pathname;` +
-  `if(p==='/login'||p==='/sell/register'||p.indexOf('/sell/register/')===0){` +
-  `document.documentElement.setAttribute('data-t','light')}` +
-  `else{var t=localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}')` +
-  `||localStorage.getItem('${THEME_STORAGE_KEY}');` +
-  `if(t==='dark'||t==='slate'||t==='olive'||t==='sand'){` +
-  `document.documentElement.setAttribute('data-t',t);` +
-  `if(!localStorage.getItem('${THEME_CONSOLE_STORAGE_KEY}'))` +
-  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}',t)}` +
-  `else{document.documentElement.setAttribute('data-t','dark');` +
-  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','dark')}}}` +
-  `catch(e){}`;
+  `try{document.documentElement.setAttribute('data-t','light');` +
+  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','light')}catch(e){}`;
 
 /** Archetype F routes — light working surfaces, dark brand panel on the right. */
-export const CONSOLE_AUTH_PATHS = ['/login', '/sell/register'] as const;
+export const CONSOLE_AUTH_PATHS = ['/login', '/forgot-password', '/sell/register'] as const;
 
 export function isConsoleAuthPath(pathname: string): boolean {
   return (
     pathname === '/login' ||
+    pathname === '/forgot-password' ||
     pathname === '/sell/register' ||
     pathname.startsWith('/sell/register/')
   );
@@ -115,14 +102,11 @@ export function applyAuthLightTheme(): void {
 }
 
 export function restoreConsoleThemeFromStorage(): void {
+  applyAuthLightTheme();
   try {
-    const raw =
-      localStorage.getItem(THEME_CONSOLE_STORAGE_KEY) ??
-      localStorage.getItem(THEME_STORAGE_KEY);
-    const theme = raw && CONSOLE_THEME_SET.has(raw) ? raw : 'dark';
-    document.documentElement.setAttribute('data-t', theme);
+    localStorage.setItem(THEME_CONSOLE_STORAGE_KEY, 'light');
   } catch {
-    document.documentElement.setAttribute('data-t', 'dark');
+    // Private window — theme still applies for this session.
   }
 }
 

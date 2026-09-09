@@ -12,6 +12,7 @@ export default {
     // regflow grid classes are purged and "Why we ask" stacks under the form.
     '../storefront/src/app/register/**/*.{ts,tsx}',
     '../storefront/src/app/sell/register/**/*.{ts,tsx}',
+    '../storefront/src/app/forgot-password/**/*.{ts,tsx}',
     '../storefront/src/lib/controls.tsx',
   ],
 } satisfies Config;

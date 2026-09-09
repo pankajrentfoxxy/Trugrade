@@ -34,7 +34,7 @@ interface Wait {
   seconds: number | null;
 }
 
-export function ForgotPassword(): React.JSX.Element {
+export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: string }): React.JSX.Element {
   const [stage, setStage] = React.useState<Stage>({ k: 'ask' });
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -116,7 +116,7 @@ export function ForgotPassword(): React.JSX.Element {
           <Button
             type="button"
             variant="primary"
-            onClick={() => window.location.assign('/sign-in')}
+            onClick={() => window.location.assign(signInPath)}
           >
             Sign in
           </Button>
@@ -233,7 +233,7 @@ export function ForgotPassword(): React.JSX.Element {
       <p className="text-body-sm text-ink-3">
         We say the same thing whether or not that address has an account — telling you would tell
         anybody else who asked.{' '}
-        <a className="text-acc-ink underline underline-offset-4" href="/sign-in">
+        <a className="text-acc-ink underline underline-offset-4" href={signInPath}>
           Back to sign in
         </a>
       </p>

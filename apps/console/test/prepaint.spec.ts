@@ -24,6 +24,6 @@ describe('the pre-paint theme read', () => {
 
   it('runs before the stylesheet it is guarding against a flash of', () => {
     expect(html.indexOf('<script>')).toBeGreaterThan(html.indexOf('fonts.googleapis.com/css2'));
-    expect(html).toContain('data-t="dark"');
+    expect(html).toContain('data-t="light"');
   });
 });

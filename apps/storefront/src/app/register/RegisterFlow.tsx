@@ -749,34 +749,32 @@ export function RegisterFlow({
 
       <main ref={mainRef} className="regflow-main flex min-w-0 flex-col gap-4 sm:gap-5">
         <header className="flex flex-col gap-3">
-          {process.env.NODE_ENV === 'development' && (
-            <details className="rounded border border-rule-2 bg-sheet-2 px-4 py-3">
-              <summary className="cursor-pointer text-label font-mono uppercase tracking-[0.13em] text-ink-3">
-                Validate (dev)
-              </summary>
-              <label className="mt-3 flex flex-col gap-2 text-label text-ink-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-                <input
-                  className="h-8 w-full max-w-[5.5rem] rounded-sm border border-rule bg-sheet px-2 font-mono text-body-sm text-ink"
-                  value={validateInput}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setValidateInput(next);
-                    try {
-                      sessionStorage.setItem('tg-register-validate', next);
-                    } catch {
-                      // A private window cannot remember the switch.
-                    }
-                  }}
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-describedby="tg-register-validate-hint"
-                />
-                <span id="tg-register-validate-hint" className="text-ink-4 sm:max-w-[42ch]">
-                  Type true to check every step, or false to skip those checks.
-                </span>
-              </label>
-            </details>
-          )}
+          <details className="rounded border border-rule-2 bg-sheet-2 px-4 py-3">
+            <summary className="cursor-pointer text-label font-mono uppercase tracking-[0.13em] text-ink-3">
+              Validate (dev)
+            </summary>
+            <label className="mt-3 flex flex-col gap-2 text-label text-ink-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+              <input
+                className="h-8 w-full max-w-[5.5rem] rounded-sm border border-rule bg-sheet px-2 font-mono text-body-sm text-ink"
+                value={validateInput}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setValidateInput(next);
+                  try {
+                    sessionStorage.setItem('tg-register-validate', next);
+                  } catch {
+                    // A private window cannot remember the switch.
+                  }
+                }}
+                autoComplete="off"
+                spellCheck={false}
+                aria-describedby="tg-register-validate-hint"
+              />
+              <span id="tg-register-validate-hint" className="text-ink-4 sm:max-w-[42ch]">
+                Type true to check every step, or false to skip those checks.
+              </span>
+            </label>
+          </details>
           {(reviewing || registered) && (
             <div className="flex flex-wrap items-baseline gap-3">
               {reviewing && (

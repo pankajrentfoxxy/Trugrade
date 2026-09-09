@@ -1,23 +1,15 @@
 import * as React from 'react';
-import { useLocation } from 'react-router';
-import {
-  applyAuthLightTheme,
-  isConsoleAuthPath,
-  restoreConsoleThemeFromStorage,
-} from '@trugrade/ui';
+import { applyAuthLightTheme } from '@trugrade/ui';
 
 /**
- * Keeps archetype F routes on the light palette and the signed-in console on
- * dark. The prepaint script in index.html handles the first paint; this handles
- * client navigations between /login and the shell without a reload.
+ * Console working surfaces stay on the light palette — sign-in, registration,
+ * and the signed-in shell. The prepaint script in index.html handles first
+ * paint; this keeps client navigations aligned without a reload.
  */
 export function ConsoleThemeSync(): null {
-  const { pathname } = useLocation();
-
   React.useLayoutEffect(() => {
-    if (isConsoleAuthPath(pathname)) applyAuthLightTheme();
-    else restoreConsoleThemeFromStorage();
-  }, [pathname]);
+    applyAuthLightTheme();
+  }, []);
 
   return null;
 }

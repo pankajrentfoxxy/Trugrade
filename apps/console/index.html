@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-t="dark">
+<html lang="en" data-t="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,9 +11,9 @@
     />
     <!--
       Console pre-paint read. Verbatim copy of `THEME_CONSOLE_PREPAINT_SCRIPT`
-      from `@trugrade/ui` — dark in the shell, light on /login and /sell/register.
+      from `@trugrade/ui` — light everywhere in the console.
     -->
-    <script>try{var p=location.pathname;if(p==='/login'||p==='/sell/register'||p.indexOf('/sell/register/')===0){document.documentElement.setAttribute('data-t','light')}else{var t=localStorage.getItem('tg-console-theme')||localStorage.getItem('tg-theme');if(t==='dark'||t==='slate'||t==='olive'||t==='sand'){document.documentElement.setAttribute('data-t',t);if(!localStorage.getItem('tg-console-theme'))localStorage.setItem('tg-console-theme',t)}else{document.documentElement.setAttribute('data-t','dark');localStorage.setItem('tg-console-theme','dark')}}}catch(e){}</script>
+    <script>try{document.documentElement.setAttribute('data-t','light');localStorage.setItem('tg-console-theme','light')}catch(e){}</script>
     <title>Console</title>
   </head>
   <body>

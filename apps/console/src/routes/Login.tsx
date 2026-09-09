@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { BRAND } from '@trugrade/config/brand';
 import { Button, Input, MfaChallenge, RateLimitNotice, StatusPill } from '@trugrade/ui';
 import { AuthShell } from '../AuthShell';
@@ -294,12 +294,12 @@ export function LoginRoute(): React.JSX.Element {
             Sign in
           </Button>
           <div className="flex flex-col gap-1 border-t border-rule-2 pt-3">
-            <a
+            <Link
               className="text-body-sm text-acc-ink underline underline-offset-4"
-              href={`${import.meta.env.VITE_STOREFRONT_URL ?? 'http://localhost:3000'}/forgot-password`}
+              to="/forgot-password"
             >
               Forgotten your password?
-            </a>
+            </Link>
             <p className="text-body-sm text-ink-3">
               Applying to supply?{' '}
               <a
