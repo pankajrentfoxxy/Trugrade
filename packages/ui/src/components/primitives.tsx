@@ -165,10 +165,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
 
       <div
         className={
-          action ? 'flex w-full flex-col gap-3 sm:flex-row sm:items-center' : undefined
+          action
+            ? 'input-action-row grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
+            : undefined
         }
       >
-        <div className={cn(isPassword && 'relative', (action || isPassword) && 'min-w-0 flex-1')}>
+        <div className={cn(isPassword && 'relative', action && 'min-w-0')}>
           <input
             ref={ref}
             id={inputId}
@@ -180,7 +182,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
             className={cn(
               // placeholder:text-ink-3 — ink-4 measures 2.53:1, which fails both the
               // text floor and the 3:1 floor for meaningful graphics.
-              'h-11 w-full rounded border bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3',
+              'h-11 w-full min-w-0 rounded border bg-sheet px-4 text-body-sm text-ink placeholder:text-ink-3',
               'transition-colors',
               // `tnum` and not just `font-mono`. CLAUDE.md: every number is IBM Plex
               // Mono WITH tabular-nums, and this branch is what renders every GSTIN,
@@ -192,9 +194,6 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
               error || verifyState === 'rejected' ? 'border-fail' : 'border-rule',
               verifyState === 'verified' && 'border-pass',
               className,
-              // After `className` so a caller passing `w-full` cannot stretch the
-              // box under the button and wrap it onto the next line.
-              action && 'min-w-0 flex-1',
               isPassword && 'pr-12',
             )}
             {...props}

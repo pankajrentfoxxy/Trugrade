@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 export default {
   reactStrictMode: true,
+  env: {
+    // Client bundle reads NEXT_PUBLIC_* only. Map from CONSOLE_URL so production
+    // builds pick up the seller origin without a second variable to forget.
+    NEXT_PUBLIC_CONSOLE_URL:
+      process.env.NEXT_PUBLIC_CONSOLE_URL ?? process.env.CONSOLE_URL ?? 'http://localhost:5173',
+  },
   // The UI package ships TypeScript source rather than a build step, so Next has
   // to compile it. This is the whole reason it can be consumed unchanged by both
   // the Vite console and this app.

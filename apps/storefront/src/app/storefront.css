@@ -70,8 +70,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
   background:var(--acc);color:var(--acc-on);font-weight:600;font-size:13px;
   padding:10px 16px;border-radius:0 0 5px 0}
 .skiplink:focus{left:0}
+html,body{overflow-x:clip}
 .wrap{max-width:1400px;margin:0 auto;padding:0 20px}
 .hide-sm{display:inline}
+.hide-md{display:inline}
+.hbtn-short{display:none}
 /* ---- QC motifs ---- */
 @keyframes sweep{0%{top:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100%;opacity:0}}
 .mk .b{stroke:currentColor;stroke-width:2.2;opacity:.34}
@@ -80,8 +83,9 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
 .wm{font-weight:700;letter-spacing:-.04em;font-size:20px;line-height:1}
 .wm .g{color:var(--acc)}
 /* ============ UTILITY ============ */
+header,footer{width:100%;max-width:100%}
 .util{background:var(--chrome);border-bottom:1px solid var(--chrome-line);font-size:12px;color:var(--on-chrome)}
-.util .wrap{display:flex;align-items:center;height:34px;gap:18px}
+.util .wrap{display:flex;align-items:center;min-height:34px;gap:18px}
 .util .l,.util .r{display:flex;gap:18px;align-items:center}
 .util .r{margin-left:auto}
 .util a{color:var(--on-chrome)}
@@ -92,7 +96,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
 .util .blip{margin-right:6px}
 /* ============ HEADER ============ */
 .head{background:var(--chrome);color:var(--on-chrome);position:relative;z-index:30}
-.head .wrap{display:flex;align-items:center;gap:14px;height:62px}
+.head .wrap{display:flex;align-items:center;gap:14px;min-height:62px;min-width:0}
 .brand{display:flex;align-items:center;gap:9px;flex:0 0 auto;color:var(--on-chrome)}
 .catbtn{display:flex;align-items:center;gap:9px;background:var(--chrome-3);border-radius:5px;padding:0 14px;
   height:38px;font-size:13.5px;font-weight:600;flex:0 0 auto;color:var(--on-chrome)}
@@ -546,7 +550,36 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   .filters{position:static;max-height:none}
   .hero{grid-template-columns:1fr;padding:20px}.gauge{display:none}
   .pgrid{grid-template-columns:repeat(2,1fr)}.strip,.sell{grid-template-columns:1fr}
-  .sell{padding:20px}.fg{grid-template-columns:1fr 1fr}.hide-sm{display:none}}
+  .sell{padding:20px}.fg{grid-template-columns:1fr 1fr}.fa{grid-column:1 / -1}.hide-sm{display:none}
+  /* Header: brand + actions on row 1, search full width on row 2. */
+  .head .wrap{flex-wrap:wrap;height:auto;padding:10px 0;row-gap:10px}
+  .head .hact{margin-left:auto;flex-shrink:0}
+  .head .sbox{flex:1 1 100%;order:10;min-width:0}
+  /* Utility bar: allow the promo to wrap under the count on narrow screens. */
+  .util .wrap{flex-wrap:wrap;height:auto;padding:8px 0;row-gap:6px}
+  .util .r{margin-left:auto;flex-wrap:wrap;row-gap:6px}}
+@media(max-width:640px){
+  .wrap{padding:0 16px}
+  .hide-md{display:none}
+  .fg{grid-template-columns:1fr;gap:22px}
+  .fa p{max-width:none}
+  .fbot{flex-direction:column;align-items:flex-start;gap:10px}
+  .pays{flex-wrap:wrap}
+  .legal{overflow-wrap:anywhere}
+  footer{padding:28px 0 16px}
+  /* Search: scope select is the widest fixed piece — hide it below tablet. */
+  .srch select{display:none}
+  .srch button{padding:0 14px;font-size:12px}
+  .catbtn{padding:0 10px;gap:0;min-width:38px;justify-content:center}
+  .catbtn-label{display:none}
+  .hbtn:not(.solid) small{display:none}
+  .hbtn:not(.solid) strong{font-size:13px;line-height:1.2}
+  .hbtn:not(.solid){padding:0 10px}
+  .hbtn.solid{padding:0 12px}
+  .hact{gap:4px}}
+@media(max-width:480px){
+  .hbtn-long{display:none}
+  .hbtn-short{display:inline}}
 
 /* Additions for the data-backed page: states the reference mock never needed,
    because its data was illustrative and ours is read from the database. */
@@ -1988,6 +2021,75 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   .wtclaim{margin-left:0;width:100%;justify-content:center}
   .wtfilters{width:100%}
   .careas{grid-template-columns:minmax(0,1fr)}
+}
+
+/* Registration / onboarding flow (archetype D) — step rail | form | why (right) */
+.regflow{
+  display:grid;
+  align-items:start;
+  gap:var(--s5);
+  grid-template-columns:minmax(0,1fr);
+}
+.regflow>:first-child,.regflow>main,.regflow>aside[data-testid='why-rail']{min-width:0}
+.regflow>main{width:100%}
+@media(min-width:1024px){
+  .regflow{
+    column-gap:var(--s6);
+    row-gap:var(--s5);
+    grid-template-columns:240px minmax(0,1fr) 260px;
+  }
+  .regflow>:first-child{grid-column:1;grid-row:1}
+  .regflow>main{
+    grid-column:2;
+    grid-row:1;
+    width:100%;
+    max-width:none;
+  }
+  .regflow>aside[data-testid='why-rail']{
+    grid-column:3;
+    grid-row:1;
+    align-self:start;
+    width:100%;
+    max-width:260px;
+    position:sticky;
+    top:var(--s5);
+  }
+}
+
+/* Step 5 — one row per day: day · opens · closes · closed. */
+.facility-hours-day{
+  display:flex;
+  flex-direction:row;
+  flex-wrap:nowrap;
+  align-items:flex-end;
+  gap:var(--s3);
+  width:100%;
+}
+.facility-hours-day__label{
+  flex:0 0 4.5rem;
+  padding-bottom:.75rem;
+}
+.facility-hours-day__opens,.facility-hours-day__closes{
+  flex:1 1 6.5rem;
+  min-width:5.5rem;
+  max-width:9rem;
+}
+.facility-hours-day__closed{
+  flex:0 0 auto;
+  padding-bottom:.75rem;
+}
+.facility-hours-day__copy{
+  flex:1 1 9rem;
+  min-width:7rem;
+  padding-bottom:.75rem;
+}
+
+.vendor-notification-channels{
+  display:flex;
+  flex-direction:row;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  gap:var(--s4) var(--s6);
 }
 
 /* ==========================================================================

@@ -16,7 +16,13 @@ import {
 } from '../register/api';
 import { AuthShell } from '../AuthShell';
 import { ApplicationStatus, type StatusCopy } from '../register/review-parts';
-import { consoleSellRegisterUrl } from '../../lib/console-url';
+import { consoleSellRegisterUrl, consoleUrl } from '../../lib/console-url';
+
+export interface SignInProps {
+  /** Server-resolved console origin so links are correct before hydration. */
+  consoleHomeUrl?: string;
+  sellerRegisterUrl?: string;
+}
 
 /**
  * **ARCHETYPE F — Focus.** One task, centred, no navigation.
@@ -62,8 +68,6 @@ import { consoleSellRegisterUrl } from '../../lib/console-url';
  * the storefront. Sending a vendor to the shop is the small wrongness that makes
  * someone think they signed in as the wrong person.
  */
-const CONSOLE_URL = process.env.NEXT_PUBLIC_CONSOLE_URL ?? 'http://localhost:5173/';
-
 /**
  * Where a buyer sent here mid-task goes back to, off `?next=`.
  *
@@ -89,17 +93,10 @@ function safeNext(): string | null {
   }
 }
 
-const destinationFor = (orgType: string): string =>
-  orgType === 'BUYER' ? (safeNext() ?? '/') : CONSOLE_URL;
-
 /** Leave sign-in without leaving it in history — back must not return here. */
 const leaveSignIn = (url: string): void => {
   window.location.replace(url);
 };
-
-/** Where an unfinished application is picked up again. */
-const applicationFor = (orgType: string): string =>
-  orgType === 'VENDOR' ? consoleSellRegisterUrl() : '/register';
 
 /**
  * The statuses that mean "your application is not finished", as opposed to "it
@@ -185,7 +182,20 @@ function Shell({
   );
 }
 
-export function SignIn(): React.JSX.Element {
+export function SignIn({
+  consoleHomeUrl,
+  sellerRegisterUrl,
+}: SignInProps = {}): React.JSX.Element {
+  const consoleHome = consoleHomeUrl ?? consoleUrl();
+  const sellerRegister = sellerRegisterUrl ?? consoleSellRegisterUrl();
+
+  const destinationFor = (orgType: string): string =>
+    orgType === 'BUYER' ? (safeNext() ?? '/') : consoleHome;
+
+  /** Where an unfinished application is picked up again. */
+  const applicationFor = (orgType: string): string =>
+    orgType === 'VENDOR' ? sellerRegister : '/register';
+
   const [stage, setStage] = React.useState<Stage>({ k: 'code' });
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -236,7 +246,7 @@ export function SignIn(): React.JSX.Element {
       }
 
       if (session.orgType === 'INTERNAL') {
-        leaveSignIn(CONSOLE_URL);
+        leaveSignIn(consoleHome);
         return;
       }
 
@@ -256,7 +266,7 @@ export function SignIn(): React.JSX.Element {
           leaveSignIn(applicationFor(session.orgType));
           return;
         }
-        leaveSignIn(session.orgType === 'BUYER' ? '/account' : CONSOLE_URL);
+        leaveSignIn(session.orgType === 'BUYER' ? '/account' : consoleHome);
         return;
       }
 
@@ -591,7 +601,7 @@ export function SignIn(): React.JSX.Element {
             — or{' '}
             <a
               className="text-ink-2 underline decoration-rule underline-offset-4 hover:text-ink hover:decoration-acc"
-              href={consoleSellRegisterUrl()}
+              href={sellerRegister}
               target="_blank"
               rel="noopener noreferrer"
             >

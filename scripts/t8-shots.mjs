@@ -286,7 +286,7 @@ async function fillHours(facility, opensAt, closesAt) {
   const hours = facility.getByRole('group', { name: /^Operating hours for site/ });
   await hours.getByLabel('Opens').first().fill(opensAt);
   await hours.getByLabel('Closes').first().fill(closesAt);
-  await hours.getByRole('button', { name: /Copy Monday/ }).click();
+  await hours.getByRole('checkbox', { name: /Copy to every open day/ }).check();
   // Sunday is the last row, and a shut day is an answer rather than a blank.
   await hours.getByLabel('Closed').nth(6).check();
 }

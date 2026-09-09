@@ -37,13 +37,16 @@ import {
  * composition rule is being chosen against, so enforcing it is the point rather
  * than a leak. The comment above explains why login deliberately does not.
  *
+ * Company legal name is **not** here — it belongs to step 2
+ * (`BUSINESS_PROFILE`). The org is created with a pending placeholder and the
+ * real name is written when that step is promoted.
+ *
  * `orgType` is VENDOR or BUYER only. INTERNAL accounts are never self-served —
  * staff are created by an administrator, and letting the enum through would let
  * anyone mint themselves an internal org.
  */
 export const registerSchema = z.object({
   orgType: z.enum(['VENDOR', 'BUYER']),
-  companyName: z.string().trim().min(2).max(200),
   fullName: fullNameSchema,
   email: emailSchema,
   mobile: mobileSchema,

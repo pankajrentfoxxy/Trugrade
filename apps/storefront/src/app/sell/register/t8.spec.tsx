@@ -65,19 +65,17 @@ describe('nothing arrives ticked', () => {
     const checkboxes = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
     );
-    // In-house test/repair only — sourcing channels use SelectTile with a
-    // checkbox-style indicator, not native inputs.
-    expect(checkboxes).toHaveLength(2);
+    // Categories, sourcing channels, and in-house test/repair — all native checkboxes.
+    expect(checkboxes.length).toBeGreaterThan(2);
     for (const box of checkboxes) {
       expect(box).not.toBeChecked();
       expect(box).not.toHaveAttribute('checked');
     }
 
     const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
-    expect(radios.length).toBeGreaterThan(1);
     for (const radio of radios) expect(radio).not.toBeChecked();
 
-    // Categories, sourcing, and brand chips are all `aria-pressed` toggles.
+    // Brand chips are `aria-pressed` toggles; none should start selected.
     expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
 
     unmount();
@@ -113,7 +111,7 @@ describe('can_dropship', () => {
     renderCapability({ onContinue });
 
     // Everything else on the step, answered properly.
-    fireEvent.click(screen.getByRole('button', { name: /Business laptops/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Business laptops/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Dell' }));
     fireEvent.change(screen.getByLabelText(/Laptops you can supply in a month/), {
       target: { value: '300' },
@@ -121,7 +119,7 @@ describe('can_dropship', () => {
     fireEvent.change(screen.getByLabelText('Grade A+'), { target: { value: '50' } });
     fireEvent.change(screen.getByLabelText('Grade A'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Grade B'), { target: { value: '20' } });
-    fireEvent.click(screen.getByRole('button', { name: /Corporate buy-back/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Corporate buy-back/i }));
     fireEvent.click(screen.getByLabelText(/we can send serials with the offer/i));
     fireEvent.change(screen.getByLabelText(/Lead time, in days/), { target: { value: '2' } });
 

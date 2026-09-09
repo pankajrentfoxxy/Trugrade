@@ -40,8 +40,7 @@ const TAN_FIELD: FieldRequirement = {
   fieldCode: 'tan',
   label: 'TAN (optional)',
   required: false,
-  helpText:
-    'Ten characters, e.g. DELT12345E. We use it on the TDS certificate that goes with your payout.',
+  helpText: null,
 };
 
 /**
@@ -78,17 +77,10 @@ const CORRECTED_PURPOSE_NOTES: Record<string, string> = {
 };
 
 const VENDOR_STATUTORY_COPY: StatutoryCopy = {
-  panDescription: '',
-  gstinDescription: '',
   confirmConsequence:
     'Purchase orders raised against this GSTIN will carry the name above, and so will the payout advice. Confirming it is what lets us buy from you.',
-  primaryTitle: 'Which registration do we buy from?',
-  primaryDescription:
-    'The primary registration is the entity on every purchase order and every payout. It also decides whether our purchase from you is IGST or CGST plus SGST, which is what your own input credit turns on.',
   primaryMissing:
     'Choose which registration we buy from. It sets the entity on every purchase order and every payout.',
-  primaryNote:
-    'Nothing is chosen for you here. Changing it later needs a reviewer, because it changes who we pay from that point on.',
 };
 
 const WHY_VENDOR_STATUTORY: readonly WhyRailItem[] = [
@@ -201,15 +193,11 @@ const signatoryFor = (ctx: StepContext): string => {
   );
 };
 
-/** Step 1's company name, then step 2's legal name, then nothing. */
+/** Step 2's legal name, then nothing. */
 const legalNameFor = (ctx: StepContext): string =>
-  (typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
+  typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
     ? (ctx.allAnswers.BUSINESS_PROFILE.legalName as string)
-    : '') ||
-  ctx.typedCompanyName ||
-  (typeof ctx.allAnswers.ACCOUNT?.companyName === 'string'
-    ? (ctx.allAnswers.ACCOUNT.companyName as string)
-    : '');
+    : '';
 
 export interface VendorRegistrationProps {
   definitions: StepDefinition[] | null;
@@ -248,12 +236,6 @@ export function VendorRegistration({
       BUSINESS_PROFILE: (ctx) => (
         <StepVendorBusiness
           answers={ctx.answers}
-          fallbackLegalName={
-            ctx.typedCompanyName ||
-            (typeof ctx.allAnswers.ACCOUNT?.companyName === 'string'
-              ? (ctx.allAnswers.ACCOUNT.companyName as string)
-              : '')
-          }
           busy={ctx.busy}
           blockingReason={ctx.step?.blockingReason}
           onSaveDraft={ctx.saveDraft}

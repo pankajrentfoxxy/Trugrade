@@ -709,7 +709,7 @@ export function StepDocumentsBank({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy || committing}>
           Save account and continue
         </Button>

@@ -200,6 +200,24 @@ const STATUS_PREFIX: Record<StepStatus, string> = {
   blocked: 'blocked',
 };
 
+/** Completed onboarding steps carry a green tick — the same pass token as a verified field. */
+function StepCompleteMark(): React.JSX.Element {
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0 text-pass">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+        <path
+          d="M5 8.2 6.9 10.1 11 6"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 /**
  * Registration, the listing wizard, checkout.
  *
@@ -236,26 +254,23 @@ export function Stepper({
           const position = `Step ${i + 1} of ${steps.length}, ${STATUS_PREFIX[step.status]}:`;
           const blockerId = step.blockers?.length ? `step-${step.key}-blockers` : undefined;
 
+          const rowClass = cn(
+            'flex w-full items-center justify-between gap-3 text-body-sm',
+            step.status === 'complete' && 'text-ink',
+            step.status === 'current' && 'font-medium text-ink',
+            (step.status === 'upcoming' || step.status === 'blocked') && 'text-ink-3',
+          );
+
           const body = (
             <>
               <span className="sr-only">{position}</span>
-              <span aria-hidden="true" className="font-mono text-label tnum text-ink-3">
-                {String(i + 1).padStart(2, '0')}
-              </span>{' '}
-              {step.label}
-              {/* Neutral, not `--pass`. Green and red mean PASS and FAIL and
-                  nothing else (09_FRONTEND_LOCKED, colour rule 2). A finished
-                  step is neither: it says "you filled this in", not "this
-                  machine passed inspection". Spending the verdict colour on
-                  progress is how the QC chip stops meaning anything. The tick
-                  is aria-hidden because `position` already announces the
-                  status in words to a screen reader. */}
-              {step.status === 'complete' && (
-                <span aria-hidden="true" className="text-ink-3">
-                  {' '}
-                  ✓
+              <span className="flex min-w-0 items-center gap-2">
+                <span aria-hidden="true" className="shrink-0 font-mono text-label tnum text-ink-3">
+                  {String(i + 1).padStart(2, '0')}
                 </span>
-              )}
+                <span className="min-w-0">{step.label}</span>
+              </span>
+              {step.status === 'complete' ? <StepCompleteMark /> : null}
             </>
           );
 
@@ -264,25 +279,21 @@ export function Stepper({
               {step.status === 'complete' && step.href ? (
                 <a
                   href={step.href}
-                  className="text-body-sm text-ink underline underline-offset-4"
+                  className={cn(rowClass, 'underline underline-offset-4')}
                   aria-describedby={blockerId}
                 >
                   {body}
                 </a>
               ) : step.status === 'current' ? (
-                <span
-                  aria-current="step"
-                  aria-describedby={blockerId}
-                  className="text-body-sm font-medium text-ink"
-                >
+                <span aria-current="step" aria-describedby={blockerId} className={rowClass}>
+                  {body}
+                </span>
+              ) : step.status === 'complete' ? (
+                <span aria-describedby={blockerId} className={rowClass}>
                   {body}
                 </span>
               ) : (
-                <span
-                  aria-disabled="true"
-                  aria-describedby={blockerId}
-                  className="text-body-sm text-ink-3"
-                >
+                <span aria-disabled="true" aria-describedby={blockerId} className={rowClass}>
                   {body}
                 </span>
               )}

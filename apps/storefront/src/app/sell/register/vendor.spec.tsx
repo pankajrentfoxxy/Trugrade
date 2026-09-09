@@ -96,7 +96,8 @@ describe('the step rail', () => {
       <VendorRegistration definitions={VENDOR_STEPS} brands={['Dell']} grades={GRADES} />,
     );
     const vendorRail = await screen.findByTestId('step-rail');
-    expect(vendorRail).toHaveTextContent('0 of 7 done');
+    expect(vendorRail).toHaveTextContent('Onboarding completion status');
+    expect(within(vendorRail).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
     // The last three exist only in the vendor seed. If the shell held its own
     // list, or reused the buyer's, none of these could render.
     for (const title of ['Vendor CAPABILITY', 'Vendor FACILITY_CONTACTS', 'Vendor AGREEMENT'])
@@ -107,7 +108,8 @@ describe('the step rail', () => {
 
     render(<BuyerRegistration definitions={BUYER_STEPS} />);
     const buyerRail = await screen.findByTestId('step-rail');
-    expect(buyerRail).toHaveTextContent('0 of 5 done');
+    expect(buyerRail).toHaveTextContent('Onboarding completion status');
+    expect(within(buyerRail).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
     expect(within(buyerRail).getByText('Buyer CONTACTS_ADDRESSES')).toBeInTheDocument();
     expect(within(buyerRail).queryByText('Vendor CAPABILITY')).not.toBeInTheDocument();
   });
@@ -117,7 +119,6 @@ describe('the step rail', () => {
     await screen.findByTestId('step-rail');
 
     fill(/Your full name/, 'Rohan Deshpande');
-    fill(/Company name/, 'Northgate Asset Recovery');
     fill(/Work email/, 'rohan@northgate-recovery.co.in');
     fireEvent.click(screen.getAllByRole('button', { name: 'Send code' })[0]!);
 

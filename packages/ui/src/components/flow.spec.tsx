@@ -49,7 +49,7 @@ describe('StepRail', () => {
     // A future step is never a disabled <button> — it would drop out of the
     // accessibility tree, and the step would silently stop existing.
     expect(screen.queryByRole('button', { name: /Capability/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/Capability/)).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(/Capability/).closest('[aria-disabled="true"]')).toBeInTheDocument();
   });
 
   it('has no axe violations', async () => {
@@ -57,6 +57,15 @@ describe('StepRail', () => {
       <StepRail steps={STEPS} label="Vendor application" savedAt="2 minutes ago" />,
     );
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('shows onboarding completion status and a progress bar when completionPct is set', () => {
+    render(<StepRail steps={STEPS} label="Vendor application" completionPct={40} />);
+    const rail = screen.getByTestId('step-rail');
+    expect(within(rail).getByText('Onboarding completion status')).toBeInTheDocument();
+    expect(within(rail).queryByText(/done/)).not.toBeInTheDocument();
+    expect(within(rail).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+    expect(within(rail).getByText('40%')).toBeInTheDocument();
   });
 });
 

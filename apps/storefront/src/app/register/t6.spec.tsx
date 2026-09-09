@@ -105,11 +105,9 @@ describe('step 5 preferences', () => {
 
     expect(screen.queryByLabelText(/Date on the gst registration certificate/i)).toBeNull();
     expect(screen.getByLabelText(/Date on the authorised signatory id/i)).toBeInTheDocument();
-    // The rule's own number, rendered rather than a constant in this client —
-    // in the date field's hint and again in the uploader's.
-    const mentions = screen.getAllByText(/issued in the last/i);
-    expect(mentions).toHaveLength(2);
-    for (const node of mentions) expect(node).toHaveTextContent('90');
+    // The rule's own number, rendered in the date field's hint only.
+    expect(screen.getByText(/We can only accept one issued in the last/i)).toHaveTextContent('90');
+    expect(screen.getAllByText(/issued in the last/i)).toHaveLength(1);
   });
 });
 
@@ -179,7 +177,7 @@ describe('the review screen', () => {
           step('CONTACTS_ADDRESSES', 'Contacts and delivery', 4, 'IN_PROGRESS'),
         ]}
         answers={{
-          ACCOUNT: { fullName: 'Ananya Raghavan', companyName: 'Alpha Systems Private Limited' },
+          ACCOUNT: { fullName: 'Ananya Raghavan' },
           // Procurement is answered; finance is the gap.
           CONTACTS_ADDRESSES: {
             contacts: { PROCUREMENT: { fullName: 'Devika Menon' }, FINANCE: {} },

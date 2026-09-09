@@ -91,8 +91,8 @@ describe('the step rail', () => {
     const rail = await screen.findByTestId('step-rail');
     expect(within(rail).getByText('Kingfisher')).toBeInTheDocument();
     expect(within(rail).getByText('Marmalade')).toBeInTheDocument();
-    // Two steps in, two steps out — a hard-coded five would show up here.
-    expect(rail).toHaveTextContent('0 of 2 done');
+    expect(rail).toHaveTextContent('Onboarding completion status');
+    expect(within(rail).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
     expect(rail).not.toHaveTextContent('Statutory');
   });
 
@@ -181,7 +181,7 @@ describe('a resumed session', () => {
 
     render(<BuyerRegistration definitions={[account, company]} />);
 
-    const legalName = await screen.findByLabelText(/Legal name/);
+    const legalName = await screen.findByLabelText(/Company legal name/);
     expect(legalName).toHaveValue('Ferrous Works Private Limited');
     expect(screen.getByLabelText(/Year established/)).toHaveValue('2011');
     expect(screen.getByLabelText(/Constitution/)).toHaveValue('LLP');

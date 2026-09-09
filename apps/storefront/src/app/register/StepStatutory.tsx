@@ -13,7 +13,6 @@ import {
 import {
   gstinPanConflict,
   hasIdentifierRule,
-  panHolderType,
   toGstin,
   toPan,
   validateGstin,
@@ -47,14 +46,6 @@ import { ProviderProblem, isProviderProblem, useRetryLadder } from './verificati
  * for the paragraph the right rail carries.
  */
 
-/** Parenthetical note on the label row instead of a second line under the field. */
-const labelNote = (text: string, note: string): React.ReactNode => (
-  <>
-    {text}{' '}
-    <span className="text-label font-normal text-ink-3">({note})</span>
-  </>
-);
-
 /* ==========================================================================
  * The "why we ask" copy this step contributes
  * ======================================================================== */
@@ -70,30 +61,13 @@ const labelNote = (text: string, note: string): React.ReactNode => (
 export const WHY_STATUTORY: readonly WhyRailItem[] = [
   {
     term: 'Primary GSTIN',
-    explanation: (
-      <>
-        <span className="block">
-          If your business holds more than one registration, the primary one is the entity we
-          invoice. It decides three things at once: whose name and address appear on the tax
-          invoice, whether we charge IGST or CGST plus SGST, and therefore which of your
-          registrations can claim the input credit.
-        </span>
-        <span className="mt-2 block">
-          Pick the registration in the state that actually buys the machines. If the wrong one is
-          set, an invoice raised against it is credited to a registration that never took delivery,
-          and correcting it means a credit note and a fresh invoice for every order already placed.
-        </span>
-        <span className="mt-2 block">
-          You can add more GSTINs at any time. Changing which one is primary needs a reviewer,
-          because it changes how you are invoiced from that point on.
-        </span>
-      </>
-    ),
+    explanation:
+      'If you hold more than one registration, this is the one we invoice — pick the state that actually receives the laptops.',
   },
   {
     term: 'PAN',
     explanation:
-      'Characters 3 to 12 of a GSTIN are the PAN it was issued against, so the two have to agree. We check the pair before we ask the portal anything — a mismatch there is almost always a GSTIN copied from a sister company.',
+      'Characters 3–12 of a GSTIN are its PAN; the two must match before we verify with the portal.',
   },
 ];
 
@@ -129,29 +103,15 @@ export interface StatutoryValues {
 
 /** Everything that differs in wording between the buyer and the vendor flow. */
 export interface StatutoryCopy {
-  panDescription: string;
-  gstinDescription: string;
   confirmConsequence: string;
-  primaryTitle: string;
-  primaryDescription: string;
   primaryMissing: string;
-  primaryNote: string;
 }
 
 export const BUYER_STATUTORY_COPY: StatutoryCopy = {
-  panDescription:
-    'The permanent account number of the entity we invoice. Every GSTIN you add below has to belong to it.',
-  gstinDescription:
-    'Add every registration you want to buy against. Each one is checked against the GST portal on its own.',
   confirmConsequence:
     'Invoices raised against this GSTIN will carry the name above. Confirming it is what lets us bill you.',
-  primaryTitle: 'Which one do we invoice?',
-  primaryDescription:
-    'The primary registration decides the billing entity on every invoice and whether the tax is IGST or CGST plus SGST. The right-hand rail explains what changes if it is wrong.',
   primaryMissing:
     'Choose which registration we invoice. It sets the billing entity and the tax split on every order.',
-  primaryNote:
-    'Nothing is chosen for you here. Changing it later needs a reviewer, because it changes how you are invoiced from that point on.',
 };
 
 let keySeed = 0;
@@ -793,9 +753,6 @@ export function StepStatutory({
 
   /* ------------------------------------------------------------------ render */
 
-  const settledCount = values.gstins.filter(rowSettled).length;
-  const panType = panHolderType(values.pan);
-
   return (
     <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)} noValidate>
       {blockingReason && (
@@ -815,18 +772,10 @@ export function StepStatutory({
       )}
 
       {/* ------------------------------------------------------------- PAN */}
-      <FormSection
-        title="PAN"
-        description={copy.panDescription}
-      >
+      <div className="flex flex-col gap-5">
         <Input
           className="w-full"
-          label={labelNote(
-            'PAN',
-            panType
-              ? `The fourth character says this PAN belongs to a ${panType.toLowerCase().replace(/_/g, ' ')}.`
-              : 'Ten characters, as printed on the card — five letters, four digits, one letter.',
-          )}
+          label="PAN"
           mono
           maxLength={10}
           autoComplete="off"
@@ -897,19 +846,10 @@ export function StepStatutory({
             </div>
           </dl>
         </CheckOutcome>
-      </FormSection>
+      </div>
 
       {/* ----------------------------------------------------------- GSTINs */}
-      <FormSection
-        title="GST registrations"
-        description={copy.gstinDescription}
-        status={
-          <>
-            <span className="tnum">{settledCount}</span> of{' '}
-            <span className="tnum">{values.gstins.length}</span> confirmed
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5" data-testid="gstin-section">
         {values.gstins.map((row, index) => {
           const taxpayer = row.outcome ? resolvedGstin(row.outcome) : {};
           const passed = row.outcome?.outcome === 'PASS';
@@ -917,10 +857,7 @@ export function StepStatutory({
             <div key={row.key} data-testid="gstin-row" className="flex flex-col gap-3">
               <Input
                 className="w-full"
-                label={labelNote(
-                  `GSTIN ${index + 1}`,
-                  'Fifteen characters from your registration certificate, e.g. 06ABCCE1234F6Z1.',
-                )}
+                label={`GSTIN ${index + 1}`}
                 mono
                 maxLength={15}
                 autoComplete="off"
@@ -1025,44 +962,42 @@ export function StepStatutory({
             Add another GSTIN
           </Button>
         </div>
-      </FormSection>
+      </div>
 
       {/* ---------------------------------------------------------- primary */}
-      <FormSection
-        title={copy.primaryTitle}
-        description={copy.primaryDescription}
+      <fieldset
+        className="flex flex-col gap-2"
+        onFocus={() => onFieldFocus('Primary GSTIN')}
+        aria-describedby={errors.primary ? 'primary-gstin-error' : undefined}
       >
-        <fieldset
-          className="flex flex-col gap-2"
-          onFocus={() => onFieldFocus('Primary GSTIN')}
-          aria-describedby={errors.primary ? 'primary-gstin-error' : undefined}
-        >
-          <legend className="sr-only">Primary GSTIN</legend>
+        <legend className="sr-only">Primary GSTIN</legend>
           {values.gstins.map((row) => {
             const usable = validateGstin(row.gstin) === undefined;
             return (
               <label
                 key={row.key}
-                className={`flex min-h-11 cursor-pointer items-center gap-3 rounded border-l-2 px-4 py-2 ${
+                className={`flex min-h-11 cursor-pointer flex-col gap-1 rounded border-l-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:py-2 ${
                   // The amber marker is an active state, which is one of the
                   // three things the accent is allowed to mean.
                   row.isPrimary ? 'border-acc bg-sheet-2' : 'border-rule'
                 }`}
               >
-                <input
-                  type="radio"
-                  name="primary-gstin"
-                  className="h-4 w-4 accent-acc"
-                  value={row.gstin}
-                  checked={row.isPrimary}
-                  onChange={() => makePrimary(row.key)}
-                  disabled={!usable}
-                />
-                <span className="font-mono tnum text-body-sm text-ink">
-                  {toGstin(row.gstin) || 'Not entered yet'}
+                <span className="flex min-w-0 items-center gap-3">
+                  <input
+                    type="radio"
+                    name="primary-gstin"
+                    className="h-4 w-4 shrink-0 accent-acc"
+                    value={row.gstin}
+                    checked={row.isPrimary}
+                    onChange={() => makePrimary(row.key)}
+                    disabled={!usable}
+                  />
+                  <span className="min-w-0 break-all font-mono tnum text-body-sm text-ink">
+                    {toGstin(row.gstin) || 'Not entered yet'}
+                  </span>
                 </span>
                 {row.outcome?.outcome === 'PASS' ? (
-                  <span className="text-body-sm text-ink-2">
+                  <span className="min-w-0 break-words text-body-sm text-ink-2 sm:flex-1">
                     {resolvedGstin(row.outcome).legalName ?? ''}
                   </span>
                 ) : (
@@ -1071,14 +1006,12 @@ export function StepStatutory({
               </label>
             );
           })}
-          {errors.primary && (
-            <p id="primary-gstin-error" className="text-body-sm text-fail" role="alert">
-              {errors.primary}
-            </p>
-          )}
-          <p className="text-body-sm text-ink-2">{copy.primaryNote}</p>
-        </fieldset>
-      </FormSection>
+        {errors.primary && (
+          <p id="primary-gstin-error" className="text-body-sm text-fail" role="alert">
+            {errors.primary}
+          </p>
+        )}
+      </fieldset>
 
       {/* -------------------------------------------- constitution-gated fields */}
       {fields.length > 0 && (
@@ -1108,7 +1041,7 @@ export function StepStatutory({
         </FormSection>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

@@ -60,7 +60,7 @@ export function Choice({
 
   return (
     <fieldset
-      className="flex flex-col gap-3"
+      className="flex flex-col"
       data-testid={`choice-${name}`}
       aria-describedby={error ? `${name}-error` : undefined}
       onFocus={onFocus}
@@ -74,6 +74,7 @@ export function Choice({
           </span>
         )}
       </legend>
+      <div className="form-section-body">
       {description && <p className="text-body-sm text-ink-2">{description}</p>}
 
       <div className="flex flex-col gap-2">
@@ -111,6 +112,7 @@ export function Choice({
           {error}
         </p>
       )}
+      </div>
     </fieldset>
   );
 }

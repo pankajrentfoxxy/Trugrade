@@ -1,11 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Checkbox, Chip, FormSection, Input, SelectTile } from '@trugrade/ui';
+import { Button, Checkbox, Chip, FormSection, Input } from '@trugrade/ui';
 import { YesNo } from '../../register/YesNo';
 import { SOURCING_CHANNELS, SUPPLY_CATEGORIES } from '../../register/picklists';
-import { SupplyCategoryIcon } from '../../register/supply-category-icons';
-import { SourcingChannelIcon } from '../../register/sourcing-channel-icons';
 import { validateCount } from '../../register/validation';
 
 /** Parenthetical note on the label row instead of a second line under the field. */
@@ -394,24 +392,23 @@ export function StepCapability({
           </span>
         }
       >
-        <div
+        <ol
           role="group"
           aria-label="Categories you supply"
           aria-describedby={errors.categories ? 'categories-error' : undefined}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          className="flex list-none flex-col gap-3 p-0"
           onFocus={() => onFieldFocus('Capability')}
         >
           {SUPPLY_CATEGORIES.map((category) => (
-            <SelectTile
-              key={category.code}
-              label={category.label}
-              description={category.note}
-              icon={<SupplyCategoryIcon code={category.code} />}
-              selected={values.categories.includes(category.code)}
-              onToggle={() => toggleIn('categories', category.code)}
-            />
+            <li key={category.code}>
+              <Checkbox
+                label={labelNote(category.label, category.note)}
+                checked={values.categories.includes(category.code)}
+                onChange={() => toggleIn('categories', category.code)}
+              />
+            </li>
           ))}
-        </div>
+        </ol>
         {errors.categories && (
           <p id="categories-error" role="alert" className="text-body-sm text-fail">
             {errors.categories}
@@ -612,7 +609,6 @@ export function StepCapability({
       {/* --------------------------------------------------------- sourcing */}
       <FormSection
         title="Where your stock comes from"
-        description="Select all sources that apply to your stock"
         status={
           <span className="normal-case tracking-normal text-acc-ink">
             <span className="tnum">{values.sourcingChannels.length}</span> of{' '}
@@ -620,25 +616,23 @@ export function StepCapability({
           </span>
         }
       >
-        <div
+        <ol
           role="group"
           aria-label="Sourcing channels"
           aria-describedby={errors.sourcingChannels ? 'sourcing-error' : undefined}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          className="flex list-none flex-col gap-3 p-0"
           onFocus={() => onFieldFocus('Capability')}
         >
           {SOURCING_CHANNELS.map((channel) => (
-            <SelectTile
-              key={channel.code}
-              label={channel.label}
-              description={channel.note}
-              icon={<SourcingChannelIcon code={channel.code} />}
-              indicator="checkbox"
-              selected={values.sourcingChannels.includes(channel.code)}
-              onToggle={() => toggleIn('sourcingChannels', channel.code)}
-            />
+            <li key={channel.code}>
+              <Checkbox
+                label={labelNote(channel.label, channel.note)}
+                checked={values.sourcingChannels.includes(channel.code)}
+                onChange={() => toggleIn('sourcingChannels', channel.code)}
+              />
+            </li>
           ))}
-        </div>
+        </ol>
         {errors.sourcingChannels && (
           <p id="sourcing-error" role="alert" className="text-body-sm text-fail">
             {errors.sourcingChannels}
@@ -672,7 +666,6 @@ export function StepCapability({
           value={values.canProvideSerialsUpfront}
           onChange={(v) => setAndSave('canProvideSerialsUpfront', v)}
           onFocus={() => onFieldFocus('Serial numbers')}
-          description="We sell a named machine, by its serial, with its own inspection report. The serial is what a buyer scans on arrival."
           yesLabel="Yes — we can send serials with the offer"
           noLabel="No — serials only at dispatch"
           yesConsequence="Your stock can be listed unit by unit, with a passport page and a certificate per machine."
@@ -692,10 +685,7 @@ export function StepCapability({
           onChange={(e) => set('leadTimeDays', e.target.value)}
           error={errors.leadTimeDays}
         />
-      </FormSection>
 
-      {/* -------------------------------------------------------- dropship */}
-      <FormSection title="Dispatching direct to the customer">
         <YesNo
           legend="Can you dispatch directly to our customer?"
           name="can-dropship"
@@ -711,7 +701,7 @@ export function StepCapability({
         />
       </FormSection>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

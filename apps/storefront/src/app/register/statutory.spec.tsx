@@ -231,13 +231,6 @@ describe('a verified GSTIN', () => {
 /* ========================================================== GSTIN row list */
 
 describe('adding and removing GSTIN rows', () => {
-  const gstSection = (): HTMLElement => {
-    const title = screen.getByText('GST registrations');
-    const section = title.closest('[data-testid="form-section"]');
-    if (!section) throw new Error('GST section not found');
-    return section as HTMLElement;
-  };
-
   it('numbers rows in order and drops a row when Remove is clicked', () => {
     stubFetch({});
     renderStep({ pan: OWN_PAN, gstins: [{ gstin: '', isPrimary: false }] });
@@ -250,15 +243,12 @@ describe('adding and removing GSTIN rows', () => {
     expect(rows[0]).toHaveTextContent('GSTIN 1');
     expect(rows[1]).toHaveTextContent('GSTIN 2');
     expect(rows[2]).toHaveTextContent('GSTIN 3');
-    expect(gstSection()).toHaveTextContent('0 of 3 confirmed');
-
     fireEvent.click(within(rows[1]!).getByRole('button', { name: 'Remove' }));
 
     const after = screen.getAllByTestId('gstin-row');
     expect(after).toHaveLength(2);
     expect(after[0]).toHaveTextContent('GSTIN 1');
     expect(after[1]).toHaveTextContent('GSTIN 2');
-    expect(gstSection()).toHaveTextContent('0 of 2 confirmed');
     expect(screen.queryByText('GSTIN 3')).not.toBeInTheDocument();
   });
 
@@ -273,7 +263,6 @@ describe('adding and removing GSTIN rows', () => {
     fireEvent.click(within(rows[0]!).getByRole('button', { name: 'Remove' }));
 
     expect(screen.getAllByTestId('gstin-row')).toHaveLength(1);
-    expect(gstSection()).toHaveTextContent('0 of 1 confirmed');
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
   });
 });

@@ -118,9 +118,15 @@ export async function SiteHeader({
             </a>
           </div>
           <div className="r">
-            <a href="/qc/verify">Verify a certificate</a>
-            <a href="/account/orders">Track order</a>
-            <a href="/legal/grievance">Help</a>
+            <a href="/qc/verify" className="hide-md">
+              Verify a certificate
+            </a>
+            <a href="/account/orders" className="hide-md">
+              Track order
+            </a>
+            <a href="/legal/grievance" className="hide-md">
+              Help
+            </a>
             <a
               href={consoleSellRegisterUrl()}
               className="util-promo"
@@ -153,8 +159,8 @@ export async function SiteHeader({
               <b />
               <b />
               <b />
-            </i>{' '}
-            Browse laptops
+            </i>
+            <span className="catbtn-label">Browse laptops</span>
           </a>
 
           <SearchBar />
@@ -184,7 +190,8 @@ export async function SiteHeader({
                   </span>
                 </a>
                 <a className="hbtn solid" href="/register">
-                  Create account
+                  <span className="hbtn-long">Create account</span>
+                  <span className="hbtn-short">Register</span>
                 </a>
               </>
             )}

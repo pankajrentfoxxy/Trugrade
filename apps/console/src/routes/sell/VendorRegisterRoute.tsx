@@ -31,24 +31,30 @@ interface Bootstrap {
 }
 
 async function loadBootstrap(): Promise<Bootstrap> {
-  const [definitionsRes, brandsRes, gradesRes] = await Promise.all([
-    fetch('/api/onboarding/steps/definitions?orgType=VENDOR', { credentials: 'include' }),
-    fetch('/api/public/brands', { credentials: 'include' }),
-    fetch('/api/public/grades', { credentials: 'include' }),
-  ]);
+  try {
+    const [definitionsRes, brandsRes, gradesRes] = await Promise.all([
+      fetch('/api/onboarding/steps/definitions?orgType=VENDOR', { credentials: 'include' }),
+      fetch('/api/public/brands', { credentials: 'include' }),
+      fetch('/api/public/grades', { credentials: 'include' }),
+    ]);
 
-  const definitions = definitionsRes.ok
-    ? ((await definitionsRes.json()) as StepDefinition[])
-    : null;
-  const brands = brandsRes.ok ? ((await brandsRes.json()) as BrandSummary[]).map((b) => b.name) : null;
-  const grades = gradesRes.ok
-    ? ((await gradesRes.json()) as GradeDefinition[]).map((g) => ({
-        grade: g.grade,
-        customerDescription: g.customerDescription,
-      }))
-    : null;
+    const definitions = definitionsRes.ok
+      ? ((await definitionsRes.json()) as StepDefinition[])
+      : null;
+    const brands = brandsRes.ok
+      ? ((await brandsRes.json()) as BrandSummary[]).map((b) => b.name)
+      : null;
+    const grades = gradesRes.ok
+      ? ((await gradesRes.json()) as GradeDefinition[]).map((g) => ({
+          grade: g.grade,
+          customerDescription: g.customerDescription,
+        }))
+      : null;
 
-  return { definitions, brands, grades };
+    return { definitions, brands, grades };
+  } catch {
+    return { definitions: null, brands: null, grades: null };
+  }
 }
 
 export function VendorRegisterRoute(): React.JSX.Element {
@@ -72,14 +78,14 @@ export function VendorRegisterRoute(): React.JSX.Element {
 
   return (
     <div className="min-h-full bg-ground text-ink-2">
-      <header className="border-b border-rule bg-chrome px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+      <header className="border-b border-rule bg-chrome px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 sm:gap-4">
           <Link to="/login" className="text-h3 text-on-chrome no-underline">
             tru<span className="text-acc">grade</span>
           </Link>
           {principal ? (
-            <div className="flex items-center gap-4">
-              <p className="text-body-sm text-on-chrome/70">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
+              <p className="min-w-0 text-body-sm text-on-chrome/70">
                 Signed in as{' '}
                 <span className="text-on-chrome">{principal.fullName?.trim() || 'you'}</span>
               </p>
@@ -96,7 +102,7 @@ export function VendorRegisterRoute(): React.JSX.Element {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-[90rem] min-w-0 px-4 py-5 sm:px-6 sm:py-8">
         {!bootstrap ? (
           <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading registration">
             <Skeleton className="h-8 w-64" />
@@ -117,7 +123,7 @@ export function VendorRegisterRoute(): React.JSX.Element {
         )}
       </main>
 
-      <footer className="border-t border-rule px-6 py-4 text-center text-body-sm text-ink-3">
+      <footer className="border-t border-rule px-4 py-4 text-center text-body-sm text-ink-3 sm:px-6">
         Buyers shop on the storefront — only suppliers and {BRAND.name} staff use this console.
       </footer>
     </div>

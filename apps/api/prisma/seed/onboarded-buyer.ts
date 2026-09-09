@@ -217,7 +217,6 @@ export async function seedOnboardedBuyer(log: (m: string) => void = console.log)
 
   await complete('ACCOUNT', {
     fullName: 'Priya Sharma',
-    companyName: LEGAL_NAME,
     email: ONBOARDED_BUYER_EMAIL,
     mobile: '+919988776655',
   });

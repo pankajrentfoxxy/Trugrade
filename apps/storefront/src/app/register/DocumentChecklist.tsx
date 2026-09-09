@@ -104,6 +104,18 @@ function localRefusal(file: File, rule: DocumentTypeRule): string | undefined {
   return undefined;
 }
 
+function uploadFormatHint(rule: DocumentTypeRule): React.ReactNode {
+  const formats = rule.acceptedMime
+    .map((m) => m.replace('image/', '').replace('application/', ''))
+    .join(', ')
+    .toUpperCase();
+  return (
+    <>
+      {formats}, up to <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>.
+    </>
+  );
+}
+
 /** Distinguishes one in-flight file from another. Never shown. */
 let sendSeq = 0;
 
@@ -271,26 +283,9 @@ export function DocumentChecklist({
     );
   }
 
-  // Required only, in both halves of the fraction: counting an optional
-  // document as "supplied" when nothing was sent is the missing value rendering
-  // as a passing one.
-  const mandatory = asked.filter((w) => w.required);
-  const heldCount = mandatory.filter((w) =>
-    docs.some((d) => d.docType === w.docType && usable(d)),
-  ).length;
+  const showHeader = title.trim().length > 0 || description.trim().length > 0;
 
-  return (
-    <FormSection
-      title={title}
-      description={description}
-      status={
-        <>
-          <span className="tnum">{heldCount}</span> of{' '}
-          <span className="tnum">{mandatory.length}</span> required documents
-        </>
-      }
-    >
-      {asked.map((w) => {
+  const rows = asked.map((w) => {
         const rule = w.rule;
         const held = docs.filter((d) => d.docType === rule.docType);
         const inFlight = pending.filter((p) => p.docType === rule.docType);
@@ -319,10 +314,11 @@ export function DocumentChecklist({
               />
             )}
             <Uploader
-              label={`${rule.label}${w.required ? '' : ' — optional'}`}
+              label={rule.label}
+              required={w.required}
               hint={
                 compactHints ? (
-                  <span className="text-ink-3">
+                  <>
                     {w.purpose} PDF or photo, max{' '}
                     <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>
                     {rule.maxAgeDays !== null && (
@@ -331,30 +327,9 @@ export function DocumentChecklist({
                         · last <span className="font-mono tnum">{rule.maxAgeDays}</span> days
                       </>
                     )}
-                  </span>
-                ) : (
-                  <>
-                    {w.purpose}{' '}
-                    <span className="text-ink-3">
-                      {rule.acceptedMime
-                        .map((m) => m.replace('image/', '').replace('application/', ''))
-                        .join(', ')
-                        .toUpperCase()}
-                      , up to <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>,{' '}
-                      <span className="font-mono tnum">{rule.maxFiles}</span>{' '}
-                      {rule.maxFiles === 1 ? 'file' : 'files'} at most.
-                      {rule.maxAgeDays !== null && (
-                        <>
-                          {' '}
-                          Issued in the last{' '}
-                          <span className="font-mono tnum">{rule.maxAgeDays}</span> days.
-                        </>
-                      )}
-                      {rule.requiresExpiry && (
-                        <> A reviewer reads the validity date off the certificate itself.</>
-                      )}
-                    </span>
                   </>
+                ) : (
+                  uploadFormatHint(rule)
                 )
               }
               accept={rule.acceptedMime.join(',')}
@@ -403,7 +378,32 @@ export function DocumentChecklist({
             )}
           </div>
         );
-      })}
+      });
+
+  if (!showHeader) {
+    return <div className="flex flex-col gap-5">{rows}</div>;
+  }
+
+  // Required only, in both halves of the fraction: counting an optional
+  // document as "supplied" when nothing was sent is the missing value rendering
+  // as a passing one.
+  const mandatory = asked.filter((w) => w.required);
+  const heldCount = mandatory.filter((w) =>
+    docs.some((d) => d.docType === w.docType && usable(d)),
+  ).length;
+
+  return (
+    <FormSection
+      title={title}
+      description={description || undefined}
+      status={
+        <>
+          <span className="tnum">{heldCount}</span> of{' '}
+          <span className="tnum">{mandatory.length}</span> required documents
+        </>
+      }
+    >
+      {rows}
     </FormSection>
   );
 }

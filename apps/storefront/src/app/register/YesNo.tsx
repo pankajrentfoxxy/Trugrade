@@ -62,7 +62,7 @@ export function YesNo({
 
   return (
     <fieldset
-      className="flex flex-col gap-3"
+      className="flex flex-col"
       data-testid={`yesno-${name}`}
       aria-describedby={error ? `${name}-error` : undefined}
       onFocus={onFocus}
@@ -76,6 +76,7 @@ export function YesNo({
           </span>
         )}
       </legend>
+      <div className="form-section-body">
       {description && <p className="text-body-sm text-ink-2">{description}</p>}
 
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -112,6 +113,7 @@ export function YesNo({
           {error}
         </p>
       )}
+      </div>
     </fieldset>
   );
 }

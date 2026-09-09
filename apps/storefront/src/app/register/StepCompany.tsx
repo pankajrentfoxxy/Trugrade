@@ -1,9 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { Button, FormSection, Input } from '@trugrade/ui';
+import { Button, Input } from '@trugrade/ui';
 import { Select } from '../../lib/controls';
-import { ANNUAL_VOLUMES, CONSTITUTIONS, EMPLOYEE_BANDS, INDUSTRIES } from './picklists';
+import {
+  ANNUAL_VOLUMES,
+  CONSTITUTIONS,
+  EMPLOYEE_BANDS,
+  INDUSTRIES,
+  yearEstablishedOptions,
+} from './picklists';
 import { normaliseWebsite, validateCompanyName, validateYearEstablished } from './validation';
 
 /**
@@ -79,7 +85,7 @@ export const completionOf = (values: CompanyValues): number =>
 
 export interface StepCompanyProps {
   answers: Record<string, unknown>;
-  /** Carried from step 1 so the applicant does not retype what they just typed. */
+  /** Pre-filled when a draft or an earlier session already captured the name. */
   fallbackLegalName?: string;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
   onContinue: (
@@ -111,6 +117,10 @@ export function StepCompany({
   // The year the rule compares against is read once, here, and passed in — the
   // validator itself takes it as an argument so it can be tested at a boundary.
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
+  const yearOptions = React.useMemo(
+    () => yearEstablishedOptions(currentYear),
+    [currentYear],
+  );
 
   const set = <K extends keyof CompanyValues>(key: K, value: CompanyValues[K]): void => {
     setValues((v) => ({ ...v, [key]: value }));
@@ -130,7 +140,7 @@ export function StepCompany({
     if (!candidate.employeeBand) found.employeeBand = 'Choose the headcount band.';
     if (!candidate.annualVolume) found.annualVolume = 'Choose how many laptops you buy in a year.';
     if (!candidate.yearEstablished.trim())
-      found.yearEstablished = 'Enter the year the business was established.';
+      found.yearEstablished = 'Choose the year the business was established.';
     const year = validateYearEstablished(candidate.yearEstablished, currentYear);
     if (year) found.yearEstablished = year;
     const site = normaliseWebsite(candidate.website);
@@ -161,19 +171,10 @@ export function StepCompany({
         </p>
       )}
 
-      <FormSection
-        title="The legal entity"
-        description="This is the name and constitution we will invoice, so it has to match your GST certificate."
-        status={
-          <>
-            <span className="tnum">{answeredCount(values)}</span> of{' '}
-            <span className="tnum">{REQUIRED.length}</span> required answers
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5">
         <Input
-          label="Legal name"
-          hint="As registered. Include Pvt Ltd, LLP or the equivalent."
+          label="Company legal name"
+          hint="Exactly as it appears on your GST certificate."
           required
           value={values.legalName}
           onFocus={() => onFieldFocus('Company')}
@@ -183,7 +184,6 @@ export function StepCompany({
         />
         <Input
           label="Trade name"
-          hint="Optional. The name you actually go by, if it differs."
           value={values.tradeName}
           onFocus={() => onFieldFocus('Company')}
           onBlur={saveOnBlur}
@@ -192,7 +192,6 @@ export function StepCompany({
         />
         <Select
           label="Constitution"
-          hint="A private limited company is asked for a CIN; a proprietorship never is."
           required
           options={CONSTITUTIONS}
           value={values.constitution}
@@ -201,12 +200,9 @@ export function StepCompany({
           onChange={(e) => set('constitution', e.target.value)}
           error={errors.constitution}
         />
-      </FormSection>
+      </div>
 
-      <FormSection
-        title="The business"
-        description="Used to size your credit application and to route you to the right account manager."
-      >
+      <div className="flex flex-col gap-5">
         <Select
           label="Industry"
           required
@@ -217,13 +213,11 @@ export function StepCompany({
           onChange={(e) => set('industry', e.target.value)}
           error={errors.industry}
         />
-        <Input
+        <Select
           label="Year established"
-          hint="Four digits, and it cannot be in the future."
-          mono
-          inputMode="numeric"
-          maxLength={4}
+          hint="Calendar year your business started operating."
           required
+          options={yearOptions}
           value={values.yearEstablished}
           onFocus={() => onFieldFocus('Company')}
           onBlur={saveOnBlur}
@@ -242,7 +236,6 @@ export function StepCompany({
         />
         <Select
           label="Laptops bought in a year"
-          hint="A range is fine. Nothing is committed by answering it."
           required
           options={ANNUAL_VOLUMES}
           value={values.annualVolume}
@@ -253,7 +246,6 @@ export function StepCompany({
         />
         <Input
           label="Website"
-          hint="Optional. acme.co.in is fine — you do not need to type https://."
           inputMode="url"
           value={values.website}
           onFocus={() => onFieldFocus('Company')}
@@ -261,9 +253,9 @@ export function StepCompany({
           onChange={(e) => set('website', e.target.value)}
           error={errors.website}
         />
-      </FormSection>
+      </div>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

@@ -21,15 +21,11 @@ import { StepStatutory, WHY_STATUTORY, BUYER_STATUTORY_COPY } from './StepStatut
  * page still server-renders the definitions, so the rail is in the first paint.
  */
 
-/** Step 1's company name, then step 2's legal name, then nothing. */
+/** Step 2's legal name, then nothing. */
 const legalNameFor = (ctx: StepContext): string =>
-  (typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
+  typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
     ? (ctx.allAnswers.BUSINESS_PROFILE.legalName as string)
-    : '') ||
-  ctx.typedCompanyName ||
-  (typeof ctx.allAnswers.ACCOUNT?.companyName === 'string'
-    ? (ctx.allAnswers.ACCOUNT.companyName as string)
-    : '');
+    : '';
 
 /**
  * The GSTINs step 3 verified, for step 4's billing addresses.
@@ -60,12 +56,6 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
   BUSINESS_PROFILE: (ctx) => (
     <StepCompany
       answers={ctx.answers}
-      fallbackLegalName={
-        ctx.typedCompanyName ||
-        (typeof ctx.allAnswers.ACCOUNT?.companyName === 'string'
-          ? (ctx.allAnswers.ACCOUNT.companyName as string)
-          : '')
-      }
       busy={ctx.busy}
       blockingReason={ctx.step?.blockingReason}
       onSaveDraft={ctx.saveDraft}
@@ -120,12 +110,20 @@ const WHY: Record<string, readonly WhyRailItem[]> = {
   DOCUMENTS: WHY_DOCUMENTS,
 };
 
+/** Module scope — an inline object here re-runs RegisterFlow's mount effect every render. */
+const PURPOSE_NOTES: Record<string, string> = {
+  STATUTORY: 'Your GSTIN sets IGST or CGST+SGST on invoices and where input credit applies.',
+};
+
 export function BuyerRegistration({
   definitions,
 }: {
   definitions: StepDefinition[] | null;
 }): React.JSX.Element {
   const router = useRouter();
+  const onSessionEstablished = React.useCallback((): void => {
+    router.refresh();
+  }, [router]);
 
   return (
     <RegisterFlow
@@ -134,10 +132,11 @@ export function BuyerRegistration({
       basePath="/register"
       railLabel="Create a buyer account"
       renderers={RENDERERS}
+      purposeNotes={PURPOSE_NOTES}
       whyFor={(code) => WHY[code] ?? []}
       wrongAccountBody="This form creates a buyer account. Vendor and staff accounts are managed in the console. Sign out here if you need to register a second organisation."
       review={(ctx) => <Review {...ctx} />}
-      onSessionEstablished={() => router.refresh()}
+      onSessionEstablished={onSessionEstablished}
     />
   );
 }

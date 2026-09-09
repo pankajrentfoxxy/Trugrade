@@ -126,6 +126,22 @@ const emptyHours = (): Record<string, DayHours> =>
     WEEK_DAYS.map((d) => [String(d.day), { closed: false, opensAt: '', closesAt: '' }]),
   );
 
+function mondayCanCopy(hours: Record<string, DayHours>): boolean {
+  const monday = hours['1'];
+  return Boolean(monday && !monday.closed && monday.opensAt && monday.closesAt);
+}
+
+/** True when every open day already matches Monday's window. */
+function mondayCopiedToOpenDays(hours: Record<string, DayHours>): boolean {
+  const monday = hours['1'];
+  if (!mondayCanCopy(hours) || !monday) return false;
+  return Object.entries(hours).every(([day, value]) => {
+    if (day === '1') return true;
+    if (value.closed) return true;
+    return value.opensAt === monday.opensAt && value.closesAt === monday.closesAt;
+  });
+}
+
 let keySeed = 0;
 const nextKey = (): string => {
   keySeed += 1;
@@ -318,14 +334,7 @@ export function StepFacility({
     persist(next);
   };
 
-  /**
-   * Monday's window onto every other open day.
-   *
-   * Not a default and not a pre-fill — nothing happens until somebody presses
-   * it. Seven days times however many sites is the kind of form people abandon,
-   * and the alternative to a button is a screen that assumes 09:00 to 18:00 on
-   * behalf of a dock that shuts at 16:30.
-   */
+  /** Monday's window onto every other open day — only when the checkbox is ticked. */
   const copyMonday = (key: string): void => {
     const facility = values.facilities.find((f) => f.key === key)!;
     const monday = facility.hours['1'];
@@ -479,7 +488,6 @@ export function StepFacility({
       {/* ------------------------------------------------------- facilities */}
       <FormSection
         title="Where your stock actually sits"
-        description="Add every site a machine can be picked up from. Each one gets its own dispatch address, its own hours and its own access notes, because a carrier is sent to a site rather than to a company."
         status={
           <>
             <span className="tnum">{values.facilities.filter(facilityDone).length}</span> of{' '}
@@ -498,7 +506,7 @@ export function StepFacility({
             <div
               key={facility.key}
               data-testid="facility"
-              className="flex flex-col gap-4 rounded-lg border border-rule bg-sheet p-4"
+              className="flex flex-col gap-4 rounded-lg border border-rule bg-sheet p-3 sm:p-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
@@ -723,10 +731,6 @@ export function StepFacility({
                     of <span className="tnum">{WEEK_DAYS.length}</span> days answered
                   </span>
                 </div>
-                <p className="text-body-sm text-ink-2">
-                  A day you are shut is an answer — tick it. It is what stops us booking a pick-up
-                  nobody is there for.
-                </p>
 
                 {WEEK_DAYS.map((day) => {
                   const hours = facility.hours[String(day.day)] ?? {
@@ -737,57 +741,76 @@ export function StepFacility({
                   const problem = at(`hours.${day.day}`);
                   return (
                     <div key={day.day} className="flex flex-col gap-2">
-                      <div className="grid items-end gap-3 sm:grid-cols-[6rem_1fr_1fr_auto]">
-                        <span className="text-body-sm font-medium text-ink-2 sm:pb-3">
+                      <div className="facility-hours-day">
+                        <span className="facility-hours-day__label text-body-sm font-medium text-ink-2">
                           {day.label}
                         </span>
-                        <Input
-                          label="Opens"
-                          type="time"
-                          mono
-                          disabled={hours.closed}
-                          value={hours.opensAt}
-                          onFocus={() => onFieldFocus('Operating hours')}
-                          onBlur={saveOnBlur}
-                          onChange={(e) => {
-                            setValues(setHours(facility.key, day.day, { opensAt: e.target.value }));
-                            clearError(`facility.${facility.key}.hours.${day.day}`);
-                          }}
-                        />
-                        <Input
-                          label="Closes"
-                          type="time"
-                          mono
-                          disabled={hours.closed}
-                          value={hours.closesAt}
-                          onFocus={() => onFieldFocus('Operating hours')}
-                          onBlur={saveOnBlur}
-                          onChange={(e) => {
-                            setValues(
-                              setHours(facility.key, day.day, { closesAt: e.target.value }),
-                            );
-                            clearError(`facility.${facility.key}.hours.${day.day}`);
-                          }}
-                        />
-                        <Checkbox
-                          label="Closed"
-                          checked={hours.closed}
-                          onChange={(closed) => {
-                            // The window goes with the answer. `facility_hours`
-                            // stores NULL times against `is_closed`, and a shut
-                            // day still showing 09:30–18:00 is a value that
-                            // contradicts the tick beside it.
-                            const next = setHours(
-                              facility.key,
-                              day.day,
-                              closed ? { closed, opensAt: '', closesAt: '' } : { closed },
-                            );
-                            setValues(next);
-                            persist(next);
-                            clearError(`facility.${facility.key}.hours.${day.day}`);
-                          }}
-                          className="sm:pb-3"
-                        />
+                        <div className="facility-hours-day__opens">
+                          <Input
+                            label="Opens"
+                            type="time"
+                            mono
+                            disabled={hours.closed}
+                            value={hours.opensAt}
+                            onFocus={() => onFieldFocus('Operating hours')}
+                            onBlur={saveOnBlur}
+                            onChange={(e) => {
+                              setValues(
+                                setHours(facility.key, day.day, { opensAt: e.target.value }),
+                              );
+                              clearError(`facility.${facility.key}.hours.${day.day}`);
+                            }}
+                          />
+                        </div>
+                        <div className="facility-hours-day__closes">
+                          <Input
+                            label="Closes"
+                            type="time"
+                            mono
+                            disabled={hours.closed}
+                            value={hours.closesAt}
+                            onFocus={() => onFieldFocus('Operating hours')}
+                            onBlur={saveOnBlur}
+                            onChange={(e) => {
+                              setValues(
+                                setHours(facility.key, day.day, { closesAt: e.target.value }),
+                              );
+                              clearError(`facility.${facility.key}.hours.${day.day}`);
+                            }}
+                          />
+                        </div>
+                        <div className="facility-hours-day__closed">
+                          <Checkbox
+                            label="Closed"
+                            checked={hours.closed}
+                            onChange={(closed) => {
+                              // The window goes with the answer. `facility_hours`
+                              // stores NULL times against `is_closed`, and a shut
+                              // day still showing 09:30–18:00 is a value that
+                              // contradicts the tick beside it.
+                              const next = setHours(
+                                facility.key,
+                                day.day,
+                                closed ? { closed, opensAt: '', closesAt: '' } : { closed },
+                              );
+                              setValues(next);
+                              persist(next);
+                              clearError(`facility.${facility.key}.hours.${day.day}`);
+                            }}
+                          />
+                        </div>
+                        {day.day === 1 && (
+                          <div className="facility-hours-day__copy">
+                            <Checkbox
+                              label="Copy to every open day"
+                              checked={mondayCopiedToOpenDays(facility.hours)}
+                              disabled={!mondayCanCopy(facility.hours)}
+                              onChange={(checked) => {
+                                if (checked) copyMonday(facility.key);
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
                       {problem && (
                         <p role="alert" className="text-body-sm text-fail">
@@ -797,12 +820,6 @@ export function StepFacility({
                     </div>
                   );
                 })}
-
-                <div>
-                  <Button type="button" variant="ghost" onClick={() => copyMonday(facility.key)}>
-                    Copy Monday’s hours to every open day
-                  </Button>
-                </div>
               </div>
 
               {/* ----------------------------------------------- holidays */}
@@ -877,7 +894,6 @@ export function StepFacility({
       {/* --------------------------------------------------------- contacts */}
       <FormSection
         title="Who we deal with"
-        description="Four different people, usually. A purchase order to the wrong one is a machine nobody packs."
         status={
           <>
             <span className="tnum">{contactsDone}</span> of{' '}
@@ -891,12 +907,13 @@ export function StepFacility({
             <fieldset
               key={role.code}
               data-testid={`contact-${role.code}`}
-              className="flex flex-col gap-3 rounded-lg border border-rule bg-sheet p-4"
+              className="flex flex-col rounded-lg border border-rule bg-sheet p-3 sm:p-4"
             >
               <legend className="px-1 text-body-sm font-medium text-ink">
                 {role.label}
                 {!role.required && <span className="text-ink-3"> — optional</span>}
               </legend>
+              <div className="form-section-body">
               <p className="text-body-sm text-ink-2">{role.purpose}</p>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -942,7 +959,6 @@ export function StepFacility({
                   mono
                   inputMode="tel"
                   required={role.required}
-                  hint="Ten digits, or +91 followed by ten."
                   value={person.mobile}
                   onFocus={() => onFieldFocus('Contacts')}
                   onBlur={() => {
@@ -1009,12 +1025,13 @@ export function StepFacility({
                     'Preferred language not stated — we will write in English.'}
                 </p>
               )}
+              </div>
             </fieldset>
           );
         })}
       </FormSection>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

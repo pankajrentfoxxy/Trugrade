@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { FormSection, Input } from '@trugrade/ui';
+import { Input } from '@trugrade/ui';
 import { Select } from '../../../lib/controls';
 import {
   StepAccount,
@@ -24,13 +24,6 @@ import { validateCity } from '../../register/validation';
  */
 
 const VENDOR_ACCOUNT_COPY: AccountCopy = {
-  identityDescription:
-    'The person who registers is the account owner and signs the vendor agreement. They can add colleagues once you are approved.',
-  companyNameLabel: 'Company name',
-  companyNameHint:
-    'The name you trade under is fine here. The registered legal name is asked for on the next step.',
-  reachDescription:
-    'Both are verified now: a purchase order, a pick-up window and a payout advice all go to these, and a wrong number means a machine nobody comes to collect.',
   submitLabel: 'Create account and continue',
 };
 
@@ -106,13 +99,9 @@ export function StepVendorContact({
       }
       validateExtras={validateExtras}
       extras={
-        <FormSection
-          title="What you supply"
-          description="A rough answer is enough. It decides which stock enquiries reach you and who from our team calls you first — nothing here is a commitment."
-        >
+        <div className="flex flex-col gap-5">
           <Input
             label="City you operate from"
-            hint="Where the machines actually are. The full address is asked for on the next step."
             required
             value={extras.city}
             onFocus={() => onFieldFocus('Contact')}
@@ -128,7 +117,7 @@ export function StepVendorContact({
             onChange={(e) => set('monthlyVolume', e.target.value)}
             error={errors.monthlyVolume}
           />
-        </FormSection>
+        </div>
       }
     />
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Button, FormSection, Input, type WhyRailItem } from '@trugrade/ui';
+import { Button, Input, type WhyRailItem } from '@trugrade/ui';
 import { Select } from '../../lib/controls';
 import {
   CONTACT_ROLES,
@@ -419,9 +419,6 @@ export function StepContacts({
     if (refusal) setErrors(refusal);
   };
 
-  const requiredContacts = CONTACT_ROLES.filter((r) => r.required);
-  const contactsDone = requiredContacts.filter((r) => personDone(values.contacts[r.code]!)).length;
-
   /* ----------------------------------------------------------------- view */
 
   return (
@@ -433,29 +430,19 @@ export function StepContacts({
       )}
 
       {/* --------------------------------------------------------- contacts */}
-      <FormSection
-        title="Who we deal with"
-        description="Three different people, usually. An order confirmation to the wrong one is an order nobody approves."
-        status={
-          <>
-            <span className="tnum">{contactsDone}</span> of{' '}
-            <span className="tnum">{requiredContacts.length}</span> required contacts
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5">
         {CONTACT_ROLES.map((role) => {
           const person = values.contacts[role.code]!;
           return (
             <fieldset
               key={role.code}
               data-testid={`contact-${role.code}`}
-              className="flex flex-col gap-3 rounded-lg border border-rule bg-sheet p-4"
+              className="flex min-w-0 flex-col gap-3 rounded-lg border border-rule bg-sheet p-3 sm:p-4"
             >
               <legend className="px-1 text-body-sm font-medium text-ink">
                 {role.label}
                 {!role.required && <span className="text-ink-3"> — optional</span>}
               </legend>
-              <p className="text-body-sm text-ink-2">{role.purpose}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   label={`${role.label} contact name`}
@@ -472,7 +459,6 @@ export function StepContacts({
                 />
                 <Input
                   label={`${role.label} designation`}
-                  hint="Optional. What it says on their signature block."
                   value={person.designation}
                   onFocus={() => onFieldFocus('Contacts and delivery')}
                   onBlur={saveOnBlur}
@@ -498,7 +484,6 @@ export function StepContacts({
                   mono
                   inputMode="tel"
                   required={role.required}
-                  hint="Ten digits, or +91 followed by ten."
                   value={person.mobile}
                   onFocus={() => onFieldFocus('Contacts and delivery')}
                   onBlur={() => {
@@ -520,19 +505,10 @@ export function StepContacts({
             </fieldset>
           );
         })}
-      </FormSection>
+      </div>
 
       {/* ---------------------------------------------------------- billing */}
-      <FormSection
-        title="Billing address"
-        description="One per GST registration. This is the address printed on the tax invoice for that registration."
-        status={
-          <>
-            <span className="tnum">{values.billing.length}</span>{' '}
-            {values.billing.length === 1 ? 'registration' : 'registrations'}
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5">
         {values.billing.map((address, index) => {
           const at = (field: string): string | undefined => errors[`billing.${index}.${field}`];
           const issuedIn = address.gstin
@@ -542,7 +518,7 @@ export function StepContacts({
             <div
               key={address.gstin || `billing-${index}`}
               data-testid="billing-address"
-              className="flex flex-col gap-3 rounded-lg border border-rule bg-sheet p-4"
+              className="flex min-w-0 flex-col gap-3 rounded-lg border border-rule bg-sheet p-3 sm:p-4"
             >
               {address.gstin ? (
                 <p className="flex flex-wrap items-baseline gap-2 text-body-sm text-ink-2">
@@ -553,12 +529,7 @@ export function StepContacts({
                     <span className="text-ink-4">state not recognised</span>
                   )}
                 </p>
-              ) : (
-                <p className="text-body-sm text-ink-2">
-                  We could not read your GST registrations back on this device, so we are asking for
-                  one billing address. Your reviewer matches it to your registrations.
-                </p>
-              )}
+              ) : null}
               <Input
                 label="Building and street"
                 required
@@ -573,7 +544,6 @@ export function StepContacts({
               />
               <Input
                 label="Area or landmark"
-                hint="Optional."
                 value={address.line2}
                 onFocus={() => onFieldFocus('Billing address')}
                 onBlur={saveOnBlur}
@@ -624,19 +594,10 @@ export function StepContacts({
             </div>
           );
         })}
-      </FormSection>
+      </div>
 
       {/* --------------------------------------------------------- delivery */}
-      <FormSection
-        title="Where we deliver"
-        description="Add every site that receives machines. You choose between them at checkout."
-        status={
-          <>
-            <span className="tnum">{values.delivery.filter(deliveryDone).length}</span> of{' '}
-            <span className="tnum">{values.delivery.length}</span> complete
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5">
         {values.delivery.map((address, index) => {
           const at = (field: string): string | undefined =>
             errors[`delivery.${address.key}.${field}`];
@@ -644,7 +605,7 @@ export function StepContacts({
             <div
               key={address.key}
               data-testid="delivery-address"
-              className="flex flex-col gap-3 rounded-lg border border-rule bg-sheet p-4"
+              className="flex min-w-0 flex-col gap-3 rounded-lg border border-rule bg-sheet p-3 sm:p-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
@@ -663,7 +624,6 @@ export function StepContacts({
 
               <Input
                 label="Name this address"
-                hint='What your team calls it — "Head office", "Gurugram warehouse".'
                 required
                 value={address.label}
                 onFocus={() => onFieldFocus('Contacts and delivery')}
@@ -688,7 +648,6 @@ export function StepContacts({
               />
               <Input
                 label="Floor, unit or block"
-                hint="Optional."
                 value={address.line2}
                 onFocus={() => onFieldFocus('Contacts and delivery')}
                 onBlur={saveOnBlur}
@@ -738,7 +697,6 @@ export function StepContacts({
               />
               <Input
                 label="Landmark"
-                hint="Optional, and worth more than the PIN code to a rider who has not been before."
                 value={address.landmark}
                 onFocus={() => onFieldFocus('Contacts and delivery')}
                 onBlur={saveOnBlur}
@@ -786,7 +744,6 @@ export function StepContacts({
 
               <Input
                 label="Gate instructions"
-                hint='Optional. "Gate 3, ask for the security desk. No entry after 17:30."'
                 value={address.gateInstructions}
                 onFocus={() => onFieldFocus('Contacts and delivery')}
                 onBlur={saveOnBlur}
@@ -858,9 +815,9 @@ export function StepContacts({
             Add another delivery address
           </Button>
         </div>
-      </FormSection>
+      </div>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

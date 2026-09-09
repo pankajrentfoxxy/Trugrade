@@ -393,7 +393,6 @@ export class IdentityController {
 
     await this.identity.createOrganizationWithOwner({
       orgType: body.orgType,
-      legalName: body.companyName,
       fullName: body.fullName,
       email: body.email,
       mobile: body.mobile,

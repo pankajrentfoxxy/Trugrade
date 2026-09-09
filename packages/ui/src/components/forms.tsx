@@ -389,6 +389,7 @@ export interface UploaderProps {
   onRemove?: (id: string) => void;
   error?: string;
   disabled?: boolean;
+  required?: boolean;
   id?: string;
   className?: string;
 }
@@ -414,6 +415,7 @@ export function Uploader({
   onRemove,
   error,
   disabled,
+  required,
   id,
   className,
 }: UploaderProps): React.JSX.Element {
@@ -434,13 +436,13 @@ export function Uploader({
     <div className={cn('flex flex-col gap-3', className)}>
       <label htmlFor={inputId} className="text-body-sm font-medium text-ink-2">
         {label}
+        {required && (
+          <span className="text-fail" aria-hidden="true">
+            {' '}
+            *
+          </span>
+        )}
       </label>
-
-      {hint && (
-        <p id={`${inputId}-hint`} className="text-body-sm text-ink-2">
-          {hint}
-        </p>
-      )}
 
       <div
         onDragOver={(event) => {
@@ -454,7 +456,7 @@ export function Uploader({
           take(event.dataTransfer.files);
         }}
         className={cn(
-          'flex flex-col gap-3 rounded-lg border border-dashed p-5 transition-colors',
+          'flex flex-col gap-3 rounded-lg border border-dashed p-4 transition-colors sm:p-5',
           dragging ? 'border-acc-dk bg-acc-wash' : 'border-rule bg-sheet-2',
         )}
       >
@@ -467,11 +469,16 @@ export function Uploader({
           aria-describedby={describedBy}
           aria-invalid={Boolean(error) || undefined}
           onChange={(event) => take(event.target.files)}
-          className="text-body-sm text-ink-2 file:mr-4 file:min-h-11 file:rounded file:border file:border-rule file:bg-sheet file:px-4 file:text-body-sm file:text-ink"
+          className="w-full min-w-0 max-w-full text-body-sm text-ink-2 file:mb-2 file:mr-0 file:min-h-11 file:max-w-full file:rounded file:border file:border-rule file:bg-sheet file:px-4 file:text-body-sm file:text-ink sm:file:mb-0 sm:file:mr-4"
         />
-        <p className="text-body-sm text-ink-3">
-          Or drop {multiple ? 'files' : 'a file'} here. Up to {maxSizeMb} MB.
-        </p>
+        {hint && (
+          <p
+            id={`${inputId}-hint`}
+            className="text-label normal-case tracking-normal text-ink-3"
+          >
+            {hint}
+          </p>
+        )}
       </div>
 
       <p id={`${inputId}-status`} role="status" aria-live="polite" className="sr-only">

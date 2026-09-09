@@ -73,14 +73,6 @@ const EMPTY: VendorBusinessValues = {
  */
 const UNINCORPORATED = ['PROPRIETORSHIP', 'PARTNERSHIP'];
 
-/** Parenthetical note on the label row instead of a second line under the field. */
-const labelNote = (text: string, note: string): React.ReactNode => (
-  <>
-    {text}{' '}
-    <span className="text-label font-normal text-ink-3">({note})</span>
-  </>
-);
-
 export function readVendorBusinessDraft(
   answers: Record<string, unknown>,
   fallbackLegalName = '',
@@ -231,18 +223,9 @@ export function StepVendorBusiness({
         </p>
       )}
 
-      <FormSection
-        title="The legal entity"
-        description="This is the name on every purchase order we raise to you and on the payout advice that follows it, so it has to match your GST certificate."
-        status={
-          <>
-            <span className="tnum">{checksOf(values).filter(Boolean).length}</span> of{' '}
-            <span className="tnum">{checksOf(values).length}</span> answered
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5">
         <Input
-          label={labelNote('Legal name', 'As registered. Include Pvt Ltd, LLP or the equivalent.')}
+          label="Company legal name"
           required
           value={values.legalName}
           onFocus={() => onFieldFocus('Business')}
@@ -251,7 +234,7 @@ export function StepVendorBusiness({
           error={errors.legalName}
         />
         <Input
-          label={labelNote('Trade name', 'Optional. The name you actually go by, if it differs.')}
+          label="Trade name"
           value={values.tradeName}
           onFocus={() => onFieldFocus('Business')}
           onBlur={saveOnBlur}
@@ -259,10 +242,7 @@ export function StepVendorBusiness({
           error={errors.tradeName}
         />
         <Select
-          label={labelNote(
-            'Constitution',
-            'This decides what the next step asks for: a private limited company needs a CIN, an LLP an LLPIN, a proprietorship neither.',
-          )}
+          label="Constitution"
           required
           options={CONSTITUTIONS}
           value={values.constitution}
@@ -273,12 +253,7 @@ export function StepVendorBusiness({
         />
         {dateApplies && (
           <Input
-            label={labelNote(
-              'Date of incorporation',
-              values.constitution
-                ? 'As printed on the certificate of incorporation.'
-                : 'Choose a constitution above first — a proprietorship is never asked for this.',
-            )}
+            label="Date of incorporation"
             type="date"
             value={values.incorporationDate}
             onFocus={() => onFieldFocus('Business')}
@@ -287,9 +262,9 @@ export function StepVendorBusiness({
             error={errors.incorporationDate}
           />
         )}
-      </FormSection>
+      </div>
 
-      <FormSection title="The operation">
+      <div className="flex flex-col gap-5">
         <Select
           label="What best describes you"
           required
@@ -311,7 +286,7 @@ export function StepVendorBusiness({
           error={errors.staffBand}
         />
         <Input
-          label={labelNote('Website', 'Optional. acme.co.in is fine — you do not need to type https://.')}
+          label="Website"
           inputMode="url"
           value={values.website}
           onFocus={() => onFieldFocus('Business')}
@@ -319,12 +294,9 @@ export function StepVendorBusiness({
           onChange={(e) => set('website', e.target.value)}
           error={errors.website}
         />
-      </FormSection>
+      </div>
 
-      <FormSection
-        title="Registered office"
-        description="The address on your incorporation or GST certificate. It is what a reviewer matches your documents against."
-      >
+      <FormSection title="Registered office">
         <AddressFields
           value={values.registered}
           errors={{
@@ -339,10 +311,7 @@ export function StepVendorBusiness({
         />
       </FormSection>
 
-      <FormSection
-        title="Operating address"
-        description="Where the machines actually are today. If it is the same building as the registered office, say so — you add each warehouse separately on step 5."
-      >
+      <FormSection title="Operating address">
         <Checkbox
           label="Same as the registered office"
           consequence="We will use the registered office above as your operating address until you add a warehouse on step 5."
@@ -374,7 +343,7 @@ export function StepVendorBusiness({
         )}
       </FormSection>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

@@ -27,6 +27,9 @@ import { AuditService } from './internal/audit.service';
 
 /** `org_type` in the adopted schema is INTERNAL where the domain says PLATFORM. */
 export type OrgType = 'VENDOR' | 'BUYER' | 'PLATFORM';
+
+/** Written at registration; replaced when BUSINESS_PROFILE is promoted. */
+export const PENDING_ORG_LEGAL_NAME = 'Pending company details';
 const DB_ORG_TYPE: Record<OrgType, string> = {
   VENDOR: 'VENDOR',
   BUYER: 'BUYER',
@@ -175,7 +178,8 @@ export class IdentityService implements IIdentityService {
    */
   async createOrganizationWithOwner(input: {
     orgType: OrgType;
-    legalName: string;
+    /** Omitted at self-service registration — step 2 supplies the real name. */
+    legalName?: string;
     fullName: string;
     email: string;
     mobile: string;
@@ -198,7 +202,7 @@ export class IdentityService implements IIdentityService {
       const org = await this.prisma.db.organization.create({
         data: {
           org_type: DB_ORG_TYPE[input.orgType] as OrgTypeEnum,
-          legal_name: input.legalName,
+          legal_name: input.legalName?.trim() || PENDING_ORG_LEGAL_NAME,
           status: 'REGISTERED',
         },
       });

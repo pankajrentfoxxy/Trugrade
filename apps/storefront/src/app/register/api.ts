@@ -193,7 +193,6 @@ export const verifyOtp = (
   post<OtpVerified>('/api/auth/register/otp/verify', { channel, value, code });
 
 export interface RegisterInput {
-  companyName: string;
   fullName: string;
   email: string;
   mobile: string;

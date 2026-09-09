@@ -31,6 +31,13 @@ export interface StepRailProps {
   /** Names the rail. Two flows on one screen would otherwise be identical. */
   label: string;
   /**
+   * When set, replaces the flow title and "N of M done" with an onboarding
+   * completion header and progress bar. Checkout and bulk intake omit this.
+   */
+  completionPct?: number;
+  /** Defaults to "Onboarding completion status". */
+  completionTitle?: string;
+  /**
    * When the draft was last written to `kyc.onboarding_progress.draft_json`,
    * already formatted for a human: "2 minutes ago", "Yesterday 18:04".
    *
@@ -60,11 +67,17 @@ export interface StepRailProps {
 export function StepRail({
   steps,
   label,
+  completionPct,
+  completionTitle = 'Onboarding completion status',
   savedAt,
   resumeHref,
   className,
 }: StepRailProps): React.JSX.Element {
   const done = steps.filter((s) => s.status === 'complete').length;
+  const pct =
+    completionPct === undefined
+      ? undefined
+      : Math.min(100, Math.max(0, Math.round(completionPct)));
 
   return (
     <aside
@@ -75,12 +88,38 @@ export function StepRail({
       )}
       data-testid="step-rail"
     >
-      <div className="flex flex-col gap-1">
-        <h2 className="text-h3 text-ink">{label}</h2>
-        <p className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-          <span className="tnum">{done}</span> of <span className="tnum">{steps.length}</span> done
-        </p>
-      </div>
+      {pct === undefined ? (
+        <div className="flex flex-col gap-1">
+          <h2 className="text-h3 text-ink">{label}</h2>
+          <p className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+            <span className="tnum">{done}</span> of <span className="tnum">{steps.length}</span> done
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-h3 text-ink">{completionTitle}</h2>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                Progress
+              </span>
+              <span className="font-mono text-label uppercase tracking-[0.13em] tnum text-ink">
+                {pct}%
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Onboarding ${pct}% complete`}
+              className="h-1.5 w-full overflow-hidden rounded bg-sheet-3"
+            >
+              <div className="h-full bg-acc transition-[width]" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <Stepper steps={steps} label={label} />
 
@@ -141,7 +180,7 @@ export function FormSection({
   className,
 }: FormSectionProps): React.JSX.Element {
   return (
-    <fieldset className={cn('flex flex-col gap-5', className)} data-testid="form-section">
+    <fieldset className={cn('flex flex-col', className)} data-testid="form-section">
       <legend className="w-full">
         <span className="flex flex-wrap items-baseline gap-3">
           <span className="text-h3 text-ink">{title}</span>
@@ -155,7 +194,7 @@ export function FormSection({
           <span className="mt-1 block text-body-sm text-ink-2">{description}</span>
         ) : null}
       </legend>
-      {children}
+      <div className="form-section-body">{children}</div>
     </fieldset>
   );
 }

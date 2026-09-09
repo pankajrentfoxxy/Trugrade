@@ -75,14 +75,13 @@ import { receivingHoursLabel } from './validation';
 
 const accountRows = (a: Record<string, unknown>): Row[] => [
   { label: 'Your name', value: str(a, 'fullName'), required: true },
-  { label: 'Company', value: str(a, 'companyName'), required: true },
   { label: 'Work email', value: str(a, 'email'), required: true, mono: true },
   { label: 'Mobile', value: str(a, 'mobile'), required: true, mono: true },
   { label: 'How you found us', value: labelOrBlank(HEARD_FROM, str(a, 'heardFrom')) },
 ];
 
 const companyRows = (a: Record<string, unknown>): Row[] => [
-  { label: 'Legal name', value: str(a, 'legalName'), required: true },
+  { label: 'Company legal name', value: str(a, 'legalName'), required: true },
   { label: 'Trade name', value: str(a, 'tradeName') },
   { label: 'Constitution', value: labelOrBlank(CONSTITUTIONS, str(a, 'constitution')), required: true },
   { label: 'Industry', value: labelOrBlank(INDUSTRIES, str(a, 'industry')), required: true },
@@ -482,7 +481,7 @@ export function Review({
         </p>
       )}
 
-      <div className="flex flex-col gap-3 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-col gap-3 border-t border-rule-2 pt-5">
         {!isSubmittable && outstanding.length > 0 && (
           <p className="text-body-sm text-ink-2">
             <span className="tnum">{outstanding.length}</span>{' '}

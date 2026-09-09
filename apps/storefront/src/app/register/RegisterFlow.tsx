@@ -106,6 +106,16 @@ const asProgress = (d: StepDefinition): StepProgress => ({
   fields: [],
 });
 
+/** Weighted across required steps: complete ones count as 100%, the rest as drafted. */
+function onboardingCompletionPct(steps: readonly StepProgress[]): number {
+  const required = steps.filter((s) => s.isRequired);
+  if (required.length === 0) return 0;
+  return Math.round(
+    required.reduce((sum, s) => sum + (s.status === 'COMPLETE' ? 100 : s.completionPct), 0) /
+      required.length,
+  );
+}
+
 /**
  * Everything a step needs from the shell, in one object.
  *
@@ -122,8 +132,6 @@ export interface StepContext {
   step: StepProgress | undefined;
   /** `constitution_type` from the org itself; step 2's draft may be gone. */
   constitution: string | null;
-  /** Step 1's company name, carried before any draft exists. */
-  typedCompanyName: string;
   registered: boolean;
   busy: boolean;
   onFieldFocus: (term: string) => void;
@@ -233,16 +241,18 @@ export function RegisterFlow({
   const [answers, setAnswers] = React.useState<Record<string, Record<string, unknown>>>({});
   const [registered, setRegistered] = React.useState(false);
 
+  /** Resume and first sign-in both flip this; only a *new* session refreshes chrome. */
   const markSignedIn = React.useCallback((): void => {
     setRegistered(true);
+  }, []);
+
+  const notifySessionEstablished = React.useCallback((): void => {
     onSessionEstablished?.();
   }, [onSessionEstablished]);
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [saveFailure, setSaveFailure] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [activeTerm, setActiveTerm] = React.useState<string | undefined>();
-  /** Carries step 1's company name into step 2 before any draft exists. */
-  const [typedCompanyName, setTypedCompanyName] = React.useState('');
   /**
    * `constitution_type`, taken from the org rather than from a draft. Step 2's
    * answers are cleared the moment it completes, so by step 3 this is the only
@@ -335,17 +345,17 @@ export function RegisterFlow({
     [reword],
   );
 
-  const reload = React.useCallback(
-    async (landOn?: string): Promise<void> => {
-      const onboarding = await getOnboarding();
-      if (!onboarding.ok) {
-        setSaveFailure(onboarding.message);
-        return;
-      }
-      applyOnboarding(onboarding.data, landOn);
-    },
-    [applyOnboarding],
-  );
+  const applyOnboardingRef = React.useRef(applyOnboarding);
+  applyOnboardingRef.current = applyOnboarding;
+
+  const reload = React.useCallback(async (landOn?: string): Promise<void> => {
+    const onboarding = await getOnboarding();
+    if (!onboarding.ok) {
+      setSaveFailure(onboarding.message);
+      return;
+    }
+    applyOnboardingRef.current(onboarding.data, landOn);
+  }, []);
 
   /* Mount: is this a returning applicant? */
   React.useEffect(() => {
@@ -397,14 +407,15 @@ export function RegisterFlow({
       const valid =
         wanted === REVIEW ||
         (wanted && onboarding.data.progress.steps.some((s) => s.stepCode === wanted));
-      applyOnboarding(onboarding.data, valid && wanted ? wanted : undefined);
+      applyOnboardingRef.current(onboarding.data, valid && wanted ? wanted : undefined);
       setPhase('ready');
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [definitions, applyOnboarding, orgType]);
+    // Mount once per definitions/orgType — not when copy callbacks are recreated.
+  }, [definitions, orgType]);
 
   /** The step lives in the URL, so a reload and a rail link land in one place. */
   const goTo = React.useCallback((code: string): void => {
@@ -425,29 +436,16 @@ export function RegisterFlow({
     }
   }, []);
 
-  // A long step leaves the viewport scrolled to the button. Land at the heading
-  // when the step changes or when Save and continue is clicked.
+  // A long step leaves the viewport scrolled to the button. Only scroll when the
+  // step actually changes — a failed validation or save keeps the viewport where
+  // the error is, next to the field or the button they just clicked.
   React.useEffect(() => {
     scrollPageTop();
   }, [currentCode, scrollPageTop]);
 
-  React.useEffect(() => {
-    const root = mainRef.current;
-    if (!root) return;
-    const onSubmit = (event: Event): void => {
-      if (event.target instanceof HTMLFormElement && root.contains(event.target)) {
-        scrollPageTop();
-      }
-    };
-    document.addEventListener('submit', onSubmit, true);
-    return () => document.removeEventListener('submit', onSubmit, true);
-  }, [scrollPageTop]);
-
-  React.useEffect(() => {
-    if (saveFailure) scrollPageTop();
-  }, [saveFailure, scrollPageTop]);
-
   const current = steps.find((s) => s.stepCode === currentCode);
+  const withUs = AFTER_SUBMISSION.includes(orgStatus);
+  const reviewing = Boolean(review) && (currentCode === REVIEW || withUs);
 
   /* --------------------------------------------------------- second factor */
 
@@ -477,7 +475,6 @@ export function RegisterFlow({
       fields: Record<string, string> | null,
     ): Record<string, string> | null => {
       if (!skip) return fields;
-      setTypedCompanyName(values.companyName);
       setSaveFailure(null);
       goTo('BUSINESS_PROFILE');
       return null;
@@ -485,7 +482,6 @@ export function RegisterFlow({
     try {
       if (!registered) {
         const created = await register(orgType, {
-          companyName: values.companyName,
           fullName: values.fullName,
           email: values.email,
           mobile: values.mobile,
@@ -511,15 +507,13 @@ export function RegisterFlow({
           await openMfa();
           return null;
         }
+        notifySessionEstablished();
         await startOnboarding();
       }
-
-      setTypedCompanyName(values.companyName);
 
       const draft = {
         ...extras,
         fullName: values.fullName,
-        companyName: values.companyName,
         email: values.email,
         mobile: values.mobile,
         heardFrom: values.heardFrom,
@@ -563,7 +557,7 @@ export function RegisterFlow({
     const pending = pendingAccount.current;
     pendingAccount.current = null;
     await startOnboarding();
-    onSessionEstablished?.();
+    notifySessionEstablished();
     if (pending) {
       await continueFromAccount(pending.values, pending.extras);
       return;
@@ -650,21 +644,24 @@ export function RegisterFlow({
     blockers: s.blockingReason ? [s.blockingReason] : undefined,
   }));
 
-  const whyItems: WhyRailItem[] = [
-    ...steps
-      .filter((s) => s.purposeNote)
-      .map((s) => ({ term: s.title, explanation: s.purposeNote })),
-    // The step's own `purpose_note` is one sentence. Where a step makes the
-    // applicant take a decision the seed has no room to explain — the primary
-    // GSTIN, say — the flow contributes the paragraph, and only while that step
-    // is the one on screen.
-    ...(whyFor?.(currentCode) ?? []),
-  ];
+  const whyItems: WhyRailItem[] = reviewing
+    ? []
+    : [
+        ...(current?.purposeNote
+          ? [{ term: current.title, explanation: current.purposeNote }]
+          : []),
+        // The step's own `purpose_note` is one sentence. Where a step makes the
+        // applicant take a decision the seed has no room to explain — the primary
+        // GSTIN, say — the flow contributes the paragraph, and only while that step
+        // is the one on screen.
+        ...(whyFor?.(currentCode) ?? []),
+      ];
 
   const rail = (
     <StepRail
       steps={railSteps}
       label={railLabel}
+      completionPct={onboardingCompletionPct(steps)}
       savedAt={savedAt ? formatSaved(savedAt) : undefined}
       className={wide ? undefined : 'static max-h-none'}
     />
@@ -703,18 +700,6 @@ export function RegisterFlow({
     );
   }
 
-  const stepIndex = steps.findIndex((s) => s.stepCode === currentCode);
-  /**
-   * The form is behind them once the application is with us. Every status from
-   * KYC_SUBMITTED on lands on the review screen whatever `?step` says — a form
-   * that still accepts edits after submission is a lie about what happens next.
-   */
-  const withUs = AFTER_SUBMISSION.includes(orgStatus);
-  // A flow with no review screen yet cannot land on one. It falls through to the
-  // renderer lookup below, which says the step is not built rather than
-  // rendering an empty summary of an application nobody can submit.
-  const reviewing = Boolean(review) && (currentCode === REVIEW || withUs);
-
   const submit = async (): Promise<string | null> => {
     const result = await submitForReview();
     // A 409 names the steps that are not finished. It is the most useful
@@ -740,7 +725,6 @@ export function RegisterFlow({
       (typeof answers.BUSINESS_PROFILE?.constitution === 'string'
         ? (answers.BUSINESS_PROFILE.constitution as string)
         : null),
-    typedCompanyName,
     registered,
     busy,
     onFieldFocus: setActiveTerm,
@@ -751,94 +735,58 @@ export function RegisterFlow({
   };
 
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px]">
+    <div className="regflow min-w-0">
       {wide ? (
         rail
       ) : (
-        <details className="rounded-lg border border-rule bg-sheet">
-          <summary className="flex cursor-pointer list-none items-center gap-3 p-4 text-body-sm font-medium text-ink">
-            {/* The step title is the page heading immediately below, so the
-                collapsed rail says only where you are in the sequence. */}
-            <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              {/* On the review screen there is no current step, and "step 0 of
-                  5" is a position nobody is in. */}
-              {reviewing ? (
-                <>
-                  <span className="tnum">{steps.filter((s) => s.status === 'COMPLETE').length}</span>{' '}
-                  of <span className="tnum">{steps.length}</span> steps done
-                </>
-              ) : (
-                <>
-                  Step <span className="tnum">{stepIndex + 1}</span> of{' '}
-                  <span className="tnum">{steps.length}</span>
-                </>
-              )}
-            </span>
-            <span className="ml-auto text-body-sm text-acc-ink">All steps</span>
+        <details className="min-w-0 rounded-lg border border-rule bg-sheet">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center p-4 text-body-sm font-medium text-acc-ink [&::-webkit-details-marker]:hidden">
+            All steps
           </summary>
           <div className="border-t border-rule-2 p-4">{rail}</div>
         </details>
       )}
 
-      <main ref={mainRef} className="flex flex-col gap-5 lg:max-w-[70ch]">
+      <main ref={mainRef} className="regflow-main flex min-w-0 flex-col gap-4 sm:gap-5">
         <header className="flex flex-col gap-3">
-          <label className="flex flex-wrap items-center gap-2 text-label text-ink-3">
-            <span className="font-mono uppercase tracking-[0.13em]">validate</span>
-            <input
-              className="h-8 w-[5.5rem] rounded-sm border border-rule bg-sheet-2 px-2 font-mono text-body-sm text-ink"
-              value={validateInput}
-              onChange={(event) => {
-                const next = event.target.value;
-                setValidateInput(next);
-                try {
-                  sessionStorage.setItem('tg-register-validate', next);
-                } catch {
-                  // A private window cannot remember the switch.
-                }
-              }}
-              autoComplete="off"
-              spellCheck={false}
-              aria-describedby="tg-register-validate-hint"
-            />
-            <span id="tg-register-validate-hint" className="text-ink-4">
-              Type true to check every step, or false to skip those checks.
-            </span>
-          </label>
-          <div className="flex flex-wrap items-baseline gap-3">
-            {reviewing ? (
-              <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                <span className="tnum">{steps.filter((s) => s.status === 'COMPLETE').length}</span>{' '}
-                of <span className="tnum">{steps.length}</span> steps done
-              </span>
-            ) : (
-              <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                Step <span className="tnum">{Math.max(stepIndex + 1, 1)}</span> of{' '}
-                <span className="tnum">{steps.length}</span>
-              </span>
-            )}
-            <h1 className="text-h1 text-ink">
-              {/* Nothing is left to check or submit once it is with a reviewer,
-                  and a heading that says otherwise is an instruction nobody can
-                  follow. */}
-              {withUs
-                ? 'Your application'
-                : reviewing
-                  ? 'Check and submit'
-                  : (current?.title ?? 'Create an account')}
-            </h1>
-            {!reviewing &&
-              (current?.estimatedMinutes ? (
-                <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                  about <span className="tnum">{current.estimatedMinutes}</span> min
+          {process.env.NODE_ENV === 'development' && (
+            <details className="rounded border border-rule-2 bg-sheet-2 px-4 py-3">
+              <summary className="cursor-pointer text-label font-mono uppercase tracking-[0.13em] text-ink-3">
+                Validate (dev)
+              </summary>
+              <label className="mt-3 flex flex-col gap-2 text-label text-ink-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                <input
+                  className="h-8 w-full max-w-[5.5rem] rounded-sm border border-rule bg-sheet px-2 font-mono text-body-sm text-ink"
+                  value={validateInput}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setValidateInput(next);
+                    try {
+                      sessionStorage.setItem('tg-register-validate', next);
+                    } catch {
+                      // A private window cannot remember the switch.
+                    }
+                  }}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="tg-register-validate-hint"
+                />
+                <span id="tg-register-validate-hint" className="text-ink-4 sm:max-w-[42ch]">
+                  Type true to check every step, or false to skip those checks.
                 </span>
-              ) : (
-                <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-4">
-                  Duration not measured
-                </span>
-              ))}
-            {registered && <StatusPill tone="neutral" label="Signed in" />}
-          </div>
-          {!reviewing && current?.purposeNote && <p className="max-w-[62ch]">{current.purposeNote}</p>}
+              </label>
+            </details>
+          )}
+          {(reviewing || registered) && (
+            <div className="flex flex-wrap items-baseline gap-3">
+              {reviewing && (
+                <h1 className="text-h1 text-ink">
+                  {withUs ? 'Your application' : 'Check and submit'}
+                </h1>
+              )}
+              {registered && <StatusPill tone="neutral" label="Signed in" />}
+            </div>
+          )}
         </header>
 
         {saveFailure && (
@@ -884,14 +832,15 @@ export function RegisterFlow({
 
       </main>
 
-      {/* The right rail is the API's own `purpose_note` for every step, never
-          copy written next to the field. Below 1280px it moves under the form
-          rather than squeezing the form into a column too narrow to fill in. */}
+      {/* The right rail shows only the step on screen: its `purpose_note` plus
+          any extra entries the flow supplies for that step. Below 1280px it moves
+          under the form rather than squeezing the form into a column too narrow
+          to fill in. */}
       {whyItems.length > 0 && (
         <WhyRail
           items={whyItems}
           activeTerm={activeTerm ?? current?.title}
-          className="max-xl:static max-xl:max-h-none lg:col-span-2 xl:col-span-1"
+          className={wide ? undefined : 'static max-h-none top-auto'}
         />
       )}
     </div>

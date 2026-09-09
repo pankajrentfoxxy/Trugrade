@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 
+import { resolveConsoleBaseUrl } from '../../lib/console-url';
 import { SignIn } from './SignIn';
 
 /**
@@ -18,6 +20,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function Page(): React.JSX.Element {
-  return <SignIn />;
+export default async function Page(): Promise<React.JSX.Element> {
+  const h = await headers();
+  const consoleBase = resolveConsoleBaseUrl(h.get('host'), h.get('x-forwarded-proto') ?? undefined);
+
+  return (
+    <SignIn
+      consoleHomeUrl={consoleBase}
+      sellerRegisterUrl={`${consoleBase}/sell/register`}
+    />
+  );
 }

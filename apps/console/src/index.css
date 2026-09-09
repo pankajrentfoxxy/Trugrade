@@ -326,6 +326,88 @@ button.wizard-progress-hit:hover .wizard-progress-title {
   }
 }
 
+/*
+ * Registration flow — archetype D on /sell/register.
+ * Same grid as storefront.css: rail | form (240px) | why (pinned right).
+ */
+.regflow {
+  display: grid;
+  align-items: start;
+  gap: var(--s5);
+  grid-template-columns: minmax(0, 1fr);
+}
+.regflow > :first-child,
+.regflow > main,
+.regflow > aside[data-testid='why-rail'] {
+  min-width: 0;
+}
+.regflow > main {
+  width: 100%;
+}
+@media (min-width: 1024px) {
+  .regflow {
+    column-gap: var(--s6);
+    row-gap: var(--s5);
+    grid-template-columns: 240px minmax(0, 1fr) 260px;
+  }
+  .regflow > :first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .regflow > main {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: none;
+  }
+  .regflow > aside[data-testid='why-rail'] {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+    width: 100%;
+    max-width: 260px;
+    position: sticky;
+    top: var(--s5);
+  }
+}
+
+/* Step 5 — one row per day: day · opens · closes · closed. */
+.facility-hours-day {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: var(--s3);
+  width: 100%;
+}
+.facility-hours-day__label {
+  flex: 0 0 4.5rem;
+  padding-bottom: 0.75rem;
+}
+.facility-hours-day__opens,
+.facility-hours-day__closes {
+  flex: 1 1 6.5rem;
+  min-width: 5.5rem;
+  max-width: 9rem;
+}
+.facility-hours-day__closed {
+  flex: 0 0 auto;
+  padding-bottom: 0.75rem;
+}
+.facility-hours-day__copy {
+  flex: 1 1 9rem;
+  min-width: 7rem;
+  padding-bottom: 0.75rem;
+}
+
+.vendor-notification-channels {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s4) var(--s6);
+}
+
 /* Unit record — archetype C layout for one serial. */
 .unit-record .unit-kpi-grid {
   display: grid;

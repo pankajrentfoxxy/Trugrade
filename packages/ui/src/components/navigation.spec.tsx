@@ -147,6 +147,13 @@ describe('Stepper', () => {
     );
   });
 
+  it('shows a green completion mark on finished steps', () => {
+    const { container } = render(<Stepper steps={STEPS} label="Registration progress" />);
+    const completed = screen.getByRole('link', { name: /Your details/ });
+    expect(completed.querySelector('.text-pass')).toBeInTheDocument();
+    expect(container.querySelectorAll('.text-pass')).toHaveLength(1);
+  });
+
   it('states a blocker as an alert and ties it to the step it blocks', () => {
     render(<Stepper steps={STEPS} label="Registration progress" />);
     const alert = screen.getByRole('alert');

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Button, FormSection, Input, cn } from '@trugrade/ui';
+import { Button, Input, cn } from '@trugrade/ui';
 import { Select } from '../../lib/controls';
 import { ContactVerifier } from './ContactVerifier';
 import { HEARD_FROM } from './picklists';
@@ -10,7 +10,6 @@ import {
   MOBILE_PREFIX,
   toE164,
   typeMobile,
-  validateCompanyName,
   validateEmail,
   validateFullName,
   validateMobile,
@@ -24,11 +23,8 @@ import {
  * proved here, and `POST /auth/register` refuses without them. Everything after
  * it is an authenticated draft.
  *
- * **Company legal name is asked here rather than on step 2** because
- * `POST /auth/register` creates the organisation and its owner in one
- * transaction and will not create an org without a name. Step 2 opens with that
- * name already filled in and editable — asking once and confirming later is the
- * honest version; inventing a placeholder name to satisfy the endpoint is not.
+ * **Company legal name is step 2**, not here. Registration creates the org shell
+ * with a pending placeholder; `BUSINESS_PROFILE` promotion writes the real name.
  *
  * **The vendor flow uses this component, not a copy of it.** The identity half —
  * the two OTP exchanges and the strength meter — is the half that has to be
@@ -40,27 +36,15 @@ import {
 
 /** Everything that differs in wording between the two flows. */
 export interface AccountCopy {
-  identityDescription: string;
-  companyNameLabel: string;
-  companyNameHint: string;
-  reachDescription: string;
   submitLabel: string;
 }
 
 export const BUYER_ACCOUNT_COPY: AccountCopy = {
-  identityDescription:
-    'The person who opens the account is its owner and can add colleagues later.',
-  companyNameLabel: 'Company legal name',
-  companyNameHint:
-    'Exactly as it appears on your GST certificate. You can correct it on the next step.',
-  reachDescription:
-    'Both are verified now, because they are what an order confirmation and a delivery OTP go to.',
   submitLabel: 'Create account and continue',
 };
 
 export interface AccountValues {
   fullName: string;
-  companyName: string;
   email: string;
   mobile: string;
   password: string;
@@ -69,7 +53,6 @@ export interface AccountValues {
 
 const EMPTY: AccountValues = {
   fullName: '',
-  companyName: '',
   email: '',
   mobile: MOBILE_PREFIX,
   password: '',
@@ -81,7 +64,6 @@ function readDraft(answers: Record<string, unknown>): AccountValues {
     typeof answers[key] === 'string' ? (answers[key] as string) : '';
   return {
     fullName: str('fullName'),
-    companyName: str('companyName'),
     email: str('email'),
     mobile: typeMobile(str('mobile')),
     password: '',
@@ -114,8 +96,8 @@ export function StrengthMeter({
 
   return (
     <div className="flex flex-col gap-2" aria-live="polite">
-      <div className="flex items-center gap-3">
-        <div className="flex h-1 flex-1 gap-1" aria-hidden="true">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex h-1 min-w-0 flex-1 gap-1" aria-hidden="true">
           {[1, 2, 3, 4].map((segment) => (
             <span
               key={segment}
@@ -225,8 +207,6 @@ export function StepAccount({
     if (!skipValidation) {
       const name = validateFullName(values.fullName);
       if (name) found.fullName = name;
-      const company = validateCompanyName(values.companyName);
-      if (company) found.companyName = company;
       if (!emailVerified) found.email = 'Verify this address before you continue.';
       if (!mobileVerified) found.mobile = 'Verify this number before you continue.';
       const weakness = strength.missing[0];
@@ -247,10 +227,7 @@ export function StepAccount({
 
   return (
     <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)} noValidate>
-      <FormSection
-        title="Who you are"
-        description={copy.identityDescription}
-      >
+      <div className="flex flex-col gap-5">
         <Input
           label="Your full name"
           autoComplete="name"
@@ -260,34 +237,16 @@ export function StepAccount({
           onChange={(e) => set('fullName', e.target.value)}
           error={errors.fullName}
         />
-        <Input
-          label={copy.companyNameLabel}
-          hint={copy.companyNameHint}
-          required
-          value={values.companyName}
-          onFocus={() => onFieldFocus('Account')}
-          onChange={(e) => set('companyName', e.target.value)}
-          error={errors.companyName}
-        />
-      </FormSection>
+      </div>
 
-      <FormSection
-        title="How we reach you"
-        description={copy.reachDescription}
-        status={
-          <>
-            <span className="tnum">{Number(emailVerified) + Number(mobileVerified)}</span> of{' '}
-            <span className="tnum">2</span> verified
-          </>
-        }
-      >
+      <div className="flex flex-col gap-5">
         <ContactVerifier
           channel="EMAIL"
           label="Work email"
           type="email"
           inputMode="email"
           autoComplete="username"
-          hint={workEmailNote(values.email) ?? 'This becomes your sign-in address.'}
+          hint={workEmailNote(values.email)}
           value={values.email}
           onValueChange={(v) => {
             set('email', v);
@@ -306,7 +265,6 @@ export function StepAccount({
           autoComplete="tel"
           placeholder="+91 98765 43210"
           mono
-          hint="Indian mobile, stored as +91 followed by ten digits."
           value={values.mobile}
           onValueChange={(v) => {
             set('mobile', typeMobile(v));
@@ -321,10 +279,10 @@ export function StepAccount({
           }}
           error={errors.mobile}
         />
-      </FormSection>
+      </div>
 
       {!registered && (
-        <FormSection title="Your password">
+        <div className="flex flex-col gap-5">
           <Input
             label="Password"
             type="password"
@@ -340,23 +298,20 @@ export function StepAccount({
             email={values.email}
             mobile={values.mobile}
           />
-        </FormSection>
+        </div>
       )}
 
       {extras}
 
-      <FormSection title="One last thing">
-        <Select
-          label="How did you hear about us?"
-          hint="Optional. It tells us which of the things we do is actually working."
-          options={HEARD_FROM}
-          value={values.heardFrom}
-          onFocus={() => onFieldFocus('Account')}
-          onChange={(e) => set('heardFrom', e.target.value)}
-        />
-      </FormSection>
+      <Select
+        label="How did you hear about us?"
+        options={HEARD_FROM}
+        value={values.heardFrom}
+        onFocus={() => onFieldFocus('Account')}
+        onChange={(e) => set('heardFrom', e.target.value)}
+      />
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           {copy.submitLabel}
         </Button>

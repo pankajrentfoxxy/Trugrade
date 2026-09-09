@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Checkbox, FormSection, type WhyRailItem } from '@trugrade/ui';
+import { Button, Checkbox, type WhyRailItem } from '@trugrade/ui';
 import { Select } from '../../lib/controls';
 import { DocumentChecklist, missingDocuments, usable } from './DocumentChecklist';
 import type { KycDocument } from './api';
@@ -151,8 +151,8 @@ export function StepDocuments({
 
       <DocumentChecklist
         wanted={BUYER_DOCUMENTS}
-        title="Documents"
-        description="Clear photographs are fine — we do not need scans. Each file is checked by its contents, and anything we cannot read we will ask for again."
+        title=""
+        description=""
         errors={errors}
         onClearError={clearError}
         onDocsChange={setDocs}
@@ -161,10 +161,7 @@ export function StepDocuments({
       />
 
       {/* ------------------------------------------------------ preferences */}
-      <FormSection
-        title="How we reach you"
-        description="Order confirmations, dispatch notices and invoices. Nothing here is marketing, and none of it is switched on until you switch it on."
-      >
+      <div className="flex flex-col gap-5">
         <fieldset
           className="flex flex-col gap-3"
           onFocus={() => onFieldFocus('Documents and preferences')}
@@ -175,15 +172,16 @@ export function StepDocuments({
               *
             </span>
           </legend>
-          {NOTIFICATION_CHANNELS.map((channel) => (
-            <Checkbox
-              key={channel.code}
-              label={channel.label}
-              consequence={channel.consequence}
-              checked={values.channels.includes(channel.code)}
-              onChange={(on) => toggleChannel(channel.code, on)}
-            />
-          ))}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-6 sm:gap-y-3">
+            {NOTIFICATION_CHANNELS.map((channel) => (
+              <Checkbox
+                key={channel.code}
+                label={channel.label}
+                checked={values.channels.includes(channel.code)}
+                onChange={(on) => toggleChannel(channel.code, on)}
+              />
+            ))}
+          </div>
           {errors.channels && (
             <p role="alert" className="text-body-sm text-fail">
               {errors.channels}
@@ -193,7 +191,6 @@ export function StepDocuments({
 
         <Select
           label="Language"
-          hint="The language we write to you in. Invoices are in English regardless — that is a tax requirement."
           required
           options={LANGUAGES}
           value={values.language}
@@ -204,21 +201,15 @@ export function StepDocuments({
           }}
           error={errors.language}
         />
-      </FormSection>
+      </div>
 
-      <FormSection
-        title="Purchase orders"
-        description="Some finance teams will not settle an invoice that has no PO number against it."
-      >
-        <Checkbox
-          label="We require a purchase order number on every invoice"
-          consequence="We will not raise an invoice for this account without a PO number, and checkout will ask for one on every order."
-          checked={values.poRequired}
-          onChange={(poRequired) => save({ ...values, poRequired })}
-        />
-      </FormSection>
+      <Checkbox
+        label="We require a purchase order number on every invoice"
+        checked={values.poRequired}
+        onChange={(poRequired) => save({ ...values, poRequired })}
+      />
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Save and continue
         </Button>

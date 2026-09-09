@@ -280,7 +280,7 @@ export function StepAgreement({
           {VENDOR_AGREEMENTS.map((agreement) => (
             <div
               key={agreement.code}
-              className="flex flex-col gap-3 rounded border border-rule bg-sheet p-4"
+              className="flex flex-col gap-3 rounded border border-rule bg-sheet p-3 sm:p-4"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h3 className="text-h3 text-ink">{agreement.label}</h3>
@@ -329,10 +329,7 @@ export function StepAgreement({
       </FormSection>
 
       {/* ------------------------------------------------------------ price */}
-      <FormSection
-        title="How your price is set"
-        description="Both answers reach the same rupee figure. The difference is which of the two numbers you control."
-      >
+      <FormSection title="How your price is set">
         <Choice
           legend="How do you want to quote?"
           name="pricing-mode"
@@ -371,10 +368,7 @@ export function StepAgreement({
       </FormSection>
 
       {/* ----------------------------------------------------------- payout */}
-      <FormSection
-        title="When you are paid"
-        description="Settlement runs against consignments that have been delivered and are past the buyer's 48-hour inspection window."
-      >
+      <FormSection title="When you are paid">
         <Choice
           legend="How often do you want the money?"
           name="payout-cycle"
@@ -434,7 +428,6 @@ export function StepAgreement({
           legend="Who raises the invoice for our purchase?"
           name="invoice-upload"
           required
-          description="We are buying from you, so somebody has to raise a tax invoice on us. Either is fine and neither is faster."
           options={[
             {
               value: 'VENDOR',
@@ -466,47 +459,46 @@ export function StepAgreement({
       </FormSection>
 
       {/* ---------------------------------------------------- notifications */}
-      <FormSection
-        title="How we reach you"
-        description="Purchase orders, pick-up windows and payout advice. Nothing here is marketing, and none of it is switched on until you switch it on."
-      >
-        <fieldset className="flex flex-col gap-3" onFocus={() => onFieldFocus('Agreements')}>
-          <legend className="mb-1 text-body-sm font-medium text-ink-2">
+      <div className="flex flex-col gap-5">
+        <fieldset
+          className="m-0 flex flex-col border-0 p-0"
+          onFocus={() => onFieldFocus('Agreements')}
+        >
+          <legend className="text-body-sm font-medium text-ink-2">
             Notification channels{' '}
             <span className="text-fail" aria-hidden="true">
               *
             </span>
           </legend>
-          {VENDOR_NOTIFICATION_CHANNELS.map((channel) => (
-            <Checkbox
-              key={channel.code}
-              label={channel.label}
-              consequence={channel.consequence}
-              checked={values.channels.includes(channel.code)}
-              onChange={(on) => {
-                clearError('channels');
-                save({
-                  ...values,
-                  channels: on
-                    ? [...values.channels, channel.code]
-                    : values.channels.filter((c) => c !== channel.code),
-                });
-              }}
-            />
-          ))}
-          {values.channels.length === 0 && !errors.channels && (
-            <p className="text-body-sm text-ink-4">Nothing chosen yet.</p>
-          )}
-          {errors.channels && (
-            <p role="alert" className="text-body-sm text-fail">
-              {errors.channels}
-            </p>
-          )}
+          <div className="form-section-body">
+            <div className="vendor-notification-channels">
+              {VENDOR_NOTIFICATION_CHANNELS.map((channel) => (
+                <Checkbox
+                  key={channel.code}
+                  label={channel.label}
+                  checked={values.channels.includes(channel.code)}
+                  onChange={(on) => {
+                    clearError('channels');
+                    save({
+                      ...values,
+                      channels: on
+                        ? [...values.channels, channel.code]
+                        : values.channels.filter((c) => c !== channel.code),
+                    });
+                  }}
+                />
+              ))}
+            </div>
+            {errors.channels && (
+              <p role="alert" className="text-body-sm text-fail">
+                {errors.channels}
+              </p>
+            )}
+          </div>
         </fieldset>
 
         <Select
           label="Language"
-          hint="The language we write to you in. Purchase orders and invoices are in English regardless — that is a tax requirement."
           required
           options={LANGUAGES}
           value={values.language}
@@ -517,9 +509,9 @@ export function StepAgreement({
           }}
           error={errors.language}
         />
-      </FormSection>
+      </div>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
+      <div className="flow-actions flex flex-wrap items-center gap-4 border-t border-rule-2 pt-5">
         <Button type="submit" variant="primary" loading={busy}>
           Accept and continue
         </Button>

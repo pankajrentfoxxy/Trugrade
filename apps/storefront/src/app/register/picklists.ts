@@ -665,20 +665,25 @@ export const VENDOR_AGREEMENTS = [
  * **Nothing here is ticked by default**, for the same reason.
  */
 export const VENDOR_NOTIFICATION_CHANNELS = [
-  {
-    code: 'EMAIL',
-    label: 'Email',
-    consequence:
-      'Purchase orders, pick lists, payout advice and TDS certificates go to the contacts on step 5.',
-  },
-  {
-    code: 'WHATSAPP',
-    label: 'WhatsApp',
-    consequence: 'Pick-up windows and dispatch reminders on the warehouse mobile number.',
-  },
-  {
-    code: 'SMS',
-    label: 'SMS',
-    consequence: 'A purchase order raised and a payout released. Nothing else.',
-  },
+  { code: 'EMAIL', label: 'Email' },
+  { code: 'WHATSAPP', label: 'WhatsApp' },
+  { code: 'SMS', label: 'SMS' },
 ] as const;
+
+/** Earliest year shown in the step-2 "Year established" picker. */
+export const YEAR_ESTABLISHED_START = 1990;
+
+/**
+ * Calendar years for the step-2 picker, newest first.
+ *
+ * `currentYear` is passed in so tests can pin a boundary and so 2030 appears
+ * automatically when the clock rolls — no hard-coded ceiling.
+ */
+export function yearEstablishedOptions(currentYear: number): readonly Option[] {
+  const start = Math.min(YEAR_ESTABLISHED_START, currentYear);
+  const years: Option[] = [{ value: '', label: 'Select year (e.g. 2014)' }];
+  for (let year = currentYear; year >= start; year--) {
+    years.push({ value: String(year), label: String(year) });
+  }
+  return years;
+}

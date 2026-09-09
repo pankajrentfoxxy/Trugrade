@@ -534,6 +534,74 @@
     flex-direction: column;
     gap: var(--d-stack);
   }
+
+  /**
+   * FormSection and other fieldset headings: flex `gap` does not apply between
+   * `<legend>` and the rest of the fieldset, so the body is wrapped.
+   */
+  .form-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s5);
+    margin-top: var(--s5);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .regflow {
+    overflow-x: clip;
+  }
+
+  /**
+   * Registration flow (archetype D) — mobile. Step and why rails drop sticky
+   * below the desktop grid; narrow screens stack actions and wide field rows.
+   */
+  @media (max-width: 1023px) {
+    .regflow > aside[data-testid='step-rail'],
+    .regflow > aside[data-testid='why-rail'] {
+      position: static;
+      max-height: none;
+      top: auto;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .regflow .flow-actions {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .regflow .flow-actions button {
+      width: 100%;
+    }
+    .regflow .flow-actions > div:has(> button) {
+      width: 100%;
+    }
+
+    .facility-hours-day {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .facility-hours-day__label,
+    .facility-hours-day__closed,
+    .facility-hours-day__copy {
+      flex: none;
+      padding-bottom: 0;
+    }
+    .facility-hours-day__opens,
+    .facility-hours-day__closes {
+      flex: none;
+      min-width: 0;
+      max-width: none;
+      width: 100%;
+    }
+
+    .vendor-notification-channels {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--s3);
+    }
+  }
   .tg-section {
     padding-block: var(--d-section);
   }
