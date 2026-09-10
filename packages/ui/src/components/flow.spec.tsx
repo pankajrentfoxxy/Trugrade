@@ -52,6 +52,17 @@ describe('StepRail', () => {
     expect(screen.getByText(/Capability/).closest('[aria-disabled="true"]')).toBeInTheDocument();
   });
 
+  it('navigates completed steps in-place when onNavigate is set', () => {
+    const onNavigate = jest.fn();
+    const steps: Step[] = [
+      { key: 'contact', label: 'Contact', status: 'complete', onNavigate },
+      { key: 'business', label: 'Business', status: 'current' },
+    ];
+    render(<StepRail steps={steps} label="Vendor application" />);
+    screen.getByRole('button', { name: /Contact/ }).click();
+    expect(onNavigate).toHaveBeenCalledWith('contact');
+  });
+
   it('has no axe violations', async () => {
     const { container } = render(
       <StepRail steps={STEPS} label="Vendor application" savedAt="2 minutes ago" />,

@@ -30,8 +30,8 @@ import { financialYearOf, isValidGstin } from '@trugrade/contracts';
  * fails its own check digit on our own invoice is worse than none.
  */
 
-/** Haryana, matching `LEGAL_DISCLOSURE.registeredOffice.stateCode`. */
-const PLATFORM_GSTIN = '06AAJCT2846R1ZL';
+/** The seller GSTIN — one source in `LEGAL_DISCLOSURE.gstin`. */
+const PLATFORM_GSTIN = LEGAL_DISCLOSURE.gstin;
 
 /**
  * The prefix every invoice number carries: `TT/2026-27/00001`.

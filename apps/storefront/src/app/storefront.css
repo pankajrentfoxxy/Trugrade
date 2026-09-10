@@ -650,6 +650,7 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
 .denom{color:var(--ink-4);font-weight:400}
 .ink4{color:var(--ink-4)}
 .ulink{color:var(--acc-ink);text-decoration:underline;text-underline-offset:3px}
+button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text-align:inherit}
 
 /* ---- rail: disabled options, sub-groups, notes, errors ---- */
 .railzone{min-width:0}
@@ -1975,8 +1976,9 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
 .cfhint{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink-3);max-width:72ch}
 
 .cblocked{margin-top:4px}
-.cblocked > summary{cursor:pointer;font-size:12px;color:var(--ink-3);padding:6px 0}
-.cblocked > summary:hover{color:var(--ink-2)}
+.cblocked > summary{cursor:pointer;font-size:12px;color:var(--acc-ink);padding:6px 0;
+  text-decoration:underline;text-underline-offset:3px}
+.cblocked > summary:hover{text-decoration-color:var(--acc)}
 .cblocked ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .cblocked li{font-size:11.5px;line-height:1.5;color:var(--ink-3)}
 .cblocked a{color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--rule);

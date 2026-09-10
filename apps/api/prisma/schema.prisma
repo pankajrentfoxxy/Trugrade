@@ -984,7 +984,6 @@ model registration_lead {
   contact_name                                                    String
   mobile                                                          String
   email                                                           String?              @db.Citext
-  city                                                            String?
   state_code                                                      String?              @db.Char(2)
   expected_monthly_volume                                         Int?
   categories_dealt                                                String[]

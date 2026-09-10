@@ -171,7 +171,6 @@ async function register(orgType: 'VENDOR' | 'BUYER' = 'VENDOR'): Promise<Applica
       contactName: orgType === 'VENDOR' ? 'Priya Sharma' : 'Ravi Menon',
       mobile,
       email,
-      city: 'Gurugram',
       source: 'GOOGLE_ADS',
     }),
   );
@@ -234,7 +233,7 @@ const VENDOR_BUSINESS = {
 
 /** Exactly the keys `StepCapability.toDraft` writes. */
 const CAPABILITY = {
-  categories: ['BUSINESS_LAPTOP', 'WORKSTATION'],
+  categories: ['BUSINESS_LAPTOP', 'CONSUMER'],
   brands: ['Lenovo', 'Dell'],
   otherBrands: '',
   monthlyCapacity: '300',
@@ -258,11 +257,9 @@ const FACILITY = {
       address: postal(),
       dispatchSameAsFacility: false,
       dispatchAddress: postal({ line1: 'Shed 7, Sector 37', pincode: '122004' }),
-      storageCapacityUnits: '900',
       hasLoadingDock: true,
-      vehicleAccess: 'TRUCK',
+      vehicleAccess: 'TEMPO',
       liftAvailable: false,
-      testingStations: '6',
       specialInstructions: 'Ring the bell at gate 2.',
       hours: {
         '1': { closed: false, opensAt: '09:00', closesAt: '18:00' },
@@ -559,7 +556,7 @@ describe('CAPABILITY promotes into vendor_capability', () => {
       where: { org_id: who.orgId },
       orderBy: { category: 'asc' },
     });
-    expect(rows.map((r) => r.category)).toEqual(['BUSINESS_LAPTOP', 'WORKSTATION']);
+    expect(rows.map((r) => r.category)).toEqual(['BUSINESS_LAPTOP', 'CONSUMER']);
     expect(rows[0]!.monthly_capacity_units).toBe(300);
     expect(rows[0]!.lead_time_days).toBe(3);
     expect(rows[0]!.sourcing_channels).toEqual(['CORPORATE_BUYBACK', 'ITAD_CONTRACT']);
@@ -571,11 +568,11 @@ describe('CAPABILITY promotes into vendor_capability', () => {
     expect(rows[0]!.can_dropship).toBe(false);
   });
 
-  it('refuses to invent the two answers whose column default is the convenient one', async () => {
+  it('refuses to invent can_dropship whose column default is the convenient one', async () => {
     const who = await register();
     await expect(
       completeStep(who, 'CAPABILITY', { ...CAPABILITY, canDropship: null }),
-    ).rejects.toThrow(/we do not assume either/i);
+    ).rejects.toThrow(/we do not assume it/i);
     expect(await raw.vendor_capability.count({ where: { org_id: who.orgId } })).toBe(0);
   });
 
@@ -597,7 +594,7 @@ describe('CAPABILITY promotes into vendor_capability', () => {
     // Two rows, not four — and the removed one is inactive rather than gone.
     expect(rows).toHaveLength(2);
     expect(rows.find((r) => r.category === 'BUSINESS_LAPTOP')!.is_active).toBe(true);
-    expect(rows.find((r) => r.category === 'WORKSTATION')!.is_active).toBe(false);
+    expect(rows.find((r) => r.category === 'CONSUMER')!.is_active).toBe(false);
   });
 });
 
@@ -615,11 +612,11 @@ describe('FACILITY_CONTACTS promotes across the identity/vendor seam', () => {
       include: { facility_hours: true, facility_holiday: true, org_address: true },
     });
     expect(facility.facility_type).toBe('WAREHOUSE');
-    expect(facility.vehicle_access).toBe('TRUCK');
+    expect(facility.vehicle_access).toBe('TEMPO');
     expect(facility.has_loading_dock).toBe(true);
     expect(facility.lift_available).toBe(false);
-    expect(facility.storage_capacity_units).toBe(900);
-    expect(facility.testing_stations).toBe(6);
+    expect(facility.storage_capacity_units).toBeNull();
+    expect(facility.testing_stations).toBeNull();
 
     expect(facility.org_address.label).toBe('Gurugram warehouse');
     expect(facility.org_address.pincode).toBe('122015');
@@ -930,21 +927,21 @@ describe('a promotion that fails half way takes the completion with it', () => {
 });
 
 describe("a completed step's answers are readable afterwards", () => {
-  it('survives the clearing of draft_json — the Wave 2 defect', async () => {
+  it('returns the submitted snapshot from GET /onboarding/steps', async () => {
     const who = await register();
     await completeStep(who, 'BUSINESS_PROFILE', VENDOR_BUSINESS);
     await completeStep(who, 'CAPABILITY', CAPABILITY);
 
-    // `draft_json` is cleared on purpose: the promoted tables are the source of
-    // truth now. Before promotion existed, that clearing was the only thing
-    // that happened and the answers were gone.
     const step = await raw.onboarding_progress.findFirstOrThrow({
       where: { org_id: who.orgId, step_code: 'CAPABILITY' },
     });
     expect(step.status).toBe('COMPLETE');
-    expect(step.draft_json).toBeNull();
+    expect(step.draft_json).toMatchObject({ canDropship: false });
 
-    // Read back from the tables the rest of the product reads.
+    const answers = await kyc.getResumableAnswers(who.orgId, who.userId);
+    expect(answers.BUSINESS_PROFILE).toMatchObject({ legalName: VENDOR_BUSINESS.legalName });
+    expect(answers.CAPABILITY).toMatchObject({ canDropship: false, monthlyCapacity: '300' });
+
     const summary = await kyc.getOnboarding(who.orgId);
     expect(summary.progress.constitution).toBe('PVT_LTD');
     const capability = await raw.vendor_capability.findMany({ where: { org_id: who.orgId } });

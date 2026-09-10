@@ -95,6 +95,15 @@ export class FakeGstinVerification extends GstinVerificationPort {
       registrationDate: '2019-07-01',
       taxpayerType: 'Regular',
       principalAddress: 'Plot 42, Udyog Vihar Phase IV, Gurugram, Haryana',
+      constitutionType: 'PVT_LTD',
+      vendorCategory: 'ITAD',
+      registeredAddress: {
+        line1: 'Plot 42, Udyog Vihar Phase IV',
+        line2: '',
+        city: 'Gurugram',
+        state: stateCodeFromGstin(gstin) ?? '06',
+        pincode: '122015',
+      },
     };
 
     if (taxpayer.status === 'CANCELLED') {

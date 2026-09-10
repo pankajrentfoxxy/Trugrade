@@ -3,12 +3,13 @@
 import * as React from 'react';
 import type { WhyRailItem } from '@trugrade/ui';
 import type { FieldRequirement, StepDefinition } from '../../register/api';
+import { emptyPostal, type PostalAddress } from '../../register/AddressFields';
 import { RegisterFlow, type StepContext } from '../../register/RegisterFlow';
 import { StepStatutory, type StatutoryCopy } from '../../register/StepStatutory';
 import { StepAgreement, WHY_AGREEMENT } from './StepAgreement';
 import { StepCapability } from './StepCapability';
 import { StepDocumentsBank, WHY_DOCUMENTS_BANK } from './StepDocumentsBank';
-import { StepFacility } from './StepFacility';
+import { StepFacility, type AccountHolderDetails } from './StepFacility';
 import { StepVendorBusiness } from './StepVendorBusiness';
 import { StepVendorContact } from './StepVendorContact';
 import { VendorReview } from './VendorReview';
@@ -44,15 +45,14 @@ const TAN_FIELD: FieldRequirement = {
 };
 
 /**
- * `incorporation_date` is seeded as a STATUTORY field requirement, and step 2
- * asks for it.
+ * `incorporation_date` is seeded as a STATUTORY field requirement, and the
+ * Business step asks for it.
  *
  * Both are defensible — it is constitution-gated like the CIN, and it is also a
- * plain fact about the business — but asking for it twice is not, and step 2 is
- * where the backlog puts it and where the applicant has the certificate open. So
- * it is dropped from step 3's list here rather than being removed from the seed,
- * which is the other session's file and is right for a flow that does not ask on
- * step 2. Reported: the seeded rule and the step that actually asks should agree.
+ * plain fact about the business — but asking for it twice is not, and Business
+ * is where the applicant has the certificate open. So it is dropped from the
+ * Statutory list here rather than being removed from the seed. Reported: the
+ * seeded rule and the step that actually asks should agree.
  */
 const ASKED_EARLIER = ['incorporation_date'];
 
@@ -138,11 +138,6 @@ const WHY_CAPABILITY: readonly WhyRailItem[] = [
     explanation:
       'A+, A and B are all sellable — the grade is a position on a scale, not a verdict. What the mix tells us is which buyers to put you in front of: a fleet refresh wants A+ and a training lab wants B. It has to add to 100% of what you move in a month, because the part that does not add up is stock nobody has described.',
   },
-  {
-    term: 'Serial numbers',
-    explanation:
-      'Every machine we sell is listed by its own serial, with its own inspection report and its own certificate. If you can send serials with the offer, your stock is listed unit by unit and a buyer can read the passport of the exact machine before ordering it. If you cannot, it still sells — as a pool, with the serial attached at dispatch.',
-  },
 ];
 
 const WHY_FACILITY: readonly WhyRailItem[] = [
@@ -199,6 +194,22 @@ const legalNameFor = (ctx: StepContext): string =>
     ? (ctx.allAnswers.BUSINESS_PROFILE.legalName as string)
     : '';
 
+const registeredOfficeFor = (ctx: StepContext): PostalAddress => ({
+  ...emptyPostal(),
+  ...((ctx.allAnswers.BUSINESS_PROFILE?.registered as Partial<PostalAddress> | undefined) ?? {}),
+});
+
+const accountHolderFor = (ctx: StepContext): AccountHolderDetails => {
+  const fromSession = ctx.accountHolder;
+  if (fromSession.fullName || fromSession.email || fromSession.mobile) return fromSession;
+  const account = ctx.allAnswers.ACCOUNT ?? {};
+  return {
+    fullName: typeof account.fullName === 'string' ? account.fullName : '',
+    email: typeof account.email === 'string' ? account.email : '',
+    mobile: typeof account.mobile === 'string' ? account.mobile : '',
+  };
+};
+
 export interface VendorRegistrationProps {
   definitions: StepDefinition[] | null;
   /** The catalogue's own brands, server-rendered. Null when the API did not answer. */
@@ -236,6 +247,7 @@ export function VendorRegistration({
       BUSINESS_PROFILE: (ctx) => (
         <StepVendorBusiness
           answers={ctx.answers}
+          statutoryAnswers={ctx.allAnswers.STATUTORY}
           busy={ctx.busy}
           blockingReason={ctx.step?.blockingReason}
           onSaveDraft={ctx.saveDraft}
@@ -280,6 +292,8 @@ export function VendorRegistration({
       FACILITY_CONTACTS: (ctx) => (
         <StepFacility
           answers={ctx.answers}
+          registeredOffice={registeredOfficeFor(ctx)}
+          accountHolder={accountHolderFor(ctx)}
           busy={ctx.busy}
           blockingReason={ctx.step?.blockingReason}
           onSaveDraft={ctx.saveDraft}

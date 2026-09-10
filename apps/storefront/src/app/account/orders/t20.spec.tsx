@@ -101,7 +101,7 @@ const list = (over: Partial<OrderList> = {}): OrderList => ({
   facets: {
     status: [
       { value: 'AWAITING_APPROVAL', label: 'Awaiting approval', count: 4 },
-      { value: 'PAYMENT_PENDING', label: 'Placed · payment pending', count: 9 },
+      { value: 'PAYMENT_PENDING', label: 'Placed · Payment pending', count: 9 },
     ],
     site: [
       { value: SITE_ID, label: 'Gurugram IT campus', count: 7 },
@@ -149,7 +149,7 @@ describe('the board reproduces its state from the URL alone', () => {
     expect(screen.getByRole('button', { name: /Gurugram IT campus/ })).toBeInTheDocument();
 
     expect(screen.getByRole('checkbox', { name: /Awaiting approval/ })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /Placed · payment pending/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Placed · Payment pending/ })).not.toBeChecked();
 
     expect(screen.getByLabelText('Sort')).toHaveValue('value');
     expect(screen.getByRole('columnheader', { name: /Order value/ })).toHaveAttribute(
@@ -199,7 +199,7 @@ describe('the board reproduces its state from the URL alone', () => {
     zero.facets.status[1] = { ...zero.facets.status[1]!, count: 0 };
     await show('status=AWAITING_APPROVAL', zero);
 
-    const option = screen.getByRole('checkbox', { name: /Placed · payment pending/ });
+    const option = screen.getByRole('checkbox', { name: /Placed · Payment pending/ });
     expect(option).toBeInTheDocument();
     expect(option).toBeDisabled();
   });

@@ -16,9 +16,10 @@ import {
   validateCompanyName,
   validateIncorporationDate,
 } from '../../register/validation';
+import { mergeGstPrefill, prefillFromVerifiedGst } from './gst-business-prefill';
 
 /**
- * Step 2 — Business.
+ * Business — vendor step 3 (after Statutory).
  *
  * **Deliberately not `StepCompany`.** The buyer's step 2 and this one share four
  * fields and their validators, and diverge on everything that matters: a buyer
@@ -35,7 +36,7 @@ import {
  *
  * Constitution is the load-bearing answer on this screen.
  * `onboarding_field_requirement` gates CIN, LLPIN and the incorporation date on
- * it, so what step 3 asks for is decided here.
+ * it, so what the Statutory step asks for is decided here.
  */
 
 export interface VendorBusinessValues {
@@ -123,6 +124,8 @@ export const completionOf = (values: VendorBusinessValues): number => {
 
 export interface StepVendorBusinessProps {
   answers: Record<string, unknown>;
+  /** Step 2 statutory answers — the verified primary GSTIN pre-fills this screen. */
+  statutoryAnswers?: Record<string, unknown>;
   /** Carried from step 1 so the applicant does not retype what they just typed. */
   fallbackLegalName?: string;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
@@ -138,6 +141,7 @@ export interface StepVendorBusinessProps {
 
 export function StepVendorBusiness({
   answers,
+  statutoryAnswers,
   fallbackLegalName = '',
   onSaveDraft,
   onContinue,
@@ -146,10 +150,30 @@ export function StepVendorBusiness({
   blockingReason,
   skipValidation = false,
 }: StepVendorBusinessProps): React.JSX.Element {
-  const [values, setValues] = React.useState<VendorBusinessValues>(() =>
-    readVendorBusinessDraft(answers, fallbackLegalName),
+  const gstPrefill = React.useMemo(
+    () => prefillFromVerifiedGst(statutoryAnswers),
+    [statutoryAnswers],
   );
+
+  const [values, setValues] = React.useState<VendorBusinessValues>(() => {
+    const base = readVendorBusinessDraft(answers, fallbackLegalName);
+    return gstPrefill ? mergeGstPrefill(base, gstPrefill) : base;
+  });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  const prefillSaved = React.useRef(false);
+  React.useEffect(() => {
+    if (!gstPrefill || prefillSaved.current) return;
+    prefillSaved.current = true;
+    setValues((current) => {
+      const merged = mergeGstPrefill(current, gstPrefill);
+      onSaveDraft(toDraft(merged), completionOf(merged));
+      return merged;
+    });
+  }, [gstPrefill, onSaveDraft]);
+
+  const locked = gstPrefill?.locked ?? new Set<string>();
+  const registeredLocked = locked.has('registered');
 
   // Read once and passed in, so the date rule can be tested at a year boundary.
   const today = React.useMemo(() => new Date(), []);
@@ -158,11 +182,13 @@ export function StepVendorBusiness({
     key: K,
     value: VendorBusinessValues[K],
   ): void => {
+    if (locked.has(key as string)) return;
     setValues((v) => ({ ...v, [key]: value }));
     setErrors(({ [key as string]: _dropped, ...rest }) => rest);
   };
 
   const setAddress = (which: 'registered' | 'operating', patch: Partial<PostalAddress>): void => {
+    if (which === 'registered' && registeredLocked) return;
     setValues((v) => ({ ...v, [which]: { ...v[which], ...patch } }));
     setErrors((e) =>
       Object.fromEntries(Object.entries(e).filter(([key]) => !key.startsWith(`${which}.`))),
@@ -223,10 +249,18 @@ export function StepVendorBusiness({
         </p>
       )}
 
+      {gstPrefill && (
+        <p className="rounded border border-rule-2 bg-sheet-2 p-4 text-body-sm text-ink-2">
+          These details come from your verified GSTIN. They cannot be changed here — if something
+          is wrong, use a different primary registration on the Statutory step.
+        </p>
+      )}
+
       <div className="flex flex-col gap-5">
         <Input
           label="Company legal name"
           required
+          readOnly={locked.has('legalName')}
           value={values.legalName}
           onFocus={() => onFieldFocus('Business')}
           onBlur={saveOnBlur}
@@ -235,6 +269,7 @@ export function StepVendorBusiness({
         />
         <Input
           label="Trade name"
+          readOnly={locked.has('tradeName')}
           value={values.tradeName}
           onFocus={() => onFieldFocus('Business')}
           onBlur={saveOnBlur}
@@ -244,6 +279,7 @@ export function StepVendorBusiness({
         <Select
           label="Constitution"
           required
+          disabled={locked.has('constitution')}
           options={CONSTITUTIONS}
           value={values.constitution}
           onFocus={() => onFieldFocus('Business')}
@@ -255,6 +291,7 @@ export function StepVendorBusiness({
           <Input
             label="Date of incorporation"
             type="date"
+            readOnly={locked.has('incorporationDate')}
             value={values.incorporationDate}
             onFocus={() => onFieldFocus('Business')}
             onBlur={saveOnBlur}
@@ -268,6 +305,7 @@ export function StepVendorBusiness({
         <Select
           label="What best describes you"
           required
+          disabled={locked.has('category')}
           options={VENDOR_CATEGORIES}
           value={values.category}
           onFocus={() => onFieldFocus('Business')}
@@ -299,6 +337,7 @@ export function StepVendorBusiness({
       <FormSection title="Registered office">
         <AddressFields
           value={values.registered}
+          readOnly={registeredLocked}
           errors={{
             line1: at('registered')('line1'),
             city: at('registered')('city'),

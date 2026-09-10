@@ -6,11 +6,11 @@ import { Select } from '../../lib/controls';
 import {
   CONTACT_ROLES,
   RECEIVING_DAYS,
-  STATES,
   labelFor,
   stateName,
   stateNameForGstin,
 } from './picklists';
+import { PincodeLocalityFields } from './PincodeLocalityFields';
 import {
   billingStateMatchesGstin,
   isMobileBlank,
@@ -549,47 +549,25 @@ export function StepContacts({
                 onBlur={saveOnBlur}
                 onChange={(e) => setBilling(index, { line2: e.target.value })}
               />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  label="City"
-                  required
-                  value={address.city}
-                  onFocus={() => onFieldFocus('Billing address')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => {
-                    setBilling(index, { city: e.target.value });
-                    clearError(`billing.${index}.city`);
-                  }}
-                  error={at('city')}
-                />
-                <Input
-                  label="PIN code"
-                  mono
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  value={address.pincode}
-                  onFocus={() => onFieldFocus('Billing address')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => {
-                    setBilling(index, { pincode: e.target.value });
-                    clearError(`billing.${index}.pincode`);
-                  }}
-                  error={at('pincode')}
-                />
-              </div>
-              <Select
-                label="State"
-                required
-                options={STATES}
-                value={address.state}
+              <PincodeLocalityFields
+                value={{
+                  pincode: address.pincode,
+                  city: address.city,
+                  state: address.state,
+                }}
+                onChange={(patch) => {
+                  setBilling(index, patch);
+                  if (patch.pincode !== undefined) clearError(`billing.${index}.pincode`);
+                  if (patch.city !== undefined) clearError(`billing.${index}.city`);
+                  if (patch.state !== undefined) clearError(`billing.${index}.state`);
+                }}
+                errors={{
+                  pincode: at('pincode'),
+                  city: at('city'),
+                  state: at('state'),
+                }}
                 onFocus={() => onFieldFocus('Billing address')}
                 onBlur={saveOnBlur}
-                onChange={(e) => {
-                  setBilling(index, { state: e.target.value });
-                  clearError(`billing.${index}.state`);
-                }}
-                error={at('state')}
               />
             </div>
           );
@@ -653,47 +631,25 @@ export function StepContacts({
                 onBlur={saveOnBlur}
                 onChange={(e) => setDelivery(address.key, { line2: e.target.value })}
               />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  label="City"
-                  required
-                  value={address.city}
-                  onFocus={() => onFieldFocus('Contacts and delivery')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => {
-                    setDelivery(address.key, { city: e.target.value });
-                    clearError(`delivery.${address.key}.city`);
-                  }}
-                  error={at('city')}
-                />
-                <Input
-                  label="PIN code"
-                  mono
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  value={address.pincode}
-                  onFocus={() => onFieldFocus('Contacts and delivery')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => {
-                    setDelivery(address.key, { pincode: e.target.value });
-                    clearError(`delivery.${address.key}.pincode`);
-                  }}
-                  error={at('pincode')}
-                />
-              </div>
-              <Select
-                label="State"
-                required
-                options={STATES}
-                value={address.state}
+              <PincodeLocalityFields
+                value={{
+                  pincode: address.pincode,
+                  city: address.city,
+                  state: address.state,
+                }}
+                onChange={(patch) => {
+                  setDelivery(address.key, patch);
+                  if (patch.pincode !== undefined) clearError(`delivery.${address.key}.pincode`);
+                  if (patch.city !== undefined) clearError(`delivery.${address.key}.city`);
+                  if (patch.state !== undefined) clearError(`delivery.${address.key}.state`);
+                }}
+                errors={{
+                  pincode: at('pincode'),
+                  city: at('city'),
+                  state: at('state'),
+                }}
                 onFocus={() => onFieldFocus('Contacts and delivery')}
                 onBlur={saveOnBlur}
-                onChange={(e) => {
-                  setDelivery(address.key, { state: e.target.value });
-                  clearError(`delivery.${address.key}.state`);
-                }}
-                error={at('state')}
               />
               <Input
                 label="Landmark"

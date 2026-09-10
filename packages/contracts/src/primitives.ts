@@ -51,6 +51,7 @@ import {
   normaliseEmail,
   normaliseGstin,
   normaliseMobile,
+  normalisePincode,
   normaliseSerial,
 } from './normalise';
 
@@ -145,7 +146,18 @@ export const emailSchema = bind(
   EMAIL,
 );
 
-export const pincodeSchema = zodFromRule(PINCODE);
+export const pincodeSchema = bind(
+  z
+    .string()
+    .transform((v) => normalisePincode(v) ?? '')
+    .pipe(
+      z
+        .string()
+        .min(1, { message: PINCODE.message })
+        .regex(/^[1-9][0-9]{5}$/, { message: PINCODE.message }),
+    ),
+  PINCODE,
+);
 export const addressLine1Schema = zodFromRule(ADDRESS_LINE1);
 export const addressLine2Schema = zodFromRule(ADDRESS_LINE2);
 export const fullNameSchema = zodFromRule(FULL_NAME);

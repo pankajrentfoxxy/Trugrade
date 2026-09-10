@@ -22,8 +22,7 @@ import { requestMfaCode, verifyMfa } from './api';
  * The exchange itself — the six boxes, the cooldown, the resend — is
  * `MfaChallenge` in `packages/ui`, because the console meets the same challenge
  * on every supplier-owner sign-in and two copies of a cooldown is one copy too
- * many. This file is the half that is registration-specific: the two API calls
- * and the promise that the step's answers survive.
+ * many. This file is the half that is registration-specific: the two API calls.
  */
 
 export interface MfaGateProps {
@@ -47,7 +46,6 @@ export function MfaGate({ sentTo, onVerified }: MfaGateProps): React.JSX.Element
         const sent = await requestMfaCode();
         return sent.ok ? { sentTo: sent.data.sentTo } : { error: sent.message };
       }}
-      footNote="Nothing you typed on this step has been lost — it is saved the moment this code is accepted."
     />
   );
 }

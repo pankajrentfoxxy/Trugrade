@@ -11,7 +11,7 @@ import {
   type Column,
   type SortDirection,
 } from '@trugrade/ui';
-import { Money } from '@trugrade/contracts';
+import { Money, buyerOrderStatusLabel } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { inIst } from '../../../lib/deadline';
 import {
@@ -387,9 +387,7 @@ function statusOf(order: OrderSummary): { tone: 'neutral' | 'warn'; label: strin
   if (approval?.status === 'PENDING') return { tone: 'warn', label: 'Awaiting approval' };
   if (approval?.status === 'REJECTED') return { tone: 'neutral', label: 'Approval declined' };
   if (approval?.status === 'EXPIRED') return { tone: 'neutral', label: 'Approval expired' };
-  if (order.status === 'PAYMENT_PENDING')
-    return { tone: 'neutral', label: 'Placed · payment pending' };
-  return { tone: 'neutral', label: order.status.replace(/_/g, ' ').toLowerCase() };
+  return { tone: 'neutral', label: buyerOrderStatusLabel(order.status) };
 }
 
 /* ==========================================================================

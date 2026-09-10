@@ -89,16 +89,27 @@ export class ZohoGstinVerification extends GstinVerificationPort {
 
     const statusRaw = this.pick(data, 'status', 'gstin_status', 'sts') || 'Active';
     const status = this.mapStatus(statusRaw);
+    const registeredAddress = this.parseRegisteredAddress(data, gstin);
     const taxpayer: GstinTaxpayer = {
       gstin: this.pick(data, 'gstin', 'gst_no') || gstin,
       legalName,
       tradeName: this.pick(data, 'trade_name', 'tradeName', 'tradeNam', 'dba') || legalName,
       status,
       stateCode: stateCodeFromGstin(gstin) ?? gstin.slice(0, 2),
-      registrationDate:
-        this.pick(data, 'registration_date', 'registrationDate', 'rgdt') || undefined,
+      registrationDate: this.normalisePortalDate(
+        this.pick(
+          data,
+          'registered_date',
+          'registration_date',
+          'registrationDate',
+          'rgdt',
+        ),
+      ),
       taxpayerType: this.pick(data, 'taxpayer_type', 'taxpayerType', 'dty') || undefined,
       principalAddress: this.formatAddress(data) || undefined,
+      constitutionType: this.mapConstitutionType(data),
+      vendorCategory: this.mapVendorCategory(data),
+      registeredAddress,
     };
 
     if (status !== 'ACTIVE' && status !== 'PROVISIONAL') {
@@ -182,6 +193,88 @@ export class ZohoGstinVerification extends GstinVerificationPort {
       }
     }
     return body;
+  }
+
+  private parseRegisteredAddress(
+    data: Record<string, unknown>,
+    gstin: string,
+  ): GstinTaxpayer['registeredAddress'] | undefined {
+    const pob =
+      (data.pradr as Record<string, unknown> | undefined) ||
+      (data.principal_place_of_business as Record<string, unknown> | undefined) ||
+      (data.principalPlaceOfBusiness as Record<string, unknown> | undefined);
+    if (!pob || typeof pob !== 'object') return undefined;
+
+    const addr =
+      (pob.addr as Record<string, unknown> | undefined) ||
+      (pob.address as Record<string, unknown> | undefined);
+    if (!addr || typeof addr !== 'object') return undefined;
+
+    const line1 = [
+      this.pick(addr, 'flno'),
+      this.pick(addr, 'bno'),
+      this.pick(addr, 'bnm'),
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const line2 = [this.pick(addr, 'st'), this.pick(addr, 'locality')]
+      .filter(Boolean)
+      .join(', ');
+    const city = this.pick(addr, 'loc', 'dst', 'city');
+    const pincode = this.pick(addr, 'pncd', 'pincode', 'pin');
+    const state = stateCodeFromGstin(gstin) ?? '';
+
+    if (!line1 && !city && !pincode) return undefined;
+    return {
+      line1: line1 || line2,
+      line2: line1 ? line2 : '',
+      city,
+      state,
+      pincode,
+    };
+  }
+
+  private mapConstitutionType(data: Record<string, unknown>): string | undefined {
+    const raw = this.pick(
+      data,
+      'constitution_of_business',
+      'constitutionOfBusiness',
+      'ctb',
+    );
+    if (!raw) return undefined;
+    const n = raw.toLowerCase();
+    if (n.includes('private limited')) return 'PVT_LTD';
+    if (n.includes('public limited')) return 'LTD';
+    if (n.includes('limited liability partnership') || n.includes('llp')) return 'LLP';
+    if (n.includes('partnership')) return 'PARTNERSHIP';
+    if (n.includes('proprietor')) return 'PROPRIETORSHIP';
+    if (n.includes('trust')) return 'TRUST';
+    if (n.includes('society')) return 'SOCIETY';
+    return 'OTHER';
+  }
+
+  private mapVendorCategory(data: Record<string, unknown>): string | undefined {
+    const natureRaw = data.nature_of_business ?? data.natureOfBusiness;
+    const nature = Array.isArray(natureRaw) ? natureRaw.map(String) : [];
+    const pradr = data.pradr as Record<string, unknown> | undefined;
+    const ntr = typeof pradr?.ntr === 'string' ? pradr.ntr : '';
+    const text = `${nature.join(' ')} ${ntr}`.toLowerCase();
+    if (text.includes('itad') || text.includes('disposal')) return 'ITAD';
+    if (text.includes('leasing')) return 'LEASING';
+    if (text.includes('refurb')) return 'REFURBISHER';
+    if (text.includes('warehouse') || text.includes('depot')) return 'TRADER';
+    if (text.includes('recipient of goods')) return 'TRADER';
+    if (text.includes('oem') || text.includes('brand')) return 'OEM_PARTNER';
+    if (text.includes('retail')) return 'RETAILER';
+    if (nature.length > 0 || ntr) return 'TRADER';
+    return undefined;
+  }
+
+  private normalisePortalDate(value: string): string | undefined {
+    if (!value) return undefined;
+    const dmy = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
+    if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+    return value;
   }
 
   private formatAddress(data: Record<string, unknown>): string {

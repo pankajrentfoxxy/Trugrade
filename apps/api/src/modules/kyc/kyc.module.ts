@@ -7,6 +7,7 @@ import { VerificationService } from './internal/verification.service';
 import { ConsentService } from './internal/consent.service';
 import { DocumentService } from './internal/document.service';
 import { StepPromotionService } from './internal/promotion.service';
+import { PincodeLookupService } from './internal/pincode-lookup.service';
 import {
   KycReviewController,
   OnboardingController,
@@ -33,6 +34,7 @@ import {
     // runtime and nothing before that point looks at it.
     DocumentService,
     StepPromotionService,
+    PincodeLookupService,
   ],
   exports: [KycService],
 })

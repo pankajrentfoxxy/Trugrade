@@ -7,6 +7,7 @@ import {
   EInvoicePort,
   EwayBillPort,
   GstinVerificationPort,
+  PincodeLookupPort,
   NotificationPort,
   ObjectStorePort,
   PanVerificationPort,
@@ -21,6 +22,8 @@ import {
   FakePanVerification,
 } from './fakes/kyc.fakes';
 import { ZohoGstinVerification } from './live/gstin.zoho';
+import { PostalPincodeLookup } from './live/pincode.postalpincode';
+import { FakePincodeLookup } from './fakes/pincode.fakes';
 import { InteraktNotification } from './live/interakt.notification';
 import { SmtpNotification } from './live/smtp.notification';
 import {
@@ -71,6 +74,14 @@ const fakeProviders: Provider[] = [
     // config.get('GST_VERIFY_API_URL')
     //   ? new ZohoGstinVerification(config)
     //   : new FakeGstinVerification(),
+  },
+  {
+    provide: PincodeLookupPort,
+    inject: [AppConfig],
+    useFactory: (config: AppConfig): PincodeLookupPort =>
+      config.get('INTEGRATION_MODE') === 'mock' || config.get('NODE_ENV') === 'test'
+        ? new FakePincodeLookup()
+        : new PostalPincodeLookup(),
   },
   { provide: PanVerificationPort, useClass: FakePanVerification },
   { provide: BankVerificationPort, useClass: FakeBankVerification },
@@ -144,6 +155,7 @@ const fakeProviders: Provider[] = [
   exports: [
     ObjectUrlSigner,
     GstinVerificationPort,
+    PincodeLookupPort,
     PanVerificationPort,
     BankVerificationPort,
     NotificationPort,

@@ -95,8 +95,8 @@ export class StepPromotionService {
   async promote({ orgId, userId, stepCode, answers }: PromotionRequest): Promise<void> {
     // Kept for every step, promoted or not. It is the only record of what was
     // typed into a step whose answers have no column yet — the CIN, the LLPIN,
-    // the brand list — and `draft_json` is about to be cleared. Append-only and
-    // redacting PAN and account numbers on the way in.
+    // the brand list — and the fallback when an older row cleared `draft_json`.
+    // Append-only and redacting PAN and account numbers on the way in.
     await this.audit.record({
       action: 'kyc.onboarding.step_answers',
       entityType: 'onboarding_progress',

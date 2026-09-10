@@ -129,6 +129,9 @@ describe('VR-034 — pincode', () => {
   it('accepts a valid NCR pincode', () => {
     expect(pincodeSchema.parse('122001')).toBe('122001');
   });
+  it('accepts an optional space after the first three digits', () => {
+    expect(pincodeSchema.parse('122 001')).toBe('122001');
+  });
   it('rejects a leading zero — no Indian pincode starts with 0', () => {
     expect(() => pincodeSchema.parse('022001')).toThrow();
   });

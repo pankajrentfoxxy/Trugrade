@@ -181,10 +181,6 @@ describe('a session that still owes a second factor is not a session', () => {
     });
 
     expect(await screen.findByText('One more code before you are in')).toBeInTheDocument();
-    // And it says what the factor actually is. There is no TOTP enrolment
-    // anywhere in the platform; calling this an authenticator app would be a lie
-    // told by a label.
-    expect(screen.getByText(/An authenticator app is not supported yet/)).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 });

@@ -11,7 +11,7 @@ import {
   StatusPill,
   type Address,
 } from '@trugrade/ui';
-import { PINCODE, normaliseMobile } from '@trugrade/contracts';
+import { normaliseMobile, normalisePincode } from '@trugrade/contracts';
 import { MOBILE_PREFIX, typeMobile } from '../../register/validation';
 import type { ApiFailure } from '../../register/api';
 import {
@@ -362,7 +362,7 @@ function validateSiteForm(form: NewAddress): Record<string, string> {
   if (!form.label.trim()) out.label = 'Give this site a name your team will recognise.';
   if (form.line1.trim().length < 4) out.line1 = 'We need the street address, not just a number.';
   if (!form.city.trim()) out.city = 'Which city is this site in?';
-  if (!PINCODE.pattern!.test(form.pincode.trim())) {
+  if (!normalisePincode(form.pincode)) {
     out.pincode = 'A pincode is six digits and never starts with a zero — 122002, for example.';
   }
   if (form.contactName.trim().length < 2) {
@@ -378,6 +378,7 @@ function validateSiteForm(form: NewAddress): Record<string, string> {
 function sitePayload(form: NewAddress): NewAddress {
   return {
     ...form,
+    pincode: normalisePincode(form.pincode) ?? form.pincode,
     state: STATES.find((s) => s.code === form.stateCode)?.name ?? form.state,
     line2: form.line2?.trim() || null,
     landmark: form.landmark?.trim() || null,
@@ -418,6 +419,16 @@ function SiteFormFields({
         onChange={(e) => set('line2', e.target.value)}
       />
       <Input
+        label="Pincode"
+        mono
+        inputMode="numeric"
+        maxLength={6}
+        value={form.pincode}
+        onChange={(e) => set('pincode', e.target.value.replace(/\D/g, ''))}
+        {...(fields.pincode ? { error: fields.pincode } : {})}
+        required
+      />
+      <Input
         label="City"
         value={form.city}
         onChange={(e) => set('city', e.target.value)}
@@ -436,17 +447,6 @@ function SiteFormFields({
           ))}
         </select>
       </label>
-
-      <Input
-        label="Pincode"
-        mono
-        inputMode="numeric"
-        maxLength={6}
-        value={form.pincode}
-        onChange={(e) => set('pincode', e.target.value.replace(/\D/g, ''))}
-        {...(fields.pincode ? { error: fields.pincode } : {})}
-        required
-      />
       <Input
         label="Who the driver asks for"
         value={form.contactName}

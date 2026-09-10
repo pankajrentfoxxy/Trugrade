@@ -1,6 +1,6 @@
 import type { Route } from 'next';
 import Link from 'next/link';
-import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
+import { BRAND, formatRegisteredOffice, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import type { GradeDefinition, LegalTerms } from '../../lib/api';
 
 /**
@@ -266,13 +266,7 @@ function whoYouContractWith(): React.JSX.Element {
           ],
           [
             'Registered office',
-            <>
-              <Unset what="Street address" />
-              <span className="tnum ml-2 text-ink-2">
-                {LEGAL_DISCLOSURE.registeredOffice.city}, {LEGAL_DISCLOSURE.registeredOffice.state}{' '}
-                {LEGAL_DISCLOSURE.registeredOffice.pincode}
-              </span>
-            </>,
+            <span className="tnum text-ink-2">{formatRegisteredOffice()}</span>,
           ],
           [
             'Branches',
@@ -731,7 +725,10 @@ function grievance(ackHours: number | null, redressDays: number | null): LegalDo
                     <Unset what="Telephone" />
                   ),
                 ],
-                ['Address', <Unset what="Postal address" />],
+                [
+                  'Address',
+                  <span className="text-ink-2">{LEGAL_DISCLOSURE.grievanceOfficer.address}</span>,
+                ],
               ]}
             />
             <p className="mt-5 text-body text-ink-2">

@@ -134,7 +134,9 @@ export function SiteFooter(): React.JSX.Element {
             <div className="legal">
               {LEGAL_DISCLOSURE.legalName}
               <br />
-              <Pending what="Street address" /> {office.city}, {office.state} {office.pincode}
+              {office.line1}
+              <br />
+              {office.city}, {office.state} {office.pincode}
               <br />
               GSTIN {LEGAL_DISCLOSURE.gstin} &middot; CIN{' '}
               {LEGAL_DISCLOSURE.cin ?? <Pending what="CIN" />}

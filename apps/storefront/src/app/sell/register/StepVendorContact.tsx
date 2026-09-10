@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { Input } from '@trugrade/ui';
 import { Select } from '../../../lib/controls';
 import {
   StepAccount,
@@ -9,18 +8,17 @@ import {
   type AccountValues,
 } from '../../register/StepAccount';
 import { MONTHLY_VOLUMES } from '../../register/picklists';
-import { validateCity } from '../../register/validation';
 
 /**
  * Step 1 — Contact.
  *
- * **`StepAccount` renders the identity half; this file adds two fields.** The
+ * **`StepAccount` renders the identity half; this file adds one field.** The
  * two OTP exchanges, the strength meter and the registration call are shared
  * with the buyer flow because they are the same act against the same endpoint,
  * and because a second copy of the OTP handling is the one that stops getting
- * fixed. What a supplier is asked that a buyer is not — the city they operate
- * out of and how much they move a month — lives here, in the slot `StepAccount`
- * leaves for it. Brands are asked on step 4.
+ * fixed. What a supplier is asked that a buyer is not — how much they move a
+ * month — lives here, in the slot `StepAccount` leaves for it. Brands are asked
+ * on step 4; dispatch city comes from the facility step.
  */
 
 const VENDOR_ACCOUNT_COPY: AccountCopy = {
@@ -28,17 +26,15 @@ const VENDOR_ACCOUNT_COPY: AccountCopy = {
 };
 
 export interface ContactExtras {
-  city: string;
   monthlyVolume: string;
 }
 
-const EMPTY: ContactExtras = { city: '', monthlyVolume: '' };
+const EMPTY: ContactExtras = { monthlyVolume: '' };
 
 export function readContactExtras(answers: Record<string, unknown>): ContactExtras {
   const str = (key: string): string =>
     typeof answers[key] === 'string' ? (answers[key] as string) : '';
   return {
-    city: str('city'),
     monthlyVolume: str('monthlyVolume'),
   };
 }
@@ -75,8 +71,6 @@ export function StepVendorContact({
 
   const validateExtras = (): boolean => {
     const found: Record<string, string> = {};
-    const city = validateCity(extras.city);
-    if (city) found.city = city;
     if (!extras.monthlyVolume)
       found.monthlyVolume = 'Choose the band that is closest. Nothing is committed by answering it.';
     setErrors(found);
@@ -93,21 +87,12 @@ export function StepVendorContact({
       skipValidation={skipValidation}
       onContinue={(values) =>
         onContinue(values, {
-          city: extras.city,
           monthlyVolume: extras.monthlyVolume,
         })
       }
       validateExtras={validateExtras}
       extras={
         <div className="flex flex-col gap-5">
-          <Input
-            label="City you operate from"
-            required
-            value={extras.city}
-            onFocus={() => onFieldFocus('Contact')}
-            onChange={(e) => set('city', e.target.value)}
-            error={errors.city}
-          />
           <Select
             label="Laptops you move in a month"
             required

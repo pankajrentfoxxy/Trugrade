@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 import { Input } from '@trugrade/ui';
-import { Select } from '../../lib/controls';
-import { STATES } from './picklists';
 import { validateCity, validateLine1, validatePincode } from './validation';
+import { PincodeLocalityFields } from './PincodeLocalityFields';
 
 /**
  * The five fields every Indian postal address on this platform is made of.
@@ -108,41 +107,17 @@ export function AddressFields({
         onBlur={onBlur}
         onChange={(e) => onChange({ line2: e.target.value })}
       />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input
-          label="City"
-          required
-          readOnly={readOnly}
-          value={value.city}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          onChange={(e) => onChange({ city: e.target.value })}
-          error={errors.city}
-        />
-        <Input
-          label="PIN code"
-          mono
-          inputMode="numeric"
-          maxLength={6}
-          required
-          readOnly={readOnly}
-          value={value.pincode}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          onChange={(e) => onChange({ pincode: e.target.value })}
-          error={errors.pincode}
-        />
-      </div>
-      <Select
-        label="State"
-        required
-        disabled={readOnly}
-        options={STATES}
-        value={value.state}
+      <PincodeLocalityFields
+        value={{ pincode: value.pincode, city: value.city, state: value.state }}
+        onChange={onChange}
+        errors={{
+          pincode: errors.pincode,
+          city: errors.city,
+          state: errors.state,
+        }}
+        readOnly={readOnly}
         onFocus={onFocus}
         onBlur={onBlur}
-        onChange={(e) => onChange({ state: e.target.value })}
-        error={errors.state}
       />
     </>
   );

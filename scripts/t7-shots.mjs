@@ -165,7 +165,6 @@ async function finishStepOne(page, who, codes) {
   await page.waitForTimeout(900);
 
   await page.getByLabel('Password').fill(who.password);
-  await page.getByLabel('City you operate from').fill('Gurugram');
   await page.getByLabel('Laptops you move in a month').selectOption('100');
   for (const brand of ['Dell', 'HP', 'Lenovo']) {
     const chip = page.getByRole('button', { name: brand, exact: true });
@@ -189,7 +188,7 @@ async function passMfa(page, codes, theme, shotName) {
   await page.locator('input[inputmode="numeric"]').first().fill(codes.get('MFA'));
 }
 
-/* ------------------------------------------------------------------- step 2 */
+/* ------------------------------------------------------- statutory / business */
 
 const section = (page, title) =>
   page.getByTestId('form-section').filter({ hasText: title }).first();
@@ -202,7 +201,7 @@ async function fillAddress(scope, values) {
   await scope.getByLabel('State').selectOption(values.state);
 }
 
-async function fillStepTwo(page) {
+async function fillBusinessStep(page) {
   await page.getByLabel('Legal name').fill(LEGAL_NAME);
   await page.getByLabel('Trade name').fill('Northgate Recovery');
   await page.getByLabel('Constitution').selectOption('PVT_LTD');
@@ -268,23 +267,13 @@ async function cleanPath(browser, theme, runIndex) {
   await finishStepOne(page, who, codes);
   await shot(page, `T7-step1-ready-${theme}`);
 
-  /* 4 — the second factor, then step 2 with nothing entered. */
+  /* 4 — the second factor, then step 2 (Statutory) with nothing entered. */
   await page.getByRole('button', { name: 'Create account and continue' }).click();
   await passMfa(page, codes, theme, 'T7-second-factor');
-  await page.getByLabel('Legal name').waitFor({ timeout: 40000 });
+  await page.getByLabel('PAN', { exact: false }).first().waitFor({ timeout: 40000 });
   await shot(page, `T7-step2-empty-${theme}`);
 
-  /* 5 — both addresses, and the incorporation date the constitution unlocked. */
-  await fillStepTwo(page);
-  await shot(page, `T7-step2-both-addresses-${theme}`);
-  await widths(page, `T7-step2-both-addresses-${theme}`);
-
-  /* 6 — step 3, nothing entered: every check reads "Not verified". */
-  await page.getByRole('button', { name: 'Save and continue' }).click();
-  await page.getByLabel('PAN', { exact: false }).first().waitFor({ timeout: 40000 });
-  await shot(page, `T7-step3-empty-${theme}`);
-
-  /* 7 — PAN, then a GSTIN the portal confirms. The returned legal name is the
+  /* 5 — PAN, then a GSTIN the portal confirms. The returned legal name is the
      whole point of the panel, so it is what the shot is of. */
   await page.getByLabel('PAN', { exact: false }).first().fill(identity.pan);
   await page.getByRole('button', { name: 'Verify PAN' }).click();
@@ -295,7 +284,7 @@ async function cleanPath(browser, theme, runIndex) {
   await page.waitForSelector('text=Registered since', { timeout: 30000 });
   await shot(page, `T7-gstin-pass-${theme}`);
 
-  /* 8 — confirmed, primary chosen, and the three registry numbers captured. */
+  /* 6 — confirmed, primary chosen, and the three registry numbers captured. */
   await page.getByLabel('Yes, this is our business').first().check();
   await page.locator('input[name="primary-gstin"]').first().check();
   await page.getByLabel('CIN').fill('U72900HR2016PTC098765');
@@ -306,10 +295,20 @@ async function cleanPath(browser, theme, runIndex) {
   await shot(page, `T7-registry-captured-${theme}`);
   await widths(page, `T7-registry-captured-${theme}`);
 
+  /* 7 — step 3 (Business), nothing entered. */
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await page.getByLabel('Legal name').waitFor({ timeout: 40000 });
+  await shot(page, `T7-step3-empty-${theme}`);
+
+  /* 8 — both addresses, and the incorporation date the constitution unlocked. */
+  await fillBusinessStep(page);
+  await shot(page, `T7-step2-both-addresses-${theme}`);
+  await widths(page, `T7-step2-both-addresses-${theme}`);
+
   /* 9 — a cold reload, taken before step 3 is completed: `completeStep` clears
      the draft server-side, so this is the state a returning applicant is in. */
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByLabel('PAN', { exact: false }).first().waitFor({ timeout: 40000 });
+  await page.getByLabel('Legal name').waitFor({ timeout: 40000 });
   await page.waitForTimeout(1500);
   await shot(page, `T7-resumed-${theme}`);
 

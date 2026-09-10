@@ -325,8 +325,8 @@ export const STAFF_BANDS = EMPLOYEE_BANDS;
 /**
  * `vendor.vendor_capability.category`, verbatim from its CHECK constraint.
  *
- * A sixth option here is a value the column refuses, so the list is the
- * constraint and nothing else. It is what routes a stock enquiry, which is why
+ * An option not in the column CHECK is a value the column refuses, so the list
+ * is the constraint and nothing else. It is what routes a stock enquiry, which is why
  * the labels say what the buyer would call the machine rather than what the
  * column calls it.
  */
@@ -336,15 +336,27 @@ export const SUPPLY_CATEGORIES = [
     label: 'Business laptops',
     note: 'ThinkPad, Latitude, EliteBook and the like',
   },
-  {
-    code: 'WORKSTATION',
-    label: 'Mobile workstations',
-    note: 'Quadro or RTX class. ThinkPad P, ZBook, Precision',
-  },
   { code: 'CONSUMER', label: 'Consumer laptops', note: 'Inspiron, IdeaPad, Pavilion, Vivobook' },
   { code: 'MACBOOK', label: 'MacBook', note: 'Air and Pro, Intel or Apple silicon' },
   { code: 'CHROMEBOOK', label: 'Chromebook', note: 'Usually education fleets' },
 ] as const;
+
+/** `vendor_capability.lead_time_days` — offered as a pick list, not free typing. */
+export const LEAD_TIME_DAYS: readonly Option[] = [
+  { value: '', label: 'Select lead time' },
+  { value: '0', label: 'Same day (0 days)' },
+  { value: '1', label: '1 day' },
+  { value: '2', label: '2 days' },
+  { value: '3', label: '3 days' },
+  { value: '5', label: '5 days' },
+  { value: '7', label: '7 days' },
+  { value: '10', label: '10 days' },
+  { value: '14', label: '14 days' },
+  { value: '21', label: '21 days' },
+  { value: '30', label: '30 days' },
+  { value: '45', label: '45 days' },
+  { value: '60', label: '60 days' },
+];
 
 /**
  * Where the stock comes from. **No definition anywhere** —
@@ -401,15 +413,14 @@ export const FACILITY_TYPES: readonly Option[] = [
 ];
 
 /**
- * `vendor.vendor_facility.vehicle_access`, verbatim from its CHECK constraint.
+ * `vendor.vendor_facility.vehicle_access` choices shown in registration.
  *
- * The column defaults to TEMPO and this list does not: a default that decides
- * which vehicle we send is a default that puts a 19-foot truck down a lane it
- * cannot reverse out of.
+ * TRUCK remains valid in the DB for legacy rows; it is not offered here.
+ * The column defaults to TEMPO and this list does not: a default vehicle size
+ * is a default that sends the wrong thing down a lane it cannot reverse out of.
  */
 export const VEHICLE_ACCESS: readonly Option[] = [
   { value: '', label: 'Select the largest vehicle that can reach the door' },
-  { value: 'TRUCK', label: 'Truck — a 19 ft container can reach the loading point' },
   { value: 'TEMPO', label: 'Tempo — up to a 14 ft light commercial vehicle' },
   { value: 'BIKE_ONLY', label: 'Two-wheeler only — no four-wheeler access' },
 ];
@@ -424,34 +435,10 @@ export const VEHICLE_ACCESS: readonly Option[] = [
  * left in March.
  */
 export const VENDOR_CONTACT_ROLES = [
-  {
-    code: 'OWNER',
-    label: 'Owner or director',
-    required: true,
-    purpose:
-      'Who signs the vendor agreement and answers for the business. We contact them about the relationship, not about individual orders.',
-  },
-  {
-    code: 'LOGISTICS',
-    label: 'Operations',
-    required: true,
-    purpose:
-      'Who confirms a purchase order, packs it and hands it to the carrier. Every PO and every pick-up window goes here.',
-  },
-  {
-    code: 'FINANCE',
-    label: 'Finance',
-    required: true,
-    purpose:
-      'Who raises your invoice and reconciles the payout. The TDS certificate and the payout advice go here.',
-  },
-  {
-    code: 'WAREHOUSE',
-    label: 'Warehouse',
-    required: false,
-    purpose:
-      'Optional but worth giving: the person actually at the dock when a QC technician or a carrier arrives.',
-  },
+  { code: 'OWNER', label: 'Owner or director', required: true },
+  { code: 'LOGISTICS', label: 'Operations', required: true },
+  { code: 'FINANCE', label: 'Finance', required: true },
+  { code: 'WAREHOUSE', label: 'Warehouse', required: false },
 ] as const;
 
 /**

@@ -36,12 +36,9 @@ export interface MfaChallengeProps {
   heading?: string;
   /** Why this account is asked for a second factor. "We have sent one to X" follows. */
   reason?: string;
-  /**
-   * What the factor actually is. The default names today's truth for a second
-   * factor; a first-factor sign-in code passes its own, because it is not one.
-   */
+  /** Optional note on what the factor is, or what to do if nothing arrives. */
   factorNote?: React.ReactNode;
-  /** Anything the calling flow needs to promise, e.g. that a draft is safe. */
+  /** Optional reassurance or guidance below the code entry. */
   footNote?: React.ReactNode;
   className?: string;
 }
@@ -53,7 +50,7 @@ export function MfaChallenge({
   pillLabel = 'One more code',
   heading = 'Your account is created. It needs a second code before you can carry on.',
   reason = 'A supplier account can change where we send money, so we ask for a second code every time you sign in — not only today.',
-  factorNote = 'This second factor is a code to the address on the account. An authenticator app is not supported yet, so it is a second code rather than a second device.',
+  factorNote,
   footNote,
   className,
 }: MfaChallengeProps): React.JSX.Element {

@@ -159,7 +159,6 @@ async function registerVendor(over: { email?: string; mobile?: string } = {}) {
       contactName: 'Priya Sharma',
       mobile,
       email,
-      city: 'Gurugram',
       source: 'GOOGLE_ADS',
     }),
   );
@@ -246,8 +245,8 @@ describe('the stepper is data, not two hard-coded flows', () => {
     expect(progress.steps).toHaveLength(7);
     expect(progress.steps.map((s) => s.stepCode)).toEqual([
       'ACCOUNT',
-      'BUSINESS_PROFILE',
       'STATUTORY',
+      'BUSINESS_PROFILE',
       'CAPABILITY',
       'FACILITY_CONTACTS',
       'DOCUMENTS_BANK',
@@ -346,7 +345,7 @@ describe('THE EXIT CRITERION — 7 steps, abandon at 4, resume 2 days later', ()
     const { orgId, userId } = await registerVendor();
 
     // Steps 1 to 3.
-    for (const step of ['ACCOUNT', 'BUSINESS_PROFILE', 'STATUTORY']) {
+    for (const step of ['ACCOUNT', 'STATUTORY', 'BUSINESS_PROFILE']) {
       await kyc.saveStepDraft(orgId, step, { done: true }, 100);
       await kyc.completeStep(orgId, step, async () => undefined);
     }
@@ -396,12 +395,28 @@ describe('THE EXIT CRITERION — 7 steps, abandon at 4, resume 2 days later', ()
     expect(slaDueAt.getTime()).toBeGreaterThan(clock.nowMs());
   });
 
-  it('the draft is cleared on COMPLETE — we never keep a second copy of the answer', async () => {
+  it('keeps the submitted draft on COMPLETE so a completed step can be reopened', async () => {
     const { orgId } = await registerVendor();
-    await kyc.saveStepDraft(orgId, 'ACCOUNT', { gstin: 'draft-value' }, 80);
+    const account = { fullName: 'Priya Sharma', email: 'priya@example.com', mobile: '+919876543210' };
+    await kyc.saveStepDraft(orgId, 'ACCOUNT', account, 100);
     await kyc.completeStep(orgId, 'ACCOUNT', async () => undefined);
 
-    expect(await kyc.getStepDraft(orgId, 'ACCOUNT')).toBeNull();
+    expect(await kyc.getStepDraft(orgId, 'ACCOUNT')).toMatchObject(account);
+  });
+
+  it('lets a completed step accept draft edits before submission', async () => {
+    const { orgId } = await registerVendor();
+    await kyc.saveStepDraft(orgId, 'CAPABILITY', { canDropship: true, monthlyCapacity: '200' }, 100);
+    await kyc.completeStep(orgId, 'CAPABILITY', async () => undefined);
+
+    await kyc.saveStepDraft(orgId, 'CAPABILITY', { canDropship: false, monthlyCapacity: '300' }, 100);
+
+    const { progress } = await kyc.getOnboarding(orgId);
+    expect(progress.steps.find((s) => s.stepCode === 'CAPABILITY')!.status).toBe('COMPLETE');
+    expect(await kyc.getStepDraft(orgId, 'CAPABILITY')).toMatchObject({
+      canDropship: false,
+      monthlyCapacity: '300',
+    });
   });
 
   it('a failed promotion leaves the step incomplete and the draft intact', async () => {

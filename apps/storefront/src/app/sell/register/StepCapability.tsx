@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import { Button, Checkbox, Chip, FormSection, Input } from '@trugrade/ui';
+import { Select } from '../../../lib/controls';
 import { YesNo } from '../../register/YesNo';
-import { SOURCING_CHANNELS, SUPPLY_CATEGORIES } from '../../register/picklists';
-import { validateCount } from '../../register/validation';
+import { LEAD_TIME_DAYS, SOURCING_CHANNELS, SUPPLY_CATEGORIES } from '../../register/picklists';
+import { blockNonDigitKey, typeDigitsOnly, validateCount } from '../../register/validation';
 
 /** Parenthetical note on the label row instead of a second line under the field. */
 const labelNote = (text: string, note: string): React.ReactNode => (
@@ -106,7 +107,7 @@ export function readCapabilityDraft(answers: Record<string, unknown>): Capabilit
 
   return {
     ...EMPTY,
-    categories: list('categories'),
+    categories: list('categories').filter((code) => code !== 'WORKSTATION'),
     brands: list('brands'),
     otherBrands: str('otherBrands'),
     monthlyCapacity: str('monthlyCapacity'),
@@ -140,14 +141,7 @@ const CAPACITY_RULE = {
     'Tell us how many laptops a month you can actually supply. An honest number sizes the enquiries we send you — it is not a commitment.',
 };
 
-const LEAD_TIME_RULE = {
-  required: true,
-  min: 0,
-  max: 60,
-  unit: 'days',
-  missing:
-    'Tell us how many days from a purchase order to the machine leaving your dock. Zero is a real answer if you ship same day.',
-};
+const LEAD_TIME_VALUES = new Set(LEAD_TIME_DAYS.map((o) => o.value).filter(Boolean));
 
 /**
  * Summed over the grades the catalogue currently defines, not over every key in
@@ -170,9 +164,7 @@ const checksOf = (values: CapabilityValues, grades: readonly string[]): boolean[
   // A catalogue that did not answer cannot be a gate on their application.
   grades.length === 0 || gradeMixDone(values.gradeMix, grades),
   values.sourcingChannels.length > 0,
-  values.canProvideSerialsUpfront !== null,
-  validateCount(values.leadTimeDays, LEAD_TIME_RULE) === undefined &&
-    values.leadTimeDays.trim().length > 0,
+  LEAD_TIME_VALUES.has(values.leadTimeDays),
   values.canDropship !== null,
 ];
 
@@ -252,7 +244,7 @@ export function StepCapability({
     );
 
   const setGrade = (grade: string, pct: string): void => {
-    setValues((v) => ({ ...v, gradeMix: { ...v.gradeMix, [grade]: pct } }));
+    setValues((v) => ({ ...v, gradeMix: { ...v.gradeMix, [grade]: typeDigitsOnly(pct) } }));
     setErrors(({ gradeMix: _dropped, ...rest }) => rest);
   };
 
@@ -313,12 +305,9 @@ export function StepCapability({
       found.sourcingChannels =
         'Tell us where your stock comes from — at least one. A buy-back lot and an auction lot carry different paperwork, and we underwrite them differently.';
 
-    if (v.canProvideSerialsUpfront === null)
-      found.canProvideSerialsUpfront =
-        'Answer this either way. We sell a named machine by its serial, so whether you can give us serials before dispatch changes how your stock is listed.';
-
-    const leadTime = validateCount(v.leadTimeDays, LEAD_TIME_RULE);
-    if (leadTime) found.leadTimeDays = leadTime;
+    if (!LEAD_TIME_VALUES.has(v.leadTimeDays))
+      found.leadTimeDays =
+        'Choose how many days from our purchase order to the machine leaving your dock.';
 
     if (v.canDropship === null)
       found.canDropship =
@@ -489,11 +478,11 @@ export function StepCapability({
           mono
           inputMode="numeric"
           required
-          hint="Your real, sustainable number. It sizes enquiries; it commits you to nothing."
           value={values.monthlyCapacity}
           onFocus={() => onFieldFocus('Monthly capacity')}
           onBlur={saveOnBlur}
-          onChange={(e) => set('monthlyCapacity', e.target.value)}
+          onKeyDown={blockNonDigitKey}
+          onChange={(e) => set('monthlyCapacity', typeDigitsOnly(e.target.value))}
           error={errors.monthlyCapacity}
         />
 
@@ -538,6 +527,7 @@ export function StepCapability({
                     value={values.gradeMix[grade.grade] ?? ''}
                     onFocus={() => onFieldFocus('Grade mix')}
                     onBlur={saveOnBlur}
+                    onKeyDown={blockNonDigitKey}
                     onChange={(e) => setGrade(grade.grade, e.target.value)}
                     className="h-11 w-full rounded border border-rule bg-sheet px-4 font-mono text-body-sm tnum text-ink placeholder:text-ink-3 transition-colors sm:col-start-1 sm:row-start-2"
                   />
@@ -584,7 +574,8 @@ export function StepCapability({
             value={values.priceBandMin}
             onFocus={() => onFieldFocus('Capability')}
             onBlur={saveOnBlur}
-            onChange={(e) => set('priceBandMin', e.target.value)}
+            onKeyDown={blockNonDigitKey}
+            onChange={(e) => set('priceBandMin', typeDigitsOnly(e.target.value))}
             error={errors.priceBandMin}
           />
           <Input
@@ -597,7 +588,8 @@ export function StepCapability({
             value={values.priceBandMax}
             onFocus={() => onFieldFocus('Capability')}
             onBlur={saveOnBlur}
-            onChange={(e) => set('priceBandMax', e.target.value)}
+            onKeyDown={blockNonDigitKey}
+            onChange={(e) => set('priceBandMax', typeDigitsOnly(e.target.value))}
             error={errors.priceBandMax}
           />
         </div>
@@ -640,49 +632,16 @@ export function StepCapability({
         )}
       </FormSection>
 
-      {/* -------------------------------------------------------- what you do */}
-      <FormSection title="What you do to a machine before it ships">
-        <Checkbox
-          label={labelNote(
-            'We test in-house',
-            'Battery, keyboard, display and ports checked before the machine is offered. Our own QC still runs — this decides how much of it.',
-          )}
-          checked={values.hasInhouseTesting}
-          onChange={(v) => setAndSave('hasInhouseTesting', v)}
-        />
-        <Checkbox
-          label={labelNote(
-            'We repair in-house',
-            'Screens, keyboards and batteries replaced on site rather than sent out. It is what lets us route a repairable unit back to you instead of grading it down.',
-          )}
-          checked={values.hasInhouseRepair}
-          onChange={(v) => setAndSave('hasInhouseRepair', v)}
-        />
-
-        <YesNo
-          legend="Can you give us serial numbers before the machine ships?"
-          name="serials-upfront"
-          required
-          value={values.canProvideSerialsUpfront}
-          onChange={(v) => setAndSave('canProvideSerialsUpfront', v)}
-          onFocus={() => onFieldFocus('Serial numbers')}
-          yesLabel="Yes — we can send serials with the offer"
-          noLabel="No — serials only at dispatch"
-          yesConsequence="Your stock can be listed unit by unit, with a passport page and a certificate per machine."
-          noConsequence="Your stock is listed as a pool and the serial is attached at dispatch. It sells, but a buyer cannot inspect the exact machine before ordering it."
-          error={errors.canProvideSerialsUpfront}
-        />
-
-        <Input
+      {/* ----------------------------------------------------------- dispatch */}
+      <FormSection title="Dispatch">
+        <Select
           label="Lead time, in days"
-          mono
-          inputMode="numeric"
           required
-          hint="From our purchase order to the machine leaving your dock. It becomes the dispatch promise on your listings."
+          options={LEAD_TIME_DAYS}
           value={values.leadTimeDays}
           onFocus={() => onFieldFocus('Capability')}
           onBlur={saveOnBlur}
-          onChange={(e) => set('leadTimeDays', e.target.value)}
+          onChange={(e) => setAndSave('leadTimeDays', e.target.value)}
           error={errors.leadTimeDays}
         />
 

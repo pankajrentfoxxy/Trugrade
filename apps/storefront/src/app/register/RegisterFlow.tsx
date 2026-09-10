@@ -12,6 +12,7 @@ import {
   type WhyRailItem,
 } from '@trugrade/ui';
 import {
+  accountHolderFromSession,
   completeStep,
   getOnboarding,
   getSession,
@@ -20,6 +21,7 @@ import {
   saveStep,
   startOnboarding,
   submitForReview,
+  type AccountHolderDetails,
   type ResumableOnboarding,
   type ReviewDecision,
   type StepDefinition,
@@ -143,7 +145,7 @@ export interface StepContext {
   /**
    * ACCOUNT only. Creates the organisation if it does not exist yet, then saves
    * and completes the step. `extras` are the fields this flow asks on step 1
-   * that the other does not — a buyer's lead source, a vendor's city and volume.
+   * that the other does not — a buyer's lead source, a vendor's monthly volume.
    */
   continueFromAccount: (
     values: AccountValues,
@@ -154,6 +156,11 @@ export interface StepContext {
    * shell input. The API still refuses a bad save — this only unblocks Continue.
    */
   skipValidation: boolean;
+  /**
+   * The registering account's name, email and mobile. Step 1's draft is cleared
+   * on complete, so later steps read this from the session instead.
+   */
+  accountHolder: AccountHolderDetails;
 }
 
 /** What the shell hands a review screen. `Review` in the buyer flow matches it. */
@@ -239,6 +246,11 @@ export function RegisterFlow({
     () => definitions?.[0]?.stepCode ?? 'ACCOUNT',
   );
   const [answers, setAnswers] = React.useState<Record<string, Record<string, unknown>>>({});
+  const [accountHolder, setAccountHolder] = React.useState<AccountHolderDetails>({
+    fullName: '',
+    email: '',
+    mobile: '',
+  });
   const [registered, setRegistered] = React.useState(false);
 
   /** Resume and first sign-in both flip this; only a *new* session refreshes chrome. */
@@ -252,6 +264,8 @@ export function RegisterFlow({
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [saveFailure, setSaveFailure] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  /** True while re-fetching answers before opening a completed step from the rail. */
+  const [stepLoading, setStepLoading] = React.useState(false);
   const [activeTerm, setActiveTerm] = React.useState<string | undefined>();
   /**
    * `constitution_type`, taken from the org rather than from a draft. Step 2's
@@ -326,9 +340,8 @@ export function RegisterFlow({
     (data: ResumableOnboarding, landOn?: string): void => {
       const loaded = data.progress;
       setSteps(reword(loaded.steps));
-      // **Merged, not replaced.** `completeStep` clears a step's draft, so the
-      // server stops returning the answers to a step the moment it is finished.
-      // Dropping them here would empty the review screen one step at a time.
+      // **Merged, not replaced.** A completed step's snapshot lives server-side;
+      // dropping a step here would empty the review screen one completion at a time.
       setAnswers((held) => ({ ...held, ...data.answers }));
       setConstitution(loaded.constitution ?? null);
       setOrgStatus(data.status);
@@ -349,12 +362,17 @@ export function RegisterFlow({
   applyOnboardingRef.current = applyOnboarding;
 
   const reload = React.useCallback(async (landOn?: string): Promise<void> => {
-    const onboarding = await getOnboarding();
-    if (!onboarding.ok) {
-      setSaveFailure(onboarding.message);
-      return;
+    if (landOn) setStepLoading(true);
+    try {
+      const onboarding = await getOnboarding();
+      if (!onboarding.ok) {
+        setSaveFailure(onboarding.message);
+        return;
+      }
+      applyOnboardingRef.current(onboarding.data, landOn);
+    } finally {
+      if (landOn) setStepLoading(false);
     }
-    applyOnboardingRef.current(onboarding.data, landOn);
   }, []);
 
   /* Mount: is this a returning applicant? */
@@ -377,6 +395,7 @@ export function RegisterFlow({
       }
 
       markSignedIn();
+      setAccountHolder(accountHolderFromSession(session.data));
       // Idempotent, and safe on every mount — which is how it is meant to be
       // called. The client should not have to know whether registration or a
       // constitution change already materialised these rows.
@@ -418,13 +437,33 @@ export function RegisterFlow({
   }, [definitions, orgType]);
 
   /** The step lives in the URL, so a reload and a rail link land in one place. */
-  const goTo = React.useCallback((code: string): void => {
-    setCurrentCode(code);
-    setSaveFailure(null);
-    const url = new URL(window.location.href);
-    url.searchParams.set('step', code);
-    window.history.replaceState(null, '', url);
-  }, []);
+  const goTo = React.useCallback(
+    (code: string): void => {
+      setSaveFailure(null);
+      const url = new URL(window.location.href);
+      url.searchParams.set('step', code);
+      window.history.replaceState(null, '', url);
+      const target = steps.find((s) => s.stepCode === code);
+      // Completed and sent-back steps read a snapshot from the server; reload
+      // lands on the step and merges answers before the form remounts.
+      if (
+        registered &&
+        (target?.status === 'COMPLETE' || target?.status === 'NEEDS_FIX')
+      ) {
+        void reload(code);
+        return;
+      }
+      setCurrentCode(code);
+    },
+    [registered, reload, steps],
+  );
+
+  /** First step after ACCOUNT — from the seeded order, not a hard-coded code. */
+  const firstStepAfterAccount = React.useCallback((): string => {
+    const sorted = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
+    const accountIdx = sorted.findIndex((s) => s.stepCode === 'ACCOUNT');
+    return sorted[accountIdx + 1]?.stepCode ?? 'BUSINESS_PROFILE';
+  }, [steps]);
 
   const mainRef = React.useRef<HTMLElement>(null);
 
@@ -476,7 +515,7 @@ export function RegisterFlow({
     ): Record<string, string> | null => {
       if (!skip) return fields;
       setSaveFailure(null);
-      goTo('BUSINESS_PROFILE');
+      goTo(firstStepAfterAccount());
       return null;
     };
     try {
@@ -487,6 +526,7 @@ export function RegisterFlow({
           mobile: values.mobile,
           password: values.password,
         });
+        if (created.ok) setAccountHolder(accountHolderFromSession(created.data));
         if (!created.ok) {
           // The server names the field when it can — an address already in use,
           // a password that fails composition. Everything else is a banner, and
@@ -528,6 +568,11 @@ export function RegisterFlow({
       // Held locally as well: completing the step clears the server's copy, and
       // the review screen has nowhere else to read it back from.
       setAnswers((a) => ({ ...a, ACCOUNT: draft }));
+      setAccountHolder({
+        fullName: values.fullName,
+        email: values.email,
+        mobile: values.mobile,
+      });
 
       if (current?.status !== 'COMPLETE') {
         const done = await completeStep('ACCOUNT');
@@ -537,8 +582,9 @@ export function RegisterFlow({
         }
       }
 
-      await reload('BUSINESS_PROFILE');
-      goTo('BUSINESS_PROFILE');
+      const nextStep = firstStepAfterAccount();
+      await reload(nextStep);
+      goTo(nextStep);
       return null;
     } finally {
       setBusy(false);
@@ -610,16 +656,14 @@ export function RegisterFlow({
         }
         return null;
       }
-      if (current?.status !== 'COMPLETE') {
-        const done = await completeStep(stepCode);
-        if (!done.ok) {
-          setSaveFailure(done.message);
-          if (skipValidationRef.current) {
-            setSaveFailure(null);
-            goTo(nextCode);
-          }
-          return null;
+      const done = await completeStep(stepCode);
+      if (!done.ok) {
+        setSaveFailure(done.message);
+        if (skipValidationRef.current) {
+          setSaveFailure(null);
+          goTo(nextCode);
         }
+        return null;
       }
       await reload();
       // After the last step there is no next one — the review screen is where
@@ -637,9 +681,11 @@ export function RegisterFlow({
     key: s.stepCode,
     label: s.title,
     status: railStatus(s, currentCode),
-    // Only a completed step is a link back, and only once there is an account
-    // to load it against. `Stepper` renders a real anchor, so this is a page
-    // load — correct here, since the flow re-reads its state on mount anyway.
+    // Only a completed step is reachable from the rail, and only once there is
+    // an account to load it against. In-place navigation reloads answers first
+    // so the form remounts with what was submitted, not an empty draft.
+    onNavigate:
+      registered && s.status === 'COMPLETE' ? (code: string) => goTo(code) : undefined,
     href: registered && s.status === 'COMPLETE' ? `${basePath}?step=${s.stepCode}` : undefined,
     blockers: s.blockingReason ? [s.blockingReason] : undefined,
   }));
@@ -732,6 +778,7 @@ export function RegisterFlow({
     continueFrom: (values, pct) => continueFrom(currentCode, values, pct),
     continueFromAccount,
     skipValidation,
+    accountHolder,
   };
 
   return (
@@ -807,25 +854,29 @@ export function RegisterFlow({
             onEdit: goTo,
             onSubmit: submit,
           })
-        ) : phase === 'checking' ? (
+        ) : phase === 'checking' || stepLoading ? (
           <div className="flex flex-col gap-4 rounded-lg border border-rule bg-sheet p-5">
             <Skeleton lines={6} />
             <p className="text-body-sm text-ink-3" role="status">
-              Checking whether you already have an application in progress…
+              {stepLoading
+                ? 'Loading what you submitted on this step…'
+                : 'Checking whether you already have an application in progress…'}
             </p>
           </div>
         ) : (
-          (renderers[currentCode]?.(stepContext) ?? (
-            <EmptyState
-              title={`${current?.title ?? 'This step'} is not built yet`}
-              body="Your answers so far are saved and this application is waiting for you. This step opens shortly; nothing you have entered is lost in the meantime."
-              action={
-                <Button variant="secondary" onClick={() => window.location.assign('/')}>
-                  Back to the shop
-                </Button>
-              }
-            />
-          ))
+          <div key={currentCode}>
+            {renderers[currentCode]?.(stepContext) ?? (
+              <EmptyState
+                title={`${current?.title ?? 'This step'} is not built yet`}
+                body="Your answers so far are saved and this application is waiting for you. This step opens shortly; nothing you have entered is lost in the meantime."
+                action={
+                  <Button variant="secondary" onClick={() => window.location.assign('/')}>
+                    Back to the shop
+                  </Button>
+                }
+              />
+            )}
+          </div>
         )}
 
       </main>

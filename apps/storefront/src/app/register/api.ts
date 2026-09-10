@@ -180,7 +180,24 @@ export interface SessionView {
    * the 403 from the first onboarding call is what tells us instead.
    */
   mfaRequired: boolean;
+  /** The signed-in user's own details — survives after the ACCOUNT draft is cleared. */
+  fullName?: string;
+  email?: string;
+  mobile?: string;
 }
+
+/** Name, email and mobile from the account that registered — for contact prefill. */
+export interface AccountHolderDetails {
+  fullName: string;
+  email: string;
+  mobile: string;
+}
+
+export const accountHolderFromSession = (session: SessionView): AccountHolderDetails => ({
+  fullName: session.fullName ?? '',
+  email: session.email ?? '',
+  mobile: session.mobile ?? '',
+});
 
 export const sendOtp = (channel: OtpChannel, value: string): Promise<ApiResult<OtpSent>> =>
   post<OtpSent>('/api/auth/register/otp', { channel, value });
@@ -412,6 +429,14 @@ export interface VerificationOutcomeView {
 }
 
 /** What the GST portal returned, as far as this screen reads it. */
+export interface GstinPostalAddress {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
 export interface GstinTaxpayer {
   legalName?: string;
   tradeName?: string;
@@ -420,6 +445,9 @@ export interface GstinTaxpayer {
   registrationDate?: string;
   taxpayerType?: string;
   principalAddress?: string;
+  constitutionType?: string;
+  vendorCategory?: string;
+  registeredAddress?: GstinPostalAddress;
 }
 
 export interface PanHolder {
@@ -582,11 +610,31 @@ export interface KycDocument {
 export const getDocumentTypes = (): Promise<ApiResult<DocumentTypeRule[]>> =>
   get<DocumentTypeRule[]>('/api/onboarding/documents/types');
 
+export interface PincodeArea {
+  value: string;
+  label: string;
+}
+
+export interface PincodeLookup {
+  pincode: string;
+  stateCode: string;
+  stateName: string;
+  areas: PincodeArea[];
+}
+
+export const lookupPincode = (pincode: string): Promise<ApiResult<PincodeLookup>> =>
+  get<PincodeLookup>(`/api/onboarding/pincodes/${encodeURIComponent(pincode)}`);
+
 export const getDocuments = (): Promise<ApiResult<KycDocument[]>> =>
   get<KycDocument[]>('/api/onboarding/documents');
 
 export const deleteDocument = (documentId: string): Promise<ApiResult<null>> =>
   call<null>(`/api/onboarding/documents/${documentId}`, { method: 'DELETE' });
+
+export const getDocumentUrl = (
+  documentId: string,
+): Promise<ApiResult<{ url: string; expiresInSeconds: number }>> =>
+  get<{ url: string; expiresInSeconds: number }>(`/api/onboarding/documents/${documentId}/url`);
 
 /**
  * Upload one file, with progress.

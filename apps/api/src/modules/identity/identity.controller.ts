@@ -194,6 +194,9 @@ export interface SessionResponse {
   /** For a Bearer client. Browsers ignore it and use the cookie. */
   accessToken?: string;
   fullName?: string;
+  /** The signed-in user's own contact details — for prefill, never for lookup. */
+  email?: string;
+  mobile?: string;
 }
 
 /** The wire shape of a contact-change request. Neither address appears in full. */
@@ -412,7 +415,7 @@ export class IdentityController {
       ...principalOf(user),
       mfaRequired,
       accessToken: tokens.accessToken,
-      fullName: user.fullName,
+      ...userSessionFields(user),
     };
   }
 
@@ -438,7 +441,7 @@ export class IdentityController {
       ...principalOf(user),
       mfaRequired,
       accessToken: tokens.accessToken,
-      fullName: user.fullName,
+      ...userSessionFields(user),
     };
   }
 
@@ -522,7 +525,7 @@ export class IdentityController {
       ...principalOf(user),
       mfaRequired,
       accessToken: tokens.accessToken,
-      fullName: user.fullName,
+      ...userSessionFields(user),
     };
   }
 
@@ -697,7 +700,7 @@ export class IdentityController {
       const names = cookieNamesFor(this.sessionAudience(req));
       return {
         ...principalOf(principal),
-        fullName: user.fullName,
+        ...userSessionFields(user),
         mfaRequired: !principal.mfaSatisfied,
         accessToken: readSessionCookie(req, names.access),
       };
@@ -733,7 +736,7 @@ export class IdentityController {
       orgType: claims.org_type,
       roles: claims.roles,
       permissions: claims.scope,
-      fullName: user.fullName,
+      ...userSessionFields(user),
       mfaRequired: !claims.mfa,
       accessToken: tokens.accessToken,
     };
@@ -869,7 +872,7 @@ export class IdentityController {
       ...principalOf(user),
       mfaRequired: false,
       accessToken: tokens.accessToken,
-      fullName: user.fullName,
+      ...userSessionFields(user),
     };
   }
 
@@ -1076,6 +1079,19 @@ function principalOf(source: {
     orgType: source.orgType,
     roles: [...source.roles],
     permissions: [...source.permissions],
+  };
+}
+
+/** Own-account contact fields for client prefill. Omitted when not stored. */
+function userSessionFields(user: {
+  fullName: string;
+  email: string | null;
+  mobile: string | null;
+}): Pick<SessionResponse, 'fullName' | 'email' | 'mobile'> {
+  return {
+    fullName: user.fullName,
+    ...(user.email ? { email: user.email } : {}),
+    ...(user.mobile ? { mobile: user.mobile } : {}),
   };
 }
 

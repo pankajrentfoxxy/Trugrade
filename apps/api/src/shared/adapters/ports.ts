@@ -40,6 +40,15 @@ export interface VerificationResult<T> {
 // KYC and statutory verification
 // ---------------------------------------------------------------------------
 
+export interface GstinPostalAddress {
+  line1: string;
+  line2: string;
+  city: string;
+  /** GST state code, e.g. `06`. */
+  state: string;
+  pincode: string;
+}
+
 export interface GstinTaxpayer {
   gstin: string;
   legalName: string;
@@ -49,6 +58,11 @@ export interface GstinTaxpayer {
   registrationDate?: string;
   taxpayerType?: string;
   principalAddress?: string;
+  /** Mapped to `constitution_type` — filled on Business from a verified GSTIN. */
+  constitutionType?: string;
+  /** Mapped to `vendor_profile.business_category`. */
+  vendorCategory?: string;
+  registeredAddress?: GstinPostalAddress;
 }
 
 export abstract class GstinVerificationPort {
@@ -387,6 +401,40 @@ export interface QcSessionRequest {
     serialNumber: string;
   };
   sealCodeRange: [string, string];
+}
+
+// ---------------------------------------------------------------------------
+// Postal pincode lookup (India Post reference data)
+// ---------------------------------------------------------------------------
+
+export type PincodeLookupOutcome = 'SUCCESS' | 'NOT_FOUND' | 'PROVIDER_ERROR';
+
+export interface PincodeArea {
+  /** Stored in `org_address.city`. */
+  value: string;
+  /** Block when present, otherwise district — what the applicant picks. */
+  label: string;
+}
+
+export interface PincodeLookupData {
+  pincode: string;
+  stateCode: string;
+  stateName: string;
+  areas: PincodeArea[];
+}
+
+export interface PincodeLookupResult {
+  outcome: PincodeLookupOutcome;
+  data?: PincodeLookupData;
+  /** Shown when the lookup fails or the provider is down. */
+  message?: string;
+  provider: string;
+  latencyMs: number;
+  raw?: unknown;
+}
+
+export abstract class PincodeLookupPort {
+  abstract lookup(pincode: string): Promise<PincodeLookupResult>;
 }
 
 export abstract class QcPlatformPort {

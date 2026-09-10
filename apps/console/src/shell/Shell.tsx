@@ -143,6 +143,7 @@ function SiteFooter(): React.JSX.Element {
     legalName,
     brandName,
     website,
+    gstin,
     registeredOffice: office,
     customerCare,
     grievanceOfficer,
@@ -174,6 +175,8 @@ function SiteFooter(): React.JSX.Element {
             {office.city}, {office.state} {office.pincode}
             <br />
             {office.country}
+            <br />
+            GSTIN {gstin}
           </address>
           <a
             href={website}

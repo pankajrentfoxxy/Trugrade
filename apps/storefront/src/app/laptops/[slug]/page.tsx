@@ -31,13 +31,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RepresentativeImage, SidePanel } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
-import type { Grade } from '@trugrade/contracts';
+import { normalisePincode, type Grade } from '@trugrade/contracts';
 import { getOfferBoard, getSkuDetail, type OfferBoard, type SkuDetail } from '../../../lib/api';
 import { CategoryStrip } from '../../CategoryStrip';
 import { Board } from './Board';
 import { ProductCartScope } from './ProductCartScope';
 import { ProductIdentityCard } from './ProductIdentityCard';
 import { specLine } from './spec-rows';
+import { PincodeFocusLink } from './PincodeFocusLink';
 import { SupplyPointPicker } from './SupplyPointPicker';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
@@ -84,7 +85,7 @@ export default async function ProductPage({
   // A malformed pincode is not a pincode. It is dropped rather than sent, so the
   // page asks again instead of showing the API's validation error as the answer.
   const askedPin = first(query.pin);
-  const pincode = askedPin && /^[1-9][0-9]{5}$/.test(askedPin) ? askedPin : null;
+  const pincode = askedPin ? normalisePincode(askedPin) : null;
 
   // Both halves at once: what the machine IS (catalog) and what is FOR SALE
   // (listing + qc + logistics). Two endpoints because they are two modules'
@@ -205,9 +206,7 @@ export default async function ProductPage({
                 <div className="sh">
                   <div className="shrow">
                     <h2 id="board">Compare supply points</h2>
-                    <a className="sub ulink" href="#units">
-                      Pick a supply point to see its serials
-                    </a>
+                    <span className="sub">Pick a supply point to see its serials</span>
                   </div>
                 </div>
 
@@ -251,9 +250,7 @@ export default async function ProductPage({
                         source&rsquo;s declared grade survived ours, and what is in stock.
                       </p>
                       <p className="retry">
-                        <a className="ulink" href="#deliver">
-                          Enter a delivery pincode
-                        </a>
+                        <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink>
                       </p>
                     </div>
                   ) : board.delivery.kind === 'UNSERVICEABLE' ? (
@@ -261,9 +258,7 @@ export default async function ProductPage({
                       <h3>We cannot deliver to {board.pincode} yet</h3>
                       <p>{board.delivery.reason}</p>
                       <p className="retry">
-                        <a className="ulink" href="#deliver">
-                          Try another pincode
-                        </a>{' '}
+                        <PincodeFocusLink>Try another pincode</PincodeFocusLink>{' '}
                         or{' '}
                         <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
                           ask us to quote this lane
@@ -329,8 +324,8 @@ export default async function ProductPage({
                       name="pin"
                       className="mono"
                       inputMode="numeric"
-                      pattern="[1-9][0-9]{5}"
-                      maxLength={6}
+                      pattern="[1-9][0-9]{2}[ ]?[0-9]{3}"
+                      maxLength={7}
                       defaultValue={board.pincode ?? ''}
                       placeholder="110001"
                       aria-describedby="pinhelp"

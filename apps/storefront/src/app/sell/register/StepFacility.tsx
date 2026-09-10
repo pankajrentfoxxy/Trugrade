@@ -19,18 +19,21 @@ import {
   WEEK_DAYS,
   stateName,
 } from '../../register/picklists';
+import type { AccountHolderDetails } from '../../register/api';
 import {
   isMobileBlank,
+  mobileSubscriberDigits,
   MOBILE_PREFIX,
   toE164,
   typeMobile,
-  validateCount,
   validateEmail,
   validateFullName,
   validateMobile,
   validateReceivingHours,
   validateWhatsapp,
 } from '../../register/validation';
+
+export type { AccountHolderDetails };
 
 /**
  * Step 5 — Facility and contacts.
@@ -83,15 +86,15 @@ export interface Facility {
   key: string;
   label: string;
   facilityType: string;
+  /** True while the site address is a mirror of the registered office. */
+  sameAsRegistered: boolean;
   address: PostalAddress;
   /** Null until answered. `true` writes `dispatch_address_id` NULL — see above. */
   dispatchSameAsFacility: boolean | null;
   dispatchAddress: PostalAddress;
-  storageCapacityUnits: string;
   hasLoadingDock: boolean;
   vehicleAccess: string;
   liftAvailable: boolean;
-  testingStations: string;
   specialInstructions: string;
   /** `facility_hours`, keyed by `day_of_week` as a string — JSON has no int keys. */
   hours: Record<string, DayHours>;
@@ -99,6 +102,8 @@ export interface Facility {
 }
 
 export interface VendorContact {
+  /** True while name, email and mobile mirror the registering account. */
+  useAccountDetails: boolean;
   fullName: string;
   designation: string;
   email: string;
@@ -113,6 +118,7 @@ export interface FacilityValues {
 }
 
 const emptyContact = (): VendorContact => ({
+  useAccountDetails: false,
   fullName: '',
   designation: '',
   email: '',
@@ -120,6 +126,21 @@ const emptyContact = (): VendorContact => ({
   whatsapp: MOBILE_PREFIX,
   language: '',
 });
+
+const accountContactFields = (
+  account: AccountHolderDetails,
+): Pick<VendorContact, 'fullName' | 'email' | 'mobile' | 'whatsapp'> => ({
+  fullName: account.fullName,
+  email: account.email,
+  mobile: typeMobile(account.mobile),
+  whatsapp: isMobileBlank(account.mobile) ? MOBILE_PREFIX : typeMobile(account.mobile),
+});
+
+const resolvedContact = (
+  contact: VendorContact,
+  account: AccountHolderDetails,
+): VendorContact =>
+  contact.useAccountDetails ? { ...contact, ...accountContactFields(account) } : contact;
 
 const emptyHours = (): Record<string, DayHours> =>
   Object.fromEntries(
@@ -152,14 +173,13 @@ const emptyFacility = (): Facility => ({
   key: nextKey(),
   label: '',
   facilityType: '',
+  sameAsRegistered: false,
   address: emptyPostal(),
   dispatchSameAsFacility: null,
   dispatchAddress: emptyPostal(),
-  storageCapacityUnits: '',
   hasLoadingDock: false,
   vehicleAccess: '',
   liftAvailable: false,
-  testingStations: '',
   specialInstructions: '',
   hours: emptyHours(),
   holidays: [],
@@ -169,12 +189,20 @@ export function readFacilityDraft(answers: Record<string, unknown>): FacilityVal
   const savedFacilities = Array.isArray(answers.facilities)
     ? (answers.facilities as Partial<Facility>[])
     : [];
+  const allowedVehicleAccess = new Set(
+    VEHICLE_ACCESS.map((o) => o.value).filter((value) => value.length > 0),
+  );
   const facilities =
     savedFacilities.length > 0
       ? savedFacilities.map((f) => ({
           ...emptyFacility(),
           ...f,
           key: nextKey(),
+          vehicleAccess:
+            typeof f.vehicleAccess === 'string' && allowedVehicleAccess.has(f.vehicleAccess)
+              ? f.vehicleAccess
+              : '',
+          sameAsRegistered: f.sameAsRegistered === true,
           address: { ...emptyPostal(), ...(f.address ?? {}) },
           dispatchAddress: { ...emptyPostal(), ...(f.dispatchAddress ?? {}) },
           hours: { ...emptyHours(), ...(f.hours ?? {}) },
@@ -189,6 +217,7 @@ export function readFacilityDraft(answers: Record<string, unknown>): FacilityVal
     contacts[role.code] = {
       ...emptyContact(),
       ...saved,
+      useAccountDetails: saved.useAccountDetails === true,
       mobile: typeMobile(typeof saved.mobile === 'string' ? saved.mobile : ''),
       whatsapp: typeMobile(typeof saved.whatsapp === 'string' ? saved.whatsapp : ''),
     };
@@ -197,31 +226,31 @@ export function readFacilityDraft(answers: Record<string, unknown>): FacilityVal
   return { facilities, contacts };
 }
 
+const siteAddress = (facility: Facility, registeredOffice: PostalAddress): PostalAddress =>
+  facility.sameAsRegistered ? registeredOffice : facility.address;
+
 /** Only what the API should keep. The React key is regenerated on read. */
-const toDraft = (values: FacilityValues): Record<string, unknown> => ({
-  facilities: values.facilities.map(({ key: _key, ...rest }) => rest),
-  contacts: values.contacts,
+const toDraft = (
+  values: FacilityValues,
+  registeredOffice: PostalAddress,
+  accountHolder: AccountHolderDetails,
+): Record<string, unknown> => ({
+  facilities: values.facilities.map(({ key: _key, sameAsRegistered, address, ...rest }) => ({
+    ...rest,
+    sameAsRegistered,
+    address: sameAsRegistered ? registeredOffice : address,
+  })),
+  contacts: Object.fromEntries(
+    Object.entries(values.contacts).map(([role, contact]) => [
+      role,
+      resolvedContact(contact, accountHolder),
+    ]),
+  ),
 });
 
 /* ==========================================================================
  * Completeness
  * ======================================================================== */
-
-const CAPACITY_RULE = {
-  required: false,
-  min: 0,
-  max: 100000,
-  unit: 'laptops',
-  missing: '',
-};
-
-const STATIONS_RULE = {
-  required: false,
-  min: 0,
-  max: 500,
-  unit: 'stations',
-  missing: '',
-};
 
 const dayAnswered = (hours: DayHours): boolean =>
   hours.closed || validateReceivingHours(hours.opensAt, hours.closesAt) === undefined;
@@ -231,10 +260,13 @@ const hoursAnswered = (facility: Facility): boolean =>
     dayAnswered(facility.hours[String(d.day)] ?? { closed: false, opensAt: '', closesAt: '' }),
   );
 
-export const facilityDone = (facility: Facility): boolean =>
+export const facilityDone = (
+  facility: Facility,
+  registeredOffice: PostalAddress = emptyPostal(),
+): boolean =>
   facility.label.trim().length > 0 &&
   facility.facilityType.length > 0 &&
-  postalComplete(facility.address) &&
+  postalComplete(siteAddress(facility, registeredOffice)) &&
   facility.vehicleAccess.length > 0 &&
   facility.dispatchSameAsFacility !== null &&
   (facility.dispatchSameAsFacility || postalComplete(facility.dispatchAddress)) &&
@@ -245,15 +277,23 @@ const contactDone = (c: VendorContact): boolean =>
   validateEmail(c.email) === undefined &&
   validateMobile(c.mobile) === undefined;
 
-const checksOf = (values: FacilityValues): boolean[] => [
-  ...values.facilities.map(facilityDone),
+const checksOf = (
+  values: FacilityValues,
+  registeredOffice: PostalAddress,
+  accountHolder: AccountHolderDetails,
+): boolean[] => [
+  ...values.facilities.map((f) => facilityDone(f, registeredOffice)),
   ...VENDOR_CONTACT_ROLES.filter((r) => r.required).map((r) =>
-    contactDone(values.contacts[r.code]!),
+    contactDone(resolvedContact(values.contacts[r.code]!, accountHolder)),
   ),
 ];
 
-export const completionOf = (values: FacilityValues): number => {
-  const checks = checksOf(values);
+export const completionOf = (
+  values: FacilityValues,
+  registeredOffice: PostalAddress = emptyPostal(),
+  accountHolder: AccountHolderDetails = { fullName: '', email: '', mobile: MOBILE_PREFIX },
+): number => {
+  const checks = checksOf(values, registeredOffice, accountHolder);
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 };
 
@@ -267,6 +307,10 @@ export const oneLine = (a: PostalAddress): string =>
 
 export interface StepFacilityProps {
   answers: Record<string, unknown>;
+  /** Registered office from step 3 — the source when "same as registered office" is ticked. */
+  registeredOffice: PostalAddress;
+  /** Account from step 1 — the source when "use my account details" is ticked. */
+  accountHolder: AccountHolderDetails;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
   onContinue: (
     values: Record<string, unknown>,
@@ -280,6 +324,8 @@ export interface StepFacilityProps {
 
 export function StepFacility({
   answers,
+  registeredOffice,
+  accountHolder,
   onSaveDraft,
   onContinue,
   busy,
@@ -290,12 +336,29 @@ export function StepFacility({
   const [values, setValues] = React.useState<FacilityValues>(() => readFacilityDraft(answers));
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
-  const persist = (next: FacilityValues): void => onSaveDraft(toDraft(next), completionOf(next));
+  const persist = (next: FacilityValues): void =>
+    onSaveDraft(
+      toDraft(next, registeredOffice, accountHolder),
+      completionOf(next, registeredOffice, accountHolder),
+    );
   const saveOnBlur = (): void => persist(values);
 
   const clearError = (key: string): void => setErrors(({ [key]: _dropped, ...rest }) => rest);
   const clearPrefix = (prefix: string): void =>
     setErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith(prefix))));
+  const setFieldError = (key: string, message?: string): void =>
+    setErrors((e) => {
+      if (!message) {
+        const { [key]: _dropped, ...rest } = e;
+        return rest;
+      }
+      return { ...e, [key]: message };
+    });
+
+  const emailReadyToValidate = (value: string): boolean =>
+    value.trim().length > 0 && value.includes('@');
+  const mobileReadyToValidate = (value: string): boolean =>
+    mobileSubscriberDigits(value).length >= 10;
 
   /** A mobile settles into `+91XXXXXXXXXX` on blur — see `StepContacts`. */
   const settled = (typed: string): string => toE164(typed) || typed;
@@ -372,6 +435,15 @@ export function StepFacility({
       contacts: { ...v.contacts, [role]: { ...v.contacts[role]!, ...patch } },
     }));
 
+  const setContactAndSave = (role: string, patch: Partial<VendorContact>): void => {
+    const next = {
+      ...values,
+      contacts: { ...values.contacts, [role]: { ...values.contacts[role]!, ...patch } },
+    };
+    setValues(next);
+    persist(next);
+  };
+
   /* ------------------------------------------------------------ validation */
 
   const check = (v: FacilityValues): Record<string, string> => {
@@ -384,16 +456,13 @@ export function StepFacility({
       if (!facility.facilityType)
         found[at('facilityType')] =
           'Tell us what this site is. It decides whether we send a QC technician here.';
-      for (const [field, message] of Object.entries(postalErrors(facility.address)))
+      for (const [field, message] of Object.entries(
+        postalErrors(siteAddress(facility, registeredOffice)),
+      ))
         found[at(`address.${field}`)] = message;
       if (!facility.vehicleAccess)
         found[at('vehicleAccess')] =
-          'Tell us the largest vehicle that can reach the loading point. A truck sent to a lane it cannot enter is a pick-up that does not happen.';
-
-      const capacity = validateCount(facility.storageCapacityUnits, CAPACITY_RULE);
-      if (capacity) found[at('storageCapacityUnits')] = capacity;
-      const stations = validateCount(facility.testingStations, STATIONS_RULE);
-      if (stations) found[at('testingStations')] = stations;
+          'Tell us the largest vehicle that can reach the loading point. A vehicle sent to a lane it cannot enter is a pick-up that does not happen.';
 
       if (facility.dispatchSameAsFacility === null)
         found[at('dispatch')] =
@@ -425,7 +494,7 @@ export function StepFacility({
     });
 
     for (const role of VENDOR_CONTACT_ROLES) {
-      const person = v.contacts[role.code]!;
+      const person = resolvedContact(v.contacts[role.code]!, accountHolder);
       const touched =
         person.fullName.trim() || person.email.trim() || !isMobileBlank(person.mobile);
       // An optional contact is either absent or complete. Half of one is a
@@ -455,24 +524,29 @@ export function StepFacility({
     const normalised: FacilityValues = {
       ...values,
       contacts: Object.fromEntries(
-        Object.entries(values.contacts).map(([role, p]) => [
-          role,
-          {
-            ...p,
-            mobile: isMobileBlank(p.mobile) ? '' : toE164(p.mobile),
-            whatsapp: isMobileBlank(p.whatsapp) ? '' : toE164(p.whatsapp),
-          },
-        ]),
+        Object.entries(values.contacts).map(([role, contact]) => {
+          const person = resolvedContact(contact, accountHolder);
+          return [
+            role,
+            {
+              ...person,
+              mobile: isMobileBlank(person.mobile) ? '' : toE164(person.mobile),
+              whatsapp: isMobileBlank(person.whatsapp) ? '' : toE164(person.whatsapp),
+            },
+          ];
+        }),
       ),
     };
-    const refusal = await onContinue(toDraft(normalised), 100);
+    const refusal = await onContinue(toDraft(normalised, registeredOffice, accountHolder), 100);
     if (refusal) setErrors(refusal);
   };
 
   /* ----------------------------------------------------------------- view */
 
   const requiredContacts = VENDOR_CONTACT_ROLES.filter((r) => r.required);
-  const contactsDone = requiredContacts.filter((r) => contactDone(values.contacts[r.code]!)).length;
+  const contactsDone = requiredContacts.filter((r) =>
+    contactDone(resolvedContact(values.contacts[r.code]!, accountHolder)),
+  ).length;
 
   return (
     <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)} noValidate>
@@ -490,7 +564,10 @@ export function StepFacility({
         title="Where your stock actually sits"
         status={
           <>
-            <span className="tnum">{values.facilities.filter(facilityDone).length}</span> of{' '}
+            <span className="tnum">
+              {values.facilities.filter((f) => facilityDone(f, registeredOffice)).length}
+            </span>{' '}
+            of{' '}
             <span className="tnum">{values.facilities.length}</span> complete
           </>
         }
@@ -498,8 +575,9 @@ export function StepFacility({
         {values.facilities.map((facility, index) => {
           const at = (field: string): string | undefined =>
             errors[`facility.${facility.key}.${field}`];
+          const stockAddress = siteAddress(facility, registeredOffice);
           const dispatchFrom = facility.dispatchSameAsFacility
-            ? facility.address
+            ? stockAddress
             : facility.dispatchAddress;
 
           return (
@@ -550,21 +628,35 @@ export function StepFacility({
                 error={at('facilityType')}
               />
 
-              <AddressFields
-                value={facility.address}
-                errors={{
-                  line1: at('address.line1'),
-                  city: at('address.city'),
-                  state: at('address.state'),
-                  pincode: at('address.pincode'),
-                }}
-                onChange={(patch) => {
-                  setFacility(facility.key, { address: { ...facility.address, ...patch } });
+              <Checkbox
+                label="Same as the registered office"
+                consequence="We will use the registered office from your business details as this site's address."
+                checked={facility.sameAsRegistered}
+                onChange={(same) => {
+                  setFacilityAndSave(facility.key, {
+                    sameAsRegistered: same,
+                    ...(same ? { address: { ...registeredOffice } } : {}),
+                  });
                   clearPrefix(`facility.${facility.key}.address.`);
                 }}
-                onBlur={saveOnBlur}
-                onFocus={() => onFieldFocus('Facilities')}
               />
+              {!facility.sameAsRegistered && (
+                <AddressFields
+                  value={facility.address}
+                  errors={{
+                    line1: at('address.line1'),
+                    city: at('address.city'),
+                    state: at('address.state'),
+                    pincode: at('address.pincode'),
+                  }}
+                  onChange={(patch) => {
+                    setFacility(facility.key, { address: { ...facility.address, ...patch } });
+                    clearPrefix(`facility.${facility.key}.address.`);
+                  }}
+                  onBlur={saveOnBlur}
+                  onFocus={() => onFieldFocus('Facilities')}
+                />
+              )}
 
               {/* ------------------------------------------ dispatch address */}
               <div
@@ -636,41 +728,6 @@ export function StepFacility({
                   </span>
                 </p>
               </div>
-
-              {/* ------------------------------------------------- the dock */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  label="Machines this site can hold"
-                  mono
-                  inputMode="numeric"
-                  hint="Optional. Roughly, at full stretch."
-                  value={facility.storageCapacityUnits}
-                  onFocus={() => onFieldFocus('Facilities')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => {
-                    setFacility(facility.key, { storageCapacityUnits: e.target.value });
-                    clearError(`facility.${facility.key}.storageCapacityUnits`);
-                  }}
-                  error={at('storageCapacityUnits')}
-                />
-                <Input
-                  label="Testing stations here"
-                  mono
-                  inputMode="numeric"
-                  hint="Optional. Benches where a machine can be powered up and checked."
-                  value={facility.testingStations}
-                  onFocus={() => onFieldFocus('Facilities')}
-                  onBlur={saveOnBlur}
-                  onChange={(e) => {
-                    setFacility(facility.key, { testingStations: e.target.value });
-                    clearError(`facility.${facility.key}.testingStations`);
-                  }}
-                  error={at('testingStations')}
-                />
-              </div>
-              {facility.storageCapacityUnits.trim() === '' && (
-                <p className="text-body-sm text-ink-4">Storage capacity not provided.</p>
-              )}
 
               <Select
                 label="Largest vehicle that can reach the loading point"
@@ -902,7 +959,8 @@ export function StepFacility({
         }
       >
         {VENDOR_CONTACT_ROLES.map((role) => {
-          const person = values.contacts[role.code]!;
+          const stored = values.contacts[role.code]!;
+          const person = resolvedContact(stored, accountHolder);
           return (
             <fieldset
               key={role.code}
@@ -914,7 +972,29 @@ export function StepFacility({
                 {!role.required && <span className="text-ink-3"> — optional</span>}
               </legend>
               <div className="form-section-body">
-              <p className="text-body-sm text-ink-2">{role.purpose}</p>
+              <Checkbox
+                label="Use my account details"
+                consequence="We will fill in the name, email and mobile from the account you created in step 1."
+                checked={stored.useAccountDetails}
+                onChange={(use) => {
+                  const fields = use ? accountContactFields(accountHolder) : undefined;
+                  setContactAndSave(role.code, {
+                    useAccountDetails: use,
+                    ...(fields ?? {}),
+                  });
+                  if (fields) {
+                    setFieldError(`${role.code}.email`, validateEmail(fields.email));
+                    setFieldError(`${role.code}.mobile`, validateMobile(fields.mobile));
+                    if (!isMobileBlank(fields.whatsapp)) {
+                      setFieldError(`${role.code}.whatsapp`, validateWhatsapp(fields.whatsapp));
+                    } else {
+                      clearError(`${role.code}.whatsapp`);
+                    }
+                  } else {
+                    clearPrefix(`${role.code}.`);
+                  }
+                }}
+              />
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
@@ -925,7 +1005,7 @@ export function StepFacility({
                   onFocus={() => onFieldFocus('Contacts')}
                   onBlur={saveOnBlur}
                   onChange={(e) => {
-                    setContact(role.code, { fullName: e.target.value });
+                    setContact(role.code, { fullName: e.target.value, useAccountDetails: false });
                     clearError(`${role.code}.fullName`);
                   }}
                   error={errors[`${role.code}.fullName`]}
@@ -947,10 +1027,20 @@ export function StepFacility({
                   required={role.required}
                   value={person.email}
                   onFocus={() => onFieldFocus('Contacts')}
-                  onBlur={saveOnBlur}
+                  onBlur={() => {
+                    if (role.required || person.email.trim()) {
+                      setFieldError(`${role.code}.email`, validateEmail(person.email));
+                    }
+                    saveOnBlur();
+                  }}
                   onChange={(e) => {
-                    setContact(role.code, { email: e.target.value });
-                    clearError(`${role.code}.email`);
+                    const email = e.target.value;
+                    setContact(role.code, { email, useAccountDetails: false });
+                    if (emailReadyToValidate(email) || errors[`${role.code}.email`]) {
+                      setFieldError(`${role.code}.email`, validateEmail(email));
+                    } else {
+                      clearError(`${role.code}.email`);
+                    }
                   }}
                   error={errors[`${role.code}.email`]}
                 />
@@ -962,19 +1052,32 @@ export function StepFacility({
                   value={person.mobile}
                   onFocus={() => onFieldFocus('Contacts')}
                   onBlur={() => {
+                    const mobile = settled(person.mobile);
                     const next = {
                       ...values,
                       contacts: {
                         ...values.contacts,
-                        [role.code]: { ...person, mobile: settled(person.mobile) },
+                        [role.code]: {
+                          ...stored,
+                          mobile,
+                          useAccountDetails: false,
+                        },
                       },
                     };
                     setValues(next);
                     persist(next);
+                    if (role.required || !isMobileBlank(mobile)) {
+                      setFieldError(`${role.code}.mobile`, validateMobile(mobile));
+                    }
                   }}
                   onChange={(e) => {
-                    setContact(role.code, { mobile: typeMobile(e.target.value) });
-                    clearError(`${role.code}.mobile`);
+                    const mobile = typeMobile(e.target.value);
+                    setContact(role.code, { mobile, useAccountDetails: false });
+                    if (mobileReadyToValidate(mobile) || errors[`${role.code}.mobile`]) {
+                      setFieldError(`${role.code}.mobile`, validateMobile(mobile));
+                    } else {
+                      clearError(`${role.code}.mobile`);
+                    }
                   }}
                   error={errors[`${role.code}.mobile`]}
                 />
@@ -989,19 +1092,26 @@ export function StepFacility({
                   value={person.whatsapp}
                   onFocus={() => onFieldFocus('WhatsApp and language')}
                   onBlur={() => {
+                    const whatsapp = settled(person.whatsapp);
                     const next = {
                       ...values,
                       contacts: {
                         ...values.contacts,
-                        [role.code]: { ...person, whatsapp: settled(person.whatsapp) },
+                        [role.code]: { ...stored, whatsapp },
                       },
                     };
                     setValues(next);
                     persist(next);
+                    if (isMobileBlank(whatsapp)) clearError(`${role.code}.whatsapp`);
+                    else setFieldError(`${role.code}.whatsapp`, validateWhatsapp(whatsapp));
                   }}
                   onChange={(e) => {
-                    setContact(role.code, { whatsapp: typeMobile(e.target.value) });
-                    clearError(`${role.code}.whatsapp`);
+                    const whatsapp = typeMobile(e.target.value);
+                    setContact(role.code, { whatsapp });
+                    if (isMobileBlank(whatsapp)) clearError(`${role.code}.whatsapp`);
+                    else if (mobileReadyToValidate(whatsapp) || errors[`${role.code}.whatsapp`]) {
+                      setFieldError(`${role.code}.whatsapp`, validateWhatsapp(whatsapp));
+                    }
                   }}
                   error={errors[`${role.code}.whatsapp`]}
                 />

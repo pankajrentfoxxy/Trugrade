@@ -40,11 +40,11 @@ export const LEGAL_DISCLOSURE = {
    */
   cin: null as string | null,
   registeredOffice: {
-    line1: 'To be confirmed before launch',
+    line1: 'JMD MEGAPOLIS, SH 13, Central Park II, Sector 48',
     city: 'Gurugram',
     state: 'Haryana',
     stateCode: '06',
-    pincode: '122001',
+    pincode: '122018',
     country: 'India',
   },
   branches: [] as ReadonlyArray<{
@@ -61,7 +61,7 @@ export const LEGAL_DISCLOSURE = {
      * contact information that is openly missing — a customer with a problem
      * spends their attempt on it before finding the email that does work.
      */
-    phone: null as string | null,
+    phone: '+919311770438',
     hours: 'Mon–Sat, 10:00–18:00 IST',
   },
   /** r.4(4)–(5): a named person, resident in India. Acknowledge in 48 h, redress in 1 month. */
@@ -69,9 +69,23 @@ export const LEGAL_DISCLOSURE = {
     name: 'To be appointed before launch',
     designation: 'Grievance Officer',
     email: BRAND.grievance,
-    phone: null as string | null,
-    address: 'Gurugram, Haryana, India',
+    phone: '+919311770438',
+    address:
+      'JMD MEGAPOLIS, SH 13, Central Park II, Sector 48, Gurugram, Haryana 122018, India',
   },
 } as const;
+
+/** One line for footers, legal pages and invoices. */
+export function formatRegisteredOffice(
+  office: {
+    line1: string;
+    city: string;
+    state: string;
+    pincode: string;
+    country: string;
+  } = LEGAL_DISCLOSURE.registeredOffice,
+): string {
+  return `${office.line1}, ${office.city}, ${office.state} ${office.pincode}, ${office.country}`;
+}
 
 export type Brand = typeof BRAND;

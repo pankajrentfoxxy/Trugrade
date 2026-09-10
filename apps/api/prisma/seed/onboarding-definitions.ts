@@ -25,19 +25,19 @@ const STEP_DEFINITIONS: Array<[string, string, number, string, string, number]> 
   ],
   [
     'VENDOR',
-    'BUSINESS_PROFILE',
-    2,
-    'Business',
-    'Your legal name and registered address go on every purchase order we raise to you.',
-    6,
-  ],
-  [
-    'VENDOR',
     'STATUTORY',
-    3,
+    2,
     'Statutory',
     'GSTIN and PAN decide how we invoice you and whether TDS applies. We check them against the source, not against what you type.',
     5,
+  ],
+  [
+    'VENDOR',
+    'BUSINESS_PROFILE',
+    3,
+    'Business',
+    'Your legal name and registered address go on every purchase order we raise to you.',
+    6,
   ],
   [
     'VENDOR',

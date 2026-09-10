@@ -80,7 +80,6 @@ const accountRows = (a: Record<string, unknown>): Row[] => [
   { label: 'Your name', value: str(a, 'fullName'), required: true },
   { label: 'Work email', value: str(a, 'email'), required: true, mono: true },
   { label: 'Mobile', value: str(a, 'mobile'), required: true, mono: true },
-  { label: 'City you work from', value: str(a, 'city'), required: true },
   { label: 'Laptops a month', value: labelOrBlank(MONTHLY_VOLUMES, str(a, 'monthlyVolume')), required: true },
   { label: 'How you found us', value: labelOrBlank(HEARD_FROM, str(a, 'heardFrom')) },
 ];
@@ -167,16 +166,6 @@ const capabilityRows = (a: Record<string, unknown>): Row[] => {
           ? 'Yes — ships to the buyer on our invoice'
           : a.canDropship === false
             ? 'No — we would have to take the goods in first'
-            : '',
-      required: true,
-    },
-    {
-      label: 'Serials up front',
-      value:
-        a.canProvideSerialsUpfront === true
-          ? 'Yes — listed unit by unit'
-          : a.canProvideSerialsUpfront === false
-            ? 'No — serial attached at dispatch'
             : '',
       required: true,
     },
@@ -561,8 +550,8 @@ export function VendorReview({
       </p>
 
       {block('ACCOUNT', accountRows)}
-      {block('BUSINESS_PROFILE', businessRows)}
       {block('STATUTORY', statutoryRows)}
+      {block('BUSINESS_PROFILE', businessRows)}
       {block('CAPABILITY', capabilityRows)}
       {block('FACILITY_CONTACTS', facilityRows)}
 

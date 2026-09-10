@@ -7,7 +7,7 @@
  * never normalise after storing.
  */
 
-import { GSTIN, SERIAL_PLACEHOLDER_BLOCKLIST } from './rules';
+import { GSTIN, PINCODE, SERIAL_PLACEHOLDER_BLOCKLIST } from './rules';
 
 /**
  * VR-030. Accepts 10 digits, 0-prefixed, 91-prefixed, +91-prefixed, with any
@@ -62,6 +62,14 @@ export function normaliseGstin(input: string | null | undefined): string | null 
   if (!input) return null;
   const s = String(input).toUpperCase().replace(/\s/g, '');
   return s.length ? s : null;
+}
+
+/** VR-034. Accepts six digits or three, an optional space, then three more. */
+export function normalisePincode(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const trimmed = String(input).trim();
+  if (!PINCODE.pattern!.test(trimmed)) return null;
+  return trimmed.replace(/\s/g, '');
 }
 
 /**

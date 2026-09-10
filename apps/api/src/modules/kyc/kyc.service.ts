@@ -4,7 +4,7 @@ import { normaliseEmail, normaliseGstin, normaliseMobile } from '@trugrade/contr
 import { PrismaService } from '../../shared/db/prisma.service';
 import { ClockPort } from '../../shared/clock';
 import { EventBus } from '../../shared/events';
-import { AuditService } from '../identity';
+import { AuditService, IdentityService } from '../identity';
 import {
   ConflictError,
   ForbiddenError,
@@ -100,8 +100,74 @@ export class KycService implements IKycService {
     private readonly verification: VerificationService,
     private readonly consent: ConsentService,
     private readonly audit: AuditService,
+    private readonly identity: IdentityService,
     private readonly bus: EventBus,
   ) {}
+
+  /**
+   * Every step that has been started, keyed by step code.
+   *
+   * In-progress steps read their draft. Completed ones read the draft snapshot
+   * kept at promotion time, or — for rows completed before that existed — the
+   * archived answers written to the audit log at completion.
+   */
+  async getResumableAnswers(
+    orgId: string,
+    userId: string,
+  ): Promise<Record<string, Record<string, unknown>>> {
+    const progress = await this.onboarding.getProgress(orgId);
+    const answers: Record<string, Record<string, unknown>> = {};
+
+    for (const step of progress.steps) {
+      if (step.status === 'NOT_STARTED') continue;
+
+      const draft = await this.getStepDraft(orgId, step.stepCode);
+      if (draft && Object.keys(draft).length > 0) {
+        answers[step.stepCode] = draft;
+        continue;
+      }
+
+      if (step.status === 'COMPLETE') {
+        const archived = await this.archivedStepAnswers(orgId, step.stepCode);
+        if (archived) answers[step.stepCode] = archived;
+      }
+    }
+
+    answers.ACCOUNT = await this.accountStepAnswers(userId, answers.ACCOUNT);
+    return answers;
+  }
+
+  private async archivedStepAnswers(
+    orgId: string,
+    stepCode: string,
+  ): Promise<Record<string, unknown> | null> {
+    const rows = await this.audit.query({
+      action: 'kyc.onboarding.step_answers',
+      entityType: 'onboarding_progress',
+      entityId: `${orgId}:${stepCode}`,
+      limit: 1,
+    });
+    const after = rows[0]?.after_json;
+    return after && typeof after === 'object' && !Array.isArray(after)
+      ? (after as Record<string, unknown>)
+      : null;
+  }
+
+  /** Step 1 is not promoted; the user row is the fallback once the draft is gone. */
+  private async accountStepAnswers(
+    userId: string,
+    saved?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const user = await this.identity.getUser(userId);
+    return {
+      ...saved,
+      fullName: typeof saved?.fullName === 'string' ? saved.fullName : user.fullName,
+      email: typeof saved?.email === 'string' ? saved.email : (user.email ?? ''),
+      mobile: typeof saved?.mobile === 'string' ? saved.mobile : (user.mobile ?? ''),
+      ...(saved?.emailVerified === true ? { emailVerified: true } : {}),
+      ...(saved?.mobileVerified === true ? { mobileVerified: true } : {}),
+    };
+  }
 
   async selfCheck(): Promise<{ ok: boolean; detail?: string }> {
     const steps = await this.prisma.db.onboarding_step_definition.count({
@@ -131,7 +197,6 @@ export class KycService implements IKycService {
     contactName: string;
     mobile: string;
     email?: string;
-    city?: string;
     stateCode?: string;
     source?: string;
     utm?: { source?: string; medium?: string; campaign?: string };
@@ -158,7 +223,6 @@ export class KycService implements IKycService {
         contact_name: input.contactName,
         mobile,
         email: input.email ? normaliseEmail(input.email) : null,
-        city: input.city ?? null,
         state_code: input.stateCode ?? null,
         source: input.source ?? 'ORGANIC',
         utm_source: input.utm?.source ?? null,

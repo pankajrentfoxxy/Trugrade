@@ -175,7 +175,6 @@ export const createLeadBodySchema = z.object({
   contactName: fullNameSchema,
   mobile: mobileSchema,
   email: emailSchema.optional(),
-  city: z.string().min(1).max(80).optional(),
   stateCode: stateCodeSchema.optional(),
   source: z.string().min(1).max(40).optional(),
   utm: z

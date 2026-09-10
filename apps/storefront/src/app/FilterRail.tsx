@@ -3,6 +3,7 @@
 import * as React from 'react';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
+import { normalisePincode } from '@trugrade/contracts';
 import type { FacetGroup, FacetOption } from '../lib/api';
 
 /**
@@ -316,14 +317,15 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
               onCommit={(v) => {
                 // Six digits, first not zero. The message names what is wrong
                 // and what a right one looks like; "Invalid input" would not.
-                if (v !== '' && !/^[1-9][0-9]{5}$/.test(v)) {
+                const normalised = v === '' ? null : normalisePincode(v);
+                if (v !== '' && !normalised) {
                   setPincodeError(
                     `${v} is not an Indian pincode. It is six digits and does not start with a zero — for example 122002.`,
                   );
                   return;
                 }
                 setPincodeError(null);
-                setValue('pin', v);
+                setValue('pin', normalised ?? '');
               }}
             />
           </div>

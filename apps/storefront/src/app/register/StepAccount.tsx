@@ -10,10 +10,10 @@ import {
   MOBILE_PREFIX,
   toE164,
   typeMobile,
+  typeFullName,
   validateEmail,
   validateFullName,
   validateMobile,
-  workEmailNote,
 } from './validation';
 
 /**
@@ -51,6 +51,19 @@ export interface AccountValues {
   heardFrom: string;
 }
 
+const NAME_NAV_KEYS = new Set([
+  'Backspace',
+  'Delete',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Tab',
+  'Home',
+  'End',
+  'Enter',
+]);
+
 const EMPTY: AccountValues = {
   fullName: '',
   email: '',
@@ -63,7 +76,7 @@ function readDraft(answers: Record<string, unknown>): AccountValues {
   const str = (key: string): string =>
     typeof answers[key] === 'string' ? (answers[key] as string) : '';
   return {
-    fullName: str('fullName'),
+    fullName: typeFullName(str('fullName')),
     email: str('email'),
     mobile: typeMobile(str('mobile')),
     password: '',
@@ -234,7 +247,23 @@ export function StepAccount({
           required
           value={values.fullName}
           onFocus={() => onFieldFocus('Account')}
-          onChange={(e) => set('fullName', e.target.value)}
+          onKeyDown={(e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (NAME_NAV_KEYS.has(e.key)) return;
+            if (/^\d$/.test(e.key)) {
+              e.preventDefault();
+            }
+          }}
+          onPaste={(e) => {
+            e.preventDefault();
+            const pasted = e.clipboardData.getData('text');
+            const input = e.currentTarget;
+            const start = input.selectionStart ?? values.fullName.length;
+            const end = input.selectionEnd ?? values.fullName.length;
+            const merged = `${values.fullName.slice(0, start)}${pasted}${values.fullName.slice(end)}`;
+            set('fullName', typeFullName(merged));
+          }}
+          onChange={(e) => set('fullName', typeFullName(e.target.value))}
           error={errors.fullName}
         />
       </div>
@@ -246,7 +275,6 @@ export function StepAccount({
           type="email"
           inputMode="email"
           autoComplete="username"
-          hint={workEmailNote(values.email)}
           value={values.email}
           onValueChange={(v) => {
             set('email', v);
@@ -261,9 +289,11 @@ export function StepAccount({
         <ContactVerifier
           channel="MOBILE"
           label="Mobile"
-          inputMode="tel"
+          type="tel"
+          inputMode="numeric"
           autoComplete="tel"
-          placeholder="+91 98765 43210"
+          placeholder="+91 9876543210"
+          maxLength={14}
           mono
           value={values.mobile}
           onValueChange={(v) => {

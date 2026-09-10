@@ -214,7 +214,8 @@ export const EMAIL_DISPOSABLE = rule({
 export const PINCODE = rule({
   id: 'VR-034',
   field: 'identity.org_address.pincode',
-  pattern: /^[1-9][0-9]{5}$/,
+  /** Optional single space after the first three digits — `122002` or `122 002`. */
+  pattern: /^[1-9][0-9]{2}\s{0,1}[0-9]{3}$/,
   message: 'Enter a valid 6-digit PIN code.',
   enforcedAt: ['C', 'D', 'DB'],
 });

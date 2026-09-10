@@ -169,7 +169,6 @@ async function walkToStepFour(page, who, codes, identity, theme) {
   await page.waitForTimeout(900);
 
   await page.getByLabel('Password').fill(who.password);
-  await page.getByLabel('City you operate from').fill('Gurugram');
   await page.getByLabel('Laptops you move in a month').selectOption('100');
   for (const brand of ['Dell', 'HP', 'Lenovo']) {
     const chip = page.getByRole('button', { name: brand, exact: true });
@@ -185,7 +184,23 @@ async function walkToStepFour(page, who, codes, identity, theme) {
   await page.waitForTimeout(600);
   await page.locator('input[inputmode="numeric"]').first().fill(codes.get('MFA'));
 
-  /* Step 2. */
+  /* Step 2 — Statutory. */
+  await page.getByLabel('PAN', { exact: false }).first().waitFor({ timeout: 40000 });
+  await page.getByLabel('PAN', { exact: false }).first().fill(identity.pan);
+  await page.getByRole('button', { name: 'Verify PAN' }).click();
+  await page.waitForSelector('text=Held by', { timeout: 30000 });
+  await page.getByLabel('GSTIN 1').fill(identity.pass);
+  await page.getByRole('button', { name: 'Verify', exact: true }).first().click();
+  await page.waitForSelector('text=Registered since', { timeout: 30000 });
+  await page.getByLabel('Yes, this is our business').first().check();
+  await page.locator('input[name="primary-gstin"]').first().check();
+  await page.getByLabel('CIN').fill('U72900HR2016PTC098765');
+  await page.getByLabel('TAN').fill('DELT12345E');
+  await page.getByLabel('TAN').blur();
+  await page.waitForTimeout(900);
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+
+  /* Step 3 — Business. */
   await page.getByLabel('Legal name').waitFor({ timeout: 40000 });
   await page.getByLabel('Legal name').fill(LEGAL_NAME);
   await page.getByLabel('Trade name').fill('Northgate Recovery');
@@ -211,22 +226,6 @@ async function walkToStepFour(page, who, codes, identity, theme) {
   await page.waitForTimeout(600);
   await page.getByRole('button', { name: 'Save and continue' }).click();
 
-  /* Step 3. */
-  await page.getByLabel('PAN', { exact: false }).first().waitFor({ timeout: 40000 });
-  await page.getByLabel('PAN', { exact: false }).first().fill(identity.pan);
-  await page.getByRole('button', { name: 'Verify PAN' }).click();
-  await page.waitForSelector('text=Held by', { timeout: 30000 });
-  await page.getByLabel('GSTIN 1').fill(identity.pass);
-  await page.getByRole('button', { name: 'Verify', exact: true }).first().click();
-  await page.waitForSelector('text=Registered since', { timeout: 30000 });
-  await page.getByLabel('Yes, this is our business').first().check();
-  await page.locator('input[name="primary-gstin"]').first().check();
-  await page.getByLabel('CIN').fill('U72900HR2016PTC098765');
-  await page.getByLabel('TAN').fill('DELT12345E');
-  await page.getByLabel('TAN').blur();
-  await page.waitForTimeout(900);
-  await page.getByRole('button', { name: 'Save and continue' }).click();
-
   await page.getByLabel('Laptops you can supply in a month').waitFor({ timeout: 40000 });
 }
 
@@ -240,7 +239,6 @@ async function stepFour(page, theme) {
   await widths(page, `T8-step4-empty-${theme}`);
 
   await page.getByRole('button', { name: 'Business laptops' }).click();
-  await page.getByRole('button', { name: 'Mobile workstations' }).click();
   await page.getByLabel('Laptops you can supply in a month').fill('300');
   await page.getByLabel('Grade A+', { exact: true }).fill('50');
   await page.getByLabel('Grade A', { exact: true }).fill('30');
@@ -248,9 +246,7 @@ async function stepFour(page, theme) {
   await page.getByLabel('Typical price, highest').fill('42000');
   await page.getByLabel('Corporate buy-back', { exact: true }).check();
   await page.getByLabel('ITAD contract', { exact: true }).check();
-  await page.getByLabel('We test in-house').check();
-  await page.getByLabel('Lead time, in days').fill('2');
-  await page.getByLabel('Lead time, in days').blur();
+  await page.getByLabel('Lead time, in days').selectOption('2');
 
   /* 2 — a grade mix that does not total 100, and can_dropship unanswered.
      Both refusals name the number and the fix. */
@@ -262,7 +258,6 @@ async function stepFour(page, theme) {
   /* 3 — can_dropship answered "no": a real answer with a real consequence,
      never a validation failure. */
   await page.getByLabel('Grade B', { exact: true }).fill('20');
-  await page.getByLabel('we can send serials with the offer').check();
   await page.getByLabel('we cannot dispatch to a third party').check();
   await page.waitForTimeout(400);
   await shot(page, `T8-step4-dropship-no-${theme}`);
@@ -321,9 +316,7 @@ async function stepFive(page, theme) {
   await shot(page, `T8-dispatch-differs-${theme}`);
   await widths(page, `T8-dispatch-differs-${theme}`);
 
-  await first.getByLabel('Machines this site can hold').fill('1200');
-  await first.getByLabel('Testing stations here').fill('8');
-  await first.getByLabel('Largest vehicle that can reach the loading point').selectOption('TRUCK');
+  await first.getByLabel('Largest vehicle that can reach the loading point').selectOption('TEMPO');
   await first.getByLabel('There is a loading dock').check();
   await first.getByLabel('There is a working goods lift').check();
   await first
@@ -350,7 +343,6 @@ async function stepFive(page, theme) {
   await second.getByLabel('PIN code').first().fill('110020');
   await second.getByLabel('State').first().selectOption('07');
   await second.getByTestId('dispatch').getByLabel('same address').check();
-  await second.getByLabel('Machines this site can hold').fill('300');
   await second.getByLabel('Largest vehicle that can reach the loading point').selectOption('TEMPO');
   await fillHours(second, '10:00', '19:00');
   await second.getByLabel('Anything a driver needs to know').blur();

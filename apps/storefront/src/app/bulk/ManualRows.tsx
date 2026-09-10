@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button, Input } from '@trugrade/ui';
+import { normalisePincode } from '@trugrade/contracts';
 import { validatePincode } from '../register/validation';
 import { FORM_MAX_ROWS, type Grade, type RequirementRow } from './api';
 
@@ -95,7 +96,7 @@ export function toRequirementRow(d: Draft): RequirementRow {
     quantity: Number(d.quantity.trim()),
     ...(grade ? { grade } : {}),
     ...(price ? { targetPrice: price } : {}),
-    deliveryPincode: d.deliveryPincode.trim(),
+    deliveryPincode: normalisePincode(d.deliveryPincode.trim()) ?? d.deliveryPincode.trim(),
     ...(by ? { neededBy: by } : {}),
   };
 }
@@ -208,7 +209,21 @@ export function ManualRows({
                 error={errors[i]?.deliveryPincode}
                 disabled={disabled}
                 placeholder="122001"
-                onChange={(e) => onChange(i, { deliveryPincode: e.target.value })}
+                maxLength={7}
+                onChange={(e) =>
+                  onChange(i, {
+                    deliveryPincode: e.target.value
+                      .replace(/[^\d\s]/g, '')
+                      .replace(/\s+/g, ' ')
+                      .slice(0, 7),
+                  })
+                }
+                onBlur={() => {
+                  const normalised = normalisePincode(row.deliveryPincode);
+                  if (normalised && normalised !== row.deliveryPincode) {
+                    onChange(i, { deliveryPincode: normalised });
+                  }
+                }}
               />
             </div>
 

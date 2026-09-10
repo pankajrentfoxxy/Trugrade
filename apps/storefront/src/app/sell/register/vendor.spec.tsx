@@ -60,8 +60,8 @@ const definition = (stepCode: string, stepOrder: number, title: string): StepDef
 /** The seeded seven and the seeded five, in `onboarding_step_definition` order. */
 const VENDOR_STEPS = [
   'ACCOUNT',
-  'BUSINESS_PROFILE',
   'STATUTORY',
+  'BUSINESS_PROFILE',
   'CAPABILITY',
   'FACILITY_CONTACTS',
   'DOCUMENTS_BANK',

@@ -14,6 +14,7 @@ import {
 } from '@trugrade/ui';
 import {
   deleteDocument,
+  getDocumentUrl,
   getDocuments,
   getDocumentTypes,
   uploadDocument,
@@ -77,6 +78,7 @@ const asUploaded = (doc: KycDocument): UploadedFile => ({
   name: doc.originalFilename ?? doc.label,
   sizeBytes: doc.sizeBytes,
   status: STATUS[doc.status],
+  viewable: true,
   // A reviewer's rejection is their own wording, never summarised here.
   ...(doc.rejectionReason ? { rejectionReason: doc.rejectionReason } : {}),
 });
@@ -153,6 +155,7 @@ export function DocumentChecklist({
   const [pending, setPending] = React.useState<Pending[]>([]);
   const [loadFailure, setLoadFailure] = React.useState<string | null>(null);
   const [removalFailure, setRemovalFailure] = React.useState<Record<string, string>>({});
+  const [viewFailure, setViewFailure] = React.useState<Record<string, string>>({});
   /**
    * The date printed on the document, per doc type — asked for **only** where
    * the rule table gives that type a `maxAgeDays`. Without it the server refuses
@@ -242,6 +245,16 @@ export function DocumentChecklist({
     // The refusal names the file. `DocumentService` puts the filename in front
     // of the reason precisely so a list of six says which one failed.
     setPending((p) => p.map((r) => (r.id === id ? { ...r, refusal: result.message } : r)));
+  };
+
+  const view = async (id: string, docType: string): Promise<void> => {
+    const result = await getDocumentUrl(id);
+    if (!result.ok) {
+      setViewFailure((e) => ({ ...e, [docType]: result.message }));
+      return;
+    }
+    setViewFailure(({ [docType]: _dropped, ...rest }) => rest);
+    window.open(result.data.url, '_blank', 'noopener,noreferrer');
   };
 
   const remove = async (id: string, docType: string): Promise<void> => {
@@ -340,8 +353,9 @@ export function DocumentChecklist({
               onSelect={(chosen) => {
                 for (const file of chosen.slice(0, Math.max(room, 0))) void send(file, rule);
               }}
+              onView={(id) => void view(id, rule.docType)}
               onRemove={(id) => void remove(id, rule.docType)}
-              error={errors[rule.docType] ?? removalFailure[rule.docType]}
+              error={errors[rule.docType] ?? removalFailure[rule.docType] ?? viewFailure[rule.docType]}
             />
 
             {/* The per-file percentage, visibly.

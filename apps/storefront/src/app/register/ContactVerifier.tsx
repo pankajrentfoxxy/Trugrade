@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Button, Input, OtpInput } from '@trugrade/ui';
 import { OTP_POLICY } from '@trugrade/contracts';
 import { sendOtp, verifyOtp, type OtpChannel } from './api';
+import { typeMobile } from './validation';
 
 /**
  * One address, one code, one proof — used for the work email and again for the
@@ -39,13 +40,31 @@ export interface ContactVerifierProps {
   mono?: boolean;
   autoComplete?: string;
   placeholder?: string;
-  inputMode?: 'text' | 'email' | 'tel';
+  inputMode?: 'text' | 'email' | 'tel' | 'numeric';
   type?: string;
+  maxLength?: number;
   /** Surfaced by the form when the server rejects the address at registration. */
   error?: string;
 }
 
 type Phase = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified';
+
+const MOBILE_NAV_KEYS = new Set([
+  'Backspace',
+  'Delete',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Tab',
+  'Home',
+  'End',
+  'Enter',
+]);
+
+function formatAddressValue(channel: OtpChannel, raw: string): string {
+  return channel === 'MOBILE' ? typeMobile(raw) : raw;
+}
 
 export function ContactVerifier({
   channel,
@@ -62,6 +81,7 @@ export function ContactVerifier({
   placeholder,
   inputMode,
   type = 'text',
+  maxLength,
   error,
 }: ContactVerifierProps): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>(verified ? 'verified' : 'idle');
@@ -70,6 +90,8 @@ export function ContactVerifier({
   const [localError, setLocalError] = React.useState<string | undefined>();
   const [otpError, setOtpError] = React.useState<string | undefined>();
   const [cooldown, setCooldown] = React.useState(0);
+  /** Once the applicant has typed, invalid values surface on the field itself. */
+  const [touched, setTouched] = React.useState(false);
 
   React.useEffect(() => {
     if (verified) setPhase('verified');
@@ -85,12 +107,19 @@ export function ContactVerifier({
   }, [cooldown]);
 
   const target = normalise ? normalise(value) : value.trim();
+  const validationError = validate(value);
+
+  const sendDisabledReason =
+    phase === 'verified'
+      ? undefined
+      : cooldown > 0 && (phase === 'sent' || phase === 'verifying')
+        ? `You can ask for another code in ${cooldown} seconds.`
+        : validationError;
 
   const send = async (): Promise<void> => {
     if (cooldown > 0 || phase === 'sending' || phase === 'verifying') return;
-    const invalid = validate(value);
-    if (invalid) {
-      setLocalError(invalid);
+    if (validationError) {
+      setLocalError(validationError);
       return;
     }
     setLocalError(undefined);
@@ -127,7 +156,9 @@ export function ContactVerifier({
     onVerified(target);
   };
 
-  const describedError = error ?? localError;
+  const inlineValidation =
+    touched && phase !== 'verified' ? validationError : undefined;
+  const describedError = error ?? localError ?? inlineValidation;
 
   return (
     <div className="flex flex-col gap-3">
@@ -140,12 +171,49 @@ export function ContactVerifier({
         autoComplete={autoComplete}
         placeholder={placeholder}
         mono={mono}
+        maxLength={maxLength}
         required
         value={value}
         readOnly={phase === 'verified'}
+        onKeyDown={
+          channel === 'MOBILE'
+            ? (e) => {
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+                if (MOBILE_NAV_KEYS.has(e.key)) return;
+                if (/^\d$/.test(e.key)) return;
+                e.preventDefault();
+              }
+            : undefined
+        }
+        onPaste={
+          channel === 'MOBILE'
+            ? (e) => {
+                e.preventDefault();
+                const pasted = e.clipboardData.getData('text');
+                const input = e.currentTarget;
+                const start = input.selectionStart ?? value.length;
+                const end = input.selectionEnd ?? value.length;
+                const merged = `${value.slice(0, start)}${pasted}${value.slice(end)}`;
+                onValueChange(formatAddressValue(channel, merged));
+                setTouched(true);
+                setLocalError(undefined);
+                if (phase === 'sent' || phase === 'verifying') {
+                  setPhase('idle');
+                  setCode('');
+                  setOtpError(undefined);
+                }
+              }
+            : undefined
+        }
         onChange={(e) => {
-          onValueChange(e.target.value);
+          onValueChange(formatAddressValue(channel, e.target.value));
+          setTouched(true);
           setLocalError(undefined);
+          if (phase === 'sent' || phase === 'verifying') {
+            setPhase('idle');
+            setCode('');
+            setOtpError(undefined);
+          }
         }}
         error={describedError}
         verifyState={phase === 'verified' ? 'verified' : 'idle'}
@@ -163,11 +231,7 @@ export function ContactVerifier({
               type="button"
               variant="secondary"
               loading={phase === 'sending'}
-              disabledReason={
-                cooldown > 0 && phase === 'sent'
-                  ? `You can ask for another code in ${cooldown} seconds.`
-                  : undefined
-              }
+              disabledReason={sendDisabledReason}
               onClick={() => void send()}
             >
               {phase === 'sent' ? 'Resend code' : 'Send code'}

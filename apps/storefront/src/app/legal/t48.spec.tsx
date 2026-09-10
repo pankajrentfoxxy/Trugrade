@@ -263,7 +263,7 @@ describe('/legal/grievance carries the r.4(5) clocks and no invented person', ()
   it('leaves the officer visibly unappointed rather than naming somebody', () => {
     const text = words(renderDoc(docFor('grievance', TERMS, GRADES)));
     expect(text).toContain('Officer name — not yet published');
-    expect(text).toContain('Postal address — not yet published');
+    expect(text).toContain(LEGAL_DISCLOSURE.grievanceOfficer.address);
     // The email is real and monitored, so it is published.
     expect(text).toContain(LEGAL_DISCLOSURE.grievanceOfficer.email);
   });

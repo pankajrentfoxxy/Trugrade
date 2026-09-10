@@ -17,6 +17,7 @@ import {
   accountHolderNameSchema,
   bankAccountNumberSchema,
   ifscSchema,
+  pincodeSchema,
   uuidSchema,
 } from '@trugrade/contracts';
 import { CurrentUser, Public, RequirePermissions, RequireRoles } from '../../shared/auth/guards';
@@ -48,6 +49,7 @@ import {
   type UploadedBytes,
   type KycDocumentView,
 } from './internal/document.service';
+import { PincodeLookupService, type PincodeLookupView } from './internal/pincode-lookup.service';
 import {
   consentPurposeSchema,
   createLeadBodySchema,
@@ -223,10 +225,8 @@ type ReviewDocumentBodyDto = z.infer<typeof reviewDocumentBodySchema>;
 /** The stepper plus what was typed into it, which is what "resume" needs. */
 export interface ResumableOnboarding extends OnboardingSummary {
   /**
-   * Saved answers, keyed by step code. Absent for a step never started and for a
-   * COMPLETE one — completion clears the draft on purpose, because by then the
-   * promoted tables are the source of truth and a stale draft is a second copy
-   * of the answer that can disagree.
+   * Saved answers, keyed by step code. Absent only for steps never started.
+   * Completed steps return the submitted snapshot so the wizard can be reopened.
    */
   answers: Record<string, Record<string, unknown>>;
 }
@@ -482,29 +482,17 @@ export class OnboardingController {
    *
    * `progress.resumeAt` is where the client should land: the first required step
    * that is not COMPLETE, including one a reviewer sent back. The drafts are
-   * fetched only for the steps that can hold one — a COMPLETE step's draft was
-   * cleared, and a NOT_STARTED step never had one — so the extra reads are
-   * bounded by how far the applicant actually got.
+   * fetched for every started step, including ones already COMPLETE, so a rail
+   * link back to an earlier step reopens what was submitted.
    */
   @Get('steps')
   async steps(@CurrentUser() user: Principal): Promise<ResumableOnboarding> {
     const orgId = ownOrgId(user);
     const summary = await this.kyc.getOnboarding(orgId);
 
-    const inFlight = summary.progress.steps.filter(
-      (s) => s.status !== 'NOT_STARTED' && s.status !== 'COMPLETE',
-    );
-    const drafts = await Promise.all(
-      inFlight.map(
-        async (s) => [s.stepCode, await this.kyc.getStepDraft(orgId, s.stepCode)] as const,
-      ),
-    );
-
     return {
       ...summary,
-      answers: Object.fromEntries(
-        drafts.filter((d): d is [string, Record<string, unknown>] => d[1] !== null),
-      ),
+      answers: await this.kyc.getResumableAnswers(orgId, user.userId),
     };
   }
 
@@ -523,8 +511,9 @@ export class OnboardingController {
    * Mark a step done.
    *
    * `completeStep` takes a *promotion* — the writes that move the draft into the
-   * tables that own it — and clears `draft_json` afterwards, on the principle
-   * that the promoted tables then become the single source of truth. That
+   * tables that own it — and keeps `draft_json` as a read-only wizard snapshot.
+   * The promoted tables are what downstream code reads; the draft is for resume
+   * and review. That
    * promotion is `StepPromotionService`, and it is one line here on purpose: the
    * whole point of the seam is that the answers are written by the modules that
    * own the destination tables, not by a controller that knows all of them.
@@ -859,6 +848,7 @@ export class OnboardingLeadController {
     private readonly limiter: RateLimiter,
     private readonly ctx: RequestContextService,
     private readonly documents: DocumentService,
+    private readonly pincodes: PincodeLookupService,
   ) {}
 
   /**
@@ -901,6 +891,21 @@ export class OnboardingLeadController {
   @Public()
   documentTypes(): Promise<DocumentTypeRuleView[]> {
     return this.documents.types();
+  }
+
+  /**
+   * India Post areas for a pincode — city choices and the state it sits in.
+   *
+   * Public for the same reason as `documents/types`: the address steps need it
+   * while the applicant is still filling the form, and nothing here is
+   * org-specific. The raw provider payload never leaves the server.
+   */
+  @Get('pincodes/:pincode')
+  @Public()
+  lookupPincode(
+    @Param('pincode', new ZodValidationPipe(pincodeSchema)) pincode: string,
+  ): Promise<PincodeLookupView> {
+    return this.pincodes.resolve(pincode);
   }
 
   @Post('leads')

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { buyerOrderStatusLabel, deliverySiteLabel } from '@trugrade/contracts';
 import { ClockPort } from '../../../shared/clock';
 import { RequestContextService } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
@@ -141,15 +142,6 @@ interface OrderListRow {
   placed_at: Date;
   shipping_address_id: string;
 }
-
-/** Words a buyer reads, for the machine words the enum stores. */
-const STATUS_LABEL: Record<string, string> = {
-  CREATED: 'Not yet placed',
-  AWAITING_APPROVAL: 'Awaiting approval',
-  PAYMENT_PENDING: 'Placed · payment pending',
-  CONFIRMED: 'Confirmed',
-  CANCELLED: 'Cancelled',
-};
 
 const HOUR = 3_600_000;
 
@@ -500,7 +492,7 @@ export class OrderListService {
        ORDER BY o.status`;
     return rows.map((r) => ({
       value: r.value,
-      label: STATUS_LABEL[r.value] ?? r.value.replace(/_/g, ' ').toLowerCase(),
+      label: buyerOrderStatusLabel(r.value),
       count: r.count,
     }));
   }
@@ -533,7 +525,9 @@ export class OrderListService {
         const address = labels.get(r.value);
         return {
           value: r.value,
-          label: address ? (address.label ?? address.city) : 'Site no longer on your account',
+          label: address
+            ? deliverySiteLabel(address.label ?? address.city)
+            : 'Site no longer on your account',
           count: r.count,
         };
       })

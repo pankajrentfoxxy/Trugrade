@@ -16,6 +16,7 @@ import {
   normaliseEmail,
   normaliseGstin,
   normaliseMobile,
+  normalisePincode,
   panFromGstin,
 } from '@trugrade/contracts';
 
@@ -31,23 +32,16 @@ import {
  * message, and a red border with no text is not an error state.
  */
 
-/** Free webmail domains. Not a blocklist — see `workEmailNote`. */
-const CONSUMER_MAILBOXES = [
-  'gmail.com',
-  'googlemail.com',
-  'yahoo.com',
-  'yahoo.in',
-  'yahoo.co.in',
-  'outlook.com',
-  'hotmail.com',
-  'live.com',
-  'rediffmail.com',
-  'protonmail.com',
-  'proton.me',
-  'icloud.com',
-  'aol.com',
-  'zoho.com',
-];
+/** Character set allowed while typing — mirrors `FULL_NAME.pattern`. */
+const FULL_NAME_CHAR = /[\p{L} .'-]/u;
+
+/** Letters, spaces, and name punctuation only — digits and symbols stripped. */
+export function typeFullName(value: string): string {
+  return [...value]
+    .filter((ch) => FULL_NAME_CHAR.test(ch))
+    .join('')
+    .slice(0, FULL_NAME.max ?? 100);
+}
 
 export function validateFullName(value: string): string | undefined {
   const trimmed = value.trim();
@@ -72,48 +66,45 @@ export function validateEmail(value: string): string | undefined {
   return undefined;
 }
 
-/**
- * Not an error, and deliberately not a refusal.
- *
- * VR-032b refuses *temporary* mailboxes and is enforced server-side; a free
- * mailbox at a real provider is a different thing and plenty of small Indian
- * traders genuinely run on one. Blocking it here would invent an enforcement
- * that does not exist and lock out real buyers, so this says what the address
- * costs them and lets them decide.
- */
-export function workEmailNote(value: string): string | undefined {
-  const normalised = normaliseEmail(value.trim());
-  if (!normalised) return undefined;
-  const domain = normalised.slice(normalised.lastIndexOf('@') + 1);
-  if (!CONSUMER_MAILBOXES.includes(domain)) return undefined;
-  return (
-    `${domain} is a personal mailbox, and we can accept it. A company-domain address is ` +
-    'verified faster and survives the person who opened the account leaving.'
-  );
-}
-
 /** Shown in every empty mobile field so the country code is already there. */
 export const MOBILE_PREFIX = '+91 ';
 
-/** Empty, or only the country code — not a number yet. */
-export function isMobileBlank(value: string): boolean {
-  const compact = value.replace(/[\s-]/g, '');
-  return compact === '' || compact === '+' || compact === '91' || compact === '+91';
+/** The ten subscriber digits after +91 — letters and punctuation stripped, capped at 10. */
+export function mobileSubscriberDigits(value: string): string {
+  let digits = value.replace(/[^\d]/g, '');
+  digits = digits.replace(/^0+/, '');
+  if (digits.startsWith('91')) {
+    digits = digits.slice(2);
+  }
+  return digits.slice(0, 10);
 }
 
-/** Keep `+91` in the box when the field is empty or the prefix is deleted. */
+/** Empty, or only the country code — not a number yet. */
+export function isMobileBlank(value: string): boolean {
+  return mobileSubscriberDigits(value).length === 0;
+}
+
+/** Digits only, +91 prefix kept, never more than ten subscriber digits. */
 export function typeMobile(value: string): string {
-  return isMobileBlank(value) ? MOBILE_PREFIX : value;
+  const sub = mobileSubscriberDigits(value);
+  return sub.length === 0 ? MOBILE_PREFIX : `${MOBILE_PREFIX}${sub}`;
 }
 
 export function validateMobile(value: string): string | undefined {
   if (isMobileBlank(value)) return 'Enter the mobile number that receives the delivery updates.';
-  return normaliseMobile(value.trim()) ? undefined : MOBILE_E164.message;
+  const sub = mobileSubscriberDigits(value);
+  if (sub.length < 10) {
+    return `Enter all 10 digits — ${sub.length} so far. Numbers start with 6, 7, 8, or 9.`;
+  }
+  if (!/^[6-9]\d{9}$/.test(sub)) return MOBILE_E164.message;
+  return undefined;
 }
 
 /** `+919876543210`, the only form the server stores. Empty when it is not one yet. */
-export const toE164 = (value: string): string =>
-  isMobileBlank(value) ? '' : (normaliseMobile(value.trim()) ?? '');
+export const toE164 = (value: string): string => {
+  const sub = mobileSubscriberDigits(value);
+  return sub.length === 10 && /^[6-9]\d{9}$/.test(sub) ? `+91${sub}` : '';
+};
 
 /* ==========================================================================
  * Password — a meter that measures rather than decorates
@@ -411,7 +402,7 @@ export function validateCity(value: string): string | undefined {
 export function validatePincode(value: string): string | undefined {
   const trimmed = value.trim();
   if (trimmed.length === 0) return 'Enter the 6-digit PIN code. It decides the delivery route.';
-  return PINCODE.pattern?.test(trimmed) ? undefined : PINCODE.message;
+  return normalisePincode(trimmed) ? undefined : PINCODE.message;
 }
 
 /**
@@ -464,6 +455,35 @@ export const receivingHoursLabel = (
 /* ==========================================================================
  * Counts — capacity, lead time, testing stations
  * ======================================================================== */
+
+const DIGIT_NAV_KEYS = new Set([
+  'Backspace',
+  'Delete',
+  'Tab',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+]);
+
+/** Strip everything that is not 0–9. Used on change and paste. */
+export function typeDigitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+/** Block letter keys at source; paste still goes through `typeDigitsOnly` on change. */
+export function blockNonDigitKey(e: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  preventDefault: () => void;
+}): void {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (DIGIT_NAV_KEYS.has(e.key)) return;
+  if (/^\d$/.test(e.key)) return;
+  e.preventDefault();
+}
 
 /**
  * A whole number, with the reason it is bounded in the message.

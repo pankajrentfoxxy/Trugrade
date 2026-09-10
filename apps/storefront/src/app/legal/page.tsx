@@ -9,7 +9,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
+import { BRAND, formatRegisteredOffice, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { getGrades, getLegalTerms } from '../../lib/api';
 import { CategoryStrip } from '../CategoryStrip';
 import { buildDocuments } from './documents';
@@ -85,6 +85,8 @@ export default async function LegalIndexPage(): Promise<React.JSX.Element> {
             </dd>
             <dt className="text-body-sm text-ink-3">GSTIN</dt>
             <dd className="tnum text-body text-ink">{LEGAL_DISCLOSURE.gstin}</dd>
+            <dt className="text-body-sm text-ink-3">Registered office</dt>
+            <dd className="tnum text-body text-ink-2">{formatRegisteredOffice()}</dd>
             <dt className="text-body-sm text-ink-3">Grievance officer</dt>
             <dd className="text-body text-ink-2">
               <Link

@@ -310,17 +310,17 @@ function BankOutcome({
 
 export interface StepDocumentsBankProps {
   answers: Record<string, unknown>;
-  /** The legal name the penny-drop is scored against, carried from step 2. */
+  /** The legal name the penny-drop is scored against, carried from Business. */
   legalName: string;
   /** `onboarding_field_requirement` for this step. Today: `board_resolution`. */
   fields?: readonly FieldRequirement[];
   /**
-   * The org's constitution, or step 2's answer where the org has none.
+   * The org's constitution, or the Business step's answer where the org has none.
    *
    * The seed gates `board_resolution` to PVT_LTD and LTD, and the gate reads
    * `organization.constitution` — which no step promotion has ever written, so
    * it is null and the rule comes back optional for a company that plainly needs
-   * one. Where the applicant has told us on step 2, that answer is used.
+   * one. Where the applicant has told us on Business, that answer is used.
    */
   constitution?: string | null;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;

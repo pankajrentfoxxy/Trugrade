@@ -339,6 +339,8 @@ export interface UploadedFile {
   progressPct?: number;
   /** The actual reason, not "invalid file" (§5.2). */
   rejectionReason?: string;
+  /** When true, `onView` may open what was already sent. In-flight rows stay false. */
+  viewable?: boolean;
 }
 
 const UPLOAD_TONE: Record<UploadStatus, StatusPillProps['tone']> = {
@@ -387,6 +389,8 @@ export interface UploaderProps {
   files: readonly UploadedFile[];
   onSelect: (files: File[]) => void;
   onRemove?: (id: string) => void;
+  /** Opens a file the server already holds. Shown only when `viewable` is true. */
+  onView?: (id: string) => void;
   error?: string;
   disabled?: boolean;
   required?: boolean;
@@ -413,6 +417,7 @@ export function Uploader({
   files,
   onSelect,
   onRemove,
+  onView,
   error,
   disabled,
   required,
@@ -501,6 +506,16 @@ export function Uploader({
 
               <span className="flex items-center gap-3">
                 <StatusPill tone={UPLOAD_TONE[file.status]} label={UPLOAD_LABEL[file.status]} />
+                {onView && file.viewable && file.status !== 'uploading' && (
+                  <button
+                    type="button"
+                    onClick={() => onView(file.id)}
+                    aria-label={`View ${file.name}`}
+                    className="min-h-11 min-w-11 text-body-sm text-ink-2 underline underline-offset-4 hover:text-ink"
+                  >
+                    View
+                  </button>
+                )}
                 {onRemove && (
                   <button
                     type="button"

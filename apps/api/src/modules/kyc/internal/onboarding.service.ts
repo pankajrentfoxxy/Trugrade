@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { AuditService } from '../../identity';
@@ -19,9 +18,10 @@ import {
  *
  * Three design points that are easy to get wrong:
  *
- *   1. **`draft_json` holds partial form data and is cleared on COMPLETE.**
- *      Deliberately: we never write half-valid rows into `gst_profile`. A draft is
- *      a draft until it is promoted, and the promotion is the validation boundary.
+ *   1. **`draft_json` holds partial form data and is kept on COMPLETE.**
+ *      Promotion writes the validated snapshot into the tables that own it; the
+ *      draft copy stays so a completed step can be reopened in the wizard. We
+ *      never write half-valid rows into `gst_profile` — promotion is the boundary.
  *
  *   2. **`is_required` derives from org_type AND constitution.** A proprietorship
  *      skips incorporation; an LLP does not. The source document asserts this
@@ -253,24 +253,22 @@ export class OnboardingService {
       where: { org_id: orgId, step_code: stepCode },
     });
     if (!existing) throw new NotFoundError('onboarding step');
-    if (existing.status === 'COMPLETE') {
-      throw new ConflictError(
-        'This step is already complete. Use the change-request flow to alter a verified detail.',
-      );
-    }
 
     const now = this.clock.now();
+    const reopening = existing.status === 'COMPLETE';
     await this.prisma.db.onboarding_progress.update({
       where: { id: existing.id },
       data: {
         draft_json: draft as object,
         completion_pct: Math.max(0, Math.min(100, Math.round(completionPct))),
-        status: existing.status === 'NEEDS_FIX' ? 'IN_PROGRESS' : 'IN_PROGRESS',
+        // A completed step stays complete while the applicant edits before submit.
+        // NEEDS_FIX becomes in-progress once they answer the reviewer.
+        status: reopening ? 'COMPLETE' : 'IN_PROGRESS',
         first_started_at: existing.first_started_at ?? now,
         last_saved_at: now,
         // Answering the reviewer clears their note; leaving it would make the
         // applicant think the fix did not register.
-        blocking_reason: null,
+        blocking_reason: existing.status === 'NEEDS_FIX' ? null : existing.blocking_reason,
       },
     });
   }
@@ -315,15 +313,10 @@ export class OnboardingService {
           completed_at: now,
           last_saved_at: now,
           blocking_reason: null,
-          // Cleared on COMPLETE: the real tables are now the source of truth, and
-          // a stale draft is a second copy of the answer that can disagree.
-          //
-          // `Prisma.DbNull`, not `null` and not `undefined`. On a `Json?` column
-          // Prisma reads `undefined` as "leave it alone" and refuses a bare
-          // `null` outright, so the clear used to be a second statement AFTER
-          // the transaction had committed — which put the one write that
-          // destroys the answers outside the rollback that protects them.
-          draft_json: Prisma.DbNull,
+          // Kept as a read-only snapshot so a completed step can be opened again
+          // with the answers that were submitted. The promoted tables are what
+          // downstream code reads; this copy is only for the wizard and review.
+          draft_json: draft as object,
         },
       });
     });

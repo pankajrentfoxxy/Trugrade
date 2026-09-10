@@ -14,8 +14,22 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 // Also loaded by `jest.setup.ts` at runtime; imported here so `tsc --noEmit`
 // sees the matcher augmentation, which the setup file is outside `include` for.
 import '@testing-library/jest-dom';
+import { emptyPostal } from '../../register/AddressFields';
 import { StepCapability } from './StepCapability';
 import { StepFacility } from './StepFacility';
+
+jest.mock('../../register/api', () => ({
+  ...jest.requireActual<Record<string, unknown>>('../../register/api'),
+  lookupPincode: jest.fn(async (pincode: string) => ({
+    ok: true as const,
+    data: {
+      pincode,
+      stateCode: pincode.startsWith('12') ? '06' : '07',
+      stateName: pincode.startsWith('12') ? 'Haryana' : 'Delhi',
+      areas: [{ value: 'Gurugram', label: 'Gurugram' }],
+    },
+  })),
+}));
 
 const GRADES = [
   { grade: 'A_PLUS', customerDescription: 'As new.' },
@@ -47,6 +61,8 @@ function renderFacility(overrides: Partial<React.ComponentProps<typeof StepFacil
   return render(
     <StepFacility
       answers={{}}
+      registeredOffice={emptyPostal()}
+      accountHolder={{ fullName: '', email: '', mobile: '' }}
       onSaveDraft={noop}
       onContinue={accept}
       busy={false}
@@ -65,7 +81,7 @@ describe('nothing arrives ticked', () => {
     const checkboxes = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
     );
-    // Categories, sourcing channels, and in-house test/repair — all native checkboxes.
+    // Categories and sourcing channels — all native checkboxes.
     expect(checkboxes.length).toBeGreaterThan(2);
     for (const box of checkboxes) {
       expect(box).not.toBeChecked();
@@ -120,7 +136,6 @@ describe('can_dropship', () => {
     fireEvent.change(screen.getByLabelText('Grade A'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Grade B'), { target: { value: '20' } });
     fireEvent.click(screen.getByRole('checkbox', { name: /Corporate buy-back/i }));
-    fireEvent.click(screen.getByLabelText(/we can send serials with the offer/i));
     fireEvent.change(screen.getByLabelText(/Lead time, in days/), { target: { value: '2' } });
 
     // …and `can_dropship` deliberately left alone.

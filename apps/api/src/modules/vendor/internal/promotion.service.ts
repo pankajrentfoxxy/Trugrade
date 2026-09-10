@@ -65,10 +65,10 @@ const NO_DOCUMENT_HASH = 'unhashed:no-document-store';
 
 /** `vendor_facility.facility_type`, verbatim from its CHECK constraint. */
 const FACILITY_TYPES: readonly string[] = ['WAREHOUSE', 'OFFICE', 'REFURB_UNIT', 'RETAIL'];
-const VEHICLE_ACCESS: readonly string[] = ['TRUCK', 'TEMPO', 'BIKE_ONLY'];
+/** TRUCK is legacy in the DB; registration no longer offers it. */
+const VEHICLE_ACCESS: readonly string[] = ['TEMPO', 'BIKE_ONLY'];
 const SUPPLY_CATEGORIES: readonly string[] = [
   'BUSINESS_LAPTOP',
-  'WORKSTATION',
   'CONSUMER',
   'MACBOOK',
   'CHROMEBOOK',
@@ -157,16 +157,17 @@ export class VendorPromotionService {
   // -------------------------------------------------------------------------
 
   /**
-   * The three answers that must not be inferred are `can_dropship`,
-   * `can_provide_serials_upfront` and the sourcing channels.
+   * The two answers that must not be inferred are `can_dropship` and the sourcing
+   * channels. `can_dropship` is `BOOLEAN NOT NULL DEFAULT TRUE`, and TRUE is the
+   * commercially convenient answer. Under the merchant-of-record model a supplier
+   * who cannot dispatch direct is a materially different supplier — their goods
+   * have to come through a hub, which is a different cost base — so a row written
+   * from the column default would route freight on a claim nobody made. `YesNo` on
+   * the screen holds `null` until somebody presses a radio and this refuses to
+   * write the row until it has that answer.
    *
-   * The first two are `BOOLEAN NOT NULL DEFAULT TRUE`, and TRUE is the
-   * commercially convenient answer to both. Under the merchant-of-record model
-   * a supplier who cannot dispatch direct is a materially different supplier —
-   * their goods have to come through a hub, which is a different cost base — so
-   * a row written from the column default would route freight on a claim nobody
-   * made. `YesNo` on the screen holds `null` until somebody presses a radio and
-   * this refuses to write the row until it has that answer.
+   * `can_provide_serials_upfront` is no longer asked on the screen; the column
+   * default (`TRUE`) applies when the draft omits it.
    *
    * Categories the supplier removed are deactivated rather than deleted:
    * `ix_vcap_routing` is partial on `is_active`, so a deactivated row stops
@@ -186,16 +187,13 @@ export class VendorPromotionService {
     }
 
     const canDropship = bool(draft, 'canDropship');
-    const canProvideSerials = bool(draft, 'canProvideSerialsUpfront');
-    if (canDropship === null || canProvideSerials === null) {
+    if (canDropship === null) {
       throw new ValidationError(
-        'Two questions on this step have no answer yet — whether you can dispatch direct to the buyer, and whether you can give us serial numbers before dispatch. Both change how your orders are handled, so we do not assume either.',
-        {
-          canDropship: 'Answer yes or no — we will not assume it.',
-          canProvideSerialsUpfront: 'Answer yes or no — we will not assume it.',
-        },
+        'Whether you can dispatch direct to the buyer still has no answer. It changes how your orders are handled, so we do not assume it.',
+        { canDropship: 'Answer yes or no — we will not assume it.' },
       );
     }
+    const canProvideSerials = bool(draft, 'canProvideSerialsUpfront') ?? true;
 
     const channels = strings(draft, 'sourcingChannels');
     if (channels.length === 0) {
@@ -553,7 +551,7 @@ export class VendorPromotionService {
       const vehicleAccess = str(raw, 'vehicleAccess');
       if (!VEHICLE_ACCESS.includes(vehicleAccess)) {
         throw new ValidationError(
-          `Tell us the largest vehicle that can reach the door at ${label}. We send a 19-foot truck down lanes it cannot reverse out of otherwise.`,
+          `Tell us the largest vehicle that can reach the door at ${label}. We send a vehicle down lanes it cannot reverse out of otherwise.`,
           { vehicleAccess: 'Choose the largest vehicle that can reach the loading point.' },
         );
       }

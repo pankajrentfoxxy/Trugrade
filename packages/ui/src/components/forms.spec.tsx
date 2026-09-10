@@ -12,7 +12,7 @@
 import * as React from 'react';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { Checkbox, Chip, OtpInput, SelectTile, Uploader, formatFileSize, type UploadedFile } from './forms';
@@ -224,6 +224,30 @@ describe('Uploader', () => {
     );
     // A vendor with six documents in flight must not have to remember which failed.
     expect(screen.getByRole('button', { name: 'Remove udyam.pdf' })).toBeInTheDocument();
+  });
+
+  it('offers View on a file the server already holds', () => {
+    const onView = jest.fn();
+    render(
+      <Uploader
+        label="GST registration certificate"
+        accept="application/pdf"
+        maxSizeMb={10}
+        files={[
+          {
+            id: 'doc-1',
+            name: 'gst-cert.pdf',
+            sizeBytes: 384_512,
+            status: 'pending-review',
+            viewable: true,
+          },
+        ]}
+        onSelect={() => {}}
+        onView={onView}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'View gst-cert.pdf' }));
+    expect(onView).toHaveBeenCalledWith('doc-1');
   });
 
   it('hands the caller real File objects', async () => {

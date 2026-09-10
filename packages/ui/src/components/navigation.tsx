@@ -185,6 +185,12 @@ export interface Step {
   /** Completed steps are links back. An upcoming step has nowhere to go yet. */
   href?: string;
   /**
+   * When set on a completed step, the rail navigates in-place instead of following
+   * `href`. Use this in a client router so the flow can reload answers before
+   * remounting the step form.
+   */
+  onNavigate?: (key: string) => void;
+  /**
    * What a completed step established — two or three facts, PII masked
    * (`+91 98••• ••210`). 03_UX_SPEC.md §2.2.
    */
@@ -276,7 +282,16 @@ export function Stepper({
 
           return (
             <li key={step.key} className="flex flex-col gap-1">
-              {step.status === 'complete' && step.href ? (
+              {step.status === 'complete' && step.onNavigate ? (
+                <button
+                  type="button"
+                  onClick={() => step.onNavigate!(step.key)}
+                  className={cn(rowClass, 'cursor-pointer text-left underline underline-offset-4')}
+                  aria-describedby={blockerId}
+                >
+                  {body}
+                </button>
+              ) : step.status === 'complete' && step.href ? (
                 <a
                   href={step.href}
                   className={cn(rowClass, 'underline underline-offset-4')}
