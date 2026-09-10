@@ -113,14 +113,17 @@ export class PostalPincodeLookup extends PincodeLookupPort {
   }
 }
 
-function areaLabel(office: RawPostOffice): string | null {
+/** Prefer the post-office name — what India Post lists for this pincode. */
+export function areaLabel(office: RawPostOffice): string | null {
+  const name = office.Name?.trim();
+  if (name) return name;
   const block = office.Block?.trim();
   if (block && block.toUpperCase() !== 'NA') return block;
   const district = office.District?.trim();
   return district && district.length > 0 ? district : null;
 }
 
-function dedupeAreas(offices: RawPostOffice[]): PincodeArea[] {
+export function dedupeAreas(offices: RawPostOffice[]): PincodeArea[] {
   const seen = new Set<string>();
   const areas: PincodeArea[] = [];
   for (const office of offices) {

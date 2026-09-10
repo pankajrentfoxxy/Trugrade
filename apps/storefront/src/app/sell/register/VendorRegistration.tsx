@@ -85,24 +85,6 @@ const VENDOR_STATUTORY_COPY: StatutoryCopy = {
 
 const WHY_VENDOR_STATUTORY: readonly WhyRailItem[] = [
   {
-    term: 'Primary GSTIN',
-    explanation: (
-      <>
-        <span className="block">
-          If you hold more than one registration, the primary one is the entity we buy from. It
-          decides three things at once: whose name and address appear on our purchase order,
-          whether the purchase is IGST or CGST plus SGST, and which of your registrations the
-          payment and the TDS certificate land against.
-        </span>
-        <span className="mt-2 block">
-          Pick the registration that actually holds the stock. A purchase order raised against a
-          registration that never dispatched anything is an e-way bill that does not match the
-          invoice behind it, and correcting that means a credit note on both sides.
-        </span>
-      </>
-    ),
-  },
-  {
     term: 'PAN',
     explanation:
       'Characters 3 to 12 of a GSTIN are the PAN it was issued against, so the two have to agree. We check the pair before we ask the portal anything — a mismatch there is almost always a GSTIN copied from a sister company.',
@@ -116,27 +98,9 @@ const WHY_VENDOR_STATUTORY: readonly WhyRailItem[] = [
 
 const WHY_CAPABILITY: readonly WhyRailItem[] = [
   {
-    term: 'Dispatching direct',
-    explanation: (
-      <>
-        <span className="block">
-          We are the seller on the invoice, but we never hold your stock. When a customer orders a
-          machine we buy that exact serial from you and sell it on our own invoice, and the machine
-          travels from your dock to theirs — it never comes to us.
-        </span>
-        <span className="mt-2 block">
-          So whether you can dispatch to a third party is not a detail. A supplier who cannot is a
-          materially different supplier: we would have to take the goods in first, which is a
-          different cost base and a different legal posture. Answer it either way — a “no” is a real
-          answer that changes what happens next, not a failure.
-        </span>
-      </>
-    ),
-  },
-  {
     term: 'Grade mix',
     explanation:
-      'A+, A and B are all sellable — the grade is a position on a scale, not a verdict. What the mix tells us is which buyers to put you in front of: a fleet refresh wants A+ and a training lab wants B. It has to add to 100% of what you move in a month, because the part that does not add up is stock nobody has described.',
+      'A+, A and B are all sellable — the grade is a position on a scale, not a verdict. What the mix tells us is which buyers to put you in front of: a fleet refresh wants A+ and a training lab wants B. It has to add to 100%, because the part that does not add up is stock nobody has described.',
   },
 ];
 
@@ -188,8 +152,14 @@ const signatoryFor = (ctx: StepContext): string => {
   );
 };
 
-/** Step 2's legal name, then nothing. */
-const legalNameFor = (ctx: StepContext): string =>
+/** Step 1 account holder — statutory is step 2, before business profile. */
+const accountNameFor = (ctx: StepContext): string => {
+  if (ctx.accountHolder.fullName) return ctx.accountHolder.fullName;
+  const account = ctx.allAnswers.ACCOUNT ?? {};
+  return typeof account.fullName === 'string' ? account.fullName : '';
+};
+
+const businessLegalNameFor = (ctx: StepContext): string =>
   typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
     ? (ctx.allAnswers.BUSINESS_PROFILE.legalName as string)
     : '';
@@ -259,7 +229,7 @@ export function VendorRegistration({
       STATUTORY: (ctx) => (
         <StepStatutory
           answers={ctx.answers}
-          fallbackLegalName={legalNameFor(ctx)}
+          fallbackLegalName={accountNameFor(ctx)}
           constitution={ctx.constitution}
           // The seeded rules first, in the order the API returns them, then the
           // one the API has no row for.
@@ -268,6 +238,7 @@ export function VendorRegistration({
             TAN_FIELD,
           ]}
           copy={VENDOR_STATUTORY_COPY}
+          selectPrimaryGstin={false}
           busy={ctx.busy}
           blockingReason={ctx.step?.blockingReason}
           onSaveDraft={ctx.saveDraft}
@@ -307,9 +278,7 @@ export function VendorRegistration({
           answers={ctx.answers}
           // The penny-drop is scored against this. Step 2's legal name is what
           // the bank has to agree with, not the trading name from step 1.
-          legalName={legalNameFor(ctx)}
-          fields={ctx.step?.fields ?? []}
-          constitution={ctx.constitution}
+          legalName={businessLegalNameFor(ctx)}
           busy={ctx.busy}
           blockingReason={ctx.step?.blockingReason}
           onSaveDraft={ctx.saveDraft}

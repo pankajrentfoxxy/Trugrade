@@ -18,7 +18,6 @@ import {
   PAYOUT_CYCLES,
   PRICING_MODES,
   SOURCING_CHANNELS,
-  STAFF_BANDS,
   SUPPLY_CATEGORIES,
   VENDOR_AGREEMENTS,
   VENDOR_CATEGORIES,
@@ -95,7 +94,6 @@ const businessRows = (a: Record<string, unknown>): Row[] => [
   { label: 'Incorporated', value: str(a, 'incorporationDate'), mono: true },
   // `category` — the key `StepVendorBusiness` actually writes.
   { label: 'What you are', value: labelOrBlank(VENDOR_CATEGORIES, str(a, 'category')), required: true },
-  { label: 'People', value: labelOrBlank(STAFF_BANDS, str(a, 'staffBand')) },
 ];
 
 interface SavedGstin {
@@ -132,20 +130,16 @@ const capabilityRows = (a: Record<string, unknown>): Row[] => {
   const mixed = Object.entries(mix)
     .filter(([, pct]) => Number(pct) > 0)
     .map(([grade, pct]) => `${grade.replace('_PLUS', '+')} ${String(pct)}%`);
-  // `monthlyCapacity` — the key `StepCapability` actually writes.
-  const monthly = str(a, 'monthlyCapacity');
   return [
-    { label: 'Laptops a month', value: monthly, required: true, mono: true },
     {
       label: 'Grade mix',
       // Every percentage carries its denominator.
-      value: mixed.length > 0 && monthly ? `${mixed.join(' · ')} of ${monthly} units` : '',
+      value: mixed.length > 0 ? `${mixed.join(' · ')} of 100%` : '',
       required: true,
     },
     {
       label: 'Categories',
       value: labelled(SUPPLY_CATEGORIES, list(a, 'categories')),
-      required: true,
     },
     {
       label: 'Brands',
@@ -157,29 +151,10 @@ const capabilityRows = (a: Record<string, unknown>): Row[] => {
     {
       label: 'Sourced from',
       value: labelled(SOURCING_CHANNELS, list(a, 'sourcingChannels')),
-      required: true,
-    },
-    {
-      label: 'Dispatches direct',
-      value:
-        a.canDropship === true
-          ? 'Yes — ships to the buyer on our invoice'
-          : a.canDropship === false
-            ? 'No — we would have to take the goods in first'
-            : '',
-      required: true,
-    },
-    {
-      label: 'Typical price',
-      value:
-        str(a, 'priceBandMin') && str(a, 'priceBandMax')
-          ? `Rs ${Number(str(a, 'priceBandMin')).toLocaleString('en-IN')} to Rs ${Number(str(a, 'priceBandMax')).toLocaleString('en-IN')}`
-          : '',
-      mono: true,
     },
     {
       label: 'Lead time',
-      value: str(a, 'leadTimeDays') ? `${str(a, 'leadTimeDays')} days` : '',
+      value: str(a, 'leadTimeDays') ? `${str(a, 'leadTimeDays')} hr` : '',
       mono: true,
     },
   ];
@@ -253,7 +228,6 @@ const bankRows = (a: Record<string, unknown>): Row[] => {
 const agreementRows = (a: Record<string, unknown>): Row[] => {
   const accepted = (a.accepted ?? {}) as Record<string, unknown>;
   const count = VENDOR_AGREEMENTS.filter((g) => accepted[g.code] === true).length;
-  const threshold = str(a, 'payoutThreshold');
   return [
     {
       label: 'Agreements',
@@ -291,12 +265,6 @@ const agreementRows = (a: Record<string, unknown>): Row[] => {
         str(a, 'payoutCycle'),
       ),
       required: true,
-    },
-    {
-      label: 'Minimum payout',
-      value: threshold ? `Rs ${Number(threshold).toLocaleString('en-IN')}` : '',
-      required: true,
-      mono: true,
     },
     {
       label: 'Purchase invoice',
@@ -416,7 +384,7 @@ const OUTCOME: Record<string, StatusCopy> = {
   },
   UNDER_REVIEW: {
     title: 'A reviewer is looking at your application',
-    body: 'Someone has picked it up. They check your registrations against the certificates you sent, and the payout account against the cancelled cheque. If anything is missing it appears on this page and in your inbox.',
+    body: 'Someone has picked it up. They check your registrations against the certificates you sent, and the payout account against the name the bank returned. If anything is missing it appears on this page and in your inbox.',
     tone: 'info',
   },
   INFO_REQUESTED: {

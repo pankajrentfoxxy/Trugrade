@@ -29,6 +29,7 @@ import {
 } from './api';
 import { MfaGate } from './MfaGate';
 import type { AccountValues } from './StepAccount';
+import { constitutionFromVerifiedGst } from './gst-company-prefill';
 
 /**
  * Registration — **archetype D, flow**: the step rail on the left, one step in
@@ -116,6 +117,24 @@ function onboardingCompletionPct(steps: readonly StepProgress[]): number {
     required.reduce((sum, s) => sum + (s.status === 'COMPLETE' ? 100 : s.completionPct), 0) /
       required.length,
   );
+}
+
+/** Step 1's draft is cleared on complete — merge session with saved ACCOUNT answers. */
+function mergeAccountHolder(
+  session: AccountHolderDetails,
+  allAnswers: Record<string, Record<string, unknown>>,
+): AccountHolderDetails {
+  const account = allAnswers.ACCOUNT ?? {};
+  const fromAccount = {
+    fullName: typeof account.fullName === 'string' ? account.fullName : '',
+    email: typeof account.email === 'string' ? account.email : '',
+    mobile: typeof account.mobile === 'string' ? account.mobile : '',
+  };
+  return {
+    fullName: session.fullName || fromAccount.fullName,
+    email: session.email || fromAccount.email,
+    mobile: session.mobile || fromAccount.mobile,
+  };
 }
 
 /**
@@ -343,6 +362,7 @@ export function RegisterFlow({
       // **Merged, not replaced.** A completed step's snapshot lives server-side;
       // dropping a step here would empty the review screen one completion at a time.
       setAnswers((held) => ({ ...held, ...data.answers }));
+      setAccountHolder((prev) => mergeAccountHolder(prev, data.answers));
       setConstitution(loaded.constitution ?? null);
       setOrgStatus(data.status);
       setSlaDueAt(data.slaDueAt);
@@ -350,7 +370,14 @@ export function RegisterFlow({
       setDecision(data.decision);
       setIsSubmittable(loaded.isSubmittable);
       const wanted = landOn ?? loaded.resumeAt ?? loaded.steps[0]?.stepCode;
-      if (wanted) setCurrentCode(wanted);
+      if (wanted) {
+        setCurrentCode(wanted);
+        if (landOn) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('step', wanted);
+          window.history.replaceState(null, '', url);
+        }
+      }
       // ISO strings sort chronologically, so the newest save is the last one.
       const saves = loaded.steps.map((s) => s.lastSavedAt).filter((v): v is string => Boolean(v));
       setSavedAt([...saves].sort().pop() ?? null);
@@ -450,6 +477,7 @@ export function RegisterFlow({
         registered &&
         (target?.status === 'COMPLETE' || target?.status === 'NEEDS_FIX')
       ) {
+        setCurrentCode(code);
         void reload(code);
         return;
       }
@@ -635,6 +663,18 @@ export function RegisterFlow({
     }
     setSaveFailure(null);
     setAnswers((a) => ({ ...a, [stepCode]: values }));
+    setSteps((prev) =>
+      prev.map((s) =>
+        s.stepCode === stepCode
+          ? {
+              ...s,
+              status: s.status === 'NOT_STARTED' ? 'IN_PROGRESS' : s.status,
+              completionPct,
+              lastSavedAt: new Date().toISOString(),
+            }
+          : s,
+      ),
+    );
     setSavedAt(new Date().toISOString());
     return true;
   };
@@ -665,10 +705,14 @@ export function RegisterFlow({
         }
         return null;
       }
-      await reload();
-      // After the last step there is no next one — the review screen is where
-      // the flow goes, and it is a place in this client rather than a step.
-      goTo(nextCode);
+      setSteps((prev) =>
+        prev.map((s) =>
+          s.stepCode === stepCode
+            ? { ...s, status: 'COMPLETE', completionPct: 100, lastSavedAt: new Date().toISOString() }
+            : s,
+        ),
+      );
+      await reload(nextCode);
       return null;
     } finally {
       setBusy(false);
@@ -760,17 +804,14 @@ export function RegisterFlow({
     answers: answers[currentCode] ?? {},
     allAnswers: answers,
     step: current,
-    // The org's own value when there is one. There is not, today: no module has
-    // registered a step promotion, so `organization.constitution` stays null and
-    // the server's copy is always null with it. The answer typed on step 2 is
-    // the same fact and is the only place it exists in this session — without
-    // this fallback, VR-008 ("this PAN belongs to an individual, but you told us
-    // private limited") can never fire, because the client has nothing to send.
+    // The org's own value when promoted; until then the company step draft, or
+    // the constitution the primary verified GSTIN returned on statutory.
     constitution:
       constitution ??
       (typeof answers.BUSINESS_PROFILE?.constitution === 'string'
         ? (answers.BUSINESS_PROFILE.constitution as string)
-        : null),
+        : null) ??
+      constitutionFromVerifiedGst(answers.STATUTORY),
     registered,
     busy,
     onFieldFocus: setActiveTerm,
@@ -778,7 +819,7 @@ export function RegisterFlow({
     continueFrom: (values, pct) => continueFrom(currentCode, values, pct),
     continueFromAccount,
     skipValidation,
-    accountHolder,
+    accountHolder: mergeAccountHolder(accountHolder, answers),
   };
 
   return (

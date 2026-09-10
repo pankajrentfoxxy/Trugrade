@@ -220,5 +220,6 @@ describe('CIN, Udyam and TAN', () => {
     expect(screen.queryByText('Captured — not verified')).not.toBeInTheDocument();
     // And the section says once, out loud, that none of it is checked.
     expect(screen.getByText('Recorded, not checked')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).toBeNull();
   });
 });

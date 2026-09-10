@@ -308,9 +308,6 @@ export const MONTHLY_VOLUMES: readonly Option[] = [
   { value: '500', label: 'More than 500 a month' },
 ];
 
-/** `identity.organization.employee_count_band`, same column as the buyer's. */
-export const STAFF_BANDS = EMPLOYEE_BANDS;
-
 /* ==========================================================================
  * Vendor registration — step 4, capability
  * ========================================================================
@@ -341,21 +338,13 @@ export const SUPPLY_CATEGORIES = [
   { code: 'CHROMEBOOK', label: 'Chromebook', note: 'Usually education fleets' },
 ] as const;
 
-/** `vendor_capability.lead_time_days` — offered as a pick list, not free typing. */
-export const LEAD_TIME_DAYS: readonly Option[] = [
+/** Hours from purchase order to the machine leaving the dock. Stored in `lead_time_days`. */
+export const LEAD_TIME_HOURS: readonly Option[] = [
   { value: '', label: 'Select lead time' },
-  { value: '0', label: 'Same day (0 days)' },
-  { value: '1', label: '1 day' },
-  { value: '2', label: '2 days' },
-  { value: '3', label: '3 days' },
-  { value: '5', label: '5 days' },
-  { value: '7', label: '7 days' },
-  { value: '10', label: '10 days' },
-  { value: '14', label: '14 days' },
-  { value: '21', label: '21 days' },
-  { value: '30', label: '30 days' },
-  { value: '45', label: '45 days' },
-  { value: '60', label: '60 days' },
+  { value: '4', label: '4 hr' },
+  { value: '8', label: '8 hr' },
+  { value: '12', label: '12 hr' },
+  { value: '24', label: '24 hr' },
 ];
 
 /**
@@ -462,18 +451,14 @@ export const WEEK_DAYS = [
  * ======================================================================== */
 
 /**
- * The nine documents a supplier is asked for, and why each one is wanted.
+ * The seven documents a supplier is asked for, and why each one is wanted.
  *
  * Same report as `BUYER_DOCUMENTS`: `document_type_rule` has no `org_type` and
  * no `step_code`, so all fourteen rows apply to everyone and nothing in the API
- * can say which nine a *vendor* is asked for. The codes are here; every rule
+ * can say which seven a *vendor* is asked for. The codes are here; every rule
  * about each of them — the label, the size cap, the accepted types, how many we
  * take, whether it goes stale — comes from `GET /onboarding/documents/types`.
  *
- * `BOARD_RESOLUTION` is marked required here as the default for the two
- * constitutions that need one, and step 6 overrides it from the seeded
- * `onboarding_field_requirement` row for `board_resolution` whenever the server
- * returns one.
  */
 export const VENDOR_DOCUMENTS = [
   {
@@ -487,13 +472,9 @@ export const VENDOR_DOCUMENTS = [
     purpose: 'Entity PAN for TDS on payouts.',
   },
   {
-    docType: 'CANCELLED_CHEQUE',
-    required: true,
-    purpose: 'Must match the account below.',
-  },
-  {
     docType: 'ADDRESS_PROOF',
-    required: true,
+    required: false,
+    dateRequired: false,
     purpose: 'Registered office — utility bill, rent agreement or property tax.',
   },
   {
@@ -503,13 +484,8 @@ export const VENDOR_DOCUMENTS = [
   },
   {
     docType: 'SIGNATORY_ID',
-    required: true,
+    required: false,
     purpose: 'Photo ID of the authorised signatory.',
-  },
-  {
-    docType: 'BOARD_RESOLUTION',
-    required: true,
-    purpose: 'Authorising the signatory to contract.',
   },
   {
     docType: 'CPCB_EWASTE',
@@ -589,16 +565,6 @@ export const PAYOUT_CYCLES = [
 
 /** The cycle every supplier starts on, whatever they request. */
 export const CYCLE_UNTIL_EARNED = 'WEEKLY';
-
-/**
- * `platform_config.procurement.min_payout_threshold_inr`, in rupees.
- *
- * A constant here because no route exposes `platform_config` to a browser. It is
- * the floor a vendor’s own threshold may not go below — under it the balance
- * rolls forward, because nobody wants a Rs 400 NEFT. Reported: it belongs behind
- * a public config endpoint beside the option lists above.
- */
-export const MIN_PAYOUT_THRESHOLD_INR = 1000;
 
 /**
  * The four documents step 7 asks a supplier to accept.

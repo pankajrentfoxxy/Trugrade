@@ -224,8 +224,6 @@ const VENDOR_BUSINESS = {
   constitution: 'PVT_LTD',
   incorporationDate: '2019-06-11',
   category: 'REFURBISHER',
-  website: 'https://alphasystems.in',
-  staffBand: '51_200',
   registered: postal(),
   operating: postal({ line1: 'Shed 7, Sector 37', pincode: '122004' }),
   operatingSameAsRegistered: false,
@@ -236,16 +234,12 @@ const CAPABILITY = {
   categories: ['BUSINESS_LAPTOP', 'CONSUMER'],
   brands: ['Lenovo', 'Dell'],
   otherBrands: '',
-  monthlyCapacity: '300',
   gradeMix: { A_PLUS: '20', A: '50', B: '30' },
-  priceBandMin: '14000',
-  priceBandMax: '46000',
   sourcingChannels: ['CORPORATE_BUYBACK', 'ITAD_CONTRACT'],
   canProvideSerialsUpfront: true,
   hasInhouseTesting: true,
   hasInhouseRepair: false,
-  leadTimeDays: '3',
-  canDropship: false,
+  leadTimeDays: '24',
 };
 
 /** Exactly the keys `StepFacility.toDraft` writes. */
@@ -315,8 +309,6 @@ describe('BUSINESS_PROFILE promotes into organization and vendor_profile', () =>
     expect(org.constitution).toBe('PVT_LTD');
     expect(org.legal_name).toBe('Alpha Systems Private Limited');
     expect(org.trade_name).toBe('Alpha Systems');
-    expect(org.website).toBe('https://alphasystems.in');
-    expect(org.employee_count_band).toBe('51_200');
 
     const profile = await raw.vendor_profile.findUniqueOrThrow({ where: { org_id: who.orgId } });
     expect(profile.business_category).toBe('REFURBISHER');
@@ -385,22 +377,6 @@ describe('the three rules that read organization.constitution stop being inert',
       (s) => s.stepCode === 'STATUTORY',
     )!.fields;
     expect(fields.map((f) => f.fieldCode)).not.toContain('cin');
-  });
-
-  it('gates the board resolution on the promoted constitution', async () => {
-    const who = await register();
-
-    const before = (await onboarding.getProgress(who.orgId)).steps
-      .find((s) => s.stepCode === 'DOCUMENTS_BANK')!
-      .fields.find((f) => f.fieldCode === 'board_resolution');
-    expect(before!.required).toBe(false);
-
-    await completeStep(who, 'BUSINESS_PROFILE', VENDOR_BUSINESS);
-
-    const after = (await onboarding.getProgress(who.orgId)).steps
-      .find((s) => s.stepCode === 'DOCUMENTS_BANK')!
-      .fields.find((f) => f.fieldCode === 'board_resolution');
-    expect(after!.required).toBe(true);
   });
 
   it('fires VR-008 against the promoted constitution, with no entity type from the client', async () => {
@@ -557,23 +533,12 @@ describe('CAPABILITY promotes into vendor_capability', () => {
       orderBy: { category: 'asc' },
     });
     expect(rows.map((r) => r.category)).toEqual(['BUSINESS_LAPTOP', 'CONSUMER']);
-    expect(rows[0]!.monthly_capacity_units).toBe(300);
-    expect(rows[0]!.lead_time_days).toBe(3);
+    expect(rows[0]!.lead_time_days).toBe(24);
     expect(rows[0]!.sourcing_channels).toEqual(['CORPORATE_BUYBACK', 'ITAD_CONTRACT']);
     expect(rows[0]!.typical_grade_mix).toEqual({ A_PLUS: 20, A: 50, B: 30 });
-    expect(Number(rows[0]!.avg_price_band_min)).toBe(14000);
     expect(rows[0]!.has_inhouse_testing).toBe(true);
     expect(rows[0]!.has_inhouse_repair).toBe(false);
-    // The column defaults TRUE. A supplier who said no must read as no.
-    expect(rows[0]!.can_dropship).toBe(false);
-  });
-
-  it('refuses to invent can_dropship whose column default is the convenient one', async () => {
-    const who = await register();
-    await expect(
-      completeStep(who, 'CAPABILITY', { ...CAPABILITY, canDropship: null }),
-    ).rejects.toThrow(/we do not assume it/i);
-    expect(await raw.vendor_capability.count({ where: { org_id: who.orgId } })).toBe(0);
+    expect(rows[0]!.can_dropship).toBe(true);
   });
 
   it('stops routing enquiries for a category the supplier removed', async () => {
@@ -745,7 +710,6 @@ describe('AGREEMENT promotes into agreement_acceptance and vendor_payout_prefere
     pricingMode: 'COMMISSION',
     commissionRate: '8.5',
     payoutCycle: 'T_PLUS_2',
-    payoutThreshold: '2500',
     invoiceUploadRequired: true,
     channels: ['EMAIL', 'WHATSAPP'],
     language: 'EN',
@@ -776,7 +740,7 @@ describe('AGREEMENT promotes into agreement_acceptance and vendor_payout_prefere
       where: { org_id: who.orgId },
     });
     expect(payout.pricing_mode).toBe('COMMISSION');
-    expect(Number(payout.min_payout_threshold)).toBe(2500);
+    expect(Number(payout.min_payout_threshold)).toBe(1000);
     expect(payout.invoice_upload_required).toBe(true);
     // The cycle is a REQUEST. What they are actually paid on is unchanged.
     expect(payout.preferred_cycle).toBe('T_PLUS_2');
@@ -936,16 +900,15 @@ describe("a completed step's answers are readable afterwards", () => {
       where: { org_id: who.orgId, step_code: 'CAPABILITY' },
     });
     expect(step.status).toBe('COMPLETE');
-    expect(step.draft_json).toMatchObject({ canDropship: false });
+    expect(step.draft_json).toMatchObject({ leadTimeDays: '24' });
 
     const answers = await kyc.getResumableAnswers(who.orgId, who.userId);
     expect(answers.BUSINESS_PROFILE).toMatchObject({ legalName: VENDOR_BUSINESS.legalName });
-    expect(answers.CAPABILITY).toMatchObject({ canDropship: false, monthlyCapacity: '300' });
+    expect(answers.CAPABILITY).toMatchObject({ leadTimeDays: '24' });
 
     const summary = await kyc.getOnboarding(who.orgId);
     expect(summary.progress.constitution).toBe('PVT_LTD');
     const capability = await raw.vendor_capability.findMany({ where: { org_id: who.orgId } });
     expect(capability).toHaveLength(2);
-    expect(capability[0]!.monthly_capacity_units).toBe(300);
   });
 });

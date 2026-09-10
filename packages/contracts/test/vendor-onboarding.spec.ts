@@ -35,11 +35,11 @@ describe('dispatch address', () => {
 });
 
 describe('dropship capability', () => {
-  it('is required, not defaulted — an unanswered question is not a "yes"', () => {
-    expect(dropshipCapability.safeParse({}).success).toBe(false);
+  it('parses when the question is omitted', () => {
+    expect(dropshipCapability.safeParse({}).success).toBe(true);
   });
 
-  it('accepts a vendor who cannot dropship, with their constraint', () => {
+  it('still accepts an older draft that answered it', () => {
     const r = dropshipCapability.safeParse({
       canDropship: false,
       dropshipConstraint: 'No packing capability for individual units.',

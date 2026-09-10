@@ -44,18 +44,11 @@ export const dispatchAddressCapture = z
 /* -------------------------------------------------------------------------- */
 
 /**
- * Can this vendor dispatch straight to a buyer's address rather than to a hub?
- *
- * In the back-to-back model that is the *default* flow, so a vendor who cannot
- * do it is a materially different vendor — every order they win needs a hub leg,
- * which changes both the freight cost and the promise date. Required, never
- * defaulted silently, and shown in the review queue.
+ * Direct dispatch is no longer asked on the Capability step. The column
+ * default (`TRUE`) applies. This object stays so older drafts still parse.
  */
 export const dropshipCapability = z.object({
-  canDropship: z.boolean({
-    required_error:
-      'Tell us whether you can ship directly to our buyers. Most orders in this model work that way.',
-  }),
+  canDropship: z.boolean().optional(),
   /** Free text, only when they cannot. Ops reads it before deciding hub routing. */
   dropshipConstraint: z.string().max(500).optional(),
 });

@@ -27,7 +27,7 @@ import type { StepProgress, VerificationOutcomeView } from '../../register/api';
 import { ApplicationStatus } from '../../register/review-parts';
 import { StepAgreement } from './StepAgreement';
 import { StepDocumentsBank } from './StepDocumentsBank';
-import { VENDOR_AGREEMENTS } from '../../register/picklists';
+import { VENDOR_AGREEMENTS, VENDOR_DOCUMENTS } from '../../register/picklists';
 
 const noop = (): void => {};
 const accept = async (
@@ -107,6 +107,16 @@ function renderAgreement(
   );
 }
 
+describe('step 6 — the documents asked for', () => {
+  it('makes signatory ID and address proof optional, including the address-proof date, and does not ask for a board resolution or cancelled cheque', () => {
+    expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'SIGNATORY_ID')?.required).toBe(false);
+    expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'ADDRESS_PROOF')?.required).toBe(false);
+    expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'ADDRESS_PROOF')?.dateRequired).toBe(false);
+    expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'BOARD_RESOLUTION')).toBe(false);
+    expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'CANCELLED_CHEQUE')).toBe(false);
+  });
+});
+
 describe('step 7 — the agreements', () => {
   it('renders no checkbox and no radio already answered', () => {
     const { container } = renderAgreement();
@@ -129,6 +139,7 @@ describe('step 7 — the agreements', () => {
 
     // And it says so, rather than showing an empty box that reads as "no".
     expect(screen.getAllByText('Not accepted yet.')).toHaveLength(VENDOR_AGREEMENTS.length);
+    expect(screen.queryByLabelText(/Smallest amount worth paying you/)).toBeNull();
   });
 
   it('refuses to continue when the agreements have not been accepted', async () => {

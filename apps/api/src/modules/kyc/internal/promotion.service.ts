@@ -151,9 +151,8 @@ export class StepPromotionService {
         legalName: str(draft, 'legalName'),
         tradeName: str(draft, 'tradeName'),
         constitution: str(draft, 'constitution') || undefined,
-        website: str(draft, 'website'),
         yearEstablished: yearOf(draft),
-        employeeCountBand: str(draft, 'staffBand') || str(draft, 'employeeBand'),
+        employeeCountBand: str(draft, 'employeeBand'),
         annualTurnoverBand: str(draft, 'annualVolume'),
       },
       userId,
@@ -220,7 +219,14 @@ export class StepPromotionService {
    */
   private async promoteStatutory(orgId: string, draft: Draft): Promise<void> {
     const rows = objects(draft, 'gstins');
-    const primary = str(draft, 'primaryGstin');
+    let primary = str(draft, 'primaryGstin').toUpperCase();
+    if (!primary) {
+      const flagged = rows.find(
+        (row) => row.isPrimary === true && str(row, 'gstin').length === 15,
+      );
+      if (flagged) primary = str(flagged, 'gstin').toUpperCase();
+      else if (rows.length === 1 && rows[0]) primary = str(rows[0], 'gstin').toUpperCase();
+    }
     let promoted = 0;
 
     for (const row of rows) {

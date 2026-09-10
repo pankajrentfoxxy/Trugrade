@@ -133,8 +133,21 @@ export interface StepDefinition {
  * is a deliberate act and not a frequent one, and a stale rail for five minutes
  * is cheaper than a fetch on every page view.
  */
-export const getStepDefinitions = (orgType: 'VENDOR' | 'BUYER'): Promise<StepDefinition[] | null> =>
-  get<StepDefinition[]>(`/onboarding/steps/definitions?orgType=${orgType}`, 300);
+/** Step definitions — no ISR cache in dev so a migration shows on the next load. */
+export async function getStepDefinitions(
+  orgType: 'VENDOR' | 'BUYER',
+): Promise<StepDefinition[] | null> {
+  try {
+    const res = await fetch(`${API_BASE}/onboarding/steps/definitions?orgType=${orgType}`, {
+      ...(process.env.NODE_ENV === 'development'
+        ? { cache: 'no-store' as const }
+        : { next: { revalidate: 300 } }),
+    });
+    return res.ok ? ((await res.json()) as StepDefinition[]) : null;
+  } catch {
+    return null;
+  }
+}
 
 /* ==========================================================================
  * Faceted search — `/search`

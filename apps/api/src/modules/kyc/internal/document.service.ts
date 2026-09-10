@@ -423,8 +423,11 @@ export class DocumentService {
   /** VR-072. `checkDocumentAge` writes the sentence, with the real date in it. */
   private acceptAge(
     documentDate: Date | null,
-    rule: { label: string; max_age_days: number | null },
+    rule: { doc_type: string; label: string; max_age_days: number | null },
   ): void {
+    // Address proof still has a 90-day window when a date is given; the date
+    // itself is optional, so a missing one is not a refusal.
+    if (documentDate === null && rule.doc_type === 'ADDRESS_PROOF') return;
     const age = checkDocumentAge({
       documentDate,
       maxAgeDays: rule.max_age_days,

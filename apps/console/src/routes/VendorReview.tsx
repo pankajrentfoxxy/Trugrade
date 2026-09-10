@@ -246,7 +246,6 @@ export function VendorReviewRoute(): React.JSX.Element {
   // across the vendor's whole catalogue.
   const missing = [
     !data.dispatchSameAsRegistered && !data.dispatchAddress && 'dispatch address',
-    data.canDropship === null && 'dropship capability',
     data.defaultWarrantyMonths === null && 'warranty term',
     data.pricingMode === null && 'pricing mode',
   ].filter((x): x is string => typeof x === 'string');

@@ -14,13 +14,12 @@ import { Choice } from '../../register/Choice';
 import {
   CYCLE_UNTIL_EARNED,
   LANGUAGES,
-  MIN_PAYOUT_THRESHOLD_INR,
   PAYOUT_CYCLES,
   PRICING_MODES,
   VENDOR_AGREEMENTS,
   VENDOR_NOTIFICATION_CHANNELS,
 } from '../../register/picklists';
-import { validateCommissionRate, validatePayoutThreshold } from '../../register/validation';
+import { validateCommissionRate } from '../../register/validation';
 
 /**
  * Vendor step 7 — AGREEMENT.
@@ -113,23 +112,10 @@ export interface AgreementValues {
   /** Only when `pricingMode` is COMMISSION. Percent. */
   commissionRate: string;
   payoutCycle: string | null;
-  payoutThreshold: string;
   invoiceUploadRequired: boolean | null;
   channels: string[];
   language: string;
 }
-
-const EMPTY: AgreementValues = {
-  accepted: {},
-  signatoryName: '',
-  pricingMode: null,
-  commissionRate: '',
-  payoutCycle: null,
-  payoutThreshold: String(MIN_PAYOUT_THRESHOLD_INR),
-  invoiceUploadRequired: null,
-  channels: [],
-  language: '',
-};
 
 const str = (a: Record<string, unknown>, key: string, fallback: string): string =>
   typeof a[key] === 'string' ? (a[key] as string) : fallback;
@@ -149,7 +135,6 @@ export function readAgreementDraft(answers: Record<string, unknown>): AgreementV
     pricingMode: typeof answers.pricingMode === 'string' ? answers.pricingMode : null,
     commissionRate: str(answers, 'commissionRate', ''),
     payoutCycle: typeof answers.payoutCycle === 'string' ? answers.payoutCycle : null,
-    payoutThreshold: str(answers, 'payoutThreshold', EMPTY.payoutThreshold),
     invoiceUploadRequired:
       typeof answers.invoiceUploadRequired === 'boolean' ? answers.invoiceUploadRequired : null,
     channels: Array.isArray(answers.channels)
@@ -226,8 +211,6 @@ export function StepAgreement({
         if (rate) found.commissionRate = rate;
       }
       if (!values.payoutCycle) found.payoutCycle = 'Choose how often you want to be paid.';
-      const threshold = validatePayoutThreshold(values.payoutThreshold, MIN_PAYOUT_THRESHOLD_INR);
-      if (threshold) found.payoutThreshold = threshold;
       if (values.invoiceUploadRequired === null)
         found.invoiceUploadRequired =
           'Tell us whether you raise your own invoice or want us to self-bill. Both are real answers.';
@@ -409,21 +392,6 @@ export function StepAgreement({
           error={errors.payoutCycle}
         />
 
-        <Input
-          label="Smallest amount worth paying you, in rupees"
-          mono
-          required
-          inputMode="numeric"
-          hint={`Below this the balance rolls into the next run instead of moving as a tiny transfer. Our own floor is ₹${MIN_PAYOUT_THRESHOLD_INR.toLocaleString('en-IN')}, so anything under that would not be honoured.`}
-          value={values.payoutThreshold}
-          onFocus={() => onFieldFocus('Payout cycle')}
-          onChange={(e) => {
-            clearError('payoutThreshold');
-            save({ ...values, payoutThreshold: e.target.value });
-          }}
-          error={errors.payoutThreshold}
-        />
-
         <Choice
           legend="Who raises the invoice for our purchase?"
           name="invoice-upload"
@@ -534,7 +502,6 @@ function completionOf(values: AgreementValues): number {
     values.signatoryName.trim().length > 0,
     values.pricingMode !== null,
     values.payoutCycle !== null,
-    values.payoutThreshold.trim().length > 0,
     values.invoiceUploadRequired !== null,
     values.channels.length > 0,
     values.language.length > 0,

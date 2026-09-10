@@ -39,8 +39,8 @@ import {
  * `(facility_id, day_of_week)`, `facility_holiday` on `(facility_id,
  * holiday_date)`, `vendor_facility` on `address_id`, `vendor_profile` and
  * `vendor_payout_preference` on `org_id`. `vendor_capability` has none, so its
- * natural key is `(org_id, category)` — the screen asks one capacity across the
- * categories a supplier ticks, so one row per category is what an answer is.
+ * natural key is `(org_id, category)` — the screen asks the same answers across
+ * the categories a supplier ticks, so one row per category is what an answer is.
  */
 
 /** Nothing is e-signed. What is recorded is who accepted which version, when. */
@@ -157,17 +157,8 @@ export class VendorPromotionService {
   // -------------------------------------------------------------------------
 
   /**
-   * The two answers that must not be inferred are `can_dropship` and the sourcing
-   * channels. `can_dropship` is `BOOLEAN NOT NULL DEFAULT TRUE`, and TRUE is the
-   * commercially convenient answer. Under the merchant-of-record model a supplier
-   * who cannot dispatch direct is a materially different supplier — their goods
-   * have to come through a hub, which is a different cost base — so a row written
-   * from the column default would route freight on a claim nobody made. `YesNo` on
-   * the screen holds `null` until somebody presses a radio and this refuses to
-   * write the row until it has that answer.
-   *
-   * `can_provide_serials_upfront` is no longer asked on the screen; the column
-   * default (`TRUE`) applies when the draft omits it.
+   * `can_dropship` and `can_provide_serials_upfront` are no longer asked on the
+   * screen; the column defaults (`TRUE`) apply when the draft omits them.
    *
    * Categories the supplier removed are deactivated rather than deleted:
    * `ix_vcap_routing` is partial on `is_active`, so a deactivated row stops
@@ -176,32 +167,17 @@ export class VendorPromotionService {
    */
   async promoteCapability(orgId: string, draft: Draft): Promise<void> {
     const categories = strings(draft, 'categories').filter((c) => SUPPLY_CATEGORIES.includes(c));
-    if (categories.length === 0) return;
-
-    const capacity = int(draft, 'monthlyCapacity');
-    if (capacity === null || capacity < 1) {
-      throw new ValidationError(
-        'Tell us how many laptops a month you can actually supply. An honest number sizes the enquiries we send you — it is not a commitment.',
-        { monthlyCapacity: 'Enter the number of laptops a month you can supply.' },
-      );
+    if (categories.length === 0) {
+      await this.prisma.db.vendor_capability.updateMany({
+        where: { org_id: orgId },
+        data: { is_active: false },
+      });
+      return;
     }
 
-    const canDropship = bool(draft, 'canDropship');
-    if (canDropship === null) {
-      throw new ValidationError(
-        'Whether you can dispatch direct to the buyer still has no answer. It changes how your orders are handled, so we do not assume it.',
-        { canDropship: 'Answer yes or no — we will not assume it.' },
-      );
-    }
     const canProvideSerials = bool(draft, 'canProvideSerialsUpfront') ?? true;
 
     const channels = strings(draft, 'sourcingChannels');
-    if (channels.length === 0) {
-      throw new ValidationError(
-        'Tell us where your stock comes from. It is what a reviewer checks your sourcing declarations against.',
-        { sourcingChannels: 'Choose at least one source.' },
-      );
-    }
 
     const gradeMixRaw = nested(draft, 'gradeMix');
     const gradeMix: Record<string, number> = {};
@@ -210,17 +186,15 @@ export class VendorPromotionService {
       if (pct !== null && pct > 0) gradeMix[grade] = pct;
     }
 
+    const monthlyCapacity = int(draft, 'monthlyCapacity');
     const shared = {
-      monthly_capacity_units: capacity,
+      ...(monthlyCapacity != null ? { monthly_capacity_units: monthlyCapacity } : {}),
       typical_grade_mix: Object.keys(gradeMix).length > 0 ? gradeMix : undefined,
-      avg_price_band_min: decimal(draft, 'priceBandMin'),
-      avg_price_band_max: decimal(draft, 'priceBandMax'),
       sourcing_channels: channels,
       can_provide_serials_upfront: canProvideSerials,
       has_inhouse_testing: draft.hasInhouseTesting === true,
       has_inhouse_repair: draft.hasInhouseRepair === true,
-      lead_time_days: int(draft, 'leadTimeDays') ?? 2,
-      can_dropship: canDropship,
+      lead_time_days: int(draft, 'leadTimeDays') ?? 24,
       is_active: true,
     };
 
@@ -239,7 +213,12 @@ export class VendorPromotionService {
         await this.prisma.db.vendor_capability.update({ where: { id: existing.id }, data: shared });
       } else {
         await this.prisma.db.vendor_capability.create({
-          data: { org_id: orgId, category, ...shared },
+          data: {
+            org_id: orgId,
+            category,
+            ...shared,
+            monthly_capacity_units: monthlyCapacity ?? 0,
+          },
         });
       }
     }
@@ -467,10 +446,9 @@ export class VendorPromotionService {
 
     const pricingMode = str(draft, 'pricingMode');
     const requestedCycle = str(draft, 'payoutCycle');
-    const threshold = decimal(draft, 'payoutThreshold');
     const invoiceUpload = bool(draft, 'invoiceUploadRequired');
 
-    if (!pricingMode && !requestedCycle && threshold === null && invoiceUpload === null) return;
+    if (!pricingMode && !requestedCycle && invoiceUpload === null) return;
 
     if (pricingMode && pricingMode !== 'NET_PAYOUT' && pricingMode !== 'COMMISSION') {
       throw new ValidationError(
@@ -492,7 +470,6 @@ export class VendorPromotionService {
     // the granted column would be a promise we break in three weeks.
     const preference = {
       preferred_cycle: requestedCycle || 'WEEKLY',
-      min_payout_threshold: threshold ?? undefined,
       invoice_upload_required: invoiceUpload ?? false,
       pricing_mode: pricingMode || 'NET_PAYOUT',
     };

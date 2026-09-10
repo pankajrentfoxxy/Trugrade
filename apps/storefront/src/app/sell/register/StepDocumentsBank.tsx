@@ -7,7 +7,6 @@ import {
   commitBankAccount,
   pennyDrop,
   type BankAccountHolder,
-  type FieldRequirement,
   type KycDocument,
   type VerificationOutcomeView,
 } from '../../register/api';
@@ -25,13 +24,12 @@ import { ProviderProblem, isProviderProblem, useRetryLadder } from '../../regist
 /**
  * Vendor step 6 — DOCUMENTS_BANK.
  *
- * Two halves that belong on one screen because they check each other: the
- * cancelled cheque above carries the account number, the IFSC and the holder
- * name, and the penny-drop below asks the bank whether that is really the
- * account. A reviewer compares the two.
+ * Two halves on one screen: the document pack, and the penny-drop that asks
+ * the bank whether the payout account is really theirs. A reviewer compares
+ * the name the bank returned with the legal name on the certificates.
  *
  * **The checklist is `DocumentChecklist`**, the same component the buyer's step
- * 5 uses. Nine document types where a buyer has four, and that is the only
+ * 5 uses. Seven document types where a buyer has four, and that is the only
  * difference — every rule about each of them is `document_type_rule` data.
  *
  * **The penny-drop is the same three-outcome problem as the GSTIN check**, and
@@ -312,17 +310,6 @@ export interface StepDocumentsBankProps {
   answers: Record<string, unknown>;
   /** The legal name the penny-drop is scored against, carried from Business. */
   legalName: string;
-  /** `onboarding_field_requirement` for this step. Today: `board_resolution`. */
-  fields?: readonly FieldRequirement[];
-  /**
-   * The org's constitution, or the Business step's answer where the org has none.
-   *
-   * The seed gates `board_resolution` to PVT_LTD and LTD, and the gate reads
-   * `organization.constitution` — which no step promotion has ever written, so
-   * it is null and the rule comes back optional for a company that plainly needs
-   * one. Where the applicant has told us on Business, that answer is used.
-   */
-  constitution?: string | null;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
   onContinue: (
     values: Record<string, unknown>,
@@ -337,8 +324,6 @@ export interface StepDocumentsBankProps {
 export function StepDocumentsBank({
   answers,
   legalName,
-  fields = [],
-  constitution,
   onSaveDraft,
   onContinue,
   busy,
@@ -363,26 +348,7 @@ export function StepDocumentsBank({
   const runCheckRef = React.useRef<(key: string) => Promise<void>>(async () => {});
   const retry = useRetryLadder((key) => void runCheckRef.current(key));
 
-  /**
-   * `board_resolution` is seeded on this step and gated to PVT_LTD and LTD.
-   *
-   * The server's answer would be authoritative if it could see the constitution
-   * — but no step promotion has ever written `organization.constitution`, so the
-   * gate is evaluated against null and returns "optional" for a private limited
-   * company that plainly needs one. Step 2's answer is the same fact and is what
-   * this org actually told us, so it wins while the promotion is missing. When
-   * one lands, `rule.required` is right again and this fallback deletes itself.
-   */
-  const wanted = React.useMemo(() => {
-    const rule = fields.find((f) => f.fieldCode === 'board_resolution');
-    // The seed's own gate: a company signs by resolution, a proprietor does not.
-    const byConstitution = constitution ? ['PVT_LTD', 'LTD'].includes(constitution) : undefined;
-    const required = byConstitution ?? rule?.required;
-    if (required === undefined) return VENDOR_DOCUMENTS;
-    return VENDOR_DOCUMENTS.map((d) =>
-      d.docType === 'BOARD_RESOLUTION' ? { ...d, required } : d,
-    );
-  }, [fields, constitution]);
+  const wanted = VENDOR_DOCUMENTS;
 
   const clearError = React.useCallback(
     (key: string): void =>
@@ -397,7 +363,7 @@ export function StepDocumentsBank({
     (next: BankValues, held: readonly KycDocument[]): void => {
       onSaveDraft({ ...next }, completionOf(next, wanted, held));
     },
-    [onSaveDraft, wanted],
+    [onSaveDraft],
   );
 
   /**

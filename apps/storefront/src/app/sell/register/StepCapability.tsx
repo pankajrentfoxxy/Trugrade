@@ -3,9 +3,8 @@
 import * as React from 'react';
 import { Button, Checkbox, Chip, FormSection, Input } from '@trugrade/ui';
 import { Select } from '../../../lib/controls';
-import { YesNo } from '../../register/YesNo';
-import { LEAD_TIME_DAYS, SOURCING_CHANNELS, SUPPLY_CATEGORIES } from '../../register/picklists';
-import { blockNonDigitKey, typeDigitsOnly, validateCount } from '../../register/validation';
+import { LEAD_TIME_HOURS, SOURCING_CHANNELS, SUPPLY_CATEGORIES } from '../../register/picklists';
+import { blockNonDigitKey, typeDigitsOnly } from '../../register/validation';
 
 /** Parenthetical note on the label row instead of a second line under the field. */
 const labelNote = (text: string, note: string): React.ReactNode => (
@@ -22,22 +21,12 @@ const labelNote = (text: string, note: string): React.ReactNode => (
  * reaches which supplier, and it is the first screen in the vendor flow that is
  * about the *business* rather than about proving who they are.
  *
- * Three things here are load-bearing and are not ordinary form fields.
- *
- * **`can_dropship` is required and has no default.** Under the merchant-of-
- * record model the goods move from the vendor to the customer directly and
- * never touch us — we buy the serial at the moment somebody orders it and sell
- * it on our own invoice. A supplier who cannot dispatch direct is therefore a
- * materially different supplier: we would have to take their goods in, which is
- * a different cost base and a different legal posture. The column defaults to
- * `TRUE`, which is exactly why the screen refuses to: a checkbox nobody ticked
- * would assert the commercially convenient answer on their behalf. A "no" is a
- * real answer and does not fail the step — see `YesNo`.
+ * Two things here are load-bearing and are not ordinary form fields.
  *
  * **The grade mix is a percentage split and it has to total 100.** A mix that
  * adds to 85 is not a rounding problem, it is fifteen per cent of somebody's
- * stock that nobody has described. Every row also prints its denominator: `20%
- * — 60 of 300 laptops a month`, never a bare `20%`.
+ * stock that nobody has described. Every percentage carries its denominator:
+ * `20% of 100%`, never a bare `20%`.
  *
  * **The grades come from `GET /public/grades`.** A_PLUS / A / B is a policy
  * decision held in the catalogue, and a supplier being asked to split their
@@ -53,36 +42,26 @@ export interface CapabilityValues {
   categories: string[];
   brands: string[];
   otherBrands: string;
-  /** `monthly_capacity_units`, an `INT NOT NULL`. Held as typed until it is checked. */
-  monthlyCapacity: string;
   /** `typical_grade_mix`, grade code → percentage as typed. */
   gradeMix: Record<string, string>;
-  priceBandMin: string;
-  priceBandMax: string;
   sourcingChannels: string[];
   /** `can_provide_serials_upfront`. Null until answered — the column defaults true. */
   canProvideSerialsUpfront: boolean | null;
   hasInhouseTesting: boolean;
   hasInhouseRepair: boolean;
   leadTimeDays: string;
-  /** `can_dropship`. Null until answered. Required. */
-  canDropship: boolean | null;
 }
 
 const EMPTY: CapabilityValues = {
   categories: [],
   brands: [],
   otherBrands: '',
-  monthlyCapacity: '',
   gradeMix: {},
-  priceBandMin: '',
-  priceBandMax: '',
   sourcingChannels: [],
   canProvideSerialsUpfront: null,
   hasInhouseTesting: false,
   hasInhouseRepair: false,
   leadTimeDays: '',
-  canDropship: null,
 };
 
 /** `A_PLUS` → `A+`. The catalogue's code is what a draft stores. */
@@ -110,16 +89,12 @@ export function readCapabilityDraft(answers: Record<string, unknown>): Capabilit
     categories: list('categories').filter((code) => code !== 'WORKSTATION'),
     brands: list('brands'),
     otherBrands: str('otherBrands'),
-    monthlyCapacity: str('monthlyCapacity'),
     gradeMix: mix,
-    priceBandMin: str('priceBandMin'),
-    priceBandMax: str('priceBandMax'),
     sourcingChannels: list('sourcingChannels'),
     canProvideSerialsUpfront: bool('canProvideSerialsUpfront'),
     hasInhouseTesting: answers.hasInhouseTesting === true,
     hasInhouseRepair: answers.hasInhouseRepair === true,
     leadTimeDays: str('leadTimeDays'),
-    canDropship: bool('canDropship'),
   };
 }
 
@@ -132,16 +107,7 @@ const toDraft = (values: CapabilityValues): Record<string, unknown> => ({ ...val
 const asNumber = (value: string): number | null =>
   /^\d+$/.test(value.trim()) ? Number(value.trim()) : null;
 
-const CAPACITY_RULE = {
-  required: true,
-  min: 1,
-  max: 100000,
-  unit: 'laptops',
-  missing:
-    'Tell us how many laptops a month you can actually supply. An honest number sizes the enquiries we send you — it is not a commitment.',
-};
-
-const LEAD_TIME_VALUES = new Set(LEAD_TIME_DAYS.map((o) => o.value).filter(Boolean));
+const LEAD_TIME_VALUES = new Set(LEAD_TIME_HOURS.map((o) => o.value).filter(Boolean));
 
 /**
  * Summed over the grades the catalogue currently defines, not over every key in
@@ -158,14 +124,9 @@ const gradeMixDone = (mix: Record<string, string>, grades: readonly string[]): b
   gradeMixTotal(mix, grades) === 100;
 
 const checksOf = (values: CapabilityValues, grades: readonly string[]): boolean[] => [
-  values.categories.length > 0,
-  validateCount(values.monthlyCapacity, CAPACITY_RULE) === undefined &&
-    values.monthlyCapacity.trim().length > 0,
   // A catalogue that did not answer cannot be a gate on their application.
   grades.length === 0 || gradeMixDone(values.gradeMix, grades),
-  values.sourcingChannels.length > 0,
   LEAD_TIME_VALUES.has(values.leadTimeDays),
-  values.canDropship !== null,
 ];
 
 export const completionOf = (values: CapabilityValues, grades: readonly string[]): number => {
@@ -225,7 +186,7 @@ export function StepCapability({
    * A control with no blur of its own — a chip, a checkbox, a radio — writes
    * through the moment it changes. A toggle that is only saved on the *next*
    * field's blur is a toggle that silently loses its answer when the tab closes,
-   * and on this step that toggle is `can_dropship`.
+   * and on this step that toggle is a brand chip or a sourcing checkbox.
    */
   const setAndSave = <K extends keyof CapabilityValues>(
     key: K,
@@ -253,17 +214,10 @@ export function StepCapability({
   const check = (v: CapabilityValues): Record<string, string> => {
     const found: Record<string, string> = {};
 
-    if (v.categories.length === 0)
-      found.categories =
-        'Pick at least one category. This is what decides which stock enquiries reach you.';
-
     const namedBrands = v.brands.length + (v.otherBrands.trim().length > 0 ? 1 : 0);
     if (namedBrands === 0)
       found.brands =
         'Tell us at least one brand you deal in — pick from the list, or type the others in the box below.';
-
-    const capacity = validateCount(v.monthlyCapacity, CAPACITY_RULE);
-    if (capacity) found.monthlyCapacity = capacity;
 
     if (gradeCodes.length > 0) {
       const total = gradeMixTotal(v.gradeMix, gradeCodes);
@@ -283,35 +237,9 @@ export function StepCapability({
             : `The split adds up to ${total}% of 100%, which is ${total - 100}% more stock than you have. Adjust the rows until they total 100%.`;
     }
 
-    const min = v.priceBandMin.trim();
-    const max = v.priceBandMax.trim();
-    for (const [key, raw] of [
-      ['priceBandMin', min],
-      ['priceBandMax', max],
-    ] as const) {
-      if (raw.length > 0 && !/^\d+$/.test(raw))
-        found[key] = 'Enter whole rupees — 18000, with no comma and no paise.';
-    }
-    if (!found.priceBandMin && !found.priceBandMax) {
-      if (min.length > 0 && max.length === 0)
-        found.priceBandMax = 'Give the top of the band too, so the pair means something.';
-      if (max.length > 0 && min.length === 0)
-        found.priceBandMin = 'Give the bottom of the band too, so the pair means something.';
-      if (min.length > 0 && max.length > 0 && Number(min) >= Number(max))
-        found.priceBandMax = 'The top of the band has to be more than the bottom.';
-    }
-
-    if (v.sourcingChannels.length === 0)
-      found.sourcingChannels =
-        'Tell us where your stock comes from — at least one. A buy-back lot and an auction lot carry different paperwork, and we underwrite them differently.';
-
     if (!LEAD_TIME_VALUES.has(v.leadTimeDays))
       found.leadTimeDays =
-        'Choose how many days from our purchase order to the machine leaving your dock.';
-
-    if (v.canDropship === null)
-      found.canDropship =
-        'Answer this one either way. A “no” is a real answer and does not stop your application — it changes how we work with you, so we need it before a reviewer sees this.';
+        'Choose how many hours from our purchase order to the machine leaving your dock.';
 
     return found;
   };
@@ -329,33 +257,23 @@ export function StepCapability({
 
   /* ----------------------------------------------------------------- view */
 
-  const capacity = asNumber(values.monthlyCapacity);
   const mixTotal = gradeMixTotal(values.gradeMix, gradeCodes);
   const namedBrands = values.brands.length + (values.otherBrands.trim().length > 0 ? 1 : 0);
 
   /**
-   * `20%` of `300` reads `20% — 60 of 300 laptops a month`, never a bare
-   * percentage. A share nobody has given reads "Not provided", never a dash
-   * beside a number that would look like a zero.
+   * A share nobody has given reads "Not provided", never a dash beside a number
+   * that would look like a zero.
    */
   const shareOf = (grade: string): React.ReactNode => {
     const raw = (values.gradeMix[grade] ?? '').trim();
     if (raw === '') return <span className="text-ink-4">Not provided.</span>;
     const value = asNumber(raw);
-    if (value === null || capacity === null)
-      return (
-        <>
-          <span className="font-mono tnum text-ink">{raw}%</span> —{' '}
-          <span className="text-ink-4">
-            units not known until you give a monthly capacity above.
-          </span>
-        </>
-      );
+    if (value === null)
+      return <span className="font-mono tnum text-ink">{raw}%</span>;
     return (
       <>
-        <span className="font-mono tnum text-ink">{value}%</span> —{' '}
-        <span className="font-mono tnum text-ink">{Math.round((capacity * value) / 100)}</span> of{' '}
-        <span className="font-mono tnum text-ink">{capacity}</span> laptops a month.
+        <span className="font-mono tnum text-ink">{value}%</span> of{' '}
+        <span className="font-mono tnum text-ink">100%</span>
       </>
     );
   };
@@ -373,7 +291,7 @@ export function StepCapability({
 
       {/* ------------------------------------------------------- categories */}
       <FormSection
-        title="What you supply"
+        title="(optional) What you supply"
         status={
           <span className="normal-case tracking-normal text-acc-ink">
             <span className="tnum">{values.categories.length}</span> of{' '}
@@ -423,14 +341,6 @@ export function StepCapability({
             aria-describedby={errors.brands ? 'brands-error' : undefined}
             onFocus={() => onFieldFocus('Capability')}
           >
-            {brands.map((brand) => (
-              <Chip
-                key={brand}
-                label={brand}
-                selected={values.brands.includes(brand)}
-                onToggle={() => toggleIn('brands', brand)}
-              />
-            ))}
             <Chip
               label="All"
               selected={brands.length > 0 && brands.every((b) => values.brands.includes(b))}
@@ -441,6 +351,14 @@ export function StepCapability({
                 )
               }
             />
+            {brands.map((brand) => (
+              <Chip
+                key={brand}
+                label={brand}
+                selected={values.brands.includes(brand)}
+                onToggle={() => toggleIn('brands', brand)}
+              />
+            ))}
           </div>
         ) : (
           // Never fabricate data on a screen: with no answer from the catalogue
@@ -472,20 +390,7 @@ export function StepCapability({
       </FormSection>
 
       {/* --------------------------------------------------- volume and mix */}
-      <FormSection title="How much, and of what quality">
-        <Input
-          label="Laptops you can supply in a month"
-          mono
-          inputMode="numeric"
-          required
-          value={values.monthlyCapacity}
-          onFocus={() => onFieldFocus('Monthly capacity')}
-          onBlur={saveOnBlur}
-          onKeyDown={blockNonDigitKey}
-          onChange={(e) => set('monthlyCapacity', typeDigitsOnly(e.target.value))}
-          error={errors.monthlyCapacity}
-        />
-
+      <FormSection title="Typical grade mix">
         <div
           role="group"
           aria-label="Typical grade mix"
@@ -542,18 +447,7 @@ export function StepCapability({
           {grades.length > 0 && (
             <p id="grade-mix-total" className="text-body-sm text-ink-2">
               Total <span className="font-mono tnum text-ink">{mixTotal}%</span> of{' '}
-              <span className="font-mono tnum text-ink">100%</span>
-              {capacity !== null && (
-                <>
-                  {' '}
-                  —{' '}
-                  <span className="font-mono tnum text-ink">
-                    {Math.round((capacity * mixTotal) / 100)}
-                  </span>{' '}
-                  of <span className="font-mono tnum text-ink">{capacity}</span> laptops a month
-                </>
-              )}
-              .
+              <span className="font-mono tnum text-ink">100%</span>.
             </p>
           )}
           {errors.gradeMix && (
@@ -562,45 +456,11 @@ export function StepCapability({
             </p>
           )}
         </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input
-            label={labelNote(
-              'Typical price, lowest (optional)',
-              'Whole rupees per machine, as you would sell it to us.',
-            )}
-            mono
-            inputMode="numeric"
-            value={values.priceBandMin}
-            onFocus={() => onFieldFocus('Capability')}
-            onBlur={saveOnBlur}
-            onKeyDown={blockNonDigitKey}
-            onChange={(e) => set('priceBandMin', typeDigitsOnly(e.target.value))}
-            error={errors.priceBandMin}
-          />
-          <Input
-            label={labelNote(
-              'Typical price, highest (optional)',
-              'The top of the band, not your best-ever sale.',
-            )}
-            mono
-            inputMode="numeric"
-            value={values.priceBandMax}
-            onFocus={() => onFieldFocus('Capability')}
-            onBlur={saveOnBlur}
-            onKeyDown={blockNonDigitKey}
-            onChange={(e) => set('priceBandMax', typeDigitsOnly(e.target.value))}
-            error={errors.priceBandMax}
-          />
-        </div>
-        {values.priceBandMin.trim() === '' && values.priceBandMax.trim() === '' && (
-          <p className="text-body-sm text-ink-4">Price band not provided.</p>
-        )}
       </FormSection>
 
       {/* --------------------------------------------------------- sourcing */}
       <FormSection
-        title="Where your stock comes from"
+        title="(optional) Where your stock comes from"
         status={
           <span className="normal-case tracking-normal text-acc-ink">
             <span className="tnum">{values.sourcingChannels.length}</span> of{' '}
@@ -635,28 +495,14 @@ export function StepCapability({
       {/* ----------------------------------------------------------- dispatch */}
       <FormSection title="Dispatch">
         <Select
-          label="Lead time, in days"
+          label="Lead time"
           required
-          options={LEAD_TIME_DAYS}
+          options={LEAD_TIME_HOURS}
           value={values.leadTimeDays}
           onFocus={() => onFieldFocus('Capability')}
           onBlur={saveOnBlur}
           onChange={(e) => setAndSave('leadTimeDays', e.target.value)}
           error={errors.leadTimeDays}
-        />
-
-        <YesNo
-          legend="Can you dispatch directly to our customer?"
-          name="can-dropship"
-          required
-          value={values.canDropship}
-          onChange={(v) => setAndSave('canDropship', v)}
-          onFocus={() => onFieldFocus('Dispatching direct')}
-          yesLabel="Yes — we pack and hand over to the carrier"
-          noLabel="No — we cannot dispatch to a third party"
-          yesConsequence="Standard. You get the purchase order, the pick list and the customer's delivery address in our packaging; the e-way bill is raised from your dispatch address."
-          noConsequence="That is a real answer and it does not stop your application. It does mean we would have to take your goods in before selling them, which is a different arrangement — an account manager will go through it with you before you are approved."
-          error={errors.canDropship}
         />
       </FormSection>
 

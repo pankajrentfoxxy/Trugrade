@@ -228,7 +228,6 @@ export async function seedOnboardedBuyer(log: (m: string) => void = console.log)
     industry: 'IT_SERVICES',
     yearEstablished: '2019',
     employeeBand: '51-200',
-    website: 'https://www.meridiansys.in',
     annualVolume: '51-200',
   });
 

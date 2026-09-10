@@ -23,7 +23,6 @@ import {
 } from './fakes/kyc.fakes';
 import { ZohoGstinVerification } from './live/gstin.zoho';
 import { PostalPincodeLookup } from './live/pincode.postalpincode';
-import { FakePincodeLookup } from './fakes/pincode.fakes';
 import { InteraktNotification } from './live/interakt.notification';
 import { SmtpNotification } from './live/smtp.notification';
 import {
@@ -77,11 +76,7 @@ const fakeProviders: Provider[] = [
   },
   {
     provide: PincodeLookupPort,
-    inject: [AppConfig],
-    useFactory: (config: AppConfig): PincodeLookupPort =>
-      config.get('INTEGRATION_MODE') === 'mock' || config.get('NODE_ENV') === 'test'
-        ? new FakePincodeLookup()
-        : new PostalPincodeLookup(),
+    useClass: PostalPincodeLookup,
   },
   { provide: PanVerificationPort, useClass: FakePanVerification },
   { provide: BankVerificationPort, useClass: FakeBankVerification },
@@ -146,7 +141,7 @@ const fakeProviders: Provider[] = [
             ? 'interakt'
             : 'fake';
         new Logger('Adapters').log(
-          `INTEGRATION_MODE=${mode}${mode === 'mock' ? ' — every external call is a fake' : ''} · GSTIN=${gst} · EMAIL=${mail} · WHATSAPP_OTP=${whatsapp}`,
+          `INTEGRATION_MODE=${mode}${mode === 'mock' ? ' — most external calls are fakes' : ''} · GSTIN=${gst} · PINCODE=postalpincode.in · EMAIL=${mail} · WHATSAPP_OTP=${whatsapp}`,
         );
         return mode;
       },

@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Input, type WhyRailItem } from '@trugrade/ui';
+import { Button, Checkbox, Input, type WhyRailItem } from '@trugrade/ui';
+import type { AccountHolderDetails } from './api';
 import { Select } from '../../lib/controls';
 import {
   CONTACT_ROLES,
@@ -11,6 +12,7 @@ import {
   stateNameForGstin,
 } from './picklists';
 import { PincodeLocalityFields } from './PincodeLocalityFields';
+import { mergeBillingGstPrefill, prefillBillingFromVerifiedGst } from './gst-billing-prefill';
 import {
   billingStateMatchesGstin,
   isMobileBlank,
@@ -81,6 +83,8 @@ export const WHY_CONTACTS: readonly WhyRailItem[] = [
  * ======================================================================== */
 
 export interface Person {
+  /** When true, name, email and mobile come from step 1 until the applicant edits them. */
+  useAccountDetails?: boolean;
   fullName: string;
   designation: string;
   email: string;
@@ -118,11 +122,23 @@ export interface ContactsValues {
 }
 
 const emptyPerson = (): Person => ({
+  useAccountDetails: false,
   fullName: '',
   designation: '',
   email: '',
   mobile: MOBILE_PREFIX,
 });
+
+const accountContactFields = (
+  account: AccountHolderDetails,
+): Pick<Person, 'fullName' | 'email' | 'mobile'> => ({
+  fullName: account.fullName,
+  email: account.email,
+  mobile: typeMobile(account.mobile),
+});
+
+const resolvedContact = (contact: Person, account: AccountHolderDetails): Person =>
+  contact.useAccountDetails ? { ...contact, ...accountContactFields(account) } : contact;
 
 const emptyPostal = (gstin = ''): BillingAddress => ({
   gstin,
@@ -139,6 +155,9 @@ const nextKey = (): string => {
   return `d${keySeed}`;
 };
 
+const DEFAULT_OPENS_AT = '10:00';
+const DEFAULT_CLOSES_AT = '19:00';
+
 const emptyDelivery = (): DeliveryAddress => ({
   ...emptyPostal(),
   key: nextKey(),
@@ -148,8 +167,8 @@ const emptyDelivery = (): DeliveryAddress => ({
   landmark: '',
   gateInstructions: '',
   days: '',
-  opensAt: '',
-  closesAt: '',
+  opensAt: DEFAULT_OPENS_AT,
+  closesAt: DEFAULT_CLOSES_AT,
 });
 
 /**
@@ -162,6 +181,7 @@ const emptyDelivery = (): DeliveryAddress => ({
 export function readContactsDraft(
   answers: Record<string, unknown>,
   savedGstins: readonly string[],
+  statutoryAnswers?: Record<string, unknown>,
 ): ContactsValues {
   const savedContacts = (answers.contacts ?? {}) as Record<string, Partial<Person>>;
   const contacts: Record<string, Person> = {};
@@ -170,6 +190,7 @@ export function readContactsDraft(
     contacts[role.code] = {
       ...emptyPerson(),
       ...saved,
+      useAccountDetails: saved.useAccountDetails === true,
       mobile: typeMobile(typeof saved.mobile === 'string' ? saved.mobile : ''),
     };
   }
@@ -177,11 +198,13 @@ export function readContactsDraft(
   const savedBilling = Array.isArray(answers.billing)
     ? (answers.billing as Partial<BillingAddress>[])
     : [];
-  const billing =
+  const gstBillingPrefill = prefillBillingFromVerifiedGst(statutoryAnswers);
+  let billing =
     savedBilling.length > 0
       ? savedBilling.map((b) => ({ ...emptyPostal(b.gstin ?? ''), ...b }))
-      : // No draft yet: one row per registration, in the order step 3 gave them.
+      : // No draft yet: one row per registration, in the order step 2 gave them.
         (savedGstins.length > 0 ? savedGstins : ['']).map((g) => emptyPostal(g));
+  billing = mergeBillingGstPrefill(billing, gstBillingPrefill);
 
   const savedDelivery = Array.isArray(answers.delivery)
     ? (answers.delivery as Partial<DeliveryAddress>[])
@@ -193,6 +216,14 @@ export function readContactsDraft(
           ...d,
           key: nextKey(),
           contactMobile: typeMobile(typeof d.contactMobile === 'string' ? d.contactMobile : ''),
+          opensAt:
+            typeof d.opensAt === 'string' && d.opensAt.trim().length > 0
+              ? d.opensAt
+              : DEFAULT_OPENS_AT,
+          closesAt:
+            typeof d.closesAt === 'string' && d.closesAt.trim().length > 0
+              ? d.closesAt
+              : DEFAULT_CLOSES_AT,
         }))
       : [emptyDelivery()];
 
@@ -200,8 +231,16 @@ export function readContactsDraft(
 }
 
 /** Only what the API should keep. The React key is regenerated on read. */
-const toDraft = (values: ContactsValues): Record<string, unknown> => ({
-  contacts: values.contacts,
+const toDraft = (
+  values: ContactsValues,
+  accountHolder: AccountHolderDetails,
+): Record<string, unknown> => ({
+  contacts: Object.fromEntries(
+    Object.entries(values.contacts).map(([role, contact]) => [
+      role,
+      resolvedContact(contact, accountHolder),
+    ]),
+  ),
   billing: values.billing,
   delivery: values.delivery.map(({ key: _key, ...rest }) => rest),
 });
@@ -226,14 +265,22 @@ const deliveryDone = (a: DeliveryAddress): boolean =>
   validateReceivingHours(a.opensAt, a.closesAt) === undefined;
 
 /** Every block that has to be answered, counted the way the step is marked done. */
-const checksOf = (values: ContactsValues): boolean[] => [
-  ...CONTACT_ROLES.filter((r) => r.required).map((r) => personDone(values.contacts[r.code]!)),
+const checksOf = (
+  values: ContactsValues,
+  accountHolder: AccountHolderDetails,
+): boolean[] => [
+  ...CONTACT_ROLES.filter((r) => r.required).map((r) =>
+    personDone(resolvedContact(values.contacts[r.code]!, accountHolder)),
+  ),
   ...values.billing.map(postalDone),
   values.delivery.some(deliveryDone),
 ];
 
-export const completionOf = (values: ContactsValues): number => {
-  const checks = checksOf(values);
+export const completionOf = (
+  values: ContactsValues,
+  accountHolder: AccountHolderDetails = { fullName: '', email: '', mobile: MOBILE_PREFIX },
+): number => {
+  const checks = checksOf(values, accountHolder);
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 };
 
@@ -243,8 +290,12 @@ export const completionOf = (values: ContactsValues): number => {
 
 export interface StepContactsProps {
   answers: Record<string, unknown>;
-  /** From step 3's saved answers. Never asked for again. */
+  /** From step 2's saved answers. Never asked for again. */
   gstins: readonly string[];
+  /** Step 2 statutory answers — verified GSTIN addresses pre-fill billing rows. */
+  statutoryAnswers?: Record<string, unknown>;
+  /** Account from step 1 — the source when "use my account details" is ticked. */
+  accountHolder: AccountHolderDetails;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
   onContinue: (
     values: Record<string, unknown>,
@@ -259,6 +310,8 @@ export interface StepContactsProps {
 export function StepContacts({
   answers,
   gstins,
+  statutoryAnswers,
+  accountHolder,
   onSaveDraft,
   onContinue,
   busy,
@@ -266,8 +319,13 @@ export function StepContacts({
   blockingReason,
   skipValidation = false,
 }: StepContactsProps): React.JSX.Element {
+  const gstBillingPrefill = React.useMemo(
+    () => prefillBillingFromVerifiedGst(statutoryAnswers),
+    [statutoryAnswers],
+  );
+
   const [values, setValues] = React.useState<ContactsValues>(() =>
-    readContactsDraft(answers, gstins),
+    readContactsDraft(answers, gstins, statutoryAnswers),
   );
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
@@ -283,16 +341,80 @@ export function StepContacts({
   // the current one. Arrival only — a draft per keystroke is what `onBlur`
   // exists to avoid.
   const arrival = React.useRef({ needed: !Array.isArray(answers.billing), save: (): void => {} });
-  arrival.current.save = (): void => onSaveDraft(toDraft(values), completionOf(values));
+  arrival.current.save = (): void =>
+    onSaveDraft(toDraft(values, accountHolder), completionOf(values, accountHolder));
 
   React.useEffect(() => {
     if (arrival.current.needed) arrival.current.save();
   }, []);
 
+  const billingPrefillSaved = React.useRef(false);
+  React.useEffect(() => {
+    if (!gstBillingPrefill.size || billingPrefillSaved.current) return;
+    billingPrefillSaved.current = true;
+    setValues((current) => {
+      const billing = mergeBillingGstPrefill(current.billing, gstBillingPrefill);
+      const unchanged = billing.every(
+        (row, i) =>
+          row.line1 === current.billing[i]!.line1 &&
+          row.line2 === current.billing[i]!.line2 &&
+          row.city === current.billing[i]!.city &&
+          row.state === current.billing[i]!.state &&
+          row.pincode === current.billing[i]!.pincode,
+      );
+      if (unchanged) return current;
+      const next = { ...current, billing };
+      onSaveDraft(toDraft(next, accountHolder), completionOf(next, accountHolder));
+      return next;
+    });
+  }, [accountHolder, gstBillingPrefill, onSaveDraft]);
+
+  // Step 1's draft is cleared on complete — account details may arrive after mount.
+  React.useEffect(() => {
+    const hasAccount =
+      accountHolder.fullName.trim() ||
+      accountHolder.email.trim() ||
+      accountHolder.mobile.trim();
+    if (!hasAccount) return;
+
+    setValues((v) => {
+      let contacts = v.contacts;
+      let changed = false;
+      for (const role of CONTACT_ROLES) {
+        const stored = contacts[role.code]!;
+        if (!stored.useAccountDetails) continue;
+        const merged = { ...stored, ...accountContactFields(accountHolder) };
+        if (
+          merged.fullName === stored.fullName &&
+          merged.email === stored.email &&
+          merged.mobile === stored.mobile
+        ) {
+          continue;
+        }
+        contacts = { ...contacts, [role.code]: merged };
+        changed = true;
+      }
+      if (!changed) return v;
+      const next = { ...v, contacts };
+      onSaveDraft(toDraft(next, accountHolder), completionOf(next, accountHolder));
+      return next;
+    });
+  }, [accountHolder.fullName, accountHolder.email, accountHolder.mobile, accountHolder]);
+
   const clearError = (key: string): void =>
     setErrors(({ [key]: _dropped, ...rest }) => rest);
 
-  const persist = (next: ContactsValues): void => onSaveDraft(toDraft(next), completionOf(next));
+  const setFieldError = (key: string, message?: string): void =>
+    setErrors((e) => {
+      if (!message) {
+        const { [key]: _dropped, ...rest } = e;
+        return rest;
+      }
+      return { ...e, [key]: message };
+    });
+
+  const persist = (next: ContactsValues): void =>
+    onSaveDraft(toDraft(next, accountHolder), completionOf(next, accountHolder));
   const saveOnBlur = (): void => persist(values);
 
   /**
@@ -312,6 +434,15 @@ export function StepContacts({
       ...v,
       contacts: { ...v.contacts, [role]: { ...v.contacts[role]!, ...patch } },
     }));
+
+  const setPersonAndSave = (role: string, patch: Partial<Person>): void => {
+    const next = {
+      ...values,
+      contacts: { ...values.contacts, [role]: { ...values.contacts[role]!, ...patch } },
+    };
+    setValues(next);
+    persist(next);
+  };
 
   const setBilling = (index: number, patch: Partial<BillingAddress>): void =>
     setValues((v) => ({
@@ -342,7 +473,7 @@ export function StepContacts({
     const found: Record<string, string> = {};
 
     for (const role of CONTACT_ROLES) {
-      const person = v.contacts[role.code]!;
+      const person = resolvedContact(v.contacts[role.code]!, accountHolder);
       const touched =
         person.fullName.trim() || person.email.trim() || !isMobileBlank(person.mobile);
       // An optional contact is either absent or complete. Half of one is a
@@ -405,17 +536,23 @@ export function StepContacts({
     const normalised: ContactsValues = {
       ...values,
       contacts: Object.fromEntries(
-        Object.entries(values.contacts).map(([role, p]) => [
-          role,
-          { ...p, mobile: isMobileBlank(p.mobile) ? '' : toE164(p.mobile) },
-        ]),
+        Object.entries(values.contacts).map(([role, p]) => {
+          const resolved = resolvedContact(p, accountHolder);
+          return [
+            role,
+            {
+              ...resolved,
+              mobile: isMobileBlank(resolved.mobile) ? '' : toE164(resolved.mobile),
+            },
+          ];
+        }),
       ),
       delivery: values.delivery.map((d) => ({
         ...d,
         contactMobile: isMobileBlank(d.contactMobile) ? '' : toE164(d.contactMobile),
       })),
     };
-    const refusal = await onContinue(toDraft(normalised), 100);
+    const refusal = await onContinue(toDraft(normalised, accountHolder), 100);
     if (refusal) setErrors(refusal);
   };
 
@@ -432,7 +569,8 @@ export function StepContacts({
       {/* --------------------------------------------------------- contacts */}
       <div className="flex flex-col gap-5">
         {CONTACT_ROLES.map((role) => {
-          const person = values.contacts[role.code]!;
+          const stored = values.contacts[role.code]!;
+          const person = resolvedContact(stored, accountHolder);
           return (
             <fieldset
               key={role.code}
@@ -443,6 +581,33 @@ export function StepContacts({
                 {role.label}
                 {!role.required && <span className="text-ink-3"> — optional</span>}
               </legend>
+              <Checkbox
+                label="Use my account details"
+                consequence="We will fill in the name, email and mobile from the account you created in step 1."
+                checked={stored.useAccountDetails === true}
+                onChange={(use) => {
+                  const patch = use
+                    ? { useAccountDetails: true, ...accountContactFields(accountHolder) }
+                    : {
+                        useAccountDetails: false,
+                        fullName: '',
+                        email: '',
+                        mobile: MOBILE_PREFIX,
+                      };
+                  setPersonAndSave(role.code, patch);
+                  if (use) {
+                    setFieldError(`${role.code}.email`, validateEmail(patch.email));
+                    setFieldError(`${role.code}.mobile`, validateMobile(patch.mobile));
+                    clearError(`${role.code}.fullName`);
+                  } else {
+                    setErrors((e) =>
+                      Object.fromEntries(
+                        Object.entries(e).filter(([key]) => !key.startsWith(`${role.code}.`)),
+                      ),
+                    );
+                  }
+                }}
+              />
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   label={`${role.label} contact name`}
@@ -452,7 +617,7 @@ export function StepContacts({
                   onFocus={() => onFieldFocus('Contacts and delivery')}
                   onBlur={saveOnBlur}
                   onChange={(e) => {
-                    setPerson(role.code, { fullName: e.target.value });
+                    setPerson(role.code, { fullName: e.target.value, useAccountDetails: false });
                     clearError(`${role.code}.fullName`);
                   }}
                   error={errors[`${role.code}.fullName`]}
@@ -468,21 +633,32 @@ export function StepContacts({
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   label={`${role.label} email`}
+                  type="email"
                   inputMode="email"
+                  autoComplete="email"
                   required={role.required}
                   value={person.email}
                   onFocus={() => onFieldFocus('Contacts and delivery')}
                   onBlur={saveOnBlur}
                   onChange={(e) => {
-                    setPerson(role.code, { email: e.target.value });
-                    clearError(`${role.code}.email`);
+                    const email = e.target.value;
+                    setPerson(role.code, { email, useAccountDetails: false });
+                    if (role.required || email.trim()) {
+                      setFieldError(`${role.code}.email`, validateEmail(email));
+                    } else {
+                      clearError(`${role.code}.email`);
+                    }
                   }}
                   error={errors[`${role.code}.email`]}
                 />
                 <Input
                   label={`${role.label} mobile`}
                   mono
-                  inputMode="tel"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  placeholder="+91 9876543210"
+                  maxLength={14}
                   required={role.required}
                   value={person.mobile}
                   onFocus={() => onFieldFocus('Contacts and delivery')}
@@ -490,14 +666,22 @@ export function StepContacts({
                     const mobile = settled(person.mobile);
                     const next = {
                       ...values,
-                      contacts: { ...values.contacts, [role.code]: { ...person, mobile } },
+                      contacts: {
+                        ...values.contacts,
+                        [role.code]: { ...stored, mobile, useAccountDetails: false },
+                      },
                     };
                     setValues(next);
                     persist(next);
                   }}
                   onChange={(e) => {
-                    setPerson(role.code, { mobile: typeMobile(e.target.value) });
-                    clearError(`${role.code}.mobile`);
+                    const mobile = typeMobile(e.target.value);
+                    setPerson(role.code, { mobile, useAccountDetails: false });
+                    if (role.required || !isMobileBlank(mobile)) {
+                      setFieldError(`${role.code}.mobile`, validateMobile(mobile));
+                    } else {
+                      clearError(`${role.code}.mobile`);
+                    }
                   }}
                   error={errors[`${role.code}.mobile`]}
                 />
@@ -509,6 +693,13 @@ export function StepContacts({
 
       {/* ---------------------------------------------------------- billing */}
       <div className="flex flex-col gap-5">
+        {gstBillingPrefill.size > 0 && (
+          <p className="rounded border border-rule-2 bg-sheet-2 p-4 text-body-sm text-ink-2">
+            Billing addresses come from your verified GST registrations. You can edit them if the
+            registered office is not where invoices should be sent, but the state must match the
+            registration.
+          </p>
+        )}
         {values.billing.map((address, index) => {
           const at = (field: string): string | undefined => errors[`billing.${index}.${field}`];
           const issuedIn = address.gstin
@@ -632,6 +823,7 @@ export function StepContacts({
                 onChange={(e) => setDelivery(address.key, { line2: e.target.value })}
               />
               <PincodeLocalityFields
+                autoLookup={false}
                 value={{
                   pincode: address.pincode,
                   city: address.city,
@@ -675,7 +867,11 @@ export function StepContacts({
                 <Input
                   label="Their mobile"
                   mono
-                  inputMode="tel"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  placeholder="+91 9876543210"
+                  maxLength={14}
                   required
                   value={address.contactMobile}
                   onFocus={() => onFieldFocus('Contacts and delivery')}
@@ -691,8 +887,10 @@ export function StepContacts({
                     persist(next);
                   }}
                   onChange={(e) => {
-                    setDelivery(address.key, { contactMobile: typeMobile(e.target.value) });
-                    clearError(`delivery.${address.key}.contactMobile`);
+                    const contactMobile = typeMobile(e.target.value);
+                    setDelivery(address.key, { contactMobile });
+                    const key = `delivery.${address.key}.contactMobile`;
+                    setFieldError(key, validateMobile(contactMobile));
                   }}
                   error={at('contactMobile')}
                 />
@@ -780,7 +978,7 @@ export function StepContacts({
         <Button
           type="button"
           variant="ghost"
-          onClick={() => onSaveDraft(toDraft(values), completionOf(values))}
+          onClick={() => onSaveDraft(toDraft(values, accountHolder), completionOf(values, accountHolder))}
         >
           Save and finish later
         </Button>

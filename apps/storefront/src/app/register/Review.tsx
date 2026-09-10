@@ -88,7 +88,6 @@ const companyRows = (a: Record<string, unknown>): Row[] => [
   { label: 'Year established', value: str(a, 'yearEstablished'), required: true, mono: true },
   { label: 'Employees', value: labelOrBlank(EMPLOYEE_BANDS, str(a, 'employeeBand')), required: true },
   { label: 'Laptops a year', value: labelOrBlank(ANNUAL_VOLUMES, str(a, 'annualVolume')), required: true },
-  { label: 'Website', value: str(a, 'website') },
 ];
 
 interface SavedGstin {
@@ -435,9 +434,14 @@ export function Review({
         back and it opens again.
       </p>
 
-      {block('ACCOUNT', accountRows)}
-      {block('BUSINESS_PROFILE', companyRows)}
-      {block('STATUTORY', statutoryRows)}
+      {[...steps]
+        .sort((a, b) => a.stepOrder - b.stepOrder)
+        .flatMap((step) => {
+          if (step.stepCode === 'ACCOUNT') return [block('ACCOUNT', accountRows)];
+          if (step.stepCode === 'STATUTORY') return [block('STATUTORY', statutoryRows)];
+          if (step.stepCode === 'BUSINESS_PROFILE') return [block('BUSINESS_PROFILE', companyRows)];
+          return [];
+        })}
 
       {contactsStep &&
         (contactAnswers ? (

@@ -142,9 +142,17 @@ const resolvedContact = (
 ): VendorContact =>
   contact.useAccountDetails ? { ...contact, ...accountContactFields(account) } : contact;
 
+const WEEKDAY_OPENS = '10:00';
+const WEEKDAY_CLOSES = '19:00';
+
 const emptyHours = (): Record<string, DayHours> =>
   Object.fromEntries(
-    WEEK_DAYS.map((d) => [String(d.day), { closed: false, opensAt: '', closesAt: '' }]),
+    WEEK_DAYS.map((d) => [
+      String(d.day),
+      d.day === 0
+        ? { closed: true, opensAt: '', closesAt: '' }
+        : { closed: false, opensAt: WEEKDAY_OPENS, closesAt: WEEKDAY_CLOSES },
+    ]),
   );
 
 function mondayCanCopy(hours: Record<string, DayHours>): boolean {
@@ -804,7 +812,7 @@ export function StepFacility({
                         </span>
                         <div className="facility-hours-day__opens">
                           <Input
-                            label="Opens"
+                            label="Morning"
                             type="time"
                             mono
                             disabled={hours.closed}
@@ -821,7 +829,7 @@ export function StepFacility({
                         </div>
                         <div className="facility-hours-day__closes">
                           <Input
-                            label="Closes"
+                            label="Evening"
                             type="time"
                             mono
                             disabled={hours.closed}
@@ -843,7 +851,7 @@ export function StepFacility({
                             onChange={(closed) => {
                               // The window goes with the answer. `facility_hours`
                               // stores NULL times against `is_closed`, and a shut
-                              // day still showing 09:30–18:00 is a value that
+                              // day still showing 10:00–19:00 is a value that
                               // contradicts the tick beside it.
                               const next = setHours(
                                 facility.key,
@@ -977,16 +985,21 @@ export function StepFacility({
                 consequence="We will fill in the name, email and mobile from the account you created in step 1."
                 checked={stored.useAccountDetails}
                 onChange={(use) => {
-                  const fields = use ? accountContactFields(accountHolder) : undefined;
-                  setContactAndSave(role.code, {
-                    useAccountDetails: use,
-                    ...(fields ?? {}),
-                  });
-                  if (fields) {
-                    setFieldError(`${role.code}.email`, validateEmail(fields.email));
-                    setFieldError(`${role.code}.mobile`, validateMobile(fields.mobile));
-                    if (!isMobileBlank(fields.whatsapp)) {
-                      setFieldError(`${role.code}.whatsapp`, validateWhatsapp(fields.whatsapp));
+                  const patch = use
+                    ? { useAccountDetails: true, ...accountContactFields(accountHolder) }
+                    : {
+                        useAccountDetails: false,
+                        fullName: '',
+                        email: '',
+                        mobile: MOBILE_PREFIX,
+                        whatsapp: MOBILE_PREFIX,
+                      };
+                  setContactAndSave(role.code, patch);
+                  if (use) {
+                    setFieldError(`${role.code}.email`, validateEmail(patch.email));
+                    setFieldError(`${role.code}.mobile`, validateMobile(patch.mobile));
+                    if (!isMobileBlank(patch.whatsapp)) {
+                      setFieldError(`${role.code}.whatsapp`, validateWhatsapp(patch.whatsapp));
                     } else {
                       clearError(`${role.code}.whatsapp`);
                     }

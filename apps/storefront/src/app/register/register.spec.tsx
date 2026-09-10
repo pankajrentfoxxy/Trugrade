@@ -170,7 +170,6 @@ describe('a resumed session', () => {
               constitution: 'LLP',
               industry: 'MANUFACTURING',
               yearEstablished: '2011',
-              website: 'https://ferrous.co.in/',
               employeeBand: '',
               annualVolume: '',
             },
@@ -185,7 +184,6 @@ describe('a resumed session', () => {
     expect(legalName).toHaveValue('Ferrous Works Private Limited');
     expect(screen.getByLabelText(/Year established/)).toHaveValue('2011');
     expect(screen.getByLabelText(/Constitution/)).toHaveValue('LLP');
-    expect(screen.getByLabelText(/Website/)).toHaveValue('https://ferrous.co.in/');
 
     // The rail has to say the draft is safe, and say when.
     await waitFor(() => expect(screen.getByTestId('step-rail')).toHaveTextContent(/Saved /));

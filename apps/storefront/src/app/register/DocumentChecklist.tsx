@@ -27,7 +27,7 @@ import {
  * The document checklist, shared by the buyer's step 5 and the vendor's step 6.
  *
  * T6 built this against `POST /onboarding/documents`; the vendor step asks for
- * nine types where the buyer asks for four, and that difference is **data** —
+ * seven types where the buyer asks for four, and that difference is **data** —
  * a list of doc codes and why each one is wanted. Everything that makes the
  * upload correct is not: one request per file so each carries its own progress
  * and its own refusal, the server's sentence rendered verbatim against the file
@@ -49,6 +49,11 @@ export interface WantedDocument {
   docType: string;
   required: boolean;
   purpose: string;
+  /**
+   * When the type has `maxAgeDays`, the date field is required unless this is
+   * false. Missing means required — that is how cancelled-cheque used to work.
+   */
+  dateRequired?: boolean;
 }
 
 const STATUS: Record<DocumentStatus, UploadStatus> = {
@@ -305,6 +310,7 @@ export function DocumentChecklist({
         const inFlight = pending.filter((p) => p.docType === rule.docType);
         const files: UploadedFile[] = [...inFlight.map(asPending), ...held.map(asUploaded)];
         const room = rule.maxFiles - held.filter(usable).length;
+        const dateRequired = rule.maxAgeDays !== null && w.dateRequired !== false;
 
         return (
           <div
@@ -317,11 +323,13 @@ export function DocumentChecklist({
                 label={`Date on the ${rule.label}`}
                 type="date"
                 mono
-                required
+                required={dateRequired}
                 hint={
                   compactHints
                     ? `Issued in the last ${rule.maxAgeDays} days.`
-                    : `We can only accept one issued in the last ${rule.maxAgeDays} days, so we check the date before the file.`
+                    : dateRequired
+                      ? `We can only accept one issued in the last ${rule.maxAgeDays} days, so we check the date before the file.`
+                      : `Optional. If you give a date we check it is within the last ${rule.maxAgeDays} days.`
                 }
                 value={dates[rule.docType] ?? ''}
                 onChange={(e) => setDates((d) => ({ ...d, [rule.docType]: e.target.value }))}
@@ -351,7 +359,7 @@ export function DocumentChecklist({
               maxSizeMb={Math.floor(rule.maxBytes / (1024 * 1024))}
               multiple={rule.maxFiles > 1}
               files={files}
-              disabled={room <= 0 || (rule.maxAgeDays !== null && !dates[rule.docType])}
+              disabled={room <= 0 || (dateRequired && !dates[rule.docType])}
               onSelect={(chosen) => {
                 for (const file of chosen.slice(0, Math.max(room, 0))) void send(file, rule);
               }}

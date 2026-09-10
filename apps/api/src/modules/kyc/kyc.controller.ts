@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Post,
@@ -902,6 +903,7 @@ export class OnboardingLeadController {
    */
   @Get('pincodes/:pincode')
   @Public()
+  @Header('Cache-Control', 'no-store')
   lookupPincode(
     @Param('pincode', new ZodValidationPipe(pincodeSchema)) pincode: string,
   ): Promise<PincodeLookupView> {

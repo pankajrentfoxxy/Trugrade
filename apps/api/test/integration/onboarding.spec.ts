@@ -273,8 +273,8 @@ describe('the stepper is data, not two hard-coded flows', () => {
     expect(progress.steps).toHaveLength(5);
     expect(progress.steps.map((s) => s.stepCode)).toEqual([
       'ACCOUNT',
-      'BUSINESS_PROFILE',
       'STATUTORY',
+      'BUSINESS_PROFILE',
       'CONTACTS_ADDRESSES',
       'DOCUMENTS',
     ]);
@@ -322,7 +322,7 @@ describe('is_required derives from constitution — the derivation the source do
     expect(statutory.fields.find((f) => f.fieldCode === 'cin')).toBeUndefined();
   });
 
-  it('a private limited company is asked for a CIN and a board resolution', async () => {
+  it('a private limited company is asked for a CIN', async () => {
     const { orgId } = await registerVendor();
     await raw.organization.update({
       where: { id: orgId },
@@ -334,7 +334,7 @@ describe('is_required derives from constitution — the derivation the source do
     const docs = progress.steps.find((s) => s.stepCode === 'DOCUMENTS_BANK')!;
 
     expect(statutory.fields.find((f) => f.fieldCode === 'cin')?.required).toBe(true);
-    expect(docs.fields.find((f) => f.fieldCode === 'board_resolution')?.required).toBe(true);
+    expect(docs.fields.find((f) => f.fieldCode === 'board_resolution')).toBeUndefined();
   });
 });
 

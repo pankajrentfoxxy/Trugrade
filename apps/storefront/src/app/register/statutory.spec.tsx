@@ -82,6 +82,7 @@ function renderStep(answers: Record<string, unknown>): void {
       fallbackLegalName="Alpha Systems Private Limited"
       constitution="PVT_LTD"
       copy={BUYER_STATUTORY_COPY}
+      selectPrimaryGstin={false}
       busy={false}
       onSaveDraft={noop}
       onContinue={async () => null}
@@ -209,22 +210,22 @@ describe('a verified GSTIN', () => {
     renderStep({ pan: OWN_PAN, gstins: [{ gstin: GSTIN_OWN_PAN, isPrimary: false }] });
     fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
 
-    // Twice over: as the heading of the verified panel, and beside the primary
-    // radio, which is where the choice is actually made.
-    expect(await screen.findAllByText('Alpha Systems Private Limited')).toHaveLength(2);
+    expect(await screen.findByText('Alpha Systems Private Limited')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).toBeNull();
     const confirm = screen.getByLabelText(/Yes, this is our business/);
     // Rule 4(9): the box that says "that is us" is never ticked for them.
     expect(confirm).not.toBeChecked();
   });
 
-  it('does not pre-select a primary registration', () => {
+  it('does not render a primary-registration picker', () => {
     stubFetch({});
     renderStep({
       pan: OWN_PAN,
       gstins: [{ gstin: GSTIN_OWN_PAN, isPrimary: false }, { gstin: GSTIN_OTHER_PAN }],
     });
 
-    for (const radio of screen.getAllByRole('radio')) expect(radio).not.toBeChecked();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByText('Not entered yet')).toBeNull();
   });
 });
 
@@ -296,7 +297,7 @@ describe('a resumed session', () => {
 
     expect(screen.getByText('ALPHA SYSTEMS PRIVATE LIMITED')).toBeInTheDocument();
     expect(screen.getAllByText('Alpha Systems Private Limited').length).toBeGreaterThan(0);
-    expect(screen.getByRole('radio')).toBeChecked();
+    expect(screen.queryByRole('radio')).toBeNull();
     expect(calls).toHaveLength(0);
   });
 });

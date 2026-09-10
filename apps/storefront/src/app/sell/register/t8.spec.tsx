@@ -1,13 +1,12 @@
 /**
- * The three things about steps 4 and 5 that would be silently wrong.
+ * The two things about steps 4 and 5 that would be silently wrong.
  *
  * None of these asserts that a guard exists. The first counts every checkbox
  * and radio the two steps actually render and fails if any one of them arrives
- * ticked. The second **attempts the forbidden thing**: it fills in every other
- * answer on step 4, submits, and expects the step to refuse rather than send a
- * `can_dropship` nobody gave. The third saves a dispatch address that differs
- * from the facility address, throws the component away, and rebuilds it from
- * the draft the save actually produced.
+ * ticked, except the Sunday-closed and copy-hours defaults on step 5. The
+ * second saves a dispatch address that differs from the facility address,
+ * throws the component away, and rebuilds it from the draft the save actually
+ * produced.
  */
 import * as React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -100,11 +99,18 @@ describe('nothing arrives ticked', () => {
   it('step 5 renders no checkbox and no radio in a chosen state', () => {
     const { container, unmount } = renderFacility();
 
+    const allowedDefaults = new Set([
+      ...screen.getAllByRole('checkbox', { name: 'Closed' }).filter((box) => box.checked),
+      screen.getByRole('checkbox', { name: /Copy to every open day/ }),
+    ]);
+    expect(allowedDefaults.size).toBe(2);
+
     const checkboxes = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
     );
     expect(checkboxes.length).toBeGreaterThan(3);
     for (const box of checkboxes) {
+      if (allowedDefaults.has(box)) continue;
       expect(box).not.toBeChecked();
       expect(box).not.toHaveAttribute('checked');
     }
@@ -116,51 +122,6 @@ describe('nothing arrives ticked', () => {
     expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
 
     unmount();
-  });
-});
-
-/* ================================== can_dropship cannot be left unanswered */
-
-describe('can_dropship', () => {
-  it('refuses the step rather than sending an answer nobody gave', () => {
-    const onContinue = jest.fn(accept);
-    renderCapability({ onContinue });
-
-    // Everything else on the step, answered properly.
-    fireEvent.click(screen.getByRole('checkbox', { name: /Business laptops/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Dell' }));
-    fireEvent.change(screen.getByLabelText(/Laptops you can supply in a month/), {
-      target: { value: '300' },
-    });
-    fireEvent.change(screen.getByLabelText('Grade A+'), { target: { value: '50' } });
-    fireEvent.change(screen.getByLabelText('Grade A'), { target: { value: '30' } });
-    fireEvent.change(screen.getByLabelText('Grade B'), { target: { value: '20' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: /Corporate buy-back/i }));
-    fireEvent.change(screen.getByLabelText(/Lead time, in days/), { target: { value: '2' } });
-
-    // …and `can_dropship` deliberately left alone.
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
-
-    expect(onContinue).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/A “no” is a real answer and does not stop your application/),
-    ).toBeInTheDocument();
-
-    // Answering it — either way — is what lets the step through.
-    fireEvent.click(screen.getByLabelText(/we cannot dispatch to a third party/i));
-    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
-
-    expect(onContinue).toHaveBeenCalledTimes(1);
-    expect(onContinue.mock.calls[0]![0]).toMatchObject({ canDropship: false });
-  });
-
-  it('does not treat the column default as an answer on a resumed draft', () => {
-    // A draft saved before the question was reached holds no `canDropship` key
-    // at all. The column defaults to TRUE; the screen must not.
-    renderCapability({ answers: { monthlyCapacity: '300' } });
-    const group = screen.getByTestId('yesno-can-dropship');
-    expect(within(group).getByText('Not answered yet.')).toBeInTheDocument();
-    for (const radio of within(group).getAllByRole('radio')) expect(radio).not.toBeChecked();
   });
 });
 

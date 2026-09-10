@@ -2892,7 +2892,7 @@ model vendor_capability {
   org_id                      String       @db.Uuid
   brand_id                    String?      @db.Uuid
   category                    String
-  monthly_capacity_units      Int
+  monthly_capacity_units      Int?
   typical_grade_mix           Json?
   avg_price_band_min          Decimal?     @db.Decimal(14, 2)
   avg_price_band_max          Decimal?     @db.Decimal(14, 2)

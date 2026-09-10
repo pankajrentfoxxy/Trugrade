@@ -236,28 +236,6 @@ export function validateYearEstablished(value: string, currentYear: number): str
   return undefined;
 }
 
-/**
- * Optional, and a URL typed without a scheme is a URL.
- *
- * People type `acme.co.in`, and refusing that for want of `https://` is the
- * validator being right about a specification and wrong about a person. The
- * scheme is added here and the normalised value is what gets saved.
- */
-export function normaliseWebsite(value: string): { url?: string; error?: string } {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return {};
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  let parsed: URL;
-  try {
-    parsed = new URL(withScheme);
-  } catch {
-    return { error: 'That is not a web address. Try something like acme.co.in.' };
-  }
-  if (!parsed.hostname.includes('.') || parsed.hostname.endsWith('.'))
-    return { error: 'That is not a web address. Try something like acme.co.in.' };
-  return { url: parsed.toString() };
-}
-
 /* ==========================================================================
  * Statutory — GSTIN, PAN, CIN
  * ========================================================================
@@ -580,25 +558,6 @@ export function validateAccountHolderName(value: string): string | undefined {
   if (trimmed.length > 120) return 'That is longer than 120 characters, which no bank will hold.';
   if (!/^[A-Za-z0-9 .,&'()\-/]+$/.test(trimmed))
     return 'Use letters, numbers and . , & ’ ( ) - / only. A bank name has nothing else in it.';
-  return undefined;
-}
-
-/**
- * The vendor's own minimum payout, against the platform floor.
- *
- * Below the floor the balance rolls forward anyway, so a smaller number here is
- * a promise we would not keep — it is refused with the floor named rather than
- * silently raised.
- */
-export function validatePayoutThreshold(value: string, floorInr: number): string | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return 'Enter the smallest amount worth paying you.';
-  if (!/^\d+$/.test(trimmed)) return 'Whole rupees only — no paise, no commas.';
-  const amount = Number(trimmed);
-  if (amount < floorInr)
-    return `Our own floor is Rs ${floorInr.toLocaleString('en-IN')}. Below that the balance rolls into the next run, so a smaller figure here would not be honoured.`;
-  if (amount > 10_00_000)
-    return 'That is above Rs 10,00,000. A threshold that high means most runs would pay you nothing.';
   return undefined;
 }
 

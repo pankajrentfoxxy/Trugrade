@@ -175,6 +175,21 @@ export function readStatutoryDraft(
 const rowSettled = (row: GstinRow): boolean =>
   row.deferred || (row.outcome?.outcome === 'PASS' && row.confirmed);
 
+/**
+ * One verified registration is enough — the first settled GSTIN is the
+ * billing (buyer) or buying (vendor) entity. There is no radio to pick it.
+ */
+const applyAutoPrimary = (gstins: GstinRow[]): GstinRow[] => {
+  const settled = gstins.filter(
+    (r) => validateGstin(r.gstin) === undefined && rowSettled(r),
+  );
+  if (settled.length === 0) return gstins.map((r) => ({ ...r, isPrimary: false }));
+
+  const existing = settled.find((r) => r.isPrimary);
+  const primaryKey = existing?.key ?? settled[0]!.key;
+  return gstins.map((r) => ({ ...r, isPrimary: r.key === primaryKey }));
+};
+
 const panSettled = (v: StatutoryValues): boolean =>
   v.panDeferred || v.panOutcome?.outcome === 'PASS';
 
@@ -186,11 +201,13 @@ export function completionOf(
   values: StatutoryValues,
   fields: readonly FieldRequirement[],
   today: Date,
+  selectPrimaryGstin = false,
 ): number {
+  const gstins = selectPrimaryGstin ? values.gstins : applyAutoPrimary(values.gstins);
   const checks = [
     panSettled(values),
-    values.gstins.some(rowSettled),
-    values.gstins.some((r) => r.isPrimary),
+    gstins.some(rowSettled),
+    selectPrimaryGstin ? gstins.some((r) => r.isPrimary) : gstins.some(rowSettled),
     ...fields
       .filter((f) => f.required)
       .map((f) => capturedError(f, values.captured[f.fieldCode] ?? '', today) === undefined),
@@ -488,6 +505,8 @@ export interface StepStatutoryProps {
   onFieldFocus: (term: string) => void;
   blockingReason?: string | null;
   skipValidation?: boolean;
+  /** False (default): primary is the first verified GSTIN. True keeps a radio picker. */
+  selectPrimaryGstin?: boolean;
 }
 
 export function StepStatutory({
@@ -502,6 +521,7 @@ export function StepStatutory({
   onFieldFocus,
   blockingReason,
   skipValidation = false,
+  selectPrimaryGstin = false,
 }: StepStatutoryProps): React.JSX.Element {
   const [values, setValues] = React.useState<StatutoryValues>(() =>
     readStatutoryDraft(answers, fallbackLegalName, fields),
@@ -558,9 +578,13 @@ export function StepStatutory({
    * GSTINs and closes the tab must come back to two verified GSTINs, and a draft
    * saved only on blur loses whichever answer the portal returned last.
    */
+  const prepare = (next: StatutoryValues): StatutoryValues =>
+    selectPrimaryGstin ? next : { ...next, gstins: applyAutoPrimary(next.gstins) };
+
   const persist = (next: StatutoryValues): void => {
-    latest.current = next;
-    onSaveDraft(toDraft(next), completionOf(next, fields, today));
+    const prepared = prepare(next);
+    latest.current = prepared;
+    onSaveDraft(toDraft(prepared), completionOf(prepared, fields, today, selectPrimaryGstin));
   };
 
   const runCheck = async (key: string): Promise<void> => {
@@ -583,7 +607,8 @@ export function StepStatutory({
           })
         : await verifyGstin({
             gstin: toGstin(row?.gstin ?? ''),
-            expectedLegalName: current.legalName || undefined,
+            // Name is not compared here — statutory runs before company profile,
+            // and the portal name is what the applicant confirms on the next screen.
             expectedPan: toPan(current.pan) || undefined,
           });
 
@@ -729,7 +754,7 @@ export function StepStatutory({
       else if (!rowSettled(row)) found[row.key] = 'Verify this GSTIN before you continue.';
     }
 
-    if (!values.gstins.some((r) => r.isPrimary))
+    if (selectPrimaryGstin && !values.gstins.some((r) => r.isPrimary))
       found.primary = copy.primaryMissing;
 
     for (const field of fields) {
@@ -747,7 +772,8 @@ export function StepStatutory({
       setErrors(found);
       return;
     }
-    const refusal = await onContinue(toDraft(values), 100);
+    const prepared = prepare(values);
+    const refusal = await onContinue(toDraft(prepared), 100);
     if (refusal) setErrors(refusal);
   };
 
@@ -964,21 +990,19 @@ export function StepStatutory({
         </div>
       </div>
 
-      {/* ---------------------------------------------------------- primary */}
-      <fieldset
-        className="flex flex-col gap-2"
-        onFocus={() => onFieldFocus('Primary GSTIN')}
-        aria-describedby={errors.primary ? 'primary-gstin-error' : undefined}
-      >
-        <legend className="sr-only">Primary GSTIN</legend>
+      {selectPrimaryGstin && (
+        <fieldset
+          className="flex flex-col gap-2"
+          onFocus={() => onFieldFocus('Primary GSTIN')}
+          aria-describedby={errors.primary ? 'primary-gstin-error' : undefined}
+        >
+          <legend className="sr-only">Primary GSTIN</legend>
           {values.gstins.map((row) => {
             const usable = validateGstin(row.gstin) === undefined;
             return (
               <label
                 key={row.key}
                 className={`flex min-h-11 cursor-pointer flex-col gap-1 rounded border-l-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:py-2 ${
-                  // The amber marker is an active state, which is one of the
-                  // three things the accent is allowed to mean.
                   row.isPrimary ? 'border-acc bg-sheet-2' : 'border-rule'
                 }`}
               >
@@ -993,7 +1017,7 @@ export function StepStatutory({
                     disabled={!usable}
                   />
                   <span className="min-w-0 break-all font-mono tnum text-body-sm text-ink">
-                    {toGstin(row.gstin) || 'Not entered yet'}
+                    {toGstin(row.gstin)}
                   </span>
                 </span>
                 {row.outcome?.outcome === 'PASS' ? (
@@ -1006,12 +1030,13 @@ export function StepStatutory({
               </label>
             );
           })}
-        {errors.primary && (
-          <p id="primary-gstin-error" className="text-body-sm text-fail" role="alert">
-            {errors.primary}
-          </p>
-        )}
-      </fieldset>
+          {errors.primary && (
+            <p id="primary-gstin-error" className="text-body-sm text-fail" role="alert">
+              {errors.primary}
+            </p>
+          )}
+        </fieldset>
+      )}
 
       {/* -------------------------------------------- constitution-gated fields */}
       {fields.length > 0 && (

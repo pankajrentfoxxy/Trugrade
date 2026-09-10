@@ -107,7 +107,6 @@ describe('the four Change 4 captures are on the review screen', () => {
 describe('a missing capture blocks approval', () => {
   it.each([
     ['dispatch address', { dispatchAddress: null, dispatchSameAsRegistered: false }],
-    ['dropship capability', { canDropship: null }],
     ['warranty term', { defaultWarrantyMonths: null }],
     ['pricing mode', { pricingMode: null }],
   ])('%s missing — Approve is disabled and says why', async (label, patch) => {

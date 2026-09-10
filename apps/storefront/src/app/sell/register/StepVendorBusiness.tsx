@@ -10,12 +10,8 @@ import {
   postalErrors,
   type PostalAddress,
 } from '../../register/AddressFields';
-import { CONSTITUTIONS, STAFF_BANDS, VENDOR_CATEGORIES } from '../../register/picklists';
-import {
-  normaliseWebsite,
-  validateCompanyName,
-  validateIncorporationDate,
-} from '../../register/validation';
+import { CONSTITUTIONS, VENDOR_CATEGORIES } from '../../register/picklists';
+import { validateCompanyName, validateIncorporationDate } from '../../register/validation';
 import { mergeGstPrefill, prefillFromVerifiedGst } from './gst-business-prefill';
 
 /**
@@ -25,14 +21,14 @@ import { mergeGstPrefill, prefillFromVerifiedGst } from './gst-business-prefill'
  * fields and their validators, and diverge on everything that matters: a buyer
  * is asked what industry they are in and how many laptops they buy a year, a
  * supplier is asked for two postal addresses and what kind of supplier they are.
- * The five shared fields are five `Input`s calling the same three exported
- * validators — folding two structurally different forms into one component
- * behind a mode flag would cost more than it saves and would make every future
- * change to either of them a change to both.
+ * The shared fields are `Input`s calling the same exported validators — folding
+ * two structurally different forms into one component behind a mode flag would
+ * cost more than it saves and would make every future change to either of them
+ * a change to both.
  *
  * What *is* shared is pulled out properly: `AddressFields` is the postal
- * fieldset, `CONSTITUTIONS` is the database enum, and `validateCompanyName`,
- * `normaliseWebsite` and `validateIncorporationDate` are the rules themselves.
+ * fieldset, `CONSTITUTIONS` is the database enum, and `validateCompanyName` and
+ * `validateIncorporationDate` are the rules themselves.
  *
  * Constitution is the load-bearing answer on this screen.
  * `onboarding_field_requirement` gates CIN, LLPIN and the incorporation date on
@@ -45,8 +41,6 @@ export interface VendorBusinessValues {
   constitution: string;
   incorporationDate: string;
   category: string;
-  website: string;
-  staffBand: string;
   registered: PostalAddress;
   operating: PostalAddress;
   /** True while the operating address is a mirror of the registered one. */
@@ -59,8 +53,6 @@ const EMPTY: VendorBusinessValues = {
   constitution: '',
   incorporationDate: '',
   category: '',
-  website: '',
-  staffBand: '',
   registered: emptyPostal(),
   operating: emptyPostal(),
   operatingSameAsRegistered: false,
@@ -91,8 +83,6 @@ export function readVendorBusinessDraft(
     constitution: str('constitution'),
     incorporationDate: str('incorporationDate'),
     category: str('category'),
-    website: str('website'),
-    staffBand: str('staffBand'),
     registered: address('registered'),
     operating: address('operating'),
     operatingSameAsRegistered: answers.operatingSameAsRegistered === true,
@@ -112,7 +102,6 @@ const checksOf = (values: VendorBusinessValues): boolean[] => [
   validateCompanyName(values.legalName) === undefined,
   values.constitution.length > 0,
   values.category.length > 0,
-  values.staffBand.length > 0,
   postalComplete(values.registered),
   values.operatingSameAsRegistered || postalComplete(values.operating),
 ];
@@ -207,13 +196,10 @@ export function StepVendorBusiness({
     if (!candidate.constitution)
       found.constitution = 'Choose the constitution — it decides which documents we ask for.';
     if (!candidate.category) found.category = 'Choose what best describes your business.';
-    if (!candidate.staffBand) found.staffBand = 'Choose the headcount band.';
     if (dateApplies && candidate.constitution) {
       const date = validateIncorporationDate(candidate.incorporationDate, false, today);
       if (date) found.incorporationDate = date;
     }
-    const site = normaliseWebsite(candidate.website);
-    if (site.error) found.website = site.error;
 
     for (const [key, message] of Object.entries(postalErrors(candidate.registered)))
       found[`registered.${key}`] = message;
@@ -231,8 +217,7 @@ export function StepVendorBusiness({
       setErrors(found);
       return;
     }
-    const site = normaliseWebsite(values.website);
-    const refusal = await onContinue(toDraft({ ...values, website: site.url ?? '' }), 100);
+    const refusal = await onContinue(toDraft(values), 100);
     if (refusal) setErrors(refusal);
   };
 
@@ -312,25 +297,6 @@ export function StepVendorBusiness({
           onBlur={saveOnBlur}
           onChange={(e) => set('category', e.target.value)}
           error={errors.category}
-        />
-        <Select
-          label="People on the payroll"
-          required
-          options={STAFF_BANDS}
-          value={values.staffBand}
-          onFocus={() => onFieldFocus('Business')}
-          onBlur={saveOnBlur}
-          onChange={(e) => set('staffBand', e.target.value)}
-          error={errors.staffBand}
-        />
-        <Input
-          label="Website"
-          inputMode="url"
-          value={values.website}
-          onFocus={() => onFieldFocus('Business')}
-          onBlur={saveOnBlur}
-          onChange={(e) => set('website', e.target.value)}
-          error={errors.website}
         />
       </div>
 

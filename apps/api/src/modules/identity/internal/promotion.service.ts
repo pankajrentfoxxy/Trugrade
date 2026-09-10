@@ -44,7 +44,6 @@ export interface OrgProfilePatch {
   tradeName?: string;
   /** The `constitution_type` enum. Rejected here rather than at the database. */
   constitution?: string;
-  website?: string;
   yearEstablished?: number | null;
   employeeCountBand?: string;
   annualTurnoverBand?: string;
@@ -138,7 +137,6 @@ export class OrgPromotionService {
         legal_name: patch.legalName || undefined,
         trade_name: patch.tradeName || undefined,
         constitution: (patch.constitution as ConstitutionEnum | undefined) || undefined,
-        website: patch.website || undefined,
         year_established: patch.yearEstablished ?? undefined,
         employee_count_band: patch.employeeCountBand || undefined,
         annual_turnover_band: patch.annualTurnoverBand || undefined,

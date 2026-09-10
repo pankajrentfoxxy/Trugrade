@@ -21,17 +21,13 @@ import { StepStatutory, WHY_STATUTORY, BUYER_STATUTORY_COPY } from './StepStatut
  * page still server-renders the definitions, so the rail is in the first paint.
  */
 
-/** Step 2's legal name, then nothing. */
-const legalNameFor = (ctx: StepContext): string =>
-  typeof ctx.allAnswers.BUSINESS_PROFILE?.legalName === 'string'
-    ? (ctx.allAnswers.BUSINESS_PROFILE.legalName as string)
-    : '';
+const accountNameFor = (ctx: StepContext): string => ctx.accountHolder.fullName;
 
 /**
- * The GSTINs step 3 verified, for step 4's billing addresses.
+ * The GSTINs step 2 verified, for step 4's billing addresses.
  *
  * Read, never asked for again. Once step 4 has a draft of its own it carries its
- * own copy — which is what survives step 3 being marked COMPLETE and its draft
+ * own copy — which is what survives step 2 being marked COMPLETE and its draft
  * cleared server-side.
  */
 function savedGstins(ctx: StepContext): string[] {
@@ -56,6 +52,8 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
   BUSINESS_PROFILE: (ctx) => (
     <StepCompany
       answers={ctx.answers}
+      statutoryAnswers={ctx.allAnswers.STATUTORY}
+      fallbackLegalName={accountNameFor(ctx)}
       busy={ctx.busy}
       blockingReason={ctx.step?.blockingReason}
       onSaveDraft={ctx.saveDraft}
@@ -67,10 +65,11 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
   STATUTORY: (ctx) => (
     <StepStatutory
       answers={ctx.answers}
-      fallbackLegalName={legalNameFor(ctx)}
+      fallbackLegalName={accountNameFor(ctx)}
       constitution={ctx.constitution}
       fields={ctx.step?.fields}
       copy={BUYER_STATUTORY_COPY}
+      selectPrimaryGstin={false}
       busy={ctx.busy}
       blockingReason={ctx.step?.blockingReason}
       onSaveDraft={ctx.saveDraft}
@@ -83,6 +82,8 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
     <StepContacts
       answers={ctx.answers}
       gstins={savedGstins(ctx)}
+      statutoryAnswers={ctx.allAnswers.STATUTORY}
+      accountHolder={ctx.accountHolder}
       busy={ctx.busy}
       blockingReason={ctx.step?.blockingReason}
       onSaveDraft={ctx.saveDraft}
@@ -105,7 +106,7 @@ const RENDERERS: Record<string, (ctx: StepContext) => React.ReactNode> = {
 };
 
 const WHY: Record<string, readonly WhyRailItem[]> = {
-  STATUTORY: WHY_STATUTORY,
+  STATUTORY: WHY_STATUTORY.filter((item) => item.term !== 'Primary GSTIN'),
   CONTACTS_ADDRESSES: WHY_CONTACTS,
   DOCUMENTS: WHY_DOCUMENTS,
 };

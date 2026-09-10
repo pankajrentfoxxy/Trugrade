@@ -10,10 +10,14 @@ import {
   INDUSTRIES,
   yearEstablishedOptions,
 } from './picklists';
-import { normaliseWebsite, validateCompanyName, validateYearEstablished } from './validation';
+import {
+  mergeCompanyGstPrefill,
+  prefillCompanyFromVerifiedGst,
+} from './gst-company-prefill';
+import { validateCompanyName, validateYearEstablished } from './validation';
 
 /**
- * Step 2 — Company.
+ * Step 3 — Company (after Statutory).
  *
  * Everything typed here goes to `PUT /onboarding/steps/BUSINESS_PROFILE` on
  * blur, so leaving the tab open on a phone call costs nothing. The draft is a
@@ -22,7 +26,9 @@ import { normaliseWebsite, validateCompanyName, validateYearEstablished } from '
  *
  * Constitution matters more than it looks. `onboarding_step_definition` gates
  * whole steps on it and `onboarding_field_requirement` gates CIN, LLPIN and the
- * incorporation date, so this answer decides what step 3 will ask for.
+ * incorporation date, so this answer decides what statutory will ask for on
+ * re-review. The primary verified GSTIN on step 2 pre-fills the four fields
+ * that overlap with the portal response.
  */
 
 export interface CompanyValues {
@@ -32,7 +38,6 @@ export interface CompanyValues {
   industry: string;
   yearEstablished: string;
   employeeBand: string;
-  website: string;
   annualVolume: string;
 }
 
@@ -43,11 +48,10 @@ const EMPTY: CompanyValues = {
   industry: '',
   yearEstablished: '',
   employeeBand: '',
-  website: '',
   annualVolume: '',
 };
 
-/** The six that must be answered. Trade name and website are genuinely optional. */
+/** The six that must be answered. Trade name is genuinely optional. */
 const REQUIRED: ReadonlyArray<keyof CompanyValues> = [
   'legalName',
   'constitution',
@@ -71,7 +75,6 @@ export function readCompanyDraft(
     industry: str('industry'),
     yearEstablished: str('yearEstablished'),
     employeeBand: str('employeeBand'),
-    website: str('website'),
     annualVolume: str('annualVolume'),
   };
 }
@@ -85,6 +88,8 @@ export const completionOf = (values: CompanyValues): number =>
 
 export interface StepCompanyProps {
   answers: Record<string, unknown>;
+  /** Step 2 statutory answers — the verified primary GSTIN pre-fills this screen. */
+  statutoryAnswers?: Record<string, unknown>;
   /** Pre-filled when a draft or an earlier session already captured the name. */
   fallbackLegalName?: string;
   onSaveDraft: (values: Record<string, unknown>, completionPct: number) => void;
@@ -101,6 +106,7 @@ export interface StepCompanyProps {
 
 export function StepCompany({
   answers,
+  statutoryAnswers,
   fallbackLegalName = '',
   onSaveDraft,
   onContinue,
@@ -109,10 +115,29 @@ export function StepCompany({
   blockingReason,
   skipValidation = false,
 }: StepCompanyProps): React.JSX.Element {
-  const [values, setValues] = React.useState<CompanyValues>(() =>
-    readCompanyDraft(answers, fallbackLegalName),
+  const gstPrefill = React.useMemo(
+    () => prefillCompanyFromVerifiedGst(statutoryAnswers),
+    [statutoryAnswers],
   );
+
+  const [values, setValues] = React.useState<CompanyValues>(() => {
+    const base = readCompanyDraft(answers, fallbackLegalName);
+    return gstPrefill ? mergeCompanyGstPrefill(base, gstPrefill) : base;
+  });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  const prefillSaved = React.useRef(false);
+  React.useEffect(() => {
+    if (!gstPrefill || prefillSaved.current) return;
+    prefillSaved.current = true;
+    setValues((current) => {
+      const merged = mergeCompanyGstPrefill(current, gstPrefill);
+      onSaveDraft({ ...merged }, completionOf(merged));
+      return merged;
+    });
+  }, [gstPrefill, onSaveDraft]);
+
+  const locked = gstPrefill?.locked ?? new Set<string>();
 
   // The year the rule compares against is read once, here, and passed in — the
   // validator itself takes it as an argument so it can be tested at a boundary.
@@ -123,6 +148,7 @@ export function StepCompany({
   );
 
   const set = <K extends keyof CompanyValues>(key: K, value: CompanyValues[K]): void => {
+    if (locked.has(key as string)) return;
     setValues((v) => ({ ...v, [key]: value }));
     setErrors(({ [key as string]: _dropped, ...rest }) => rest);
   };
@@ -143,8 +169,6 @@ export function StepCompany({
       found.yearEstablished = 'Choose the year the business was established.';
     const year = validateYearEstablished(candidate.yearEstablished, currentYear);
     if (year) found.yearEstablished = year;
-    const site = normaliseWebsite(candidate.website);
-    if (site.error) found.website = site.error;
     return found;
   };
 
@@ -155,8 +179,7 @@ export function StepCompany({
       setErrors(found);
       return;
     }
-    const site = normaliseWebsite(values.website);
-    const refusal = await onContinue({ ...values, website: site.url ?? '' }, 100);
+    const refusal = await onContinue({ ...values }, 100);
     if (refusal) setErrors(refusal);
   };
 
@@ -171,11 +194,18 @@ export function StepCompany({
         </p>
       )}
 
+      {gstPrefill && (
+        <p className="rounded border border-rule-2 bg-sheet-2 p-4 text-body-sm text-ink-2">
+          These details come from your verified GSTIN. They cannot be changed here — if something
+          is wrong, use a different primary registration on the Statutory step.
+        </p>
+      )}
+
       <div className="flex flex-col gap-5">
         <Input
           label="Company legal name"
-          hint="Exactly as it appears on your GST certificate."
           required
+          readOnly={locked.has('legalName')}
           value={values.legalName}
           onFocus={() => onFieldFocus('Company')}
           onBlur={saveOnBlur}
@@ -184,6 +214,7 @@ export function StepCompany({
         />
         <Input
           label="Trade name"
+          readOnly={locked.has('tradeName')}
           value={values.tradeName}
           onFocus={() => onFieldFocus('Company')}
           onBlur={saveOnBlur}
@@ -193,6 +224,7 @@ export function StepCompany({
         <Select
           label="Constitution"
           required
+          disabled={locked.has('constitution')}
           options={CONSTITUTIONS}
           value={values.constitution}
           onFocus={() => onFieldFocus('Company')}
@@ -215,8 +247,8 @@ export function StepCompany({
         />
         <Select
           label="Year established"
-          hint="Calendar year your business started operating."
           required
+          disabled={locked.has('yearEstablished')}
           options={yearOptions}
           value={values.yearEstablished}
           onFocus={() => onFieldFocus('Company')}
@@ -243,15 +275,6 @@ export function StepCompany({
           onBlur={saveOnBlur}
           onChange={(e) => set('annualVolume', e.target.value)}
           error={errors.annualVolume}
-        />
-        <Input
-          label="Website"
-          inputMode="url"
-          value={values.website}
-          onFocus={() => onFieldFocus('Company')}
-          onBlur={saveOnBlur}
-          onChange={(e) => set('website', e.target.value)}
-          error={errors.website}
         />
       </div>
 
