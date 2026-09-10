@@ -41,7 +41,7 @@ const rule = (docType: string, label: string, maxAgeDays: number | null = null):
   label,
   maxAgeDays,
   requiresExpiry: false,
-  maxFiles: 3,
+  maxFiles: 4,
   maxBytes: UPLOAD_MAX_BYTES,
   acceptedMime: [...UPLOAD_ALLOWED_MIME],
 });

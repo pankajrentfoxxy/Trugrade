@@ -113,7 +113,8 @@ function uploadFormatHint(rule: DocumentTypeRule): React.ReactNode {
     .toUpperCase();
   return (
     <>
-      {formats}, up to <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>.
+      {formats}, up to <span className="font-mono tnum">{rule.maxFiles}</span> files,{' '}
+      <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span> each.
     </>
   );
 }
@@ -332,8 +333,9 @@ export function DocumentChecklist({
               hint={
                 compactHints ? (
                   <>
-                    {w.purpose} PDF or photo, max{' '}
-                    <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span>
+                    {w.purpose} PDF or photo, up to{' '}
+                    <span className="font-mono tnum">{rule.maxFiles}</span> files, max{' '}
+                    <span className="font-mono tnum">{formatFileSize(rule.maxBytes)}</span> each
                     {rule.maxAgeDays !== null && (
                       <>
                         {' '}

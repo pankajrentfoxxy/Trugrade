@@ -45,7 +45,7 @@ const DOC_TYPES = [
     label: 'GST registration certificate',
     maxAgeDays: null,
     requiresExpiry: false,
-    maxFiles: 1,
+    maxFiles: 4,
     maxBytes: 5 * 1024 * 1024,
     acceptedMime: ['application/pdf', 'image/jpeg'],
   },

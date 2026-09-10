@@ -3057,7 +3057,7 @@ model document_type_rule {
   label           String
   max_age_days    Int?
   requires_expiry Boolean @default(false)
-  max_files       Int     @default(3)
+  max_files       Int     @default(4)
   is_sensitive    Boolean @default(false)
 
   @@schema("kyc")

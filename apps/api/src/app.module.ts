@@ -12,6 +12,7 @@ import { AuthGuard, PermissionsGuard } from './shared/auth/guards';
 import { AuthModule } from './shared/auth/auth.module';
 import { DomainExceptionFilter, HttpModule, RequestContextInterceptor } from './shared/http/http';
 
+import { DevSqlModule } from './platform/dev/dev-sql.module';
 import { HealthModule } from './platform/health/health.service';
 import { JobsModule } from './platform/jobs/integrity.jobs';
 import { ObjectsModule } from './platform/objects/objects.controller';
@@ -43,6 +44,7 @@ import { PlatformModule } from './modules/platform';
     HttpModule,
 
     // Platform plumbing
+    DevSqlModule.register(),
     HealthModule,
     JobsModule,
     ObjectsModule,

@@ -242,9 +242,11 @@ export async function seedOnboardingDefinitions(prisma: PrismaClient): Promise<v
 
   for (const [code, label, maxAge, requiresExpiry, sensitive] of DOCUMENT_TYPES) {
     await prisma.$executeRaw`
-      INSERT INTO kyc.document_type_rule (doc_type, label, max_age_days, requires_expiry, is_sensitive)
-      VALUES (${code}, ${label}, ${maxAge}, ${requiresExpiry}, ${sensitive})
+      INSERT INTO kyc.document_type_rule (doc_type, label, max_age_days, requires_expiry, is_sensitive, max_files)
+      VALUES (${code}, ${label}, ${maxAge}, ${requiresExpiry}, ${sensitive}, 4)
       ON CONFLICT (doc_type) DO UPDATE
-        SET label = EXCLUDED.label, max_age_days = EXCLUDED.max_age_days`;
+        SET label = EXCLUDED.label,
+            max_age_days = EXCLUDED.max_age_days,
+            max_files = 4`;
   }
 }

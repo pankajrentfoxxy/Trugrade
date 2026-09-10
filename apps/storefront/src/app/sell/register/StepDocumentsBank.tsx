@@ -601,11 +601,17 @@ export function StepDocumentsBank({
             required
             inputMode="numeric"
             autoComplete="off"
+            maxLength={18}
             value={accountNumber}
             onChange={(e) => {
               clearError('accountNumber');
-              setAccountNumber(e.target.value);
+              setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 18));
               invalidate({ accountLast4: '' });
+            }}
+            onBlur={() => {
+              const problem = validateAccountNumber(accountNumber);
+              if (problem) setErrors((e) => ({ ...e, accountNumber: problem }));
+              else persist(values, docs);
             }}
             error={errors.accountNumber}
           />
@@ -614,12 +620,17 @@ export function StepDocumentsBank({
             label={labelNote('IFSC', '11 characters, fifth is zero')}
             mono
             required
+            maxLength={11}
             value={values.ifsc}
             onChange={(e) => {
               clearError('ifsc');
-              invalidate({ ifsc: e.target.value.toUpperCase() });
+              invalidate({ ifsc: toIfsc(e.target.value).replace(/[^A-Z0-9]/g, '').slice(0, 11) });
             }}
-            onBlur={() => persist(values, docs)}
+            onBlur={() => {
+              const problem = validateIfsc(values.ifsc);
+              if (problem) setErrors((e) => ({ ...e, ifsc: problem }));
+              else persist(values, docs);
+            }}
             error={errors.ifsc}
           />
 

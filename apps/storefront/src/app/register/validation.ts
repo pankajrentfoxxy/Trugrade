@@ -538,30 +538,34 @@ export const toAccountNumber = (value: string): string => value.replace(/[\s-]/g
 
 export const toIfsc = (value: string): string => value.trim().toUpperCase();
 
+/** VR-023 — same pattern as `@trugrade/contracts`. */
+const ACCOUNT_NUMBER_PATTERN = /^[0-9]{9,18}$/;
+
+/** VR-021 — fifth character is the digit zero, not the letter O. */
+const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
 export function validateAccountNumber(value: string): string | undefined {
   const cleaned = toAccountNumber(value);
   if (!cleaned) return 'Enter the account number we should pay into.';
+  if (ACCOUNT_NUMBER_PATTERN.test(cleaned)) return undefined;
   if (/\D/.test(cleaned))
     return 'An account number is digits only. Take out any letters or symbols.';
   if (cleaned.length < 9)
     return `That is ${cleaned.length} digits. An Indian account number is between 9 and 18.`;
   if (cleaned.length > 18)
     return `That is ${cleaned.length} digits, which is longer than any Indian account number. The most is 18.`;
-  return undefined;
+  return 'Enter a valid account number — 9 to 18 digits.';
 }
 
 export function validateIfsc(value: string): string | undefined {
   const cleaned = toIfsc(value);
   if (!cleaned) return 'Enter the IFSC of the branch. It is printed on your cheque.';
+  if (IFSC_PATTERN.test(cleaned)) return undefined;
   if (cleaned.length !== 11)
     return `An IFSC is exactly 11 characters and this one is ${cleaned.length}.`;
-  if (!/^[A-Z]{4}/.test(cleaned)) return 'The first four characters of an IFSC are letters.';
-  // The single most common IFSC typo, and worth its own sentence.
   if (cleaned[4] !== '0')
     return 'The fifth character of an IFSC is the digit zero, not the letter O.';
-  if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleaned))
-    return 'Enter a valid 11-character IFSC, for example HDFC0001234.';
-  return undefined;
+  return 'Enter a valid 11-character IFSC, for example HDFC0001234.';
 }
 
 /**
