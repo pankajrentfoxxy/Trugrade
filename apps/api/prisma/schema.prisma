@@ -1802,13 +1802,13 @@ model order_line {
 model order_line_unit {
   id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   order_line_id  String           @db.Uuid
-  unit_id        String           @unique @db.Uuid
-  serial_number  String
+  unit_id        String?          @unique @db.Uuid
+  serial_number  String?
   qc_report_id   String?          @db.Uuid
   status         unit_status      @default(RESERVED)
   qc_report      qc_report?       @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_olu_qcreport")
   order_line     order_line       @relation(fields: [order_line_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  unit           unit             @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit           unit?            @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   return_request return_request[]
 
   @@index([serial_number], map: "ix_olu_serial")
@@ -3377,7 +3377,7 @@ model purchase_order {
 model purchase_order_line {
   id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   po_id             String         @db.Uuid
-  unit_id           String         @unique @db.Uuid
+  unit_id           String?        @unique @db.Uuid
   sku_id            String         @db.Uuid
   agreed_net_payout Decimal        @db.Decimal(14, 2)
   grade_at_po       grade_type
@@ -3387,7 +3387,7 @@ model purchase_order_line {
   purchase_order    purchase_order @relation(fields: [po_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   qc_report         qc_report?     @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   sku               sku            @relation(fields: [sku_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit              unit           @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit              unit?          @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([po_id], map: "ix_pol_po")
   @@schema("procurement")

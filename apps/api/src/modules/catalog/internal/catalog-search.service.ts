@@ -70,6 +70,19 @@ export interface SearchResult {
   matchedBy: 'FILTER' | 'FULL_TEXT' | 'TRIGRAM';
 }
 
+/** One catalogued machine — brand + model, not a configuration. */
+export interface ModelSearchHit {
+  modelId: string;
+  brandName: string;
+  modelName: string;
+}
+
+export interface ModelSearchResult {
+  hits: ModelSearchHit[];
+  total: number;
+  matchedBy: 'FULL_TEXT' | 'TRIGRAM';
+}
+
 export type FacetDimension =
   | 'brand'
   | 'series'
@@ -369,6 +382,86 @@ export class CatalogSearchService {
    * the duration of the rebuild. Postgres refuses CONCURRENTLY inside a
    * transaction block, so this must never be called from `runInTransaction`.
    */
+  /**
+   * Unique models matching brand or model name. Series is used to match
+   * (Latitude → 3420) but is not returned — the picker shows Brand + Model.
+   */
+  async searchModels(q: string, limit = 20): Promise<ModelSearchResult> {
+    const query = q.trim();
+    const cap = Math.min(Math.max(Math.trunc(limit), 1), 50);
+    const like = `%${query.toLowerCase()}%`;
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ model_id: string; brand_name: string; model_name: string; rank: number; total: number }>
+    >`
+      SELECT m.id AS model_id, b.name AS brand_name, m.name AS model_name,
+             ts_rank(
+               setweight(to_tsvector('simple', b.name), 'A') ||
+               setweight(to_tsvector('simple', m.name), 'A') ||
+               setweight(to_tsvector('simple', se.name), 'B'),
+               websearch_to_tsquery('simple', ${query}::text)
+             ) AS rank,
+             (count(*) OVER ())::int AS total
+        FROM catalog.model m
+        JOIN catalog.series se ON se.id = m.series_id AND se.is_active
+        JOIN catalog.brand  b  ON b.id  = se.brand_id AND b.is_active
+       WHERE m.is_active
+         AND EXISTS (
+           SELECT 1 FROM catalog.sku s WHERE s.model_id = m.id AND s.is_active
+         )
+         AND (
+           (
+             setweight(to_tsvector('simple', b.name), 'A') ||
+             setweight(to_tsvector('simple', m.name), 'A') ||
+             setweight(to_tsvector('simple', se.name), 'B')
+           ) @@ websearch_to_tsquery('simple', ${query}::text)
+           OR lower(b.name || ' ' || m.name) LIKE ${like}
+         )
+       ORDER BY rank DESC, b.name, m.name
+       LIMIT ${cap}`;
+
+    if (rows.length > 0) {
+      return {
+        hits: rows.map((r) => ({
+          modelId: r.model_id,
+          brandName: r.brand_name,
+          modelName: r.model_name,
+        })),
+        total: rows[0]!.total,
+        matchedBy: 'FULL_TEXT',
+      };
+    }
+
+    const fuzzy = await this.prisma.$queryRaw<
+      Array<{ model_id: string; brand_name: string; model_name: string; rank: number; total: number }>
+    >`
+      SELECT m.id AS model_id, b.name AS brand_name, m.name AS model_name,
+             GREATEST(similarity(m.name, ${query}::text),
+                      similarity(b.name || ' ' || m.name, ${query}::text)) AS rank,
+             (count(*) OVER ())::int AS total
+        FROM catalog.model m
+        JOIN catalog.series se ON se.id = m.series_id AND se.is_active
+        JOIN catalog.brand  b  ON b.id  = se.brand_id AND b.is_active
+       WHERE m.is_active
+         AND EXISTS (
+           SELECT 1 FROM catalog.sku s WHERE s.model_id = m.id AND s.is_active
+         )
+         AND ((m.name % ${query}::text)
+              OR ((b.name || ' ' || m.name) % ${query}::text))
+       ORDER BY rank DESC, b.name, m.name
+       LIMIT ${cap}`;
+
+    return {
+      hits: fuzzy.map((r) => ({
+        modelId: r.model_id,
+        brandName: r.brand_name,
+        modelName: r.model_name,
+      })),
+      total: fuzzy[0]?.total ?? 0,
+      matchedBy: 'TRIGRAM',
+    };
+  }
+
   async refreshSearchIndex(): Promise<void> {
     await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_sku_search`;
   }

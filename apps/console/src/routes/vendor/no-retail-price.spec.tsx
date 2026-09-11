@@ -47,6 +47,25 @@ function mockApi(routes: Array<[RegExp, unknown]>): void {
 const LISTING = {
   id: 'l1',
   skuId: 's1',
+  sku: {
+    skuCode: 'DEL-LAT-5420-A',
+    brandName: 'Dell',
+    seriesName: 'Latitude',
+    modelName: 'Latitude 5420',
+    cpuBrand: 'Intel',
+    cpuFamily: 'Core i5',
+    cpuModel: 'i5-1145G7',
+    cpuGeneration: '11th',
+    ramGb: 16,
+    storageGb: 512,
+    storageType: 'NVMe',
+    gpuType: 'Integrated',
+    gpuModel: null,
+    screenSizeIn: 14,
+    resolution: 'FHD',
+    isTouch: false,
+    osSupported: 'Windows 11 Pro',
+  },
   grade: 'A',
   conditionType: 'REFURBISHED',
   functionalStatus: 'FULLY_FUNCTIONAL',
@@ -216,7 +235,10 @@ describe('no vendor screen shows the retail price', () => {
   });
 
   it('the units table does not', async () => {
-    mockApi([[/listings\/l1\/units/, [UNIT]]]);
+    mockApi([
+      [/listings\/l1\/units/, [UNIT]],
+      [/listings\/l1$/, LISTING],
+    ]);
     const { container } = render(
       <MemoryRouter initialEntries={['/vendor/listings/l1']}>
         <Routes>
@@ -244,6 +266,7 @@ describe('no vendor screen shows the retail price', () => {
         ],
       ],
       [/listings\/l1\/units/, [UNIT]],
+      [/listings\/l1$/, LISTING],
     ]);
     const { container } = render(
       <MemoryRouter initialEntries={['/vendor/listings/l1/units/u1']}>

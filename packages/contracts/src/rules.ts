@@ -531,6 +531,24 @@ export const PRICE_GUARDRAILS = Object.freeze({
 export const GRADES = Object.freeze(['A_PLUS', 'A', 'B'] as const);
 export type Grade = (typeof GRADES)[number];
 
+/**
+ * Keys of `vendor_capability.typical_grade_mix` whose value is greater than
+ * zero, in platform order.
+ *
+ * Registration used to store a percentage split (`{ A: 50, B: 50 }`). It now
+ * stores presence (`{ A: 1, B: 1 }`). Both shapes mean the same thing here:
+ * the vendor said they supply that grade.
+ */
+export function offeredGradesFromMix(mix: unknown): Grade[] {
+  if (!mix || typeof mix !== 'object' || Array.isArray(mix)) return [];
+  const picked = new Set<string>();
+  for (const [key, value] of Object.entries(mix as Record<string, unknown>)) {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (Number.isFinite(n) && n > 0) picked.add(key);
+  }
+  return GRADES.filter((g) => picked.has(g));
+}
+
 /** Grades DeviceSure can emit. C/D/FAIL map to *not listable* — 07 §4 item 8. */
 export const DEVICESURE_GRADES = Object.freeze(['A_PLUS', 'A', 'B', 'C', 'D', 'FAIL'] as const);
 export type DeviceSureGrade = (typeof DEVICESURE_GRADES)[number];

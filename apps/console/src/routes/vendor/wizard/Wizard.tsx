@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Button, EmptyState, WhyRail, type Step, type WhyRailItem } from '@trugrade/ui';
+import { Button, EmptyState, type Step } from '@trugrade/ui';
 import { PageHeader } from '../../../lib/controls';
 import { API, postJson, rupees, type MoneyString, type VendorListing } from '../api';
-import { useDraft, type WizardDraft } from './draft';
+import { payoutBlocker, useDraft, type WizardDraft } from './draft';
 import { StepMachine } from './StepMachine';
 import { StepCondition } from './StepCondition';
 import { StepSerials } from './StepSerials';
 import { StepPrice } from './StepPrice';
-import { WizardProgress, WizardStepHeader } from './WizardChrome';
+import { WizardProgress } from './WizardChrome';
 
 /**
- * ARCHETYPE D — Flow. Step rail + one step + a "why we ask" rail.
+ * ARCHETYPE D — Flow. Step rail + one step.
  * DENSITY: default (vendor portal), set on the app root by the shell.
  *
  * The four-step listing wizard.
@@ -26,101 +26,6 @@ import { WizardProgress, WizardStepHeader } from './WizardChrome';
  * The draft survives a navigation away (`sessionStorage`, see `draft.ts`), which
  * is what makes the step-1 handoff to the SKU-request flow non-destructive.
  */
-
-/**
- * The third column of archetype D, one list per step.
- *
- * It was missing: the wizard declared archetype D and shipped two columns of it,
- * with the reasons buried as prose between the fields where a vendor who already
- * knows the answer has to read past them. `WhyRail` was already in
- * `@trugrade/ui`, built for vendor registration and used by nothing.
- *
- * Everything here is a *consequence*, never a definition. "We ask for the serial
- * so we can identify the machine" is a sentence that teaches nobody anything;
- * "a serial already live on the platform is refused, and the check is ours to
- * run because a browser cannot see another vendor's stock" is why the field
- * behaves the way it does.
- */
-const WHY: Record<1 | 2 | 3 | 4, readonly WhyRailItem[]> = {
-  1: [
-    {
-      term: 'Search the catalog',
-      explanation:
-        'Every listing sits on a SKU we already carry. That is what lets a buyer put your machine beside four other vendors’ on the same specification — and it is why you cannot type your own title.',
-    },
-    {
-      term: 'The declared specification',
-      explanation:
-        'This is what the technician inspects against. Listing on the wrong SKU is not a cosmetic mistake: the inspection compares the machine to this row and fails it.',
-    },
-    {
-      term: 'No SKU matches',
-      explanation:
-        'Request one. Everything you have entered stays in this tab, and you come straight back to it.',
-    },
-  ],
-  2: [
-    {
-      term: 'Grade',
-      explanation:
-        'You are declaring what you believe the condition to be, not deciding it. A lower measured grade is a correction you can accept, reprice, withdraw or dispute — not a rejection.',
-    },
-    {
-      term: 'Battery health',
-      explanation:
-        'A band, because you are reading a label or a tool. The inspection measures the number, and each grade has a floor it must clear.',
-    },
-    {
-      term: 'Your warranty, in months',
-      explanation:
-        'A commercial commitment we can recover against. It is also the one field on this step that moves your money: offer longer and we reserve less, which raises what you can be paid on step 4.',
-    },
-    {
-      term: 'Where we collect from',
-      explanation:
-        'The facility decides which technician can visit and when. A closed day cannot be booked, so the address here sets the inspection date more than anything else you enter.',
-    },
-  ],
-  3: [
-    {
-      term: 'Serial numbers',
-      explanation:
-        'One row per machine, because a buyer buys a specific serial with a specific seal on it. Batch quantities are not what we sell.',
-    },
-    {
-      term: 'The checks we run',
-      explanation:
-        'Format, duplicates inside your own paste, duplicates against every live listing on the platform, and the stolen-serial register. The last two are ours to run — a browser cannot see another vendor’s stock.',
-    },
-    {
-      term: 'An unrecognised shape',
-      explanation:
-        'Warns and never blocks. Worn and reprinted labels are real machines, and a wizard that refuses them is one the warehouse works around.',
-    },
-  ],
-  4: [
-    {
-      term: 'Net payout per machine',
-      explanation:
-        'What lands in your account, after everything. It does not move for freight, for a buyer discount, or if we correct the grade after inspection. It is fixed when the purchase order is raised.',
-    },
-    {
-      term: 'The deductions',
-      explanation:
-        'Computed on the server, because they depend on your purchases so far this financial year, your PAN state and any standing penalties. A number the browser guessed at would be a promise we then did not pay.',
-    },
-    {
-      term: 'Our commission',
-      explanation:
-        'Our whole charge as a share of what the buyer pays — not a share of your payout. The retail price is not on this screen and the breakdown of our charge is not yours to carry.',
-    },
-    {
-      term: 'Dispatch SLA',
-      explanation:
-        'How long after a purchase order you can have the machines sealed and ready. Missing it is a penalty, so it is a promise rather than a preference.',
-    },
-  ],
-};
 
 const STEPS = ['Pick the machine', 'Declare the condition', 'Serial numbers', 'Price'] as const;
 
@@ -150,7 +55,10 @@ type SubmitResult = SubmitDecisionRequired | SubmitHeld | SubmitAccepted;
 /** Whether anything has actually been entered, which is what "saved" means here. */
 function draftStarted(draft: WizardDraft): boolean {
   return (
-    draft.sku !== null || draft.serials.length > 0 || draft.netPayoutRupees.trim() !== ''
+    draft.sku !== null ||
+    draft.catalogModel !== null ||
+    draft.serials.length > 0 ||
+    draft.netPayoutRupees.trim() !== ''
   );
 }
 
@@ -168,11 +76,16 @@ function blockerFor(draft: WizardDraft): string {
         ? ''
         : 'Add at least one serial number. Every machine is listed individually.';
     case 4:
-      return /^\d+(\.\d{1,2})?$/.test(draft.netPayoutRupees.trim()) &&
-        Number(draft.netPayoutRupees) > 0
-        ? ''
-        : 'Enter the amount you want to receive per machine.';
+      return payoutBlocker(draft.netPayoutRupees);
   }
+}
+
+/** Every field the create call needs — not just the current step. */
+function submitBlocker(draft: WizardDraft): string {
+  if (!draft.sku) return blockerFor({ ...draft, step: 1 });
+  if (!draft.pickupLocationId) return blockerFor({ ...draft, step: 2 });
+  if (draft.serials.length === 0) return blockerFor({ ...draft, step: 3 });
+  return blockerFor({ ...draft, step: 4 });
 }
 
 export function ListingWizardRoute(): React.JSX.Element {
@@ -192,6 +105,7 @@ export function ListingWizardRoute(): React.JSX.Element {
    * an error naming their own machines as duplicates, and no inspection.
    */
   const [listingId, setListingId] = React.useState<string | null>(null);
+  const inFlight = React.useRef(false);
   const navigate = useNavigate();
 
   /**
@@ -204,7 +118,8 @@ export function ListingWizardRoute(): React.JSX.Element {
    * is what stops a second press from doing exactly that.
    */
   async function commit(choice?: 'HOLD' | 'ACCEPT_FEE'): Promise<void> {
-    if (!draft.sku) return;
+    if (submitBlocker(draft) || !draft.sku || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -218,6 +133,7 @@ export function ListingWizardRoute(): React.JSX.Element {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -301,17 +217,11 @@ export function ListingWizardRoute(): React.JSX.Element {
   });
 
   return (
-    <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_200px]">
+    <div className="min-w-0">
       <div>
-        <PageHeader title="List stock">
-          {/* The pivot of the whole model, said before the first field rather
-              than after the last button: submitting requests an inspection. */}
-          Finishing this does not put anything on sale. It requests an inspection at your site. Your
-          machines go live only after they have been inspected and sealed.
-        </PageHeader>
+        <PageHeader title="List stock" />
 
         <div className="mt-7">
-          <WizardStepHeader step={draft.step} />
           <WizardProgress
             steps={steps}
             onStepClick={(n) => patch({ step: n as WizardDraft['step'] })}
@@ -341,17 +251,16 @@ export function ListingWizardRoute(): React.JSX.Element {
             {result.unitCount} machines is fewer than the {result.minUnitsPerVisit} a visit is
             worth.
           </p>
-          <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-            Nothing has been submitted yet. Either hold these {result.unitCount} until you have{' '}
-            {result.shortBy} more, or accept the visit fee of {rupees(result.visitFee)} and we come
-            now.
-          </p>
+          {/*
+            Nothing has been submitted yet. Either hold these until you have more,
+            or accept the visit fee and we come now.
+          */}
           <div className="mt-4 flex flex-wrap gap-3">
             <Button variant="secondary" loading={busy} onClick={() => void commit('HOLD')}>
               Hold until I reach {result.minUnitsPerVisit}
             </Button>
             <Button variant="primary" loading={busy} onClick={() => void commit('ACCEPT_FEE')}>
-              Accept {rupees(result.visitFee)} and inspect now
+              Inspect now
             </Button>
           </div>
         </div>
@@ -389,7 +298,8 @@ export function ListingWizardRoute(): React.JSX.Element {
             <Button
               variant="primary"
               loading={busy}
-              disabledReason={blocker}
+              disabled={busy}
+              disabledReason={busy ? undefined : submitBlocker(draft)}
               onClick={() => void commit()}
             >
               Request the inspection
@@ -410,10 +320,6 @@ export function ListingWizardRoute(): React.JSX.Element {
         </Button>
       </div>
         </div>
-      </div>
-
-      <div>
-        <WhyRail items={WHY[draft.step]} compact className="wizard-why" />
       </div>
     </div>
   );

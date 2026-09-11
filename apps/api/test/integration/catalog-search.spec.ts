@@ -418,6 +418,36 @@ describe('faceted filtering — CAT-010', () => {
   });
 });
 
+// --- vendor listing picker: brand + model, not configurations --------------
+
+describe('model search for the vendor listing picker', () => {
+  it('returns one row per model even when that model has two SKUs', async () => {
+    const f = await seedTwoBrands();
+
+    const r = await search.searchModels('Latitude 5420');
+    expect(r.matchedBy).toBe('FULL_TEXT');
+    expect(r.hits).toHaveLength(1);
+    expect(r.hits[0]).toEqual({
+      modelId: f.dell.modelId,
+      brandName: f.dell.brandName,
+      modelName: 'Latitude 5420',
+    });
+    expect(r.hits[0]).not.toHaveProperty('skuCode');
+  });
+
+  it('matches a series name so Latitude still finds the machine', async () => {
+    const f = await seedTwoBrands();
+    const r = await search.searchModels('Latitude');
+    expect(r.hits.map((h) => h.modelId)).toEqual([f.dell.modelId]);
+  });
+
+  it('lists every active configuration under that model', async () => {
+    const f = await seedTwoBrands();
+    const rows = await moduleRef.get(SkuRepository).findByModelId(f.dell.modelId);
+    expect(rows.map((s) => s.id).sort()).toEqual([f.dellLatitude16, f.dellLatitude32].sort());
+  });
+});
+
 // --- the view is only as fresh as the last refresh --------------------------
 
 describe('refreshSearchIndex', () => {

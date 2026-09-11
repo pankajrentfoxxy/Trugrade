@@ -27,7 +27,7 @@ import {
  * The document checklist, shared by the buyer's step 5 and the vendor's step 6.
  *
  * T6 built this against `POST /onboarding/documents`; the vendor step asks for
- * seven types where the buyer asks for four, and that difference is **data** —
+ * six types where the buyer asks for four, and that difference is **data** —
  * a list of doc codes and why each one is wanted. Everything that makes the
  * upload correct is not: one request per file so each carries its own progress
  * and its own refusal, the server's sentence rendered verbatim against the file

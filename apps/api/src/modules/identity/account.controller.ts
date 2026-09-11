@@ -3,8 +3,10 @@ import { z } from 'zod';
 import {
   addressLine1Schema,
   addressLine2Schema,
+  emailSchema,
   fullNameSchema,
   mobileSchema,
+  passwordSchema,
   pincodeSchema,
   uuidSchema,
 } from '@trugrade/contracts';
@@ -13,6 +15,7 @@ import { ZodValidationPipe } from '../../shared/http/http';
 import {
   AccountService,
   type AddressBookView,
+  type CreateMemberInput,
   type OrgAddressView,
   type OrgProfileView,
   type TeamMemberView,
@@ -93,15 +96,40 @@ const updateAddressSchema = createAddressSchema.partial().extend({
 const updateMemberSchema = z
   .object({
     roles: z.array(z.string().trim().min(1).max(40)).max(6).optional(),
-    status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
+    permissions: z.array(z.string().trim().min(1).max(80)).min(1).max(120).optional(),
+    status: z.enum(['ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
   })
-  .refine((v) => v.roles !== undefined || v.status !== undefined, {
-    message: 'Say what to change — either the roles or whether the account is active.',
+  .refine((v) => v.roles !== undefined || v.permissions !== undefined || v.status !== undefined, {
+    message: 'Say what to change — roles, permissions, or whether the account is active.',
+  })
+  .refine((v) => !(v.roles !== undefined && v.permissions !== undefined), {
+    message: 'Send roles or permissions, not both.',
+    path: ['permissions'],
   });
+
+const createMemberSchema = z.object({
+  fullName: fullNameSchema,
+  email: emailSchema,
+  mobile: mobileSchema,
+  jobTitle: z
+    .string()
+    .trim()
+    .min(1, 'Enter this person\'s job title.')
+    .max(80, 'Job title must be 80 characters or fewer.'),
+  department: z.string().trim().max(80).nullish(),
+  roles: z.array(z.string().trim().min(1).max(40)).min(1).max(6),
+  password: passwordSchema,
+});
+
+const setMemberPasswordSchema = z.object({
+  password: passwordSchema,
+});
 
 type CreateAddressDto = z.infer<typeof createAddressSchema>;
 type UpdateAddressDto = z.infer<typeof updateAddressSchema>;
 type UpdateMemberDto = z.infer<typeof updateMemberSchema>;
+type CreateMemberDto = z.infer<typeof createMemberSchema>;
+type SetMemberPasswordDto = z.infer<typeof setMemberPasswordSchema>;
 
 @Controller('account')
 export class AccountController {
@@ -183,6 +211,15 @@ export class AccountController {
     return this.account.team();
   }
 
+  /** Add somebody to the organisation with roles and an initial password. */
+  @Post('team/members')
+  @RequirePermissions('identity.user.write')
+  createMember(
+    @Body(new ZodValidationPipe(createMemberSchema)) body: CreateMemberDto,
+  ): Promise<TeamMemberView> {
+    return this.account.createMember(body as CreateMemberInput);
+  }
+
   /**
    * Change somebody's roles, or switch their account off.
    *
@@ -199,5 +236,24 @@ export class AccountController {
     @Body(new ZodValidationPipe(updateMemberSchema)) body: UpdateMemberDto,
   ): Promise<TeamMemberView> {
     return this.account.updateMember(userId, body);
+  }
+
+  /** Set a new password for somebody else. Ends every session they hold. */
+  @Post('team/:userId/password')
+  @RequirePermissions('identity.user.write')
+  setMemberPassword(
+    @Param('userId', new ZodValidationPipe(uuidSchema)) userId: string,
+    @Body(new ZodValidationPipe(setMemberPasswordSchema)) body: SetMemberPasswordDto,
+  ): Promise<{ ok: true }> {
+    return this.account.setMemberPassword(userId, body.password).then(() => ({ ok: true as const }));
+  }
+
+  /** Clear second-factor enrolment and end every session. */
+  @Post('team/:userId/mfa-reset')
+  @RequirePermissions('identity.user.write')
+  resetMemberMfa(
+    @Param('userId', new ZodValidationPipe(uuidSchema)) userId: string,
+  ): Promise<TeamMemberView> {
+    return this.account.resetMemberMfa(userId);
   }
 }

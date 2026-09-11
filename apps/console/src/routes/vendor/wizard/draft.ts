@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { VENDOR_NET_PAYOUT } from '@trugrade/contracts';
 import type { SkuDetail } from '../api';
 
 /**
@@ -21,6 +22,7 @@ export interface WizardDraft {
 
   // Step 1
   sku: SkuDetail | null;
+  catalogModel: { modelId: string; brandName: string; modelName: string } | null;
 
   // Step 2
   grade: 'A_PLUS' | 'A' | 'B';
@@ -50,6 +52,7 @@ export interface WizardDraft {
 export const EMPTY_DRAFT: WizardDraft = {
   step: 1,
   sku: null,
+  catalogModel: null,
   grade: 'A',
   conditionType: 'REFURBISHED',
   functionalStatus: 'FULLY_FUNCTIONAL',
@@ -68,6 +71,20 @@ export const EMPTY_DRAFT: WizardDraft = {
   moq: 1,
   dispatchSlaHours: 48,
 };
+
+/** Empty string means the amount is ready to send. */
+export function payoutBlocker(rupees: string): string {
+  const amount = rupees.trim();
+  if (amount === '') return 'Enter the net payout per machine.';
+  if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
+    return 'Enter a rupee amount greater than zero.';
+  }
+  const n = Number(amount);
+  if (n < VENDOR_NET_PAYOUT.min! || n > VENDOR_NET_PAYOUT.max!) {
+    return VENDOR_NET_PAYOUT.message;
+  }
+  return '';
+}
 
 const KEY = 'trugrade.vendor.listing-wizard';
 

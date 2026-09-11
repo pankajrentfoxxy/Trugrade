@@ -176,6 +176,8 @@ export interface OrderConfirmationView {
   grandTotal: string;
   tax: TaxSplitView;
   serials: Array<{ serialNumber: string; dispatchPoint: string }>;
+  /** How many machines this order is for. Serials arrive when the vendor attaches. */
+  units: number;
   /** What happens next, in words. The approval case is a different sentence. */
   next: string;
 }
@@ -447,8 +449,6 @@ export class CheckoutService {
       failAt: input.failAt,
     });
 
-    const serialLabels = await this.dispatchLabelsForUnits(result.serials.map((s) => s.unitId));
-
     return {
       orderId: result.orderId,
       orderNumber: result.orderNumber,
@@ -471,16 +471,14 @@ export class CheckoutService {
         delivery,
         lines[0]?.gstRatePct ?? 18,
       ),
-      serials: result.serials.map((s) => ({
-        serialNumber: s.serialNumber,
-        dispatchPoint: serialLabels.get(s.unitId) ?? 'Dispatch point to be confirmed',
-      })),
+      serials: [],
+      units: result.serials.length,
       next:
         result.status === 'AWAITING_APPROVAL'
-          ? `Sent to ${approval?.approverName ?? 'your approver'} to sign off. These exact machines are held for you until then; if the approval is not given by ${result.holdExpiresAt.toISOString()}, they go back on sale and nothing is charged.`
+          ? `Sent to ${approval?.approverName ?? 'your approver'} to sign off. Stock is held until then; if the approval is not given by ${result.holdExpiresAt.toISOString()}, it goes back on sale and nothing is charged. Serials are named when a machine is attached to this order.`
           : result.status === 'PAYMENT_PENDING'
-            ? 'These exact machines are allocated to you. Complete payment and we buy them on your behalf and arrange dispatch.'
-            : 'Confirmed on your credit terms. These exact machines are allocated to you and we are arranging dispatch.',
+            ? 'Stock is held for this order. Complete payment and we buy the machines on your behalf. Serials are named when a machine is attached to this order.'
+            : 'Confirmed on your credit terms. We are arranging dispatch. Serials are named when a machine is attached to this order.',
     };
   }
 
@@ -995,34 +993,6 @@ export class CheckoutService {
       );
     }
     return out;
-  }
-
-  /**
-   * The same label per allocated machine, for the confirmation page.
-   *
-   * Joined inside `listing`'s own schema and on both keys the unique constraint
-   * uses: `uq_supply_point_vendor_city` means a code is unique per city, not
-   * globally, so joining on `code` alone would eventually label two vendors the
-   * same and quietly merge two supply points into one on screen.
-   */
-  private async dispatchLabelsForUnits(unitIds: readonly string[]): Promise<Map<string, string>> {
-    if (unitIds.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; supply_point_code: string | null; city: string | null }>
-    >`
-      SELECT u.id, u.supply_point_code, p.city
-        FROM listing.unit u
-        LEFT JOIN listing.supply_point p
-               ON p.vendor_org_id = u.vendor_org_id AND p.code = u.supply_point_code
-       WHERE u.id = ANY(${[...unitIds]}::uuid[])`;
-    return new Map(
-      rows.map((r) => [
-        r.id,
-        r.supply_point_code && r.city
-          ? supplyPointLabel(r.supply_point_code, r.city)
-          : 'Dispatch point to be confirmed',
-      ]),
-    );
   }
 
   /** The serials actually held, per listing. What the review step shows. */

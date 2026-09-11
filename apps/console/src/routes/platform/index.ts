@@ -3,6 +3,7 @@ import type { Permission } from '@trugrade/contracts';
 import { AuditLogRoute } from './AuditLog';
 import { ConfigRoute } from './Config';
 import { FlagsRoute } from './Flags';
+import { UsersRoute } from './Users';
 import { FinanceConsoleRoute } from '../finance/Console';
 
 /**
@@ -68,5 +69,15 @@ export const platformRoutes: readonly PlatformRoute[] = [
     permission: 'identity.audit.read',
     group: 'Platform',
     element: React.createElement(AuditLogRoute),
+  },
+  // `identity.user.read` — the permission GET /api/account/team actually checks.
+  // OPS_MANAGER, KYC_REVIEWER and DPO hold it alongside PLATFORM_SUPERADMIN;
+  // the screen is org-scoped and returns only the caller's organisation.
+  {
+    path: '/platform/users',
+    label: 'Users',
+    permission: 'identity.user.read',
+    group: 'Platform',
+    element: React.createElement(UsersRoute),
   },
 ];

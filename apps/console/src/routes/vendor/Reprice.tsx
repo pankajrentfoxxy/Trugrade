@@ -11,8 +11,10 @@ import {
   Skeleton,
   StatusPill,
 } from '@trugrade/ui';
-import type { Grade } from '@trugrade/contracts';
+import { VENDOR_NET_PAYOUT, type Grade } from '@trugrade/contracts';
 import { NotMeasured } from '../../lib/controls';
+import { ListingMachineCard, machineTitle } from './ListingMachine';
+import { payoutBlocker } from './wizard/draft';
 import { useResource } from '../../lib/useResource';
 import {
   API,
@@ -113,7 +115,8 @@ export function RepriceRoute(): React.JSX.Element {
   const rows = units.data ?? [];
   const movable = repriceable(rows);
   const locked = rows.filter((u) => u.payoutLocked);
-  const clean = /^\d+(\.\d{1,2})?$/.test(amount.trim()) && Number(amount) > 0;
+  const payoutIssue = payoutBlocker(amount);
+  const inBand = payoutIssue === '';
 
   /**
    * The live preview, debounced, and deliberately a server call.
@@ -125,7 +128,7 @@ export function RepriceRoute(): React.JSX.Element {
    */
   React.useEffect(() => {
     const value = amount.trim();
-    if (!clean || !listing.data || movable.length === 0) {
+    if (payoutIssue || !listing.data || movable.length === 0) {
       setPreview(null);
       return;
     }
@@ -158,7 +161,7 @@ export function RepriceRoute(): React.JSX.Element {
     };
     // `movable.length` rather than the array: a re-fetch that returns the same
     // machines must not refire the preview.
-  }, [amount, clean, listing.data, movable.length]);
+  }, [amount, payoutIssue, listing.data, movable.length]);
 
   if (listing.error || units.error) {
     return (
@@ -193,8 +196,8 @@ export function RepriceRoute(): React.JSX.Element {
   const blocker =
     movable.length === 0
       ? 'Every machine on this listing is committed to an order and keeps the payout it was bought at. There is nothing here to reprice.'
-      : !clean
-        ? 'Enter the amount you want to receive per machine.'
+      : payoutIssue
+        ? payoutIssue
         : reason.trim().length < 3
           ? 'Say why, in a few words at least — this goes on the record with your name.'
           : '';
@@ -210,12 +213,12 @@ export function RepriceRoute(): React.JSX.Element {
       />
 
       <RecordHeader
-        title="Change what you receive"
+        title={machineTitle(l)}
         // Both halves counted off the SAME list. `listing.qty_total` is a
         // trigger-maintained counter and `rows` is the machines themselves; they
         // should agree, and reading one number from each source is precisely how
         // a screen ends up quoting two totals for one listing.
-        subtitle={`${rows.length} ${rows.length === 1 ? 'machine' : 'machines'} on this listing, ${movable.length} of them repriceable.`}
+        subtitle={`Change what you receive · ${rows.length} ${rows.length === 1 ? 'machine' : 'machines'} on this listing, ${movable.length} of them repriceable.`}
         status={
           <StatusPill
             tone={l.underPriceReview ? 'warn' : 'neutral'}
@@ -232,6 +235,8 @@ export function RepriceRoute(): React.JSX.Element {
         ]}
       />
 
+      <ListingMachineCard listing={l} />
+
       <div className="grid [&>*]:min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div>
           <h2 className="text-h3 text-ink">The new amount</h2>
@@ -244,13 +249,17 @@ export function RepriceRoute(): React.JSX.Element {
             <Input
               label="New net payout per machine"
               mono
-              inputMode="decimal"
+              type="number"
+              min={VENDOR_NET_PAYOUT.min}
+              max={VENDOR_NET_PAYOUT.max}
+              step={0.01}
               placeholder="42000"
               hint={
                 l.vendorAskPrice === null
                   ? 'No amount is set on this listing yet.'
                   : `Currently ${rupees(l.vendorAskPrice)}.`
               }
+              error={amount.trim() === '' ? undefined : payoutIssue || undefined}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
@@ -277,7 +286,7 @@ export function RepriceRoute(): React.JSX.Element {
                 {movable.length === 1 ? 'machine' : 'machines'} would pay you after deductions.
               </p>
             )}
-            {!preview && movable.length > 0 && amount.trim() !== '' && !error && (
+            {!preview && movable.length > 0 && amount.trim() !== '' && inBand && !error && (
               <Skeleton lines={4} />
             )}
 

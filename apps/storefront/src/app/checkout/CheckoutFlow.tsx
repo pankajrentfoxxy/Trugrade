@@ -1172,7 +1172,7 @@ function Failed({ message }: { message: string }): React.JSX.Element {
  */
 function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
   const awaiting = order.status === 'AWAITING_APPROVAL';
-  const units = order.serials.length;
+  const units = order.units || order.serials.length;
 
   return (
     <div className="chdone" role="status" aria-live="polite">
@@ -1191,8 +1191,8 @@ function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
         </h1>
         <p className="chdone-lede">
           {awaiting
-            ? `${BRAND.name} has your request. Nothing is charged until your approver signs off, and the exact machines stay held while they decide.`
-            : `Your order is with ${BRAND.legalEntity}. We will pick and dispatch the exact serial numbers you held, and your GST invoice will follow.`}
+            ? `${BRAND.name} has your request. Nothing is charged until your approver signs off, and stock stays held while they decide.`
+            : `Your order is with ${BRAND.legalEntity}. Serial numbers are named when a machine is attached to this order, and your GST invoice will follow.`}
         </p>
         <dl className="chdone-facts">
           <div className="chdone-fact">

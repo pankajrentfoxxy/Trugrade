@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { Input, Skeleton } from '@trugrade/ui';
 import { NotMeasured } from '../../../lib/controls';
+import { VENDOR_NET_PAYOUT } from '@trugrade/contracts';
 import { API, onDate, postJson, rupees, type PayoutPreview } from '../api';
-import type { WizardDraft } from './draft';
+import { payoutBlocker, type WizardDraft } from './draft';
 
 /** Step 4 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
 
@@ -38,13 +39,16 @@ export function StepPrice({
   const [preview, setPreview] = React.useState<PayoutPreview | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const units = draft.serials.length;
+  const amount = draft.netPayoutRupees.trim();
+  const payoutError = payoutBlocker(draft.netPayoutRupees) || undefined;
 
   React.useEffect(() => {
     const amount = draft.netPayoutRupees.trim();
-    // Mid-keystroke is not an error state. Anything that is not yet a clean
-    // rupee amount simply has no preview.
-    if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) === 0 || !draft.sku || units === 0) {
+    // Mid-keystroke is not an error state. Anything the server would refuse
+    // (empty, not a rupee amount, outside the payout band) has no preview.
+    if (payoutBlocker(amount) || !draft.sku || units === 0) {
       setPreview(null);
+      setError(null);
       return;
     }
     let cancelled = false;
@@ -82,10 +86,14 @@ export function StepPrice({
         <div className="grid gap-5 sm:grid-cols-2">
           <Input
             label="Net payout per machine"
+            required
             mono
-            inputMode="decimal"
+            type="number"
+            min={VENDOR_NET_PAYOUT.min}
+            max={VENDOR_NET_PAYOUT.max}
+            step={0.01}
             hint={`For ${units} ${units === 1 ? 'machine' : 'machines'} in this listing.`}
-            placeholder="42000"
+            error={payoutError}
             value={draft.netPayoutRupees}
             onChange={(e) => patch({ netPayoutRupees: e.target.value })}
           />
@@ -109,6 +117,7 @@ export function StepPrice({
           />
         </div>
 
+        {(error || preview || units === 0 || draft.netPayoutRupees.trim() !== '') && (
         <div className="tg-card rounded-lg border border-rule bg-sheet" data-testid="payout-preview">
           {error && (
             <p className="text-body-sm text-fail" role="alert">
@@ -121,11 +130,6 @@ export function StepPrice({
             (units === 0 ? (
               <p className="text-body-sm text-ink-2">
                 Add serial numbers on the previous step and the batch total appears here.
-              </p>
-            ) : draft.netPayoutRupees.trim() === '' ? (
-              <p className="text-body-sm text-ink-2">
-                Enter the amount you want per machine and we will show the batch, the deductions
-                and when it is paid.
               </p>
             ) : (
               <Skeleton lines={5} />
@@ -246,6 +250,7 @@ export function StepPrice({
             </p>
           )}
         </div>
+        )}
       </div>
     </div>
   );

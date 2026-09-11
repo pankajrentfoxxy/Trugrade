@@ -1,14 +1,19 @@
-import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { uuidSchema } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
+  attachPoUnitSchema,
+  attachableUnitsQuerySchema,
   listPurchaseOrdersQuerySchema,
   poStatusSchema,
+  type AttachPoUnitDto,
+  type AttachableUnitsQueryDto,
   type ListPurchaseOrdersQueryDto,
 } from './dto/purchase-order.dto';
 import {
   PurchaseOrderService,
+  type AttachableUnitView,
   type VendorPickList,
   type VendorPoDetail,
   type VendorPoView,
@@ -96,6 +101,25 @@ export class ProcurementController {
     @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
   ): Promise<VendorPickList> {
     return this.pos.pickList(poId);
+  }
+
+  @Get(':poId/attachable-units')
+  @RequirePermissions('procurement.po.read_own')
+  attachableUnits(
+    @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
+    @Query(new ZodValidationPipe(attachableUnitsQuerySchema)) query: AttachableUnitsQueryDto,
+  ): Promise<AttachableUnitView[]> {
+    return this.pos.attachableUnits(poId, query.skuId, query.grade);
+  }
+
+  @Post(':poId/attach')
+  @HttpCode(200)
+  @RequirePermissions('procurement.po.acknowledge')
+  attach(
+    @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
+    @Body(new ZodValidationPipe(attachPoUnitSchema)) body: AttachPoUnitDto,
+  ): Promise<VendorPoDetail> {
+    return this.pos.attach(poId, body);
   }
 
   /** 200, not 201: an acknowledgement changes a purchase order, it creates nothing. */

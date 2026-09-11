@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { GradeBadge, Input, RepresentativeImage, Skeleton, cn } from '@trugrade/ui';
+import { GradeBadge, Input, Modal, RepresentativeImage, Skeleton, cn } from '@trugrade/ui';
 import { GRADES, type Grade } from '@trugrade/contracts';
 import { Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
@@ -9,6 +9,7 @@ import {
   type GradeDefinition,
   type ResolvedGradeImages,
   type VendorFacility,
+  type VendorOfferedGrades,
 } from '../api';
 import type { WizardDraft } from './draft';
 
@@ -117,7 +118,31 @@ function GradePicker({
     API.gradeDefinitions,
     'Grade definitions unavailable',
   );
+  const offered = useResource<VendorOfferedGrades>(
+    API.offeredGrades,
+    'Offered grades unavailable',
+  );
   const byGrade = new Map((data ?? []).map((d) => [d.grade, d]));
+
+  /**
+   * Only the grades they ticked at registration. A malformed or missing
+   * payload falls back to every platform grade so a demo org, or a capability
+   * step completed before this question existed, can still list.
+   */
+  const visible: Grade[] = React.useMemo(() => {
+    const raw = offered.data;
+    if (!raw || !Array.isArray(raw.offeredGrades)) return [...GRADES];
+    const picked = raw.offeredGrades.filter((g): g is Grade =>
+      (GRADES as readonly string[]).includes(g),
+    );
+    return picked.length > 0 ? picked : [...GRADES];
+  }, [offered.data]);
+
+  React.useEffect(() => {
+    if (visible.includes(value)) return;
+    const next = visible[0];
+    if (next) onChange(next);
+  }, [visible, value, onChange]);
 
   // The declared band cannot reach the chosen grade's floor. Not a block — the
   // vendor may have read the wrong band off a worn machine — but a correction
@@ -130,13 +155,13 @@ function GradePicker({
 
   return (
     <fieldset>
-      <legend className="text-body-sm font-medium text-ink-2">Grade</legend>
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        {GRADES.map((g) => (
+      <legend className="text-label font-medium text-ink-2">Grade</legend>
+      <div className="mt-3 flex flex-wrap justify-center gap-3">
+        {visible.map((g) => (
           <label
             key={g}
             className={cn(
-              'flex cursor-pointer items-start gap-4 rounded border p-4 transition-colors',
+              'flex w-[15.5rem] cursor-pointer flex-col items-center gap-2 rounded border p-3 text-center transition-colors',
               // Amber as an active state — the third legitimate use of the
               // accent, and the only one on this step.
               value === g ? 'border-acc bg-acc-wash' : 'border-rule bg-sheet hover:bg-sheet-2',
@@ -148,57 +173,48 @@ function GradePicker({
               value={g}
               checked={value === g}
               onChange={() => onChange(g)}
-              className="mt-1"
+              className="sr-only"
             />
-            <span className="flex flex-col gap-2">
-              <GradeBadge grade={g} variant="declared" />
-              {error ? (
-                <span className="text-body-sm text-ink-2">
-                  We could not load the definition for Grade {gradeLabel(g)}. Grade from the
-                  photographs in the grading policy rather than from memory.
+            <GradeBadge grade={g} variant="declared" className="px-2 py-0.5 text-label" />
+            {error ? (
+              <span className="text-label text-ink-2">
+                We could not load the definition for Grade {gradeLabel(g)}. Grade from the
+                photographs in the grading policy rather than from memory.
+              </span>
+            ) : !data ? (
+              <Skeleton lines={2} />
+            ) : (
+              <>
+                <span className="text-label leading-snug text-ink-2">
+                  {byGrade.get(g)?.customerDescription ??
+                    'No published definition for this grade yet.'}
                 </span>
-              ) : !data ? (
-                <Skeleton lines={2} />
-              ) : (
-                <>
-                  <span className="text-body-sm text-ink-2">
-                    {byGrade.get(g)?.customerDescription ??
-                      'No published definition for this grade yet.'}
-                  </span>
-                  {/* The words are what the vendor reads; these are what the
-                      engine applies. A declaration anchored to adjectives is
-                      the root of most grade disputes. */}
-                  {byGrade.get(g) && (
-                    <span className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                      <span>
-                        Battery{' '}
-                        <span className="tnum text-ink-2">
-                          {byGrade.get(g)?.minBatteryHealthPct}%
-                        </span>{' '}
-                        or better
-                      </span>
-                      <span>
-                        Cosmetic{' '}
-                        <span className="tnum text-ink-2">
-                          {byGrade.get(g)?.minCosmeticScore}
-                        </span>{' '}
-                        of 100
-                      </span>
-                      {byGrade.get(g)?.maxCycleCount === null ? (
-                        <span className="text-ink-4">Cycles not capped</span>
-                      ) : (
-                        <span>
-                          Cycles under{' '}
-                          <span className="tnum text-ink-2">
-                            {byGrade.get(g)?.maxCycleCount}
-                          </span>
-                        </span>
-                      )}
+                {byGrade.get(g) && (
+                  <span className="flex flex-col gap-0.5 font-mono text-label uppercase tracking-[0.13em] text-ink-3">
+                    <span>
+                      Battery{' '}
+                      <span className="tnum text-ink-2">
+                        {byGrade.get(g)?.minBatteryHealthPct}%
+                      </span>{' '}
+                      or better
                     </span>
-                  )}
-                </>
-              )}
-            </span>
+                    <span>
+                      Cosmetic{' '}
+                      <span className="tnum text-ink-2">{byGrade.get(g)?.minCosmeticScore}</span> of
+                      100
+                    </span>
+                    {byGrade.get(g)?.maxCycleCount === null ? (
+                      <span className="text-ink-4">Cycles not capped</span>
+                    ) : (
+                      <span>
+                        Cycles under{' '}
+                        <span className="tnum text-ink-2">{byGrade.get(g)?.maxCycleCount}</span>
+                      </span>
+                    )}
+                  </span>
+                )}
+              </>
+            )}
           </label>
         ))}
       </div>
@@ -224,75 +240,56 @@ function GradePicker({
   );
 }
 
-/**
- * What a buyer will actually be shown for the grade the vendor is choosing.
- *
- * The grading policy was words and numbers and nothing else, and the one moment
- * a vendor needs the photographs is the moment they are declaring a grade
- * against them. The library exists — 608 catalogued frames — and until now there
- * was no vendor-reachable view of it at all: the only screen was the console's
- * coverage grid, guarded by `catalog.condition_image.write`, which no vendor
- * role holds and which carries object keys and every competitor's models.
- *
- * So this reads the same `@Public()` SKU route the product page reads, through
- * the same resolver, and renders through `RepresentativeImage` — the component
- * that bakes in the caption. The vendor is therefore looking at the literal
- * frames a buyer will see beside their machine, which is the only version of
- * this panel worth having: a separate "grading guide" is a second set of
- * photographs to keep in step with the first.
- */
-function GradeReference({ skuId, grade }: { skuId: string; grade: Grade }): React.JSX.Element {
-  const { data, error } = useResource<{ images: ResolvedGradeImages | null }>(
+function GradeReference({ skuId, grade }: { skuId: string; grade: Grade }): React.JSX.Element | null {
+  const { data } = useResource<{ images: ResolvedGradeImages | null }>(
     API.skuImages(skuId, grade),
     'Reference photographs unavailable',
   );
-
+  const [openId, setOpenId] = React.useState<string | null>(null);
   const resolved = data?.images ?? null;
+  const images =
+    resolved && resolved.match !== 'PLACEHOLDER' ? resolved.images : [];
+  const open = images.find((image) => image.id === openId) ?? null;
+
+  if (images.length === 0 || !resolved) return null;
 
   return (
-    <section className="mt-6">
-      <h4 className="text-body font-semibold text-ink">What a buyer sees at Grade {gradeLabel(grade)}</h4>
-      {error ? (
-        <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-          {error}. Grade from the written definitions above rather than from memory — nothing about
-          your declaration depends on these photographs loading.
-        </p>
-      ) : !data ? (
-        <Skeleton lines={3} />
-      ) : resolved === null || resolved.images.length === 0 ? (
-        <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-          We have not photographed Grade {gradeLabel(grade)} for this machine yet, so a buyer sees a
-          labelled placeholder rather than a photograph. Your declaration is unaffected; the
-          inspection still measures the machine.
-        </p>
-      ) : (
-        <>
-          <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-            {/* The match level matters to the person declaring: a SERIES-anchored
-                set is a different model, so "worse than this and it is a B" is a
-                looser comparison than it looks. Said in words, not inferred. */}
-            {resolved.match === 'SKU'
-              ? 'These are our photographs of this exact configuration at this grade.'
-              : resolved.match === 'MODEL'
-                ? 'These are our photographs of this model at this grade — another machine, not yours.'
-                : 'These are our photographs of this range at this grade — a different model in the same family.'}{' '}
-            Your machine should look no worse than this. Its own photographs are taken at the
-            inspection and go on its unit passport.
-          </p>
-          <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {resolved.images.map((image) => (
-              <RepresentativeImage
-                key={image.id}
-                src={image.url}
-                alt={image.altText}
-                grade={grade}
-                match={resolved.match}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </section>
+    <>
+      <div className="mt-4 flex flex-nowrap justify-center gap-2 px-2">
+        {images.map((image) => (
+          <button
+            key={image.id}
+            type="button"
+            onClick={() => setOpenId(image.id)}
+            aria-label="View photograph"
+            className="min-w-0 max-w-[7rem] flex-1 basis-0 cursor-zoom-in rounded-md text-left"
+          >
+            <RepresentativeImage
+              className="pointer-events-none w-full [&_figcaption]:sr-only [&_img]:aspect-[3/2] [&_img]:object-cover"
+              src={image.url}
+              alt={image.altText}
+              grade={grade}
+              match={resolved.match}
+            />
+          </button>
+        ))}
+      </div>
+      <Modal
+        open={open !== null}
+        onClose={() => setOpenId(null)}
+        title="Photograph"
+        size="lg"
+        className="[&_h2]:sr-only"
+      >
+        {open ? (
+          <img
+            src={open.url}
+            alt=""
+            className="w-full rounded-lg border border-rule bg-sheet object-contain"
+          />
+        ) : null}
+      </Modal>
+    </>
   );
 }
 
@@ -307,29 +304,11 @@ export function StepCondition({
 
   return (
     <div>
-      {/* The three sentences PHASE_03 Task 3 step 2 requires on this screen, in
-          plain words and above the fields rather than under them. Disclosure at
-          declaration time is worth more than an appeals process later. */}
-      <div className="wizard-disclosure">
-        <p className="text-body text-ink">We will check this.</p>
-        <p className="mt-3 text-body-sm text-ink-2">
-          Every machine you list is inspected before it is sold. You are declaring what you believe
-          the condition to be, not deciding it. If our inspection finds a lower grade than you
-          declared, we issue a <strong>grade correction</strong>: the unit is re-listed at the
-          corrected grade, you are told what we measured and shown the photographs, and you can
-          accept, reprice, withdraw the unit or dispute it. Repeated corrections lower your
-          grade-accuracy score, which affects your tier, your payout speed and how much of your
-          stock we sample.
-        </p>
-      </div>
-
-      <div className="mt-6">
-        <GradePicker
-          value={draft.grade}
-          batteryBand={draft.batteryHealthBand}
-          onChange={(grade) => patch({ grade })}
-        />
-      </div>
+      <GradePicker
+        value={draft.grade}
+        batteryBand={draft.batteryHealthBand}
+        onChange={(grade) => patch({ grade })}
+      />
 
       {draft.sku && <GradeReference skuId={draft.sku.skuId} grade={draft.grade} />}
 

@@ -41,6 +41,7 @@ import { SkuImportService, type ImportResult } from './internal/sku-import.servi
 import {
   CatalogSearchService,
   type Facets,
+  type ModelSearchResult,
   type SearchResult,
 } from './internal/catalog-search.service';
 import {
@@ -48,6 +49,7 @@ import {
   bulkConditionImageSchema,
   catalogBoardQuerySchema,
   catalogSearchQuerySchema,
+  modelSearchQuerySchema,
   conditionImageUploadUrlSchema,
   importSkusSchema,
   reorderConditionImagesSchema,
@@ -60,6 +62,7 @@ import {
   type BulkConditionImageDto,
   type CatalogSearchQueryDto,
   type CatalogBoardQueryDto,
+  type ModelSearchQueryDto,
   type ConditionImageUploadUrlDto,
   type ImportSkusDto,
   type ReorderConditionImagesDto,
@@ -190,6 +193,7 @@ export interface CatalogSearchResponse extends SearchResult {
 export interface SkuDetailView {
   /** `skuId`, not `id` — it is the id of a SKU wherever the clients carry it. */
   skuId: string;
+  modelId: string;
   skuCode: string;
   brandName: string;
   seriesName: string;
@@ -215,7 +219,7 @@ export interface SkuDetailView {
    * machine, and showing it unlabelled is the Rule 7(2) misrepresentation the
    * resolver exists to make visible rather than convenient.
    */
-  images: PublicResolvedImages | null;
+  images?: PublicResolvedImages | null;
 }
 
 /**
@@ -516,6 +520,36 @@ export class CatalogController {
   }
 
   /**
+   * Unique brand + model hits for the vendor listing picker.
+   *
+   * The SKU search above returns one row per configuration. A vendor looking
+   * for "Dell Latitude 3420" should see the machine once, then pick RAM and
+   * storage from what that model actually carries.
+   */
+  @Get('models/search')
+  @Public()
+  @Header('Cache-Control', 'public, max-age=30')
+  async searchModels(
+    @Query(new ZodValidationPipe(modelSearchQuerySchema)) query: ModelSearchQueryDto,
+    @Req() req: Request,
+  ): Promise<ModelSearchResult> {
+    await this.limiter.consume(SEARCH_LIMIT, req.ip ?? 'unknown');
+    return this.search.searchModels(query.q, query.limit);
+  }
+
+  /** Every active configuration under one model — the picker's dropdown source. */
+  @Get('models/:id/skus')
+  @Public()
+  @Header('Cache-Control', 'public, max-age=60')
+  async skusForModel(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<SkuDetailView[]> {
+    const rows = await this.skus.findByModelId(id);
+    if (rows.length === 0) throw new NotFoundError('model');
+    return rows.map((sku) => this.toSkuDetail(sku));
+  }
+
+  /**
    * One SKU, as the catalog declares it — and, if a grade is named, the
    * photographs a buyer would see for that grade.
    */
@@ -530,7 +564,40 @@ export class CatalogController {
     if (!sku) throw new NotFoundError('SKU');
 
     return {
+      ...this.toSkuDetail(sku),
+      // `normalizedKey` stays off the wire. The key is the dedupe guarantee, not
+      // a public identifier, and publishing it invites a client to compute one
+      // and find us disagreeing about the same machine.
+      images: query.grade ? await this.publicImages(sku.id, query.grade as Grade) : null,
+    };
+  }
+
+  private toSkuDetail(sku: {
+    id: string;
+    modelId: string;
+    skuCode: string;
+    brandName: string;
+    seriesName: string;
+    modelName: string;
+    cpuBrand: string;
+    cpuFamily: string;
+    cpuModel: string;
+    cpuGeneration: string;
+    ramGb: number;
+    storageGb: number;
+    storageType: string;
+    gpuType: string;
+    gpuModel: string | null;
+    screenSizeIn: number;
+    resolution: string;
+    isTouch: boolean;
+    osSupported: string;
+    hsnCode: string;
+    isActive: boolean;
+  }): SkuDetailView {
+    return {
       skuId: sku.id,
+      modelId: sku.modelId,
       skuCode: sku.skuCode,
       brandName: sku.brandName,
       seriesName: sku.seriesName,
@@ -550,10 +617,6 @@ export class CatalogController {
       osSupported: sku.osSupported,
       hsnCode: sku.hsnCode,
       isActive: sku.isActive,
-      // `modelId` and `normalizedKey` are deliberately absent. The key is the
-      // dedupe guarantee, not a public identifier, and publishing it invites a
-      // client to compute one and find us disagreeing about the same machine.
-      images: query.grade ? await this.publicImages(sku.id, query.grade as Grade) : null,
     };
   }
 

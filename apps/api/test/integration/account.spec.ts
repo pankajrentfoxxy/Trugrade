@@ -38,6 +38,7 @@ import { AuthModule } from '../../src/shared/auth/auth.module';
 import { RedisModule } from '../../src/shared/redis/redis.service';
 import { AccountService } from '../../src/modules/identity/internal/account.service';
 import { AuditService } from '../../src/modules/identity/internal/audit.service';
+import { PasswordService } from '../../src/modules/identity/internal/password.service';
 import {
   closeTestDb,
   migrateTestDatabase,
@@ -91,6 +92,7 @@ beforeAll(async () => {
       },
       OrgScope,
       AuditService,
+      PasswordService,
       AccountService,
     ],
   }).compile();

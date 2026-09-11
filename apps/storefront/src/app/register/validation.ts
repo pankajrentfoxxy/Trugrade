@@ -516,6 +516,45 @@ export const toAccountNumber = (value: string): string => value.replace(/[\s-]/g
 
 export const toIfsc = (value: string): string => value.trim().toUpperCase();
 
+/**
+ * An IFSC as typed: first four characters are the bank code (letters only);
+ * after that only digits can land. Letters in the tail are dropped rather than
+ * kept and refused later — the field cannot hold a character it will not accept.
+ */
+export function typeIfsc(value: string): string {
+  const raw = toIfsc(value).replace(/[^A-Z0-9]/g, '');
+  let out = '';
+  for (const ch of raw) {
+    if (out.length >= 11) break;
+    if (out.length < 4) {
+      if (/[A-Z]/.test(ch)) out += ch;
+    } else if (/\d/.test(ch)) {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+/** Block a digit in the bank code, or a letter after it, at the keystroke. */
+export function blockIfscKey(e: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  currentTarget: { selectionStart: number | null; value: string };
+  preventDefault: () => void;
+}): void {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (DIGIT_NAV_KEYS.has(e.key)) return;
+  const pos = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
+  if (pos < 4) {
+    if (/^[a-zA-Z]$/.test(e.key)) return;
+    e.preventDefault();
+    return;
+  }
+  if (pos >= 11 || !/^\d$/.test(e.key)) e.preventDefault();
+}
+
 /** VR-023 — same pattern as `@trugrade/contracts`. */
 const ACCOUNT_NUMBER_PATTERN = /^[0-9]{9,18}$/;
 
@@ -539,6 +578,11 @@ export function validateIfsc(value: string): string | undefined {
   const cleaned = toIfsc(value);
   if (!cleaned) return 'Enter the IFSC of the branch. It is printed on your cheque.';
   if (IFSC_PATTERN.test(cleaned)) return undefined;
+  const bank = cleaned.slice(0, Math.min(4, cleaned.length));
+  if (!/^[A-Z]+$/.test(bank) || (cleaned.length >= 4 && !/^[A-Z]{4}/.test(cleaned)))
+    return 'The first four characters of an IFSC are letters — the bank code, for example HDFC.';
+  if (/[A-Z]/.test(cleaned.slice(4)))
+    return 'After the bank code an IFSC is digits only. The fifth character is the digit zero.';
   if (cleaned.length !== 11)
     return `An IFSC is exactly 11 characters and this one is ${cleaned.length}.`;
   if (cleaned[4] !== '0')

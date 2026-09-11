@@ -168,6 +168,23 @@ export class SkuRepository {
     return rows[0] ? toRow(rows[0]) : null;
   }
 
+  async findByModelId(modelId: string): Promise<SkuRow[]> {
+    const rows = await this.prisma.$queryRaw<RawSku[]>`
+      SELECT s.id, s.model_id, s.sku_code, s.normalized_key,
+             s.cpu_brand, s.cpu_family, s.cpu_model, s.cpu_generation,
+             s.ram_gb, s.storage_gb, s.storage_type, s.gpu_type, s.gpu_model,
+             s.screen_size_inch, s.resolution, s.is_touch, s.os_supported,
+             s.hsn_code, s.is_active,
+             b.name AS brand_name, se.name AS series_name, m.name AS model_name
+      FROM catalog.sku s
+      JOIN catalog.model  m  ON m.id  = s.model_id
+      JOIN catalog.series se ON se.id = m.series_id
+      JOIN catalog.brand  b  ON b.id  = se.brand_id
+      WHERE s.model_id = ${modelId}::uuid AND s.is_active
+      ORDER BY s.cpu_model, s.ram_gb, s.storage_gb, s.sku_code`;
+    return rows.map(toRow);
+  }
+
   async findById(id: string): Promise<SkuRow | null> {
     const rows = await this.prisma.$queryRaw<RawSku[]>`
       SELECT s.id, s.model_id, s.sku_code, s.normalized_key,

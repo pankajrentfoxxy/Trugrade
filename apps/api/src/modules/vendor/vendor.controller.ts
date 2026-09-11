@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  GRADES,
   Money,
   TIMEZONE,
   addressLine1Schema,
@@ -8,7 +9,9 @@ import {
   fullNameSchema,
   mobileSchema,
   moneyFromDb,
+  offeredGradesFromMix,
   pincodeSchema,
+  type Grade,
 } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { ClockPort } from '../../shared/clock';
@@ -47,6 +50,11 @@ interface VendorFacilityView {
   label: string;
   city: string;
   pincode: string;
+}
+
+/** The grades this vendor ticked at registration. The listing wizard's step 2 list. */
+interface VendorOfferedGradesView {
+  offeredGrades: Grade[];
 }
 
 /**
@@ -296,6 +304,33 @@ export class VendorController {
         },
       },
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Grades they said they supply
+  // -------------------------------------------------------------------------
+
+  /**
+   * The grades the listing wizard's step 2 may offer.
+   *
+   * Read off `vendor_capability.typical_grade_mix` — the keys they ticked on
+   * registration step 4. A vendor with no mix yet (demo orgs, or a capability
+   * step completed before grades were asked) sees every platform grade, so the
+   * wizard cannot lock them out of listing.
+   */
+  @Get('offered-grades')
+  @RequirePermissions('listing.own.read')
+  async offeredGrades(): Promise<VendorOfferedGradesView> {
+    const orgId = this.requireVendorOrg();
+    const rows = await this.prisma.$queryRaw<Array<{ typical_grade_mix: unknown }>>`
+      SELECT typical_grade_mix
+        FROM vendor.vendor_capability
+       WHERE org_id = ${orgId}::uuid
+         AND typical_grade_mix IS NOT NULL
+       ORDER BY is_active DESC
+       LIMIT 1`;
+    const offered = offeredGradesFromMix(rows[0]?.typical_grade_mix);
+    return { offeredGrades: offered.length > 0 ? offered : [...GRADES] };
   }
 
   // -------------------------------------------------------------------------

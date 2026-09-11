@@ -65,6 +65,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     disabledReason,
     children,
     disabled,
+    onClick,
     ...props
   },
   ref,
@@ -79,6 +80,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       aria-disabled={isDisabled || undefined}
       aria-busy={loading || undefined}
       title={disabledReason}
+      onClick={(e) => {
+        if (isDisabled) {
+          e.preventDefault();
+          return;
+        }
+        onClick?.(e);
+      }}
       {...props}
     >
       {loading ? (

@@ -96,6 +96,21 @@ describe('nothing arrives ticked', () => {
     unmount();
   });
 
+  it('resumes ticked grades from the draft the save produced', () => {
+    const saved: Record<string, unknown>[] = [];
+    const first = renderCapability({ onSaveDraft: (values) => void saved.push(values) });
+
+    fireEvent.click(screen.getByLabelText(/Grade A\+/));
+    const draft = saved[saved.length - 1]!;
+    expect(draft.grades).toEqual(['A_PLUS']);
+    first.unmount();
+
+    renderCapability({ answers: draft });
+    expect(screen.getByLabelText(/Grade A\+/)).toBeChecked();
+    expect(screen.getByLabelText(/Grade A \(Light wear/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Grade B/)).not.toBeChecked();
+  });
+
   it('step 5 renders no checkbox and no radio in a chosen state', () => {
     const { container, unmount } = renderFacility();
 

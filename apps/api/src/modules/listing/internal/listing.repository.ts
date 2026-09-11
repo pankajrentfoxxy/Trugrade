@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Money, moneyFromDb, type Grade, type SerialIssue } from '@trugrade/contracts';
+import {
+  Money,
+  moneyFromDb,
+  offeredGradesFromMix,
+  type Grade,
+  type SerialIssue,
+} from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { OrgScope } from '../../../shared/db/org-scope';
@@ -7,6 +13,7 @@ import {
   ConflictError,
   ForbiddenError,
   PreconditionFailedError,
+  ValidationError,
 } from '../../../shared/errors/domain-errors';
 
 /**
@@ -101,6 +108,76 @@ export interface PublicPricingFacts {
   gstRatePct: number;
   vendorWarrantyMonths: number;
   vendorAskPrice: Money;
+}
+
+/**
+ * What a vendor needs to recognise the machine — brand, model, and the
+ * configuration they picked in the wizard. Looked up from `catalog` in a
+ * separate statement, never joined onto `listing.listing`.
+ */
+export interface CatalogSkuFacts {
+  skuCode: string;
+  brandName: string;
+  seriesName: string;
+  modelName: string;
+  cpuBrand: string;
+  cpuFamily: string;
+  cpuModel: string;
+  cpuGeneration: string;
+  ramGb: number;
+  storageGb: number;
+  storageType: string;
+  gpuType: string;
+  gpuModel: string | null;
+  screenSizeIn: number;
+  resolution: string;
+  isTouch: boolean;
+  osSupported: string;
+}
+
+interface RawCatalogSku {
+  id: string;
+  sku_code: string;
+  cpu_brand: string;
+  cpu_family: string;
+  cpu_model: string;
+  cpu_generation: string;
+  ram_gb: number;
+  storage_gb: number;
+  storage_type: string;
+  gpu_type: string;
+  gpu_model: string | null;
+  screen_size_inch: unknown;
+  resolution: string;
+  is_touch: boolean;
+  os_supported: string;
+  brand_name: string;
+  series_name: string;
+  model_name: string;
+}
+
+function toCatalogSku(r: RawCatalogSku): CatalogSkuFacts {
+  return {
+    skuCode: r.sku_code,
+    brandName: r.brand_name,
+    seriesName: r.series_name,
+    modelName: r.model_name,
+    cpuBrand: r.cpu_brand,
+    cpuFamily: r.cpu_family,
+    cpuModel: r.cpu_model,
+    cpuGeneration: r.cpu_generation,
+    ramGb: Number(r.ram_gb),
+    storageGb: Number(r.storage_gb),
+    storageType: r.storage_type,
+    gpuType: r.gpu_type,
+    gpuModel: r.gpu_model,
+    // NUMERIC(4,1) arrives as a Decimal; Number() is the conversion the catalog
+    // repository already does so nothing above this layer sees one.
+    screenSizeIn: Number(r.screen_size_inch),
+    resolution: r.resolution,
+    isTouch: r.is_touch,
+    osSupported: r.os_supported,
+  };
 }
 
 export interface ListingRow {
@@ -472,6 +549,31 @@ export class ListingRepository {
   }
 
   /**
+   * A listing grade the vendor did not tick at registration is a form they
+   * cannot honestly complete. Standalone read of `vendor.vendor_capability` —
+   * no join onto listing. Empty mix means no restriction (demo orgs, or a
+   * capability step completed before grades were asked).
+   */
+  private async assertGradeOffered(grade: Grade): Promise<void> {
+    const { orgId } = this.orgPredicate();
+    if (!orgId) return;
+    const rows = await this.prisma.$queryRaw<Array<{ typical_grade_mix: unknown }>>`
+      SELECT typical_grade_mix
+        FROM vendor.vendor_capability
+       WHERE org_id = ${orgId}::uuid
+         AND typical_grade_mix IS NOT NULL
+       ORDER BY is_active DESC
+       LIMIT 1`;
+    const offered = offeredGradesFromMix(rows[0]?.typical_grade_mix);
+    if (offered.length === 0 || offered.includes(grade)) return;
+    const names = offered.map((g) => (g === 'A_PLUS' ? 'A+' : g)).join(', ');
+    throw new ValidationError(
+      `This listing has to be one of the grades you said you supply: ${names}.`,
+      { grade: `Pick ${names} — those are the grades you ticked when you registered.` },
+    );
+  }
+
+  /**
    * Create a draft.
    *
    * `unit_price` gets the vendor's own asking price rather than a placeholder.
@@ -505,7 +607,17 @@ export class ListingRepository {
       });
     }
 
-    const ask = input.vendorAskPrice.toString();
+    const [sku] = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM catalog.sku WHERE id = ${input.skuId}::uuid AND is_active`;
+    if (!sku) {
+      throw new ValidationError('That machine is not in the catalog we carry.', {
+        skuId: 'Search again and pick the configuration we hold.',
+      });
+    }
+
+    await this.assertGradeOffered(input.grade);
+
+    const ask = Money.parse(input.vendorAskPrice).toString();
     const rows = await this.prisma.$queryRaw<RawListing[]>`
       INSERT INTO listing.listing
         (vendor_org_id, sku_id, grade, condition_type, functional_status,
@@ -557,6 +669,7 @@ export class ListingRepository {
    * Nobody has asked to clear it; when they do it needs its own verb.
    */
   async updateDraft(id: string, patch: UpdateDraftInput): Promise<ListingRow | null> {
+    if (patch.grade) await this.assertGradeOffered(patch.grade);
     const { orgId, isPlatform } = this.orgPredicate();
     const ask = patch.vendorAskPrice?.toString() ?? null;
     const scopeJson = patch.vendorWarrantyScope ? JSON.stringify(patch.vendorWarrantyScope) : null;
@@ -1198,6 +1311,30 @@ export class ListingRepository {
         },
       ]),
     );
+  }
+
+  /**
+   * Catalog identity for these SKU ids, as a separate statement: `catalog` is
+   * another schema and `no-cross-schema-join` forbids fusing it onto
+   * `listing.listing`. A listing board that cannot name the machine is a board
+   * of anonymous grades.
+   */
+  async skuDetails(ids: readonly string[]): Promise<Map<string, CatalogSkuFacts>> {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return new Map();
+
+    const rows = await this.prisma.$queryRaw<RawCatalogSku[]>`
+      SELECT s.id, s.sku_code, s.cpu_brand, s.cpu_family, s.cpu_model, s.cpu_generation,
+             s.ram_gb, s.storage_gb, s.storage_type, s.gpu_type, s.gpu_model,
+             s.screen_size_inch, s.resolution, s.is_touch, s.os_supported,
+             b.name AS brand_name, se.name AS series_name, m.name AS model_name
+        FROM catalog.sku s
+        JOIN catalog.model  m  ON m.id  = s.model_id
+        JOIN catalog.series se ON se.id = m.series_id
+        JOIN catalog.brand  b  ON b.id  = se.brand_id
+       WHERE s.id = ANY(${unique}::text[]::uuid[])`;
+
+    return new Map(rows.map((r) => [r.id, toCatalogSku(r)]));
   }
 
 }

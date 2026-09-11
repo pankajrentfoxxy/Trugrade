@@ -357,7 +357,7 @@ beforeEach(async () => {
  * ======================================================================== */
 
 describe('a confirmed order', () => {
-  it('allocates specific serials, raises one PO per supply point, and balances', async () => {
+  it('holds stock, raises vacant PO and order-line slots, and balances', async () => {
     const alpha = await makeVendor(HARYANA);
     const beta = await makeVendor({ ...HARYANA, city: 'Noida', pincode: '201301' });
     const a = await makeOffer({
@@ -381,11 +381,16 @@ describe('a confirmed order', () => {
 
     expect(order.orderNumber).toMatch(/^TT-\d{2}-\d{5}$/);
     expect(order.status).toBe('PAYMENT_PENDING');
-    expect(order.serials).toHaveLength(3);
+    expect(order.units).toBe(3);
+    expect(order.serials).toHaveLength(0);
 
-    // The serials are REAL machines from the two listings, not invented ones.
-    const allocated = order.serials.map((s) => s.serialNumber).sort();
-    expect(allocated.every((s) => [...a.serials, ...b.serials].includes(s))).toBe(true);
+    const vacant = await db.$queryRaw<Array<{ unit_id: string | null }>>`
+      SELECT olu.unit_id FROM ordering.order_line_unit olu
+        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${order.orderId}::uuid`;
+    expect(vacant).toHaveLength(3);
+    expect(vacant.every((r) => r.unit_id === null)).toBe(true);
 
     // One sub-order and one purchase order per supply point. Two vendors, two POs.
     const [{ count: subOrders } = { count: 0n }] = await db.$queryRaw<Array<{ count: bigint }>>`
@@ -502,7 +507,10 @@ describe('ORD-010: two concurrent buyers race for the last unit', () => {
     expect(Number(orderCount)).toBe(1);
     const [{ count: allocations } = { count: 0n }] = await db.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) FROM ordering.order_line_unit WHERE unit_id = ${offer.unitIds[0]}::uuid`;
-    expect(Number(allocations)).toBe(1);
+    expect(Number(allocations)).toBe(0);
+    const [{ status } = { status: '' }] = await db.$queryRaw<Array<{ status: string }>>`
+      SELECT status::text AS status FROM listing.unit WHERE id = ${offer.unitIds[0]}::uuid`;
+    expect(status).toBe('RESERVED');
     expect(await counters(offer.listingId)).toMatchObject({ qty_available: 0, qty_reserved: 1 });
   });
 });
@@ -753,6 +761,9 @@ describe('one machine, one order line, ever', () => {
         JOIN ordering.sub_order s ON s.id = ol.sub_order_id
        WHERE s.order_id = ${order.orderId}::uuid`;
 
+    await db.$executeRaw`
+      INSERT INTO ordering.order_line_unit (order_line_id, unit_id, serial_number, status)
+      VALUES (${line!.id}::uuid, ${offer.unitIds[0]}::uuid, 'FIRST-BIND', 'RESERVED')`;
     await expect(
       db.$executeRaw`
         INSERT INTO ordering.order_line_unit (order_line_id, unit_id, serial_number, status)
@@ -770,6 +781,10 @@ describe('one machine, one order line, ever', () => {
     const [po] = await db.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM procurement.purchase_order WHERE order_id = ${order.orderId}::uuid`;
 
+    await db.$executeRaw`
+      INSERT INTO procurement.purchase_order_line
+        (po_id, unit_id, sku_id, agreed_net_payout, grade_at_po)
+      VALUES (${po!.id}::uuid, ${offer.unitIds[0]}::uuid, ${skuId}::uuid, 1, 'A'::grade_type)`;
     await expect(
       db.$executeRaw`
         INSERT INTO procurement.purchase_order_line
@@ -872,8 +887,8 @@ describe('PRC-030: the vendor PO carries no buyer identity and no retail price',
     for (const forbidden of [v.orgId, String(VENDOR_ASK), 'PO-', 'sub_order', 'vendor']) {
       expect(payload).not.toContain(forbidden);
     }
-    // The supply point is a letter and a city, and nothing finer.
-    expect(order.serials[0]!.dispatchPoint).toMatch(/^Supply Point [A-Z]{1,2} · Gurugram$/);
+    expect(order.serials).toHaveLength(0);
+    expect(order.units).toBe(1);
   });
 });
 
@@ -1078,9 +1093,9 @@ describe('the twenty-minute hold', () => {
     const session = await asBuyer(() => checkout.begin(cartId));
     const order = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
 
-    expect(order.serials.map((s) => s.serialNumber).sort()).toEqual(
-      [...session.lines[0]!.serials].sort(),
-    );
+    expect(order.serials).toHaveLength(0);
+    expect(order.units).toBe(2);
+    expect(session.lines[0]!.serials).toHaveLength(2);
     // The hold is consumed, not left behind to be released later.
     const [{ count } = { count: 0n }] = await db.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) FROM ordering.checkout_hold`;

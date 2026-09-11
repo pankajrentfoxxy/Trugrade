@@ -98,9 +98,9 @@ const WHY_VENDOR_STATUTORY: readonly WhyRailItem[] = [
 
 const WHY_CAPABILITY: readonly WhyRailItem[] = [
   {
-    term: 'Grade mix',
+    term: 'Grades you supply',
     explanation:
-      'A+, A and B are all sellable — the grade is a position on a scale, not a verdict. What the mix tells us is which buyers to put you in front of: a fleet refresh wants A+ and a training lab wants B. It has to add to 100%, because the part that does not add up is stock nobody has described.',
+      'A+, A and B are all sellable — the grade is a position on a scale, not a verdict. Tick every grade you will list. The listing wizard will only offer those grades, so a fleet refresh is not sent a B you never said you had.',
   },
 ];
 

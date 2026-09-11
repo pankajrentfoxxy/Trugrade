@@ -163,12 +163,7 @@ export function VendorPurchaseOrdersRoute(): React.JSX.Element {
             >
               Open
             </Link>
-            <Link
-              className="text-ink underline underline-offset-4 hover:text-acc-ink"
-              to={`/vendor/orders/${po.poId}/pick-list`}
-            >
-              Pick list
-            </Link>
+            {/* Pick list is stood down while attach is how a machine is named. */}
           </span>
         ),
       },

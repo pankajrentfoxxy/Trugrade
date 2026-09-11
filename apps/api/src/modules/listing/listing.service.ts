@@ -8,6 +8,7 @@ import {
 } from '../../shared/errors/domain-errors';
 import {
   ListingRepository,
+  type CatalogSkuFacts,
   type CreateDraftInput,
   type ListingFilter,
   type ListingRow,
@@ -80,9 +81,18 @@ export type {
  * built by subtraction silently gains every column somebody adds to the row
  * later; this one gains nothing it was not handed.
  */
+/**
+ * The catalogued machine this listing is — brand, model, and the configuration
+ * the vendor picked. `null` when the SKU could not be read; a missing catalog
+ * row must not look like an unnamed machine with empty strings.
+ */
+export type VendorSkuView = CatalogSkuFacts;
+
 export interface VendorListingView {
   id: string;
   skuId: string;
+  /** Catalog identity for the board and the record. Never a price. */
+  sku: VendorSkuView | null;
   grade: string;
   conditionType: string;
   functionalStatus: string;
@@ -606,7 +616,7 @@ export class ListingService implements IListingService {
   // -------------------------------------------------------------------------
 
   async createDraft(input: CreateDraftInput): Promise<VendorListingView> {
-    return toVendorView(await this.listings.createDraft(input));
+    return this.asVendorView(await this.listings.createDraft(input));
   }
 
   async updateDraft(id: string, patch: UpdateDraftInput): Promise<VendorListingView> {
@@ -616,13 +626,13 @@ export class ListingService implements IListingService {
     const current = await this.requireDraft(id);
     const updated = await this.listings.updateDraft(id, patch);
     if (!updated) throw new IllegalStateTransitionError('listing', current.status, 'DRAFT');
-    return toVendorView(updated);
+    return this.asVendorView(updated);
   }
 
   async getForVendor(id: string): Promise<VendorListingView> {
     const row = await this.listings.findById(id);
     if (!row) throw new NotFoundError('listing');
-    return toVendorView(row);
+    return this.asVendorView(row);
   }
 
   async listForVendor(
@@ -630,7 +640,17 @@ export class ListingService implements IListingService {
     page: { page: number; pageSize: number },
   ): Promise<Page<VendorListingView>> {
     const result = await this.listings.findByVendor(filter, page);
-    return { ...result, rows: result.rows.map(toVendorView) };
+    return { ...result, rows: await this.asVendorViews(result.rows) };
+  }
+
+  private async asVendorView(row: ListingRow): Promise<VendorListingView> {
+    const [view] = await this.asVendorViews([row]);
+    return view!;
+  }
+
+  private async asVendorViews(rows: readonly ListingRow[]): Promise<VendorListingView[]> {
+    const skus = await this.listings.skuDetails(rows.map((r) => r.skuId));
+    return rows.map((r) => ({ ...toVendorView(r), sku: skus.get(r.skuId) ?? null }));
   }
 
   getListing(id: string): Promise<ListingRow | null> {
@@ -819,7 +839,7 @@ export class ListingService implements IListingService {
   }
 }
 
-function toVendorView(r: ListingRow): VendorListingView {
+function toVendorView(r: ListingRow): Omit<VendorListingView, 'sku'> {
   return {
     id: r.id,
     skuId: r.skuId,

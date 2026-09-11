@@ -43,10 +43,10 @@ import { HoldService } from './hold.service';
  * still holds. If correctness depended on Redis being up, it would not be
  * correctness.
  *
- * **3. `order_line_unit.unit_id` and `purchase_order_line.unit_id` are both
- * UNIQUE.** A physical laptop is on exactly one customer order line and exactly
- * one purchase order line, ever. Together they make a double-sell a `23505`
- * rather than a discovery made by a buyer who received nothing.
+ * **3. `order_line_unit` is a vacant slot at confirm.** `unit_id`,
+ * `serial_number` and `qc_report_id` stay null until the vendor attaches a
+ * matching machine. UNIQUE on `unit_id` then refuses a second purchase of the
+ * same laptop. Listing stock is still reserved so the qty hold is real.
  *
  * **4. If the PO cannot be raised, the order does not confirm.** No agreed
  * payout, a suspended vendor, units that disagree about their GST valuation —
@@ -315,15 +315,14 @@ export class OrderTransactionService {
                   ${line.goods.add(line.split.total).toString()}::numeric,
                   ${lineStatus}::public.order_status)`;
 
-        // 10. order_line_unit. `unit_id` is UNIQUE — this is the customer half of
-        //     "a laptop is sold once", and a second attempt is a 23505.
+        // 10. order_line_unit. A vacant SKU + grade slot — the vendor names the
+        //     serial when they attach. Listing stock is still reserved below.
         input.failAt?.('order_line_unit');
         for (const unit of line.units) {
           await this.prisma.$executeRaw`
             INSERT INTO ordering.order_line_unit
               (order_line_id, unit_id, serial_number, qc_report_id, status)
-            VALUES (${lineId}::uuid, ${unit.unitId}::uuid, ${unit.serialNumber},
-                    ${unit.qcReportId}::uuid, 'RESERVED'::public.unit_status)`;
+            VALUES (${lineId}::uuid, NULL, NULL, NULL, 'RESERVED'::public.unit_status)`;
           serials.push({
             unitId: unit.unitId,
             serialNumber: unit.serialNumber,
@@ -390,8 +389,8 @@ export class OrderTransactionService {
       type: input.approval ? 'order.approval_requested' : 'order.placed',
       to: status,
       note: input.approval
-        ? `Sent for approval. ${serials.length} ${machines(serials.length)} are held for you while it is signed off.`
-        : `Order placed. ${serials.length} ${machines(serials.length)} allocated to you by serial number.`,
+        ? `Sent for approval. ${serials.length} ${machines(serials.length)} are held while it is signed off. Serials are named when a machine is attached to this order.`
+        : `Order placed. ${serials.length} ${machines(serials.length)} held. Serials are named when a machine is attached to this order.`,
       occurredAt: now,
       actorId,
     });
@@ -606,23 +605,14 @@ export class OrderTransactionService {
               ${valuationMethod}, 15, ${input.now}, ${input.now})`;
 
     for (const unit of units) {
-      // `unit_id` is UNIQUE here too. The pair of unique constraints is what
-      // makes double-selling structurally impossible rather than merely
-      // unlikely — one on the customer's side, one on ours.
+      // The line is a SKU + grade slot. The vendor names the serial later
+      // from their listing; `unit_id` stays null until they attach.
       await this.prisma.$executeRaw`
         INSERT INTO procurement.purchase_order_line
           (po_id, unit_id, sku_id, agreed_net_payout, grade_at_po, qc_report_id, created_at)
-        VALUES (${poId}::uuid, ${unit.unitId}::uuid, ${unit.skuId}::uuid,
+        VALUES (${poId}::uuid, NULL, ${unit.skuId}::uuid,
                 ${(unit.vendorAskPrice ?? Money.ZERO).toString()}::numeric,
-                ${unit.grade}::public.grade_type, ${unit.qcReportId}::uuid, ${input.now})`;
-
-      // What we agreed to pay is frozen onto the machine at this moment.
-      // `trg_lock_purchase_price` makes it immutable from here, so a later move
-      // in the retail price cannot retrospectively change what a vendor is owed.
-      await this.prisma.$executeRaw`
-        UPDATE listing.unit
-           SET purchase_price = ${(unit.vendorAskPrice ?? Money.ZERO).toString()}::numeric
-         WHERE id = ${unit.unitId}::uuid AND purchase_price IS NULL`;
+                ${unit.grade}::public.grade_type, NULL, ${input.now})`;
     }
 
     // 14. The payable and the TDS ledger entry, in the same breath as the PO.
@@ -834,15 +824,36 @@ export class OrderTransactionService {
       });
     }
 
-    const rows = await this.prisma.$queryRaw<
-      Array<{ vendor_org_id: string; unit_id: string; serial_number: string; listing_id: string }>
+    const slots = await this.prisma.$queryRaw<
+      Array<{ vendor_org_id: string; order_line_id: string; listing_id: string; qty: number }>
     >`
-      SELECT so.vendor_org_id, olu.unit_id, olu.serial_number, ol.listing_id
-        FROM ordering.order_line_unit olu
-        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+      SELECT so.vendor_org_id, ol.id AS order_line_id, ol.listing_id, ol.qty
+        FROM ordering.order_line ol
         JOIN ordering.sub_order so ON so.id = ol.sub_order_id
-       WHERE so.order_id = ${orderId}::uuid
-       ORDER BY olu.unit_id`;
+       WHERE so.order_id = ${orderId}::uuid`;
+
+    const lineIds = slots.map((s) => s.order_line_id);
+    const reserved =
+      lineIds.length === 0
+        ? []
+        : await this.prisma.$queryRaw<
+            Array<{ id: string; serial_number: string; order_line_id: string }>
+          >`
+            SELECT id, serial_number, order_line_id
+              FROM listing.unit
+             WHERE order_line_id = ANY(${lineIds}::uuid[])
+               AND status = 'RESERVED'::public.unit_status
+             ORDER BY id`;
+
+    const rows = reserved.map((u) => {
+      const slot = slots.find((s) => s.order_line_id === u.order_line_id);
+      return {
+        vendor_org_id: slot?.vendor_org_id ?? '',
+        unit_id: u.id,
+        serial_number: u.serial_number,
+        listing_id: slot?.listing_id ?? '',
+      };
+    });
 
     const units = await this.unitFacts(rows.map((r) => r.unit_id));
     const byVendor = groupBy(rows, (r) => r.vendor_org_id);
@@ -888,7 +899,7 @@ export class OrderTransactionService {
       type: 'order.approved',
       from: 'AWAITING_APPROVAL',
       to: status,
-      note: `Approved. ${rows.length} ${machines(rows.length)} are now committed to you by serial number.`,
+      note: `Approved. ${rows.length} ${machines(rows.length)} are committed. Serials are named when a machine is attached to this order.`,
       occurredAt: now,
       actorId,
     });
@@ -921,13 +932,18 @@ export class OrderTransactionService {
    * correction beside a trigger is how counters end up disagreeing.
    */
   async releaseOrderStock(orderId: string, reason: string): Promise<number> {
-    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
-      SELECT olu.unit_id
-        FROM ordering.order_line_unit olu
-        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+    const lines = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT ol.id
+        FROM ordering.order_line ol
         JOIN ordering.sub_order so ON so.id = ol.sub_order_id
-       WHERE so.order_id = ${orderId}::uuid
-       ORDER BY olu.unit_id`;
+       WHERE so.order_id = ${orderId}::uuid`;
+    if (lines.length === 0) return 0;
+
+    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
+      SELECT id AS unit_id FROM listing.unit
+       WHERE order_line_id = ANY(${lines.map((l) => l.id)}::uuid[])
+         AND status = 'RESERVED'::public.unit_status
+       ORDER BY id`;
     if (rows.length === 0) return 0;
 
     const unitIds = rows.map((r) => r.unit_id);

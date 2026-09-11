@@ -20,7 +20,8 @@ import {
 import type { Grade } from '@trugrade/contracts';
 import { Board, Datum, NotMeasured, PageHeader, Section } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, NO_DATE, gradeLabel, humanise, locationLabel, onDate, onDateTime, rupees, type VendorUnit, type VendorUnitMovement } from './api';
+import { API, NO_DATE, gradeLabel, humanise, locationLabel, onDate, onDateTime, rupees, type VendorListing, type VendorUnit, type VendorUnitMovement } from './api';
+import { ListingMachineCard, machineTitle } from './ListingMachine';
 
 /**
  * ARCHETYPE B (the list) and C (one serial). Board, then record.
@@ -355,38 +356,29 @@ function unitColumns(listingId: string | undefined): ReadonlyArray<Column<Vendor
 
 export function ListingUnitsRoute(): React.JSX.Element {
   const { id } = useParams();
+  const listing = useResource<VendorListing>(
+    id ? API.listing(id) : '',
+    'This listing did not load',
+  );
   const { data, error } = useUnits(id);
   const columns = React.useMemo(() => unitColumns(id), [id]);
 
-  if (error) {
-    return (
-      <EmptyState title="The units did not load" body={`${error}. Nothing has been changed.`} />
-    );
-  }
-  if (!data) return <Skeleton lines={8} />;
-  if (data.length === 0) {
+  if (listing.error || error) {
     return (
       <EmptyState
-        title="No serials on this listing yet"
-        body="A listing with no serials has nothing to inspect and nothing to sell."
-        action={
-          <Link
-            className="text-acc-ink underline underline-offset-4"
-            to={`/vendor/listings/${id}/bulk-upload`}
-          >
-            Upload a CSV of serials
-          </Link>
-        }
+        title="This listing did not load"
+        body={`${listing.error ?? error}. Nothing has been changed.`}
       />
     );
   }
+  if (!listing.data || !data) return <Skeleton lines={8} />;
 
   return (
     <div className="tg-stack">
       <Breadcrumb items={[{ label: 'Your stock', href: '/vendor/listings' }, { label: 'Units' }]} />
 
       <PageHeader
-        title={`${data.length} ${data.length === 1 ? 'machine' : 'machines'}`}
+        title={machineTitle(listing.data)}
         action={
           <Link
             className="text-acc-ink underline underline-offset-4"
@@ -396,23 +388,45 @@ export function ListingUnitsRoute(): React.JSX.Element {
           </Link>
         }
       >
-        Every serial on this listing, and where each one is.
+        {data.length} {data.length === 1 ? 'machine' : 'machines'} on this listing, and where each
+        one is.
       </PageHeader>
 
-      <Board>
-        <DataBoard
-          caption={`${data.length} machines on this listing.`}
-          columns={columns}
-          rows={data}
-          rowKey={(u) => u.id}
+      <ListingMachineCard listing={listing.data} />
+
+      {data.length === 0 ? (
+        <EmptyState
+          title="No serials on this listing yet"
+          body="A listing with no serials has nothing to inspect and nothing to sell."
+          action={
+            <Link
+              className="text-acc-ink underline underline-offset-4"
+              to={`/vendor/listings/${id}/bulk-upload`}
+            >
+              Upload a CSV of serials
+            </Link>
+          }
         />
-      </Board>
+      ) : (
+        <Board>
+          <DataBoard
+            caption={`${data.length} machines on this listing.`}
+            columns={columns}
+            rows={data}
+            rowKey={(u) => u.id}
+          />
+        </Board>
+      )}
     </div>
   );
 }
 
 export function UnitDetailRoute(): React.JSX.Element {
   const { id, unitId } = useParams();
+  const listing = useResource<VendorListing>(
+    id ? API.listing(id) : '',
+    'This listing did not load',
+  );
   const { data, error } = useUnits(id);
   const movements = useResource<VendorUnitMovement[]>(
     API.listingUnitMovements(id ?? '', unitId ?? ''),
@@ -468,7 +482,11 @@ export function UnitDetailRoute(): React.JSX.Element {
 
       <RecordHeader
         title={unit.serialNumber}
-        subtitle={`Declared Grade ${gradeLabel(unit.gradeDeclared)} on ${onDate(unit.createdAt)}`}
+        subtitle={
+          listing.data
+            ? `${machineTitle(listing.data)} · Declared Grade ${gradeLabel(unit.gradeDeclared)} on ${onDate(unit.createdAt)}`
+            : `Declared Grade ${gradeLabel(unit.gradeDeclared)} on ${onDate(unit.createdAt)}`
+        }
         status={
           <StatusPill
             tone={halted ? 'warn' : unit.isSellable ? 'info' : 'processing'}
@@ -524,6 +542,8 @@ export function UnitDetailRoute(): React.JSX.Element {
           </>
         }
       />
+
+      {listing.data ? <ListingMachineCard listing={listing.data} /> : null}
 
       <div className="unit-kpi-grid">
         <div className="unit-kpi-tile">

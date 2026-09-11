@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationSchema } from '@trugrade/contracts';
+import { gradeSchema, paginationSchema, uuidSchema } from '@trugrade/contracts';
 
 /**
  * The ten values of `public.po_status`, restated as a Zod enum.
@@ -40,3 +40,16 @@ export const listPurchaseOrdersQuerySchema = paginationSchema
   });
 
 export type ListPurchaseOrdersQueryDto = z.infer<typeof listPurchaseOrdersQuerySchema>;
+
+export const attachableUnitsQuerySchema = z.object({
+  skuId: uuidSchema,
+  grade: gradeSchema,
+});
+export type AttachableUnitsQueryDto = z.infer<typeof attachableUnitsQuerySchema>;
+
+export const attachPoUnitSchema = z.object({
+  skuId: uuidSchema,
+  grade: gradeSchema,
+  unitId: uuidSchema,
+});
+export type AttachPoUnitDto = z.infer<typeof attachPoUnitSchema>;

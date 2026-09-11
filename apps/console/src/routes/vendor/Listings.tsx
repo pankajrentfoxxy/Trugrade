@@ -14,6 +14,7 @@ import { GRADES, type Grade } from '@trugrade/contracts';
 import { Board, NotMeasured, PageHeader, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, gradeLabel, onDate, postJson, rupees, type Page, type VendorListing } from './api';
+import { machineTitle } from './ListingMachine';
 
 /**
  * ARCHETYPE B — Board. Filter rail + data table + row actions.
@@ -143,6 +144,22 @@ export function VendorListingsRoute(): React.JSX.Element {
             onChange={() => toggle(l.id)}
           />
         ),
+      },
+      {
+        key: 'machine',
+        header: 'Machine',
+        cell: (l) =>
+          l.sku ? (
+            <span>
+              <span className="text-ink">{machineTitle(l)}</span>
+              <span className="mt-1 block font-mono text-body-sm text-ink-3">{l.sku.skuCode}</span>
+            </span>
+          ) : (
+            <NotMeasured
+              why="The catalog entry for this machine could not be read"
+              label="No catalog entry"
+            />
+          ),
       },
       {
         key: 'grade',

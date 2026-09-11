@@ -108,12 +108,13 @@ function renderAgreement(
 }
 
 describe('step 6 — the documents asked for', () => {
-  it('makes signatory ID and address proof optional, including the address-proof date, and does not ask for a board resolution or cancelled cheque', () => {
+  it('makes signatory ID and address proof optional, including the address-proof date, and does not ask for a board resolution, cancelled cheque or CPCB', () => {
     expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'SIGNATORY_ID')?.required).toBe(false);
     expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'ADDRESS_PROOF')?.required).toBe(false);
     expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'ADDRESS_PROOF')?.dateRequired).toBe(false);
     expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'BOARD_RESOLUTION')).toBe(false);
     expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'CANCELLED_CHEQUE')).toBe(false);
+    expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'CPCB_EWASTE')).toBe(false);
   });
 });
 
@@ -225,6 +226,24 @@ describe('step 6 — the penny-drop', () => {
       ).toBeInTheDocument(),
     );
     expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it('keeps the first four IFSC characters as letters and will not take a letter after that', () => {
+    render(
+      <StepDocumentsBank
+        answers={{}}
+        legalName="Northgate Asset Recovery Private Limited"
+        onSaveDraft={noop}
+        onContinue={accept}
+        busy={false}
+        onFieldFocus={noop}
+      />,
+    );
+
+    const field = screen.getByLabelText(/^IFSC/);
+    fireEvent.change(field, { target: { value: '1hdFC00ab1234' } });
+    // Leading digit dropped; letters after the bank code dropped.
+    expect(field).toHaveValue('HDFC001234');
   });
 
   it('shows nothing that reads as verified before any check has run', () => {

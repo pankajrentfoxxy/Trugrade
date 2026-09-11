@@ -42,11 +42,20 @@ export interface PoHeaderRow {
 }
 
 export interface PoLineRow {
-  unit_id: string;
+  id: string;
+  unit_id: string | null;
   sku_id: string;
   agreed_net_payout: string;
   grade_at_po: string;
   qc_report_id: string | null;
+}
+
+export interface AttachableUnitRow {
+  id: string;
+  serial_number: string;
+  status: string;
+  qc_report_id: string | null;
+  vendor_ask_price: string | null;
 }
 
 /** The delivery point, allow-listed. No contact, no label, no instructions. */
@@ -168,11 +177,12 @@ export class PurchaseOrderRepository {
   async linesOf(poId: string): Promise<PoLineRow[]> {
     const orgId = this.vendorOrgId();
     return this.prisma.$queryRaw<PoLineRow[]>`
-      SELECT l.unit_id, l.sku_id, l.agreed_net_payout::text AS agreed_net_payout,
+      SELECT l.id, l.unit_id, l.sku_id, l.agreed_net_payout::text AS agreed_net_payout,
              l.grade_at_po::text AS grade_at_po, l.qc_report_id
         FROM procurement.purchase_order_line l
         JOIN procurement.purchase_order po ON po.id = l.po_id
-       WHERE l.po_id = ${poId}::uuid AND po.vendor_org_id = ${orgId}::uuid`;
+       WHERE l.po_id = ${poId}::uuid AND po.vendor_org_id = ${orgId}::uuid
+       ORDER BY l.created_at`;
   }
 
   /**
@@ -184,6 +194,153 @@ export class PurchaseOrderRepository {
    * with the caller's — it is what makes this statement safe on its own terms,
    * which is the property that matters the first time somebody reuses it.
    */
+  /** Units already named on any of this vendor's PO lines. */
+  async attachedUnitIds(): Promise<string[]> {
+    const orgId = this.vendorOrgId();
+    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
+      SELECT l.unit_id
+        FROM procurement.purchase_order_line l
+        JOIN procurement.purchase_order po ON po.id = l.po_id
+       WHERE po.vendor_org_id = ${orgId}::uuid
+         AND l.unit_id IS NOT NULL`;
+    return rows.map((r) => r.unit_id);
+  }
+
+  /**
+   * Machines held for this order. Two statements: the line ids are `ordering`'s,
+   * the reserved units are `listing`'s. `order_line_unit.unit_id` is null until
+   * attach, so the hold is `listing.unit.order_line_id`.
+   */
+  async reservedUnitIdsForOrder(orderId: string): Promise<string[]> {
+    const lines = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT ol.id
+        FROM ordering.order_line ol
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${orderId}::uuid`;
+    if (lines.length === 0) return [];
+    const named = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
+      SELECT olu.unit_id
+        FROM ordering.order_line_unit olu
+       WHERE olu.order_line_id = ANY(${lines.map((l) => l.id)}::uuid[])
+         AND olu.unit_id IS NOT NULL`;
+    const held = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM listing.unit
+       WHERE order_line_id = ANY(${lines.map((l) => l.id)}::uuid[])`;
+    return [...new Set([...named.map((r) => r.unit_id), ...held.map((r) => r.id)])];
+  }
+
+  /**
+   * Free LISTED stock of this SKU and grade, plus machines already reserved
+   * on this order, minus anything already named on a PO.
+   */
+  async attachableUnits(input: {
+    skuId: string;
+    grade: string;
+    reservedIds: readonly string[];
+    takenIds: readonly string[];
+  }): Promise<AttachableUnitRow[]> {
+    const orgId = this.vendorOrgId();
+    const none = '00000000-0000-0000-0000-000000000000';
+    const reserved = input.reservedIds.length > 0 ? [...input.reservedIds] : [none];
+    const taken = input.takenIds.length > 0 ? [...input.takenIds] : [none];
+    return this.prisma.$queryRaw<AttachableUnitRow[]>`
+      SELECT u.id, u.serial_number, u.status::text AS status,
+             u.qc_report_id, u.vendor_ask_price::text AS vendor_ask_price
+        FROM listing.unit u
+       WHERE u.vendor_org_id = ${orgId}::uuid
+         AND u.sku_id = ${input.skuId}::uuid
+         AND COALESCE(u.grade_actual, u.grade_declared)::text = ${input.grade}
+         AND u.id <> ALL(${taken}::uuid[])
+         AND (u.status = 'LISTED' OR u.id = ANY(${reserved}::uuid[]))
+       ORDER BY u.serial_number`;
+  }
+
+  async unitForVendor(unitId: string): Promise<AttachableUnitRow & { sku_id: string; grade: string } | null> {
+    const orgId = this.vendorOrgId();
+    const [row] = await this.prisma.$queryRaw<
+      Array<AttachableUnitRow & { sku_id: string; grade: string }>
+    >`
+      SELECT u.id, u.serial_number, u.status::text AS status, u.qc_report_id,
+             u.vendor_ask_price::text AS vendor_ask_price,
+             u.sku_id, COALESCE(u.grade_actual, u.grade_declared)::text AS grade
+        FROM listing.unit u
+       WHERE u.id = ${unitId}::uuid AND u.vendor_org_id = ${orgId}::uuid`;
+    return row ?? null;
+  }
+
+  async attachToVacantLine(input: {
+    poId: string;
+    skuId: string;
+    grade: string;
+    unitId: string;
+    serialNumber: string;
+    qcReportId: string | null;
+    payout: string;
+    now: Date;
+  }): Promise<boolean> {
+    const orgId = this.vendorOrgId();
+    const updated = await this.prisma.$executeRaw`
+      UPDATE procurement.purchase_order_line l
+         SET unit_id = ${input.unitId}::uuid,
+             qc_report_id = ${input.qcReportId}::uuid
+       WHERE l.id = (
+         SELECT l2.id
+           FROM procurement.purchase_order_line l2
+           JOIN procurement.purchase_order po ON po.id = l2.po_id
+          WHERE po.id = ${input.poId}::uuid
+            AND po.vendor_org_id = ${orgId}::uuid
+            AND po.status = 'ACKNOWLEDGED'
+            AND l2.sku_id = ${input.skuId}::uuid
+            AND l2.grade_at_po::text = ${input.grade}
+            AND l2.unit_id IS NULL
+          ORDER BY l2.created_at
+          LIMIT 1
+       )`;
+    if (updated === 0) return false;
+
+    const [po] = await this.prisma.$queryRaw<Array<{ order_id: string }>>`
+      SELECT order_id FROM procurement.purchase_order
+       WHERE id = ${input.poId}::uuid AND vendor_org_id = ${orgId}::uuid`;
+    if (po) {
+      const bound = await this.prisma.$executeRaw`
+        UPDATE ordering.order_line_unit olu
+           SET unit_id = ${input.unitId}::uuid,
+               serial_number = ${input.serialNumber},
+               qc_report_id = ${input.qcReportId}::uuid
+         WHERE olu.id = (
+           SELECT olu2.id
+             FROM ordering.order_line_unit olu2
+             JOIN ordering.order_line ol ON ol.id = olu2.order_line_id
+             JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+            WHERE so.order_id = ${po.order_id}::uuid
+              AND ol.sku_id = ${input.skuId}::uuid
+              AND ol.grade::text = ${input.grade}
+              AND olu2.unit_id IS NULL
+            ORDER BY olu2.id
+            LIMIT 1
+         )`;
+      if (bound > 0) {
+        const [slot] = await this.prisma.$queryRaw<Array<{ order_line_id: string }>>`
+          SELECT order_line_id FROM ordering.order_line_unit
+           WHERE unit_id = ${input.unitId}::uuid`;
+        if (slot) {
+          await this.prisma.$executeRaw`
+            UPDATE listing.unit
+               SET status = 'RESERVED'::public.unit_status,
+                   order_line_id = ${slot.order_line_id}::uuid
+             WHERE id = ${input.unitId}::uuid
+               AND status = 'LISTED'::public.unit_status`;
+        }
+      }
+    }
+
+    await this.prisma.$executeRaw`
+      UPDATE listing.unit
+         SET purchase_price = ${input.payout}::numeric
+       WHERE id = ${input.unitId}::uuid AND purchase_price IS NULL`;
+    return true;
+  }
+
   async serialsOf(unitIds: readonly string[]): Promise<Map<string, string>> {
     if (unitIds.length === 0) return new Map();
     const orgId = this.vendorOrgId();

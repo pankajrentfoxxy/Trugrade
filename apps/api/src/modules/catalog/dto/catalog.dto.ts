@@ -83,6 +83,13 @@ export const catalogSearchQuerySchema = z.object({
 });
 export type CatalogSearchQueryDto = z.infer<typeof catalogSearchQuerySchema>;
 
+/** Vendor listing picker: unique models, not SKU configurations. */
+export const modelSearchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ModelSearchQueryDto = z.infer<typeof modelSearchQuerySchema>;
+
 /**
  * The grade is optional because two callers want different things from one SKU:
  * the vendor wizard needs the declared specification, to show what it is about

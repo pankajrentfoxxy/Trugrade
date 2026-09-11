@@ -13,8 +13,10 @@ import {
 import { DocumentChecklist, missingDocuments } from '../../register/DocumentChecklist';
 import { ACCOUNT_TYPES, VENDOR_DOCUMENTS } from '../../register/picklists';
 import {
+  blockIfscKey,
   toAccountNumber,
   toIfsc,
+  typeIfsc,
   validateAccountHolderName,
   validateAccountNumber,
   validateIfsc,
@@ -29,7 +31,7 @@ import { ProviderProblem, isProviderProblem, useRetryLadder } from '../../regist
  * the name the bank returned with the legal name on the certificates.
  *
  * **The checklist is `DocumentChecklist`**, the same component the buyer's step
- * 5 uses. Seven document types where a buyer has four, and that is the only
+ * 5 uses. Six document types where a buyer has four, and that is the only
  * difference — every rule about each of them is `document_type_rule` data.
  *
  * **The penny-drop is the same three-outcome problem as the GSTIN check**, and
@@ -583,14 +585,18 @@ export function StepDocumentsBank({
           />
 
           <Input
-            label={labelNote('IFSC', '11 characters, fifth is zero')}
+            label={labelNote('IFSC', 'first four letters, then digits — fifth is zero')}
             mono
             required
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
             maxLength={11}
             value={values.ifsc}
+            onKeyDown={blockIfscKey}
             onChange={(e) => {
               clearError('ifsc');
-              invalidate({ ifsc: toIfsc(e.target.value).replace(/[^A-Z0-9]/g, '').slice(0, 11) });
+              invalidate({ ifsc: typeIfsc(e.target.value) });
             }}
             onBlur={() => {
               const problem = validateIfsc(values.ifsc);

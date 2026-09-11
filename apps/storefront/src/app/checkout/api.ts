@@ -129,6 +129,7 @@ export interface OrderConfirmation {
   grandTotal: string;
   tax: TaxSplit;
   serials: Array<{ serialNumber: string; dispatchPoint: string }>;
+  units: number;
   next: string;
 }
 

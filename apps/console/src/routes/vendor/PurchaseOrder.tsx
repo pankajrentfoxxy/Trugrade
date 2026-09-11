@@ -6,13 +6,12 @@ import {
   DataBoard,
   EmptyState,
   GradeBadge,
+  Modal,
   RecordHeader,
-  SealChip,
   SidePanel,
   Skeleton,
   StatusPill,
   type Column,
-  type SealStatus,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import { useAuth } from '../../lib/auth';
@@ -20,28 +19,28 @@ import { Board, Datum, NotMeasured } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import {
   API,
+  humanise,
   onDate,
   postJson,
   rupees,
+  type AttachableUnit,
+  type PurchaseOrderDemand,
   type PurchaseOrderDetail,
-  type PurchaseOrderLine,
 } from './api';
 
 /**
  * ARCHETYPE C — Record. Identity header + evidence panel + actions side panel.
  * DENSITY: default (vendor portal), set on the app root by the shell.
  *
- * One purchase order — `03_UX_SPEC.md` §3B.3, `/vendor/orders/[poId]`.
+ * One purchase order — `/vendor/orders/[poId]`.
  *
- * The lines name **specific serials and specific seal codes**, because those
- * exact machines were allocated to a buyer at the moment they paid. This is not
- * a request for two Latitudes; it is a request for these two Latitudes, and the
- * screen is built so a person can carry it to a shelf.
+ * The lines are SKU + grade + qty. After the vendor accepts, they attach a
+ * matching machine from their listing; serials stay off this table. The pick
+ * list is stood down until attach is the path a warehouse walks.
  *
  * **The buyer is absent by construction.** The server's allow-list carries a
  * delivery city and no more: no legal name, no GSTIN, no contact, no order
- * number. The full street address exists on the pick list, which is a separate
- * route because that is the point at which the goods have to physically travel.
+ * number.
  */
 
 const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = {
@@ -58,29 +57,101 @@ const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = 
   DISPUTED: 'warn',
 };
 
-/**
- * The seal codes a warehouse compares against a sticker, in mono and tabular.
- *
- * `SealChip` renders the status; the code sits beside it. There is deliberately
- * **no barcode**: `Barcode` in `@trugrade/ui` is placeholder geometry that
- * encodes nothing (recorded as such in the build ledger), and a barcode beside a
- * real seal code on a picking screen is an invitation to scan something that
- * cannot be scanned. A code that will not scan is worse than no code at all.
- */
-function Seal({ seal }: { seal: PurchaseOrderLine['seal'] }): React.JSX.Element {
-  if (!seal) {
-    return (
-      <NotMeasured
-        why="No seal is recorded against the inspection this machine was bought on"
-        label="No seal recorded"
-      />
-    );
+const ATTACHABLE = new Set(['ACKNOWLEDGED']);
+
+function AttachModal({
+  poId,
+  demand,
+  canAttach,
+  onClose,
+  onAttached,
+}: {
+  poId: string;
+  demand: PurchaseOrderDemand;
+  canAttach: boolean;
+  onClose: () => void;
+  onAttached: (next: PurchaseOrderDetail) => void;
+}): React.JSX.Element {
+  const { data, error } = useResource<AttachableUnit[]>(
+    API.attachableUnits(poId, demand.skuId, demand.gradeAtPo),
+    'Matching machines unavailable',
+  );
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [attachError, setAttachError] = React.useState<string | null>(null);
+
+  async function attach(unitId: string): Promise<void> {
+    setBusyId(unitId);
+    setAttachError(null);
+    try {
+      onAttached(
+        await postJson<PurchaseOrderDetail>(API.attachPoUnit(poId), {
+          skuId: demand.skuId,
+          grade: demand.gradeAtPo,
+          unitId,
+        }),
+      );
+      onClose();
+    } catch (e) {
+      setAttachError((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
   }
+
   return (
-    <span className="flex flex-wrap items-center gap-2">
-      <span className="font-mono tnum text-ink">{seal.code}</span>
-      <SealChip status={seal.status as SealStatus} />
-    </span>
+    <Modal
+      open
+      onClose={onClose}
+      title="Attach a device"
+      description={`Pick a ${demand.title ?? 'machine'} at Grade ${demand.gradeAtPo.replace('_PLUS', '+')} from your listings.`}
+      size="lg"
+    >
+      {attachError && (
+        <p className="mb-3 text-body-sm text-fail" role="alert">
+          {attachError}
+        </p>
+      )}
+      {error ? (
+        <p className="text-body-sm text-fail" role="alert">
+          {error}
+        </p>
+      ) : !data ? (
+        <Skeleton lines={4} />
+      ) : data.length === 0 ? (
+        <EmptyState
+          title="No matching machine is free"
+          body="List a unit of this SKU and grade, or wait until a reserved machine for this order is free to attach."
+        />
+      ) : (
+        <ul className="flex list-none flex-col gap-2 p-0">
+          {data.map((u) => (
+            <li
+              key={u.unitId}
+              className="flex flex-wrap items-center justify-between gap-3 rounded border border-rule bg-sheet px-4 py-3"
+            >
+              <div className="flex flex-col">
+                <span className="font-mono tnum tracking-[0.06em] text-ink">{u.serialNumber}</span>
+                <span className="text-label text-ink-3">{humanise(u.status)}</span>
+              </div>
+              <Button
+                variant="secondary"
+                loading={busyId === u.unitId}
+                disabledReason={
+                  !canAttach
+                    ? 'Attaching a machine needs the Operations, Admin or Owner role.'
+                    : busyId && busyId !== u.unitId
+                      ? 'Attaching another machine.'
+                      : ''
+                }
+                onClick={() => void attach(u.unitId)}
+              >
+                Attach
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
   );
 }
 
@@ -91,6 +162,7 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
   const [busy, setBusy] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [accepted, setAccepted] = React.useState<PurchaseOrderDetail | null>(null);
+  const [attaching, setAttaching] = React.useState<PurchaseOrderDemand | null>(null);
 
   const { data, error } = useResource<PurchaseOrderDetail>(
     `${API.purchaseOrder(poId)}?_=${reloadKey}`,
@@ -98,11 +170,6 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
   );
   const po = accepted ?? data;
 
-  /**
-   * VENDOR_FINANCE and VENDOR_VIEWER read a PO and cannot promise the machines.
-   * The API refuses them either way; this is what stops the screen offering a
-   * button that will always fail, and it says who can instead of going quiet.
-   */
   const canAcknowledge = principal?.permissions.includes('procurement.po.acknowledge') ?? false;
 
   async function acknowledge(): Promise<void> {
@@ -118,40 +185,34 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
     }
   }
 
-  const columns = React.useMemo<ReadonlyArray<Column<PurchaseOrderLine>>>(
+  const columns = React.useMemo<ReadonlyArray<Column<PurchaseOrderDemand>>>(
     () => [
       {
-        key: 'serial',
-        header: 'Serial',
-        cell: (l) =>
-          l.serialNumber ? (
-            // Wide tracking on a serial is not decoration: this string is read
-            // off a screen and compared to a sticker character by character.
-            <span className="font-mono tnum tracking-[0.06em] text-ink">{l.serialNumber}</span>
+        key: 'sku',
+        header: 'SKU',
+        cell: (d) =>
+          d.skuCode ? (
+            <span className="font-mono tnum text-ink">{d.skuCode}</span>
           ) : (
             <NotMeasured
-              why="This machine is no longer on your stock records"
-              label="Serial unavailable"
+              why="The catalog entry for this machine could not be read"
+              label="SKU unavailable"
             />
           ),
       },
-      { key: 'seal', header: 'Seal code', cell: (l) => <Seal seal={l.seal} /> },
       {
         key: 'grade',
         header: 'Grade',
-        // Neutral, always. A+, A and B are all sellable — a grade is a position
-        // on a scale and never a verdict, and `GradeBadge` is the only thing
-        // that renders one.
-        cell: (l) => <GradeBadge grade={l.gradeAtPo as Grade} />,
+        cell: (d) => <GradeBadge grade={d.gradeAtPo as Grade} />,
       },
       {
         key: 'machine',
         header: 'Machine',
-        cell: (l) =>
-          l.title ? (
+        cell: (d) =>
+          d.title ? (
             <span className="flex flex-col">
-              <span className="text-ink">{l.title}</span>
-              {l.specSummary && <span className="text-body-sm text-ink-2">{l.specSummary}</span>}
+              <span className="text-ink">{d.title}</span>
+              {d.specSummary && <span className="text-body-sm text-ink-2">{d.specSummary}</span>}
             </span>
           ) : (
             <NotMeasured
@@ -161,13 +222,44 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
           ),
       },
       {
+        key: 'qty',
+        header: 'Qty',
+        numeric: true,
+        cell: (d) => (
+          <span className="font-mono tnum text-ink">
+            {d.attachedCount} of {d.qty}
+          </span>
+        ),
+      },
+      {
         key: 'payout',
         header: 'You are owed',
         numeric: true,
-        cell: (l) => rupees(l.agreedNetPayout),
+        cell: (d) => rupees(d.agreedNetPayout),
+      },
+      {
+        key: 'action',
+        header: 'Action',
+        cell: (d) =>
+          d.attachedCount >= d.qty ? (
+            <span className="text-body-sm text-ink-3">Attached</span>
+          ) : ATTACHABLE.has(po?.status ?? '') ? (
+            <Button variant="secondary" onClick={() => setAttaching(d)}>
+              Attach device
+            </Button>
+          ) : po?.status === 'RAISED' ? (
+            <Button
+              variant="secondary"
+              disabledReason="Accept this purchase order first. Attaching a machine is available after you accept."
+            >
+              Attach device
+            </Button>
+          ) : (
+            <span className="text-body-sm text-ink-4">Not attachable</span>
+          ),
       },
     ],
-    [],
+    [po?.status],
   );
 
   if (error) {
@@ -185,9 +277,6 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
   }
 
   if (!po) {
-    // The header is real and the lines are a skeleton, as §3B.3 asks: the PO
-    // number is in the URL the vendor clicked, so there is nothing honest about
-    // hiding the page behind a spinner.
     return (
       <div className="tg-stack">
         <Breadcrumb items={[{ label: 'Purchase orders', href: '/vendor/orders' }, { label: '…' }]} />
@@ -204,6 +293,7 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
   }
 
   const settled = po.status !== 'RAISED';
+  const remaining = po.demands.reduce((n, d) => n + (d.qty - d.attachedCount), 0);
 
   return (
     <div className="tg-stack">
@@ -256,17 +346,16 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
         <div>
           <h2 className="text-h3 text-ink">The machines on this order</h2>
           <p className="mt-3 max-w-prose text-body-sm text-ink-2">
-            These serials were allocated when the buyer paid, so they are the only machines that can
-            satisfy this order. Check each seal is intact before it leaves your floor — a broken
-            seal at the door stops the pickup.
+            Attach a machine of that SKU and grade from your listings for each quantity. Serials are
+            not shown here — they appear when you pick the device.
           </p>
 
-          <Board className="mt-4" tableMinWidth={620}>
+          <Board className="mt-4" tableMinWidth={720}>
             <DataBoard
-              caption={`${po.lines.length} ${po.lines.length === 1 ? 'machine' : 'machines'} on ${po.poNumber}.`}
+              caption={`${po.units} ${po.units === 1 ? 'machine' : 'machines'} on ${po.poNumber}.`}
               columns={columns}
-              rows={po.lines}
-              rowKey={(l) => l.unitId}
+              rows={po.demands}
+              rowKey={(d) => `${d.skuId}:${d.gradeAtPo}`}
               empty={
                 <EmptyState
                   title="This purchase order has no lines"
@@ -279,9 +368,6 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
           <div className="mt-6 max-w-prose">
             <Datum label="What we agreed to pay">{rupees(po.totalNet)}</Datum>
             <Datum label="TDS deducted at source">
-              {/* Every percentage carries its denominator. A rate with no base
-                  is a number nobody can check, and this one is 0% for a reason
-                  that has to be legible rather than assumed. */}
               <span className="font-mono tnum">{po.tdsRatePct}%</span> —{' '}
               <span className="font-mono tnum">{rupees(po.tdsAmount)}</span> of{' '}
               <span className="font-mono tnum">{rupees(po.totalNet)}</span>
@@ -318,19 +404,12 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
           title={settled ? 'This order is accepted' : 'Accept this order'}
           description={
             settled
-              ? 'Nothing more is needed here. Print the pick list when you are ready to pack.'
-              : 'Accepting tells us these machines are yours to produce. It does not release them — the pickup is arranged separately.'
+              ? remaining > 0
+                ? `Attach the remaining ${remaining} ${remaining === 1 ? 'machine' : 'machines'} from your listings.`
+                : 'Every machine on this order has been attached.'
+              : 'Accepting tells us you will produce these machines. After you accept, attach each one from your listings.'
           }
           footnote={
-            /* §3B.3 asks for "the acceptance deadline with the penalty for
-               missing it, stated before acceptance". There is no acceptance
-               window in platform_config and no penalty rule behind one, so
-               there is no deadline to state and inventing 24 or 48 hours would
-               put a number on this screen that nobody agreed to. Reported.
-
-               Only before acceptance, because "stated before acceptance" is
-               the whole point of it — a deadline note under an order already
-               accepted is noise on the one screen that must stay scannable. */
             settled ? undefined : po.acknowledgeBy ? (
               <>
                 Accept by <span className="font-mono tnum">{onDate(po.acknowledgeBy)}</span>.
@@ -349,39 +428,36 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
             </p>
           )}
 
-          {settled ? (
-            <Link
-              className="text-ink underline underline-offset-4 hover:text-acc-ink"
-              to={`/vendor/orders/${po.poId}/pick-list`}
+          {!settled && (
+            <Button
+              variant="primary"
+              loading={busy}
+              disabledReason={
+                canAcknowledge
+                  ? ''
+                  : 'Accepting a purchase order needs the Operations, Admin or Owner role. Ask an owner in your organisation.'
+              }
+              onClick={() => void acknowledge()}
             >
-              Open the pick list
-            </Link>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {/* The one amber control on this screen. `Button` defaults to
-                  `secondary`, so the primary has to be asked for by name. */}
-              <Button
-                variant="primary"
-                loading={busy}
-                disabledReason={
-                  canAcknowledge
-                    ? ''
-                    : 'Accepting a purchase order needs the Operations, Admin or Owner role. Ask an owner in your organisation.'
-                }
-                onClick={() => void acknowledge()}
-              >
-                Accept {po.poNumber}
-              </Button>
-              <Link
-                className="text-ink underline underline-offset-4 hover:text-acc-ink"
-                to={`/vendor/orders/${po.poId}/pick-list`}
-              >
-                Open the pick list
-              </Link>
-            </div>
+              Accept {po.poNumber}
+            </Button>
           )}
+          {/* Pick list is stood down while attach is how a machine is named. */}
         </SidePanel>
       </div>
+
+      {attaching && (
+        <AttachModal
+          poId={po.poId}
+          demand={attaching}
+          canAttach={canAcknowledge}
+          onClose={() => setAttaching(null)}
+          onAttached={(next) => {
+            setAccepted(next);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
     </div>
   );
 }

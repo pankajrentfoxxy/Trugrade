@@ -1,5 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { ROLE_PERMISSIONS, type Permission, type Role } from '@trugrade/contracts';
+import {
+  CUSTOMER_ROLES,
+  MFA_REQUIRED_ROLES,
+  PERMISSIONS,
+  PLATFORM_ROLES,
+  ROLE_PERMISSIONS,
+  VENDOR_ROLES,
+  normaliseEmail,
+  normaliseMobile,
+  type Permission,
+  type Role,
+} from '@trugrade/contracts';
 import { AppConfig } from '../../../shared/config';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { OrgScope, RequestContextService } from '../../../shared/db/org-scope';
@@ -11,6 +22,9 @@ import {
   ValidationError,
 } from '../../../shared/errors/domain-errors';
 import { AuditService } from './audit.service';
+import { PasswordService } from './password.service';
+
+const PASSWORD_ROTATION_DAYS = 180;
 
 /**
  * The buying organisation's own record of itself — its addresses and its people
@@ -149,7 +163,19 @@ export type UpdateAddressInput = Partial<CreateAddressInput> & { isActive?: bool
 
 export interface UpdateMemberInput {
   roles?: string[];
-  status?: 'ACTIVE' | 'SUSPENDED';
+  /** Resolved to roles server-side — permissions are not stored on the user row. */
+  permissions?: string[];
+  status?: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+}
+
+export interface CreateMemberInput {
+  fullName: string;
+  email: string;
+  mobile: string;
+  jobTitle: string;
+  department?: string | null;
+  roles: string[];
+  password: string;
 }
 
 export interface RegisteredAddressView {
@@ -188,18 +214,6 @@ export interface OrgProfileView {
 
 /* ========================================================================== */
 
-/** The roles a buying organisation may hold. Everything else is ours or a vendor's. */
-const BUYER_ROLES: readonly Role[] = [
-  'CUSTOMER_OWNER',
-  'CUSTOMER_ADMIN',
-  'CUSTOMER_BUYER',
-  'CUSTOMER_APPROVER',
-  'CUSTOMER_FINANCE',
-  'CUSTOMER_VIEWER',
-];
-
-const OWNER_ROLE = 'CUSTOMER_OWNER';
-
 const BILLING_LOCKED =
   'This address is bound to your GST registration and appears on every invoice we raise you, so it cannot be edited here. Changing it needs a document showing the new registered address — raise a support ticket and we will take it through the change-of-particulars check.';
 
@@ -212,6 +226,7 @@ export class AccountService {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly config: AppConfig,
+    private readonly passwords: PasswordService,
   ) {}
 
   /* ----------------------------------------------------------------------
@@ -462,12 +477,13 @@ export class AccountService {
        WHERE u.org_id = ${orgId}::uuid
        ORDER BY u.is_org_owner DESC, u.full_name`;
 
+    const { ownerRole } = this.orgRoleConfig();
     const owners = members.filter(
-      (m) => m.status === 'ACTIVE' && m.roles.includes(OWNER_ROLE),
+      (m) => m.status === 'ACTIVE' && m.roles.includes(ownerRole),
     ).length;
 
     return {
-      members: members.map((m) => this.memberView(m, me.userId, owners)),
+      members: members.map((m) => this.memberView(m, me.userId, owners, ownerRole)),
       roles: await this.roleOptions(),
       owners,
     };
@@ -484,7 +500,11 @@ export class AccountService {
     const orgId = this.orgId();
     const me = this.ctx.requirePrincipal();
 
-    if (userId === me.userId) {
+    const { ownerRole } = this.orgRoleConfig();
+
+    // Platform super admins manage their own row here. Last-owner protection
+    // below is the guard that matters — not a second rule that hides the menu.
+    if (userId === me.userId && me.orgType !== 'PLATFORM') {
       throw new ForbiddenError(
         'You cannot change your own access from here. Removing your own last permission is how an organisation locks itself out, so another account owner has to make the change.',
         { reason: 'self_role_change' },
@@ -504,20 +524,33 @@ export class AccountService {
        WHERE u.id = ${userId}::uuid AND u.org_id = ${orgId}::uuid`;
     if (!target) throw new NotFoundError('person', { reason: 'not_in_this_organisation' });
 
-    const roles = input.roles ? this.checkRoles(input.roles, me.permissions) : null;
+    if (input.roles !== undefined && input.permissions !== undefined) {
+      throw new ValidationError(
+        'Send either roles or permissions, not both. Roles are bundles; permissions are the fine-grained view of the same thing.',
+        { roles: 'Pick one way to change access.', permissions: 'Pick one way to change access.' },
+      );
+    }
+
+    let roles: string[] | null = null;
+    if (input.permissions !== undefined) {
+      roles = await this.resolveRolesFromPermissions(input.permissions, me.permissions);
+    } else if (input.roles !== undefined) {
+      roles = this.checkRoles(input.roles, me.permissions);
+    }
+
     const nextStatus = input.status ?? target.status;
-    const keepsOwner = (roles ?? target.roles).includes(OWNER_ROLE) && nextStatus === 'ACTIVE';
+    const keepsOwner = (roles ?? target.roles).includes(ownerRole) && nextStatus === 'ACTIVE';
 
     // The last-owner floor. Counted live, from the same statement shape the
     // screen reads, so the button the screen disables and the rule the server
     // enforces cannot drift apart.
-    if (target.roles.includes(OWNER_ROLE) && target.status === 'ACTIVE' && !keepsOwner) {
+    if (target.roles.includes(ownerRole) && target.status === 'ACTIVE' && !keepsOwner) {
       const [owners] = await this.prisma.$queryRaw<Array<{ n: number }>>`
         SELECT count(*)::int AS n
           FROM identity.user_account u
           JOIN identity.user_role ur ON ur.user_id = u.id AND ur.org_id = u.org_id
           JOIN identity.role r ON r.id = ur.role_id
-         WHERE u.org_id = ${orgId}::uuid AND u.status = 'ACTIVE' AND r.code = ${OWNER_ROLE}`;
+         WHERE u.org_id = ${orgId}::uuid AND u.status = 'ACTIVE' AND r.code = ${ownerRole}`;
       if ((owners?.n ?? 0) <= 1) {
         throw new PreconditionFailedError(
           `${target.full_name} is the only account owner your organisation has. An organisation with no owner cannot grant the role back to itself, so make somebody else an owner first and then change this.`,
@@ -543,14 +576,11 @@ export class AccountService {
         await this.prisma.$executeRaw`
           UPDATE identity.user_account SET status = ${input.status}, updated_at = now()
            WHERE id = ${userId}::uuid AND org_id = ${orgId}::uuid`;
-        if (input.status === 'SUSPENDED') {
+        if (input.status === 'SUSPENDED' || input.status === 'DEACTIVATED') {
           // A deactivation that leaves a live fifteen-minute access token behind
           // has not deactivated anybody for fifteen minutes. Same pair of writes
           // a password reset does, for the same reason.
-          await this.tokens.revokeAllForUser(userId);
-          await this.prisma.$executeRaw`
-            UPDATE identity.session SET revoked_at = now()
-             WHERE user_id = ${userId}::uuid AND revoked_at IS NULL`;
+          await this.revokeMemberSessions(userId);
         }
       }
 
@@ -562,18 +592,217 @@ export class AccountService {
         after: { roles: roles ?? target.roles, status: nextStatus },
       });
 
-      const owners = await this.ownerCount(orgId);
+      const owners = await this.ownerCount(orgId, ownerRole);
       return this.memberView(
         { ...target, roles: roles ?? target.roles, status: nextStatus },
         me.userId,
         owners,
+        ownerRole,
       );
     });
+  }
+
+  /**
+   * Add somebody to the organisation with a password and roles.
+   *
+   * Invitations are the long-term path; direct creation is what an admin console
+   * needs today. The contact must be globally unused — email and mobile are
+   * unique across the platform.
+   */
+  async createMember(input: CreateMemberInput): Promise<TeamMemberView> {
+    const orgId = this.orgId();
+    const me = this.ctx.requirePrincipal();
+    const email = normaliseEmail(input.email);
+    const mobile = normaliseMobile(input.mobile);
+    if (!email || !mobile) {
+      const fields: Record<string, string> = {};
+      if (!email) fields.email = 'Enter a valid work email.';
+      if (!mobile) fields.mobile = 'Enter a valid 10-digit mobile number.';
+      throw new ValidationError(
+        'We need a valid work email and a 10-digit mobile number to add this person.',
+        fields,
+      );
+    }
+
+    await this.assertContactAvailable(email, mobile);
+
+    const { ownerRole } = this.orgRoleConfig();
+    const roles = this.checkRoles(input.roles, me.permissions);
+    const mfaRequired = roles.some((r) => MFA_REQUIRED_ROLES.includes(r as Role));
+
+    return this.prisma.runInTransaction(async () => {
+      const [row] = await this.prisma.$queryRaw<MemberRow[]>`
+        INSERT INTO identity.user_account
+          (org_id, full_name, email, mobile, job_title, department, status, is_org_owner)
+        VALUES (${orgId}::uuid, ${input.fullName}, ${email}, ${mobile},
+                ${input.jobTitle ?? null}, ${input.department ?? null},
+                'ACTIVE', ${roles.includes(ownerRole)})
+        RETURNING id, full_name, email, mobile, job_title, department, status,
+                  is_org_owner, mfa_enabled, last_login_at,
+                  ARRAY[]::text[] AS roles`;
+
+      if (!row) throw new PreconditionFailedError('That person could not be added.');
+
+      for (const code of roles) {
+        await this.prisma.$executeRaw`
+          INSERT INTO identity.user_role (user_id, role_id, org_id, granted_by, granted_at)
+          SELECT ${row.id}::uuid, r.id, ${orgId}::uuid, ${me.userId}::uuid, now()
+            FROM identity.role r WHERE r.code = ${code}`;
+      }
+
+      await this.passwords.setPassword(row.id, input.password, {
+        email,
+        mobile,
+        fullName: input.fullName,
+        rotationDays: mfaRequired ? PASSWORD_ROTATION_DAYS : null,
+      });
+
+      await this.audit.record({
+        action: 'account.member.created',
+        entityType: 'user_account',
+        entityId: row.id,
+        after: { roles, email, mobile },
+      });
+
+      const owners = await this.ownerCount(orgId, ownerRole);
+      return this.memberView({ ...row, roles }, me.userId, owners, ownerRole);
+    });
+  }
+
+  /**
+   * Set a new password for somebody else in the organisation.
+   *
+   * Every live session ends — the same rule as self-service reset, because an
+   * admin changing a password is almost always responding to compromise.
+   */
+  async setMemberPassword(userId: string, password: string): Promise<void> {
+    const orgId = this.orgId();
+    const me = this.ctx.requirePrincipal();
+
+    if (userId === me.userId && me.orgType !== 'PLATFORM') {
+      throw new ForbiddenError(
+        'Change your own password from account settings, not from the team screen.',
+        { reason: 'self_password_change' },
+      );
+    }
+
+    const [target] = await this.prisma.$queryRaw<
+      Array<{
+        full_name: string;
+        email: string | null;
+        mobile: string | null;
+        status: string;
+        roles: string[];
+      }>
+    >`
+      SELECT u.full_name, u.email, u.mobile, u.status,
+             coalesce(
+               (SELECT array_agg(r.code)
+                  FROM identity.user_role ur
+                  JOIN identity.role r ON r.id = ur.role_id
+                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id),
+               ARRAY[]::text[]) AS roles
+        FROM identity.user_account u
+       WHERE u.id = ${userId}::uuid AND u.org_id = ${orgId}::uuid`;
+    if (!target) throw new NotFoundError('person', { reason: 'not_in_this_organisation' });
+    if (target.status !== 'ACTIVE') {
+      throw new PreconditionFailedError(
+        'Switch this account back on before setting a password — a switched-off account cannot sign in anyway.',
+        { reason: 'inactive_account' },
+      );
+    }
+
+    const mfaRequired = target.roles.some((r) => MFA_REQUIRED_ROLES.includes(r as Role));
+    await this.passwords.setPassword(userId, password, {
+      email: target.email,
+      mobile: target.mobile,
+      fullName: target.full_name,
+      rotationDays: mfaRequired ? PASSWORD_ROTATION_DAYS : null,
+    });
+    await this.revokeMemberSessions(userId);
+
+    await this.audit.record({
+      action: 'account.member.password_set',
+      entityType: 'user_account',
+      entityId: userId,
+      actorUserId: me.userId,
+      actorOrgId: orgId,
+    });
+  }
+
+  /**
+   * Clear second-factor enrolment and end every session.
+   *
+   * TOTP enrolment is not built yet; this clears `mfa_enabled` and forces the
+   * login OTP step again for roles that require a second factor.
+   */
+  async resetMemberMfa(userId: string): Promise<TeamMemberView> {
+    const orgId = this.orgId();
+    const me = this.ctx.requirePrincipal();
+
+    if (userId === me.userId && me.orgType !== 'PLATFORM') {
+      throw new ForbiddenError(
+        'Reset your own second factor from account settings, not from the team screen.',
+        { reason: 'self_mfa_reset' },
+      );
+    }
+
+    const [target] = await this.prisma.$queryRaw<MemberRow[]>`
+      SELECT u.id, u.full_name, u.email, u.mobile, u.job_title, u.department, u.status,
+             u.is_org_owner, u.mfa_enabled, u.last_login_at,
+             coalesce(
+               (SELECT array_agg(r.code ORDER BY r.code)
+                  FROM identity.user_role ur
+                  JOIN identity.role r ON r.id = ur.role_id
+                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id),
+               ARRAY[]::text[]) AS roles
+        FROM identity.user_account u
+       WHERE u.id = ${userId}::uuid AND u.org_id = ${orgId}::uuid`;
+    if (!target) throw new NotFoundError('person', { reason: 'not_in_this_organisation' });
+
+    await this.prisma.runInTransaction(async () => {
+      await this.prisma.$executeRaw`
+        UPDATE identity.user_account
+           SET mfa_enabled = FALSE, mfa_secret_enc = NULL, mfa_enrolled_at = NULL, updated_at = now()
+         WHERE id = ${userId}::uuid AND org_id = ${orgId}::uuid`;
+      await this.revokeMemberSessions(userId);
+      await this.audit.record({
+        action: 'account.member.mfa_reset',
+        entityType: 'user_account',
+        entityId: userId,
+        actorUserId: me.userId,
+        actorOrgId: orgId,
+      });
+    });
+
+    const { ownerRole } = this.orgRoleConfig();
+    const owners = await this.ownerCount(orgId, ownerRole);
+    return this.memberView({ ...target, mfa_enabled: false }, me.userId, owners, ownerRole);
   }
 
   /* ----------------------------------------------------------------------
    * The parts
    * ------------------------------------------------------------------- */
+
+  /**
+   * Which roles and owner code apply to the signed-in organisation.
+   *
+   * Buyer, vendor and platform each have their own role vocabulary in
+   * `packages/contracts`. The team screen must offer only the roles that
+   * organisation type may hold — a vendor cannot be given OPS_MANAGER.
+   */
+  private orgRoleConfig(): { roles: readonly Role[]; ownerRole: Role } {
+    const orgType = this.ctx.requirePrincipal().orgType;
+    switch (orgType) {
+      case 'PLATFORM':
+        return { roles: PLATFORM_ROLES, ownerRole: 'PLATFORM_SUPERADMIN' };
+      case 'VENDOR':
+        return { roles: VENDOR_ROLES, ownerRole: 'VENDOR_OWNER' };
+      case 'BUYER':
+      default:
+        return { roles: CUSTOMER_ROLES, ownerRole: 'CUSTOMER_OWNER' };
+    }
+  }
 
   /**
    * The organisation every statement above is about.
@@ -634,13 +863,51 @@ export class AccountService {
     }
   }
 
-  private async ownerCount(orgId: string): Promise<number> {
+  private async assertContactAvailable(
+    email: string | null,
+    mobile: string | null,
+  ): Promise<void> {
+    if (email) {
+      const [found] = await this.prisma.$queryRaw<Array<{ email: string | null }>>`
+        SELECT email::text AS email FROM identity.user_account
+         WHERE lower(email::text) = lower(${email})
+           AND status <> 'DEACTIVATED'
+         LIMIT 1`;
+      if (found?.email) {
+        throw new ValidationError(
+          `${email} is already on an account. They may belong to another organisation — ask them to sign in, or use a different address.`,
+          { email: 'This email is already registered.' },
+        );
+      }
+    }
+    if (mobile) {
+      const [found] = await this.prisma.$queryRaw<Array<{ mobile: string | null }>>`
+        SELECT mobile FROM identity.user_account
+         WHERE mobile = ${mobile} AND status <> 'DEACTIVATED'
+         LIMIT 1`;
+      if (found?.mobile) {
+        throw new ValidationError(
+          `${mobile} is already on an account. Use a different mobile number.`,
+          { mobile: 'This mobile is already registered.' },
+        );
+      }
+    }
+  }
+
+  private async revokeMemberSessions(userId: string): Promise<void> {
+    await this.tokens.revokeAllForUser(userId);
+    await this.prisma.$executeRaw`
+      UPDATE identity.session SET revoked_at = now()
+       WHERE user_id = ${userId}::uuid AND revoked_at IS NULL`;
+  }
+
+  private async ownerCount(orgId: string, ownerRole: Role): Promise<number> {
     const [row] = await this.prisma.$queryRaw<Array<{ n: number }>>`
       SELECT count(*)::int AS n
         FROM identity.user_account u
         JOIN identity.user_role ur ON ur.user_id = u.id AND ur.org_id = u.org_id
         JOIN identity.role r ON r.id = ur.role_id
-       WHERE u.org_id = ${orgId}::uuid AND u.status = 'ACTIVE' AND r.code = ${OWNER_ROLE}`;
+       WHERE u.org_id = ${orgId}::uuid AND u.status = 'ACTIVE' AND r.code = ${ownerRole}`;
     return row?.n ?? 0;
   }
 
@@ -653,6 +920,7 @@ export class AccountService {
    */
   private async roleOptions(): Promise<TeamRoleView[]> {
     const me = this.ctx.requirePrincipal();
+    const { roles: allowedRoles } = this.orgRoleConfig();
     const rows = await this.prisma.$queryRaw<
       Array<{ code: string; description: string | null; permissions: string[] }>
     >`
@@ -664,7 +932,7 @@ export class AccountService {
                  WHERE rp.role_id = r.id),
                ARRAY[]::text[]) AS permissions
         FROM identity.role r
-       WHERE r.code = ANY(${[...BUYER_ROLES]}::text[])
+       WHERE r.code = ANY(${[...allowedRoles]}::text[])
        ORDER BY r.code`;
 
     return rows.map((r) => ({
@@ -675,8 +943,77 @@ export class AccountService {
     }));
   }
 
-  /** Every requested role must be a buyer role AND within the caller's own grant. */
+  /**
+   * Find the smallest role set whose permissions match exactly.
+   *
+   * Roles are fixed bundles — not every subset of permissions can be held. When
+   * no combination fits, the caller gets a sentence rather than a silent half-grant.
+   */
+  private async resolveRolesFromPermissions(
+    requested: readonly string[],
+    mine: ReadonlySet<Permission>,
+  ): Promise<string[]> {
+    const unique = [...new Set(requested.map((p) => p.trim()).filter(Boolean))];
+    if (unique.length === 0) {
+      throw new ValidationError(
+        'Give this person at least one permission. Somebody with none can sign in and see nothing — switch them off instead.',
+        { permissions: 'Pick at least one permission.' },
+      );
+    }
+
+    const desired = new Set<Permission>();
+    for (const code of unique) {
+      if (!(PERMISSIONS as readonly string[]).includes(code)) {
+        throw new ValidationError(`${code} is not a permission your organisation recognises.`, {
+          permissions: `${code} is not a valid permission code.`,
+        });
+      }
+      const perm = code as Permission;
+      if (!mine.has(perm)) {
+        throw new ForbiddenError(
+          `You cannot grant ${code}, because your own account does not hold it. An account owner can make this change.`,
+          { reason: 'permission_exceeds_granter', permission: code },
+        );
+      }
+      desired.add(perm);
+    }
+
+    const candidates = (await this.roleOptions()).filter((r) => r.assignable);
+    const n = candidates.length;
+    let best: string[] | null = null;
+
+    for (let mask = 1; mask < 1 << n; mask++) {
+      const picked: string[] = [];
+      const union = new Set<string>();
+      for (let i = 0; i < n; i++) {
+        if (mask & (1 << i)) {
+          const role = candidates[i]!;
+          picked.push(role.code);
+          for (const p of role.permissions) union.add(p);
+        }
+      }
+      if (union.size !== desired.size) continue;
+      if ([...desired].every((p) => union.has(p))) {
+        if (!best || picked.length < best.length) best = picked;
+      }
+    }
+
+    if (!best) {
+      throw new ValidationError(
+        'These permissions cannot be held together through your organisation\'s roles alone. Add or remove permissions, or use Change roles instead.',
+        {
+          permissions:
+            'No role combination grants exactly this set. Roles are fixed bundles — some permission mixes only exist as a larger role.',
+        },
+      );
+    }
+
+    return this.checkRoles(best, mine);
+  }
+
+  /** Every requested role must belong to this org type AND within the caller's own grant. */
   private checkRoles(requested: readonly string[], mine: ReadonlySet<Permission>): string[] {
+    const { roles: allowedRoles } = this.orgRoleConfig();
     const unique = [...new Set(requested)];
     if (unique.length === 0) {
       throw new ValidationError(
@@ -685,8 +1022,8 @@ export class AccountService {
       );
     }
     for (const code of unique) {
-      if (!BUYER_ROLES.includes(code as Role)) {
-        throw new ValidationError(`${code} is not a role a buying organisation can hold.`, {
+      if (!allowedRoles.includes(code as Role)) {
+        throw new ValidationError(`${code} is not a role your organisation can hold.`, {
           roles: `${code} is not one of your organisation's roles.`,
         });
       }
@@ -728,9 +1065,15 @@ export class AccountService {
     };
   }
 
-  private memberView(row: MemberRow, viewerId: string, owners: number): TeamMemberView {
+  private memberView(
+    row: MemberRow,
+    viewerId: string,
+    owners: number,
+    ownerRole: Role,
+  ): TeamMemberView {
     const isYou = row.id === viewerId;
-    const lastOwner = row.status === 'ACTIVE' && row.roles.includes(OWNER_ROLE) && owners <= 1;
+    const lastOwner = row.status === 'ACTIVE' && row.roles.includes(ownerRole) && owners <= 1;
+    const platformSelf = isYou && this.ctx.requirePrincipal().orgType === 'PLATFORM';
     return {
       id: row.id,
       fullName: row.full_name,
@@ -744,11 +1087,13 @@ export class AccountService {
       mfaEnabled: row.mfa_enabled,
       lastLoginAt: row.last_login_at?.toISOString() ?? null,
       isYou,
-      lockedReason: isYou
-        ? 'This is you. Another account owner has to change your access.'
-        : lastOwner
-          ? 'The only account owner. Make somebody else an owner before changing this one.'
-          : null,
+      lockedReason: platformSelf
+        ? null
+        : isYou
+          ? 'This is you. Another account owner has to change your access.'
+          : lastOwner
+            ? 'The only account owner. Make somebody else an owner before changing this one.'
+            : null,
     };
   }
 }

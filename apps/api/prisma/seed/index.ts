@@ -9,6 +9,7 @@ import { seedInvoicing } from './invoicing';
 import { seedAfterSale } from './after-sale';
 import { seedQcVisits } from './qc-visits';
 import { seedKycReview } from './kyc-review';
+import { seedNorthgatePurchaseOrders } from './purchase-orders';
 
 const prisma = new PrismaClient();
 
@@ -54,6 +55,11 @@ async function main(): Promise<void> {
     // order statuses, which has no business on a database that is not a demo.
     console.log('Advancing orders so the after-sale screens are reachable…');
     await seedAfterSale(prisma, clock.now(), (m) => console.log(m));
+
+    // Northgate's own POs. Checkout already raised ten against other vendors,
+    // so the owner login that reviewers use opened an empty /vendor/orders.
+    console.log('Seeding Northgate purchase orders…');
+    await seedNorthgatePurchaseOrders(prisma, clock.now(), (m) => console.log(m));
 
     // QC visits with a manifest and a spread of outcomes, plus the facility
     // hours and offered slots that make the real scheduling path reachable.

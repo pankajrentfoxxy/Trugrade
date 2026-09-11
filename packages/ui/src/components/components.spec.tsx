@@ -9,6 +9,7 @@
 
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { BRAND } from '@trugrade/config/brand';
 import { ToleranceBand } from './ToleranceBand';
@@ -250,6 +251,17 @@ describe('Button', () => {
     expect(btn).not.toBeDisabled();
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute('title', 'Add a GSTIN before checking out');
+  });
+
+  it('a reason-disabled button does not fire its click', async () => {
+    const onClick = jest.fn();
+    render(
+      <Button disabledReason="Enter the net payout per machine." onClick={onClick}>
+        Request the inspection
+      </Button>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Request the inspection/ }));
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   it('has no axe violations', async () => {

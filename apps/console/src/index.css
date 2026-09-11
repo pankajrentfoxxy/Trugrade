@@ -96,6 +96,80 @@ body,
   opacity: 0.6;
   cursor: default;
 }
+/* Three-dot row menu on boards — same interaction model as the avatar menu. */
+.row-actions-menu {
+  position: relative;
+  display: inline-flex;
+}
+.row-actions-trigger {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.row-actions-trigger:hover,
+.row-actions-menu:focus-within .row-actions-trigger {
+  color: var(--ink);
+  border-color: var(--rule-2);
+  background: var(--sheet-2);
+}
+.row-actions-trigger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.row-actions-pop-fixed {
+  position: fixed;
+  min-width: 196px;
+  z-index: 200;
+}
+.row-actions-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.row-actions-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.row-actions-item:hover {
+  background: var(--sheet-2);
+  color: var(--ink);
+}
+.row-actions-item.destructive {
+  color: var(--fail);
+}
+.row-actions-item.destructive:hover {
+  background: var(--sheet-2);
+  color: var(--fail);
+}
+.row-actions-item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .usermenu-pop .usermenu-panel {
   display: flex;
   flex-direction: column;

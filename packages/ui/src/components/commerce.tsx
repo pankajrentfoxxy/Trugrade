@@ -643,11 +643,13 @@ export function OfferCard({
           <QualityCell quality={offer.quality} />
         </div>
         <div className="shrink-0 text-right">
-          <span className="block font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
-          {lowestLanded ? (
-            <span className="text-body-sm text-ink-2">Lowest landed</span>
-          ) : null}
-          <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
+          <span className="flex flex-col items-end gap-2">
+            <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
+            {lowestLanded ? (
+              <span className="text-body-sm text-ink-2">Lowest landed</span>
+            ) : null}
+            <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
+          </span>
         </div>
       </div>
 

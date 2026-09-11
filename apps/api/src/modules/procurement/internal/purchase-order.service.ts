@@ -3,7 +3,12 @@ import { Money, moneyFromDb } from '@trugrade/contracts';
 import { CatalogService } from '../../catalog';
 import { QcService } from '../../qc';
 import { ClockPort } from '../../../shared/clock';
-import { PreconditionFailedError, NotFoundError } from '../../../shared/errors/domain-errors';
+import {
+  ConflictError,
+  NotFoundError,
+  PreconditionFailedError,
+  ValidationError,
+} from '../../../shared/errors/domain-errors';
 import {
   PurchaseOrderRepository,
   type PoFilter,
@@ -37,7 +42,8 @@ export interface VendorPoLineView {
    * serial may be null. Theirs to see: it is already on their units board, and
    * it names one of their machines rather than anything about who bought it.
    */
-  unitId: string;
+  unitId: string | null;
+  skuId: string;
   /** Null when the unit has been removed since. Never an invented serial. */
   serialNumber: string | null;
   /** "Dell Latitude 5420". Null when the SKU was withdrawn — never a guess. */
@@ -116,8 +122,28 @@ export interface VendorPoView {
   deliverTo: DeliveryCityView | null;
 }
 
+/** One SKU + grade the vendor must fulfil. Serials are attached later. */
+export interface VendorPoDemandView {
+  skuId: string;
+  skuCode: string | null;
+  title: string | null;
+  specSummary: string | null;
+  gradeAtPo: string;
+  qty: number;
+  attachedCount: number;
+  /** Sum of what we agreed to pay for this SKU + grade. */
+  agreedNetPayout: Money;
+}
+
 export interface VendorPoDetail extends VendorPoView {
-  lines: VendorPoLineView[];
+  demands: VendorPoDemandView[];
+}
+
+/** A machine the vendor may attach to a vacant slot. */
+export interface AttachableUnitView {
+  unitId: string;
+  serialNumber: string;
+  status: string;
 }
 
 /**
@@ -201,7 +227,7 @@ export class PurchaseOrderService {
     ]);
     return {
       ...this.header(po, shipTo && { city: shipTo.city, state: shipTo.state }),
-      lines,
+      demands: this.asDemands(lines),
     };
   }
 
@@ -224,7 +250,9 @@ export class PurchaseOrderService {
         landmark: shipTo.landmark,
       },
       // Field by field, and no `agreedNetPayout` among them. See `VendorPickList`.
-      lines: lines.map((l) => ({
+      lines: lines
+        .filter((l): l is VendorPoLineView & { unitId: string } => !!l.unitId)
+        .map((l) => ({
         unitId: l.unitId,
         serialNumber: l.serialNumber,
         sealCode: l.seal?.code ?? null,
@@ -251,6 +279,99 @@ export class PurchaseOrderService {
           : `${po.po_number} is ${po.status.toLowerCase().replaceAll('_', ' ')}, so it is past the point where it can be acknowledged.`,
         { reason: 'po_not_acknowledgeable', status: po.status },
       );
+    }
+    return this.detail(poId);
+  }
+
+  async attachableUnits(
+    poId: string,
+    skuId: string,
+    grade: string,
+  ): Promise<AttachableUnitView[]> {
+    const po = await this.mine(poId);
+    const [reservedIds, takenIds] = await Promise.all([
+      this.repo.reservedUnitIdsForOrder(po.order_id),
+      this.repo.attachedUnitIds(),
+    ]);
+    const rows = await this.repo.attachableUnits({ skuId, grade, reservedIds, takenIds });
+    return rows.map((r) => ({
+      unitId: r.id,
+      serialNumber: r.serial_number,
+      status: r.status,
+    }));
+  }
+
+  async attach(
+    poId: string,
+    input: { skuId: string; grade: string; unitId: string },
+  ): Promise<VendorPoDetail> {
+    const po = await this.mine(poId);
+    if (po.status !== 'ACKNOWLEDGED') {
+      throw new PreconditionFailedError(
+        po.status === 'RAISED'
+          ? `${po.po_number} has not been accepted yet. Accept it before attaching a machine.`
+          : `${po.po_number} is ${po.status.toLowerCase().replaceAll('_', ' ')}, so machines can no longer be attached.`,
+        { reason: 'po_not_attachable', status: po.status },
+      );
+    }
+
+    const slots = (await this.repo.linesOf(poId)).filter(
+      (l) => l.sku_id === input.skuId && l.grade_at_po === input.grade,
+    );
+    if (slots.length === 0) {
+      throw new ValidationError('That SKU and grade are not on this purchase order.', {
+        skuId: 'Pick a line that is on this order.',
+      });
+    }
+    if (slots.every((l) => l.unit_id)) {
+      throw new PreconditionFailedError(
+        'Every machine of that SKU and grade is already attached.',
+        { reason: 'po_demand_filled' },
+      );
+    }
+
+    const vacant = slots.find((l) => !l.unit_id)!;
+    const unit = await this.repo.unitForVendor(input.unitId);
+    if (!unit) {
+      throw new NotFoundError('unit', { reason: 'unit_not_this_vendor' });
+    }
+    if (unit.sku_id !== input.skuId || unit.grade !== input.grade) {
+      throw new ValidationError(
+        'That machine is a different SKU or grade than this line. Pick one that matches.',
+        { unitId: 'Choose a machine of the same SKU and grade.' },
+      );
+    }
+
+    const [reservedIds, takenIds] = await Promise.all([
+      this.repo.reservedUnitIdsForOrder(po.order_id),
+      this.repo.attachedUnitIds(),
+    ]);
+    if (takenIds.includes(unit.id)) {
+      throw new ConflictError('That machine is already on a purchase order.', {
+        reason: 'unit_already_on_po',
+      });
+    }
+    if (unit.status !== 'LISTED' && !reservedIds.includes(unit.id)) {
+      throw new ValidationError(
+        'That machine is not free to attach. Pick one that is listed, or one already reserved for this order.',
+        { unitId: 'Choose a listed machine of this SKU and grade.' },
+      );
+    }
+
+    const ok = await this.repo.attachToVacantLine({
+      poId,
+      skuId: input.skuId,
+      grade: input.grade,
+      unitId: unit.id,
+      serialNumber: unit.serial_number,
+      qcReportId: unit.qc_report_id,
+      payout: vacant.agreed_net_payout,
+      now: this.clock.now(),
+    });
+    if (!ok) {
+      throw new ConflictError('That slot was filled just now. Refresh and try again.', {
+        reason: 'po_slot_taken',
+      });
     }
     return this.detail(poId);
   }
@@ -323,7 +444,7 @@ export class PurchaseOrderService {
   private async lines(poId: string): Promise<VendorPoLineView[]> {
     const rows: PoLineRow[] = await this.repo.linesOf(poId);
     const [serials, inspections, skus] = await Promise.all([
-      this.repo.serialsOf(rows.map((r) => r.unit_id)),
+      this.repo.serialsOf(rows.map((r) => r.unit_id).filter((id): id is string => !!id)),
       this.qc
         .inspectionsByReport(rows.map((r) => r.qc_report_id).filter((id): id is string => !!id))
         .then((list) => new Map(list.map((i) => [i.reportId, i]))),
@@ -340,7 +461,8 @@ export class PurchaseOrderService {
         const inspection = r.qc_report_id ? (inspections.get(r.qc_report_id) ?? null) : null;
         return {
           unitId: r.unit_id,
-          serialNumber: serials.get(r.unit_id) ?? null,
+          skuId: r.sku_id,
+          serialNumber: r.unit_id ? (serials.get(r.unit_id) ?? null) : null,
           title: sku ? `${sku.brandName} ${sku.modelName}`.trim() : null,
           skuCode: sku?.skuCode ?? null,
           specSummary: sku
@@ -357,5 +479,28 @@ export class PurchaseOrderService {
         };
       })
       .sort((a, b) => (a.serialNumber ?? '').localeCompare(b.serialNumber ?? ''));
+  }
+
+  private asDemands(lines: readonly VendorPoLineView[]): VendorPoDemandView[] {
+    const groups = new Map<string, VendorPoLineView[]>();
+    for (const line of lines) {
+      const key = `${line.skuId}:${line.gradeAtPo}`;
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(line);
+      else groups.set(key, [line]);
+    }
+    return [...groups.values()].map((bucket) => {
+      const first = bucket[0]!;
+      return {
+        skuId: first.skuId,
+        skuCode: first.skuCode,
+        title: first.title,
+        specSummary: first.specSummary,
+        gradeAtPo: first.gradeAtPo,
+        qty: bucket.length,
+        attachedCount: bucket.filter((l) => l.unitId).length,
+        agreedNetPayout: Money.sum(bucket.map((l) => l.agreedNetPayout)),
+      };
+    });
   }
 }

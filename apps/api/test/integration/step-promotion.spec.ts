@@ -234,7 +234,7 @@ const CAPABILITY = {
   categories: ['BUSINESS_LAPTOP', 'CONSUMER'],
   brands: ['Lenovo', 'Dell'],
   otherBrands: '',
-  gradeMix: { A_PLUS: '20', A: '50', B: '30' },
+  grades: ['A_PLUS', 'A', 'B'],
   sourcingChannels: ['CORPORATE_BUYBACK', 'ITAD_CONTRACT'],
   canProvideSerialsUpfront: true,
   hasInhouseTesting: true,
@@ -535,7 +535,7 @@ describe('CAPABILITY promotes into vendor_capability', () => {
     expect(rows.map((r) => r.category)).toEqual(['BUSINESS_LAPTOP', 'CONSUMER']);
     expect(rows[0]!.lead_time_days).toBe(24);
     expect(rows[0]!.sourcing_channels).toEqual(['CORPORATE_BUYBACK', 'ITAD_CONTRACT']);
-    expect(rows[0]!.typical_grade_mix).toEqual({ A_PLUS: 20, A: 50, B: 30 });
+    expect(rows[0]!.typical_grade_mix).toEqual({ A_PLUS: 1, A: 1, B: 1 });
     expect(rows[0]!.has_inhouse_testing).toBe(true);
     expect(rows[0]!.has_inhouse_repair).toBe(false);
     expect(rows[0]!.can_dropship).toBe(true);

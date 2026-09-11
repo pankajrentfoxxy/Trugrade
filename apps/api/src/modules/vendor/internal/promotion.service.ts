@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { GRADES, offeredGradesFromMix, type Grade } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { ValidationError } from '../../../shared/errors/domain-errors';
@@ -84,6 +85,19 @@ const BUSINESS_CATEGORIES: readonly string[] = [
 ];
 const PAYOUT_CYCLES: readonly string[] = ['WEEKLY', 'T_PLUS_2', 'MONTHLY'];
 
+/**
+ * Presence flags for `typical_grade_mix`. The screen now ticks grades rather
+ * than splitting 100%; older drafts still have a percentage object, and both
+ * mean "this vendor supplies these grades".
+ */
+function offeredGradeFlags(draft: Draft): Record<string, number> {
+  const selected = strings(draft, 'grades').filter((g): g is Grade =>
+    (GRADES as readonly string[]).includes(g),
+  );
+  const codes = selected.length > 0 ? selected : offeredGradesFromMix(nested(draft, 'gradeMix'));
+  return Object.fromEntries(codes.map((g) => [g, 1]));
+}
+
 /** The whole of one facility as the wizard saved it, before anything is written. */
 interface PlannedFacility {
   ref: string;
@@ -167,26 +181,46 @@ export class VendorPromotionService {
    */
   async promoteCapability(orgId: string, draft: Draft): Promise<void> {
     const categories = strings(draft, 'categories').filter((c) => SUPPLY_CATEGORIES.includes(c));
+    const gradeMix = offeredGradeFlags(draft);
+    const canProvideSerials = bool(draft, 'canProvideSerialsUpfront') ?? true;
+    const channels = strings(draft, 'sourcingChannels');
+    const monthlyCapacity = int(draft, 'monthlyCapacity');
+
     if (categories.length === 0) {
+      // Categories are optional on the screen. Routing stops, but the grade
+      // ticks still have to land somewhere the listing wizard can read them.
       await this.prisma.db.vendor_capability.updateMany({
         where: { org_id: orgId },
-        data: { is_active: false },
+        data: {
+          is_active: false,
+          ...(Object.keys(gradeMix).length > 0 ? { typical_grade_mix: gradeMix } : {}),
+        },
       });
+      if (Object.keys(gradeMix).length > 0) {
+        const existing = await this.prisma.db.vendor_capability.findFirst({
+          where: { org_id: orgId },
+          select: { id: true },
+        });
+        if (!existing) {
+          await this.prisma.db.vendor_capability.create({
+            data: {
+              org_id: orgId,
+              category: 'BUSINESS_LAPTOP',
+              typical_grade_mix: gradeMix,
+              sourcing_channels: channels,
+              can_provide_serials_upfront: canProvideSerials,
+              has_inhouse_testing: draft.hasInhouseTesting === true,
+              has_inhouse_repair: draft.hasInhouseRepair === true,
+              lead_time_days: int(draft, 'leadTimeDays') ?? 24,
+              monthly_capacity_units: monthlyCapacity ?? 0,
+              is_active: false,
+            },
+          });
+        }
+      }
       return;
     }
 
-    const canProvideSerials = bool(draft, 'canProvideSerialsUpfront') ?? true;
-
-    const channels = strings(draft, 'sourcingChannels');
-
-    const gradeMixRaw = nested(draft, 'gradeMix');
-    const gradeMix: Record<string, number> = {};
-    for (const [grade, value] of Object.entries(gradeMixRaw)) {
-      const pct = decimal({ value }, 'value');
-      if (pct !== null && pct > 0) gradeMix[grade] = pct;
-    }
-
-    const monthlyCapacity = int(draft, 'monthlyCapacity');
     const shared = {
       ...(monthlyCapacity != null ? { monthly_capacity_units: monthlyCapacity } : {}),
       typical_grade_mix: Object.keys(gradeMix).length > 0 ? gradeMix : undefined,

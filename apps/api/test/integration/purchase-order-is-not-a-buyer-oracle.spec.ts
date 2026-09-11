@@ -163,6 +163,9 @@ interface SeededPo {
   poId: string;
   poNumber: string;
   serial: string;
+  unitId: string;
+  skuId: string;
+  grade: 'A';
   orderId: string;
 }
 
@@ -233,6 +236,25 @@ async function seedPo(opts: {
             ${opts.buyer.addressId}::uuid, ${opts.buyer.addressId}::uuid,
             60000.00, 10800.00, 70800.00, 'CONFIRMED'::order_status)`;
 
+  const subOrderId = randomUUID();
+  const lineId = randomUUID();
+  await raw.$executeRaw`
+    INSERT INTO ordering.sub_order
+      (id, order_id, sub_order_number, vendor_org_id, subtotal, gst_total, status)
+    VALUES (${subOrderId}::uuid, ${orderId}::uuid, ${`${opts.orderNumber}-1`},
+            ${unit.vendorOrgId}::uuid, 60000.00, 10800.00, 'CONFIRMED'::order_status)`;
+  await raw.$executeRaw`
+    INSERT INTO ordering.order_line
+      (id, sub_order_id, listing_id, sku_id, grade, qty, unit_price,
+       gst_rate, gst_amount, line_total, status)
+    VALUES (${lineId}::uuid, ${subOrderId}::uuid, ${unit.listingId}::uuid,
+            ${unit.skuId}::uuid, 'A'::public.grade_type, 1, 60000.00,
+            18, 10800.00, 70800.00, 'CONFIRMED'::order_status)`;
+  await raw.$executeRaw`
+    INSERT INTO ordering.order_line_unit
+      (order_line_id, unit_id, serial_number, qc_report_id, status)
+    VALUES (${lineId}::uuid, NULL, NULL, NULL, 'RESERVED'::public.unit_status)`;
+
   const poId = randomUUID();
   await raw.$executeRaw`
     INSERT INTO procurement.purchase_order
@@ -244,14 +266,17 @@ async function seedPo(opts: {
   await raw.$executeRaw`
     INSERT INTO procurement.purchase_order_line
       (po_id, unit_id, sku_id, agreed_net_payout, grade_at_po, qc_report_id)
-    VALUES (${poId}::uuid, ${unit.unitId}::uuid, ${unit.skuId}::uuid,
-            ${opts.payout}::numeric, 'A'::public.grade_type, ${unit.qcReportId}::uuid)`;
+    VALUES (${poId}::uuid, NULL, ${unit.skuId}::uuid,
+            ${opts.payout}::numeric, 'A'::public.grade_type, NULL)`;
 
   return {
     vendorOrgId: unit.vendorOrgId,
     poId,
     poNumber: opts.poNumber,
     serial: unit.serial,
+    unitId: unit.unitId,
+    skuId: unit.skuId,
+    grade: 'A' as const,
     orderId,
   };
 }
@@ -406,8 +431,9 @@ describe('a purchase order never names the buyer', () => {
     // The positive half. A test that only proves absence would pass against a
     // route that returned nothing at all.
     expect(detail.poNumber).toBe('PO-T32-0001');
-    expect(detail.lines[0]?.serialNumber).toBe(mine.serial);
-    expect(detail.lines[0]?.seal?.code).toMatch(/^TRG-/);
+    expect(detail.demands[0]?.qty).toBe(1);
+    expect(detail.demands[0]?.gradeAtPo).toBeTruthy();
+    expect(JSON.stringify(detail)).not.toContain(mine.serial);
     expect(detail.deliverTo).toEqual({ city: 'New Delhi', state: 'Delhi' });
     expect(pickList.shipTo?.line1).toBe('11th floor, Barakhamba Road');
   });
@@ -479,6 +505,61 @@ describe('acknowledging a purchase order', () => {
 
     const ops = permissionsFor(['VENDOR_OPS']);
     expect(ops).toContain('procurement.po.acknowledge');
+  });
+});
+
+describe('attaching a machine to a vacant slot', () => {
+  it('binds a matching listed unit and keeps the serial off the record', async () => {
+    const buyer = await makeBuyer();
+    const mine = await seedPo({
+      buyer,
+      orderNumber: BUYER_SECRETS.orderNumber,
+      poNumber: 'PO-T32-0001',
+      payout: '46010.00',
+    });
+
+    await expect(
+      as(mine.vendorOrgId, () =>
+        controller.attach(mine.poId, { skuId: mine.skuId, grade: mine.grade, unitId: mine.unitId }),
+      ),
+    ).rejects.toThrow(/has not been accepted yet/);
+
+    await as(mine.vendorOrgId, () => controller.acknowledge(mine.poId));
+
+    const listed = await as(mine.vendorOrgId, () =>
+      controller.attachableUnits(mine.poId, { skuId: mine.skuId, grade: mine.grade }),
+    );
+    expect(listed.map((u) => u.unitId)).toContain(mine.unitId);
+    expect(listed.find((u) => u.unitId === mine.unitId)?.serialNumber).toBe(mine.serial);
+
+    const after = await as(mine.vendorOrgId, () =>
+      controller.attach(mine.poId, { skuId: mine.skuId, grade: mine.grade, unitId: mine.unitId }),
+    );
+    expect(after.demands[0]?.attachedCount).toBe(1);
+    expect(after.demands[0]?.qty).toBe(1);
+    expect(JSON.stringify(after)).not.toContain(mine.serial);
+
+    const [bound] = await raw.$queryRaw<
+      Array<{ unit_id: string | null; serial_number: string | null; qc_report_id: string | null }>
+    >`
+      SELECT olu.unit_id, olu.serial_number, olu.qc_report_id
+        FROM ordering.order_line_unit olu
+        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${mine.orderId}::uuid`;
+    expect(bound?.unit_id).toBe(mine.unitId);
+    expect(bound?.serial_number).toBe(mine.serial);
+
+    const leftover = await as(mine.vendorOrgId, () =>
+      controller.attachableUnits(mine.poId, { skuId: mine.skuId, grade: mine.grade }),
+    );
+    expect(leftover.map((u) => u.unitId)).not.toContain(mine.unitId);
+
+    await expect(
+      as(mine.vendorOrgId, () =>
+        controller.attach(mine.poId, { skuId: mine.skuId, grade: mine.grade, unitId: mine.unitId }),
+      ),
+    ).rejects.toThrow(/already attached/);
   });
 });
 

@@ -126,15 +126,17 @@ const statutoryRows = (a: Record<string, unknown>): Row[] => {
 };
 
 const capabilityRows = (a: Record<string, unknown>): Row[] => {
+  const listed = list(a, 'grades');
   const mix = (a.gradeMix ?? {}) as Record<string, unknown>;
-  const mixed = Object.entries(mix)
+  const fromMix = Object.entries(mix)
     .filter(([, pct]) => Number(pct) > 0)
-    .map(([grade, pct]) => `${grade.replace('_PLUS', '+')} ${String(pct)}%`);
+    .map(([grade]) => grade);
+  const codes = listed.length > 0 ? listed : fromMix;
+  const labels = codes.map((grade) => `Grade ${grade.replace('_PLUS', '+')}`);
   return [
     {
-      label: 'Grade mix',
-      // Every percentage carries its denominator.
-      value: mixed.length > 0 ? `${mixed.join(' · ')} of 100%` : '',
+      label: 'Grades you supply',
+      value: labels.join(' · '),
       required: true,
     },
     {

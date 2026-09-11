@@ -451,11 +451,11 @@ export const WEEK_DAYS = [
  * ======================================================================== */
 
 /**
- * The seven documents a supplier is asked for, and why each one is wanted.
+ * The six documents a supplier is asked for, and why each one is wanted.
  *
  * Same report as `BUYER_DOCUMENTS`: `document_type_rule` has no `org_type` and
  * no `step_code`, so all fourteen rows apply to everyone and nothing in the API
- * can say which seven a *vendor* is asked for. The codes are here; every rule
+ * can say which six a *vendor* is asked for. The codes are here; every rule
  * about each of them — the label, the size cap, the accepted types, how many we
  * take, whether it goes stale — comes from `GET /onboarding/documents/types`.
  *
@@ -486,11 +486,6 @@ export const VENDOR_DOCUMENTS = [
     docType: 'SIGNATORY_ID',
     required: false,
     purpose: 'Photo ID of the authorised signatory.',
-  },
-  {
-    docType: 'CPCB_EWASTE',
-    required: false,
-    purpose: 'CPCB e-waste authorisation, if held.',
   },
   {
     docType: 'ISO_CERTIFICATE',

@@ -39,7 +39,7 @@ import { ProductCartScope } from './ProductCartScope';
 import { ProductIdentityCard } from './ProductIdentityCard';
 import { specLine } from './spec-rows';
 import { PincodeFocusLink } from './PincodeFocusLink';
-import { SupplyPointPicker } from './SupplyPointPicker';
+// import { SupplyPointPicker } from './SupplyPointPicker';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
@@ -206,18 +206,18 @@ export default async function ProductPage({
                 <div className="sh">
                   <div className="shrow">
                     <h2 id="board">Compare supply points</h2>
-                    <span className="sub">Pick a supply point to see its serials</span>
+                    {/* <span className="sub">Pick a supply point to see its serials</span> */}
                   </div>
                 </div>
 
-                {board.offers.length > 0 && (
+                {/* {board.offers.length > 0 && (
                   <SupplyPointPicker
                     offers={board.offers}
                     initialSelected={selected}
                     slug={slug}
                     query={query}
                   />
-                )}
+                )} */}
 
                 <div className="tbl">
                   <div className="tbh">

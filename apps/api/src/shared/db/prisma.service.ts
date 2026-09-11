@@ -8,7 +8,7 @@ import {
 import { PrismaClient, Prisma } from '@prisma/client';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { AppConfig, ConfigModule } from '../config';
-import { ConflictError, type DomainError } from '../errors/domain-errors';
+import { ConflictError, ValidationError, type DomainError } from '../errors/domain-errors';
 
 /**
  * The transaction-scoped client. Everything inside `runInTransaction` sees the
@@ -139,11 +139,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
 export function translatePrismaError(e: unknown): DomainError | undefined {
   if (!(e instanceof Prisma.PrismaClientKnownRequestError)) return undefined;
 
-  const target = String(
-    (e.meta as { target?: string | string[]; constraint?: string } | undefined)?.constraint ??
-      (e.meta as { target?: string | string[] } | undefined)?.target ??
-      '',
-  );
+  const meta = e.meta as
+    | { target?: string | string[]; constraint?: string; code?: string; message?: string }
+    | undefined;
+  const target = String(meta?.constraint ?? meta?.target ?? '');
+  const pgCode = String(meta?.code ?? '');
+  const pgMessage = String(meta?.message ?? e.message ?? '');
+  const constraint = target || pgMessage;
 
   if (e.code === 'P2002') {
     if (target.includes('uq_unit_active_serial')) {
@@ -174,10 +176,39 @@ export function translatePrismaError(e: unknown): DomainError | undefined {
     });
   }
 
-  // A CHECK or EXCLUDE violation surfaces as a raw query error; the important
-  // ones carry their own RAISE message from the trigger.
-  if (e.code === 'P2010' || e.code === 'P2034') {
-    return undefined; // handled by the caller, which knows the flow
+  // `$queryRaw` failures arrive as P2010 with the Postgres code in `meta.code`,
+  // not as P2002/P2003. Leaving them unmapped is how a missing SKU on listing
+  // create became an opaque 500 instead of a field the vendor can fix.
+  if (e.code === 'P2010') {
+    if (pgCode === '23503' || pgMessage.includes('foreign key')) {
+      if (pgMessage.includes('listing_sku_id_fkey')) {
+        return new ValidationError('That machine is not in the catalog we carry.', {
+          skuId: 'Search again and pick the configuration we hold.',
+        });
+      }
+      if (pgMessage.includes('listing_pickup_location_id_fkey')) {
+        return new ConflictError('Choose a pickup address that belongs to your organisation.', {
+          constraint,
+        });
+      }
+      return new ConflictError('That reference points at something that no longer exists.', {
+        constraint,
+      });
+    }
+    if (pgCode === '23505' || pgMessage.includes('duplicate key')) {
+      return new ConflictError('That value is already in use.', { constraint });
+    }
+    if (pgCode === '23514' || pgCode === '23502' || pgCode === '22P02') {
+      return new ValidationError('Some of the details need fixing.', {
+        _: 'A value was not in the form we store.',
+      });
+    }
+    return undefined;
+  }
+
+  // A CHECK or EXCLUDE violation that the caller already interprets.
+  if (e.code === 'P2034') {
+    return undefined;
   }
 
   return undefined;

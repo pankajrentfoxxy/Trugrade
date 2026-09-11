@@ -30,8 +30,9 @@ import { MAX_BYTES, MAX_ROWS, readCsvFile } from '../csvFile';
  * server decides on submit are the same constant. Nothing here re-implements a
  * brand pattern, a length band or a normalisation rule.
  *
- * One rule governs the whole screen: **a brand-shape mismatch warns and never
- * blocks.** You will meet machines whose labels are worn.
+ * One rule governs the whole screen: **a brand-shape mismatch never blocks.**
+ * Worn labels are still accepted. The shape warning is not shown — it only
+ * slowed people down.
  */
 
 const EMPTY_BATCH: SerialBatch = { accepted: [], errors: [], warnings: [] };
@@ -41,44 +42,23 @@ const NEWLINE = String.fromCharCode(10);
 const SERIAL_PLACEHOLDER = ['7XKQ1P3', '8LMR2Q4', '…'].join(NEWLINE);
 
 function Verdicts({ batch }: { batch: SerialBatch }): React.JSX.Element | null {
-  if (batch.errors.length === 0 && batch.warnings.length === 0) return null;
+  if (batch.errors.length === 0) return null;
   return (
     <div className="mt-5 flex flex-col gap-4">
-      {batch.errors.length > 0 && (
-        <div className="tg-card rounded border border-fail bg-sheet-2">
-          <p className="text-body-sm font-medium text-fail">
-            {batch.errors.length} {batch.errors.length === 1 ? 'line has' : 'lines have'} to be
-            fixed
-          </p>
-          <ul className="mt-3 flex flex-col gap-1">
-            {batch.errors.map((e) => (
-              <li key={`${e.line}-${e.serial}`} className="text-body-sm text-ink">
-                <span className="font-mono text-data tnum text-ink-2">Line {e.line}</span>{' '}
-                <code className="font-mono text-data">{e.serial || '(empty)'}</code> — {e.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {batch.warnings.length > 0 && (
-        <div className="tg-card rounded border border-warn">
-          <p className="text-body-sm font-medium text-warn">
-            {batch.warnings.length} to look at — none of them stops you
-          </p>
-          <ul className="mt-3 flex flex-col gap-1">
-            {batch.warnings.map((w) => (
-              <li key={`${w.line}-${w.serial}`} className="text-body-sm text-ink">
-                <span className="font-mono text-data tnum text-ink-2">Line {w.line}</span>{' '}
-                <code className="font-mono text-data">{w.serial}</code> — {w.message}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-body-sm text-ink-2">
-            An unrecognised shape usually means a worn or reprinted label, not a wrong serial.
-            Check the sticker; if it reads as printed, carry on.
-          </p>
-        </div>
-      )}
+      <div className="tg-card rounded border border-fail bg-sheet-2">
+        <p className="text-body-sm font-medium text-fail">
+          {batch.errors.length} {batch.errors.length === 1 ? 'line has' : 'lines have'} to be
+          fixed
+        </p>
+        <ul className="mt-3 flex flex-col gap-1">
+          {batch.errors.map((e) => (
+            <li key={`${e.line}-${e.serial}`} className="text-body-sm text-ink">
+              <span className="font-mono text-data tnum text-ink-2">Line {e.line}</span>{' '}
+              <code className="font-mono text-data">{e.serial || '(empty)'}</code> — {e.message}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -446,13 +426,7 @@ export function StepSerials({
 
   return (
     <div>
-      <p className="max-w-prose text-body-sm text-ink-2">
-        One serial per machine. We check each one against every live listing on the platform, so
-        &ldquo;already listed&rdquo; appears here rather than after you submit.
-      </p>
-
       <Tabs
-        className="mt-6"
         label="How to enter serials"
         value={method}
         onChange={(k) => setMethod(k as Method)}

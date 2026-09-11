@@ -27,6 +27,7 @@ export function Field({
   htmlFor,
   children,
   className,
+  required,
 }: {
   label: string;
   hint?: React.ReactNode;
@@ -34,11 +35,18 @@ export function Field({
   htmlFor: string;
   children: React.ReactNode;
   className?: string;
+  required?: boolean;
 }): React.JSX.Element {
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <label htmlFor={htmlFor} className="text-body-sm font-medium text-ink-2">
         {label}
+        {required && (
+          <span className="text-fail" aria-hidden="true">
+            {' '}
+            *
+          </span>
+        )}
       </label>
       {children}
       {hint && !error && (

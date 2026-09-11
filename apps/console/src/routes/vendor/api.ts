@@ -38,6 +38,9 @@ export const API = {
    * was already serving. Checked again at T27; the comments are the audit.
    */
   catalogSearch: (q: string) => `/api/catalog/search?q=${encodeURIComponent(q)}&limit=20`,
+  catalogModelSearch: (q: string) =>
+    `/api/catalog/models/search?q=${encodeURIComponent(q)}&limit=20`,
+  catalogModelSkus: (modelId: string) => `/api/catalog/models/${modelId}/skus`,
   sku: (skuId: string) => `/api/catalog/skus/${skuId}`,
   /**
    * The reference photographs for one grade of one SKU — the same call the
@@ -57,6 +60,8 @@ export const API = {
 
   /** `identity.org_address`, scoped to the caller's org. The pickup picker. */
   facilities: '/api/vendor/facilities',
+  /** Grades this vendor ticked at registration. Listing wizard step 2. */
+  offeredGrades: '/api/vendor/offered-grades',
 
   listings: '/api/vendor/listings',
   listing: (id: string) => `/api/vendor/listings/${id}`,
@@ -104,6 +109,9 @@ export const API = {
   purchaseOrder: (poId: string) => `/api/vendor/purchase-orders/${poId}`,
   pickList: (poId: string) => `/api/vendor/purchase-orders/${poId}/pick-list`,
   acknowledgePo: (poId: string) => `/api/vendor/purchase-orders/${poId}/acknowledge`,
+  attachableUnits: (poId: string, skuId: string, grade: string) =>
+    `/api/vendor/purchase-orders/${poId}/attachable-units?skuId=${encodeURIComponent(skuId)}&grade=${encodeURIComponent(grade)}`,
+  attachPoUnit: (poId: string) => `/api/vendor/purchase-orders/${poId}/attach`,
 
   /**
    * What we owe, the deduction stack, and what is honestly unknown (T33).
@@ -176,9 +184,17 @@ export interface DashboardTiles {
   };
 }
 
+/** One catalogued machine — brand + model, not a configuration. */
+export interface CatalogModelHit {
+  modelId: string;
+  brandName: string;
+  modelName: string;
+}
+
 /** One catalog hit, plus enough specification to recognise the machine. */
 export interface SkuHit {
   skuId: string;
+  modelId?: string;
   skuCode: string;
   brandName: string;
   seriesName: string;
@@ -254,9 +270,39 @@ export interface VendorFacility {
   pincode: string;
 }
 
+/** Grades this vendor said they supply. Empty is never returned — the API falls back to all. */
+export interface VendorOfferedGrades {
+  offeredGrades: Array<'A_PLUS' | 'A' | 'B'>;
+}
+
+/**
+ * Catalog identity on a vendor listing — the same facts the wizard shows once
+ * a configuration is picked. `null` when the SKU could not be read.
+ */
+export interface VendorListingSku {
+  skuCode: string;
+  brandName: string;
+  seriesName: string;
+  modelName: string;
+  cpuBrand: string;
+  cpuFamily: string;
+  cpuModel: string;
+  cpuGeneration: string;
+  ramGb: number;
+  storageGb: number;
+  storageType: string;
+  gpuType: string;
+  gpuModel: string | null;
+  screenSizeIn: number;
+  resolution: string;
+  isTouch: boolean;
+  osSupported: string;
+}
+
 export interface VendorListing {
   id: string;
   skuId: string;
+  sku?: VendorListingSku | null;
   grade: string;
   conditionType: string;
   functionalStatus: string;
@@ -467,23 +513,26 @@ export interface PurchaseOrder {
   deliverTo: DeliveryCity | null;
 }
 
-/** One machine on the PO. The serial and the seal are what a warehouse reads. */
-export interface PurchaseOrderLine {
-  /** Their own `listing.unit` id — the row key when a serial is missing. */
-  unitId: string;
-  /** Null when the unit has been removed since. Never an invented serial. */
-  serialNumber: string | null;
-  title: string | null;
+/** One SKU + grade the vendor must fulfil. Serials are attached later. */
+export interface PurchaseOrderDemand {
+  skuId: string;
   skuCode: string | null;
+  title: string | null;
   specSummary: string | null;
   gradeAtPo: string;
+  qty: number;
+  attachedCount: number;
   agreedNetPayout: MoneyString;
-  /** Null means no seal is recorded — a real problem at handover, said as one. */
-  seal: { code: string; status: string } | null;
+}
+
+export interface AttachableUnit {
+  unitId: string;
+  serialNumber: string;
+  status: string;
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrder {
-  lines: PurchaseOrderLine[];
+  demands: PurchaseOrderDemand[];
 }
 
 export interface PickListAddress {
@@ -500,7 +549,7 @@ export interface PickListAddress {
  *
  * **No money, at any depth, deliberately.** Bill-To-Ship-To under s.10(1)(b)
  * IGST means neither the vendor's invoice value nor ours travels with the goods,
- * so a price on a packing list is a compliance defect. `PurchaseOrderLine` has
+ * so a price on a packing list is a compliance defect. `PurchaseOrderDemand` has
  * `agreedNetPayout` and this type does not — two types rather than one with a
  * flag, so the omission cannot be undone by passing `true`.
  */
@@ -670,11 +719,11 @@ export interface PayoutPreview {
 /**
  * The write half of `useResource`. Same credentials, same failure shape.
  *
- * `DomainExceptionFilter` nests its payload under `error`, so the message lives
- * at `error.message` and not at the top level. Reading the top level instead
- * silently discards every actionable sentence the API wrote and renders the
- * generic fallback for all of them — which looks like the API being unhelpful
- * rather than the client dropping the answer.
+ * `DomainExceptionFilter` nests its payload under `error`. The sentence a form
+ * can act on is in `error.fields` when the refusal is a field; `error.message`
+ * is often the generic "Some of the details need fixing." Reading only the
+ * top-level `message` is how a payout-band refusal rendered as that generic
+ * line instead of "Expected payout must be between ₹1,000 and ₹5,00,000."
  */
 export async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -685,9 +734,10 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     const detail = (await res.json().catch(() => null)) as {
-      error?: { message?: string };
+      error?: { message?: string; fields?: Record<string, string> };
     } | null;
-    throw new Error(detail?.error?.message ?? `That did not go through (${res.status}).`);
+    const field = Object.values(detail?.error?.fields ?? {}).find((m) => m.trim());
+    throw new Error(field ?? detail?.error?.message ?? `That did not go through (${res.status}).`);
   }
   return (await res.json()) as T;
 }
