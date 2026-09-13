@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Button, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
-import { Board, DateField, NotMeasured, PageHeader, Select } from '../../lib/controls';
+import { Button, ClauseHeading, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
+import { Board, DateField, NotMeasured, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import {
   API,
@@ -182,11 +182,7 @@ export function VendorPurchaseOrdersRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack">
-      <PageHeader title="Purchase orders">
-        These are orders <strong className="text-ink">we</strong> placed with you, not orders your
-        customers placed with us. One is raised the moment a buyer pays for a machine you have
-        listed, and it names the exact serials.
-      </PageHeader>
+      <ClauseHeading n="01" kicker="Fulfil" title="Purchase orders" />
 
       <div className="flex flex-wrap items-end gap-4">
         <Select

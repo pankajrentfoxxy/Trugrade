@@ -31,6 +31,8 @@ export interface NavEntry {
    * a vendor a section that cannot open is the bug this field closes.
    */
   orgType?: Principal['orgType'];
+  /** Which frame renders this entry. Absent means the admin Shell. */
+  surface?: 'VENDOR';
 }
 
 /**
@@ -128,66 +130,113 @@ export const NAV: readonly NavEntry[] = [
     to: '/vendor',
     label: 'Today',
     permission: 'listing.own.read',
-    group: 'Vendor',
+    group: 'Today',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
   {
     to: '/vendor/listings',
-    label: 'My listings',
+    label: 'Listings',
     permission: 'listing.own.read',
-    group: 'Vendor',
+    group: 'Sell',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
-  // T30. Its own entry because an inspection is the gate every listing passes
-  // through — nothing a vendor lists is on sale until a technician has held it —
-  // and the board is where they find out when we are coming. `listing.own.read`
-  // and not a `qc.*` permission: no vendor role holds one, deliberately, and the
-  // vendor's routes are org-scoped copies rather than the console's queues.
+  {
+    to: '/vendor/listings/new',
+    label: 'Create listing',
+    permission: 'listing.own.write',
+    group: 'Sell',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
+  {
+    to: '/vendor/sku-request',
+    label: 'Request a SKU',
+    permission: 'listing.own.write',
+    group: 'Sell',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
   {
     to: '/vendor/qc/visits',
     label: 'Inspections',
     permission: 'listing.own.read',
-    group: 'Vendor',
+    group: 'Inspect',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
-  // Its own entry rather than a tile alone: a correction is on a two-day clock
-  // and auto-applies, so it must be reachable without first noticing a queue on
-  // the dashboard. `listing.own.read` and not the respond permission — a
-  // VENDOR_VIEWER may read what was corrected on their own stock.
   {
     to: '/vendor/corrections',
     label: 'Grade corrections',
     permission: 'listing.own.read',
-    group: 'Vendor',
+    group: 'Inspect',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
-  // T32. `procurement.po.read_own` and not `listing.own.read`: the two are held
-  // by the same five roles today, but the link has to be gated on the permission
-  // the API actually checks, or the day the grants diverge the rail offers a
-  // screen that 403s. The detail and the pick list are reached from this board
-  // and stay out of the rail, as the other vendor sub-screens do.
   {
     to: '/vendor/orders',
     label: 'Purchase orders',
     permission: 'procurement.po.read_own',
-    group: 'Vendor',
+    group: 'Fulfil',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
-  // T33. `procurement.payable.read_own` — FINANCE and OWNER only (§3B.4). The
-  // API refuses everyone else; the rail must not offer a link that 403s.
+  {
+    to: '/vendor/dispatch',
+    label: 'Dispatch',
+    permission: 'procurement.po.read_own',
+    group: 'Fulfil',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
   {
     to: '/vendor/payables',
     label: 'Payables',
     permission: 'procurement.payable.read_own',
-    group: 'Vendor',
+    group: 'Money',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
+  {
+    to: '/vendor/payouts',
+    label: 'Payout history',
+    permission: 'procurement.payable.read_own',
+    group: 'Money',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
+  {
+    to: '/vendor/team',
+    label: 'Team & access',
+    permission: 'listing.own.read',
+    group: 'Account',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
+  {
+    to: '/vendor/facilities',
+    label: 'Facilities',
+    permission: 'listing.own.read',
+    group: 'Account',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
+  },
+  {
+    to: '/vendor/documents',
+    label: 'Documents',
+    permission: 'listing.own.read',
+    group: 'Account',
+    orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
   {
     to: '/vendor/profile',
     label: 'Profile',
     permission: 'listing.own.read',
-    group: 'Vendor',
+    group: 'Account',
     orgType: 'VENDOR',
+    surface: 'VENDOR',
   },
   // T40 and T41, derived from their own barrel for the reason the QC entries
   // are: that array already carries the label and the permission, and a second

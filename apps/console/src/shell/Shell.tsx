@@ -33,7 +33,7 @@ function TopBar({
   const { principal } = useAuth();
   // Vendors navigate in the section rail; repeating the group name in the top bar
   // is a second door to the same place.
-  const sectionTabs = groups.filter(([group]) => group !== 'Vendor');
+  const sectionTabs = groups.filter(([, entries]) => entries.every((entry) => entry.surface !== 'VENDOR'));
 
   return (
     <header className="tg-chrome sticky top-0 z-30 border-b border-chrome-line">

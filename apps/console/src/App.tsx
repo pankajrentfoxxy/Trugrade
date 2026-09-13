@@ -19,6 +19,7 @@ import { qcRoutes } from './routes/qc';
 import { unitRoutes } from './routes/units';
 import { vendorRoutes } from './routes/vendor';
 import { Shell } from './shell/Shell';
+import { VendorShell } from './shell/VendorShell';
 import { NAV, canSee } from './shell/nav';
 
 /**
@@ -239,7 +240,7 @@ export function App(): React.JSX.Element {
             react-router 7 ranks a static segment above a dynamic one anyway.
           */}
           {vendorRoutes.map((r) => (
-            <Route key={r.path} path={r.path} element={<Shell>{r.element}</Shell>} />
+            <Route key={r.path} path={r.path} element={<VendorShell>{r.element}</VendorShell>} />
           ))}
 
           {/*

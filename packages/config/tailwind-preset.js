@@ -56,12 +56,16 @@ module.exports = {
         pass: v('pass'),
         warn: v('warn'),
         fail: v('fail'),
+        'pass-wash': v('pass-wash'),
+        'warn-wash': v('warn-wash'),
+        'fail-wash': v('fail-wash'),
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'Inter', 'system-ui', 'sans-serif'],
         // Hindi keeps its own family; Inter has no Devanagari coverage.
         deva: ['var(--font-deva)', 'IBM Plex Sans Devanagari', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
+        display: ['var(--font-display)', 'Inter', 'system-ui', 'sans-serif'],
       },
       /**
        * Sized against a 14px base, not 16px. `body` is the base; `body-lg` is

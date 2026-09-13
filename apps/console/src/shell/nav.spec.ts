@@ -55,6 +55,6 @@ describe('the org-type gate', () => {
       permissions: ['qc.visit.read', 'listing.own.read'],
     });
     const groups = visibleGroups(vendor).map(([group]) => group);
-    expect(groups).toEqual(['Vendor']);
+    expect(groups).toEqual(['Today', 'Sell', 'Inspect', 'Account']);
   });
 });

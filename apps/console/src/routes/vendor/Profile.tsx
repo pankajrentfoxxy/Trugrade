@@ -1,12 +1,12 @@
 import * as React from 'react';
 import {
+  ClauseHeading,
   EmptyState,
   RecordHeader,
   SidePanel,
   Skeleton,
   StatusPill,
 } from '@trugrade/ui';
-import { PageHeader } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, type OrgProfile } from './profile-api';
 
@@ -37,7 +37,7 @@ export function VendorProfileRoute(): React.JSX.Element {
   if (!data && !error) {
     return (
       <>
-        <PageHeader title="Your profile">Loading your registration particulars…</PageHeader>
+        <ClauseHeading n="01" kicker="Account" title="Profile" />
         <Skeleton lines={12} />
       </>
     );
@@ -46,7 +46,7 @@ export function VendorProfileRoute(): React.JSX.Element {
   if (error) {
     return (
       <>
-        <PageHeader title="Your profile" />
+        <ClauseHeading n="01" kicker="Account" title="Profile" />
         <EmptyState
           title="We could not load your profile"
           body={`${error}. Nothing here has changed.`}
@@ -58,7 +58,7 @@ export function VendorProfileRoute(): React.JSX.Element {
   if (!data) {
     return (
       <>
-        <PageHeader title="Your profile" />
+        <ClauseHeading n="01" kicker="Account" title="Profile" />
         <EmptyState title="No profile on record" body="Sign in again if this looks wrong." />
       </>
     );
@@ -68,9 +68,7 @@ export function VendorProfileRoute(): React.JSX.Element {
 
   return (
     <>
-      <PageHeader title="Your profile">
-        The company and statutory particulars we hold from your registration.
-      </PageHeader>
+      <ClauseHeading n="01" kicker="Account" title="Profile" />
 
       <RecordHeader
         className="mt-4"

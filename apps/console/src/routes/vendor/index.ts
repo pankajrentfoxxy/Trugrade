@@ -15,6 +15,11 @@ import { SkuRequestRoute } from './SkuRequest';
 import { VendorVisitDetailRoute, VendorVisitResultsRoute, VendorVisitsRoute } from './Visits';
 import { VendorProfileRoute } from './Profile';
 import { ListingWizardRoute } from './wizard/Wizard';
+import { VendorTeamRoute } from './Team';
+import { VendorFacilitiesRoute } from './Facilities';
+import { VendorDocumentsRoute } from './Documents';
+import { VendorDispatchRoute } from './Dispatch';
+import { VendorPayoutsRoute } from './Payouts';
 
 /**
  * The vendor portal's routes, as data.
@@ -169,6 +174,31 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/profile',
     permission: 'listing.own.read',
     element: guarded('listing.own.read', VendorProfileRoute),
+  },
+  {
+    path: '/vendor/team',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorTeamRoute),
+  },
+  {
+    path: '/vendor/facilities',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorFacilitiesRoute),
+  },
+  {
+    path: '/vendor/documents',
+    permission: 'listing.own.read',
+    element: guarded('listing.own.read', VendorDocumentsRoute),
+  },
+  {
+    path: '/vendor/dispatch',
+    permission: 'procurement.po.read_own',
+    element: guarded('procurement.po.read_own', VendorDispatchRoute),
+  },
+  {
+    path: '/vendor/payouts',
+    permission: 'procurement.payable.read_own',
+    element: guarded('procurement.payable.read_own', VendorPayoutsRoute),
   },
   {
     path: '/vendor/sku-request',

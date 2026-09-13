@@ -4,6 +4,7 @@ import {
   Breadcrumb,
   Button,
   DataBoard,
+  ClauseHeading,
   EmptyState,
   GradeBadge,
   Input,
@@ -14,7 +15,7 @@ import {
   type Column,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
-import { Board, Datum, NotMeasured, PageHeader, Section, Select, Textarea } from '../../lib/controls';
+import { Board, Datum, NotMeasured, Section, Select, Textarea } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import {
   API,
@@ -298,7 +299,7 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
   if (!data) {
     return (
       <div className="tg-stack">
-        <PageHeader title="Grade corrections">Loading what is waiting on you.</PageHeader>
+        <ClauseHeading n="01" kicker="Inspect" title="Grade corrections" />
         <Skeleton lines={8} />
       </div>
     );
@@ -306,11 +307,7 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack">
-      <PageHeader title="Grade corrections">
-        A correction says an inspection found a machine is not the grade it was declared as. If you
-        do not answer inside the window, the corrected grade applies on its own and reprices the
-        listing.
-      </PageHeader>
+      <ClauseHeading n="01" kicker="Inspect" title="Grade corrections" />
 
       <Board
         toolbar={

@@ -222,10 +222,10 @@ describe('spacing, radii and density', () => {
    * theme block that also set a gap, would couple them.
    */
   it('keeps density and theme orthogonal', () => {
-    const compact = css.slice(
-      css.indexOf("[data-density='compact']"),
-      css.indexOf('html {'),
-    );
+    // Only the density rule itself — MANIFEST sits after these blocks and
+    // overrides colours, which is a different attribute and not a coupling.
+    const compactStart = css.indexOf("[data-density='compact']");
+    const compact = css.slice(compactStart, css.indexOf('}', compactStart));
     expect(compact).not.toMatch(/--ink|--sheet|--acc|--chrome/);
     expect(DARK).not.toMatch(/--d-row|--d-cell|--d-card/);
   });
@@ -245,6 +245,32 @@ describe('spacing, radii and density', () => {
  * them through `.tg-cell`, never through a prop, so nothing in TypeScript would
  * catch a caller passing its own.
  */
+const MANIFEST = css.slice(
+  css.indexOf(":root[data-surface='manifest']"),
+  css.indexOf(":root[data-surface='manifest'][data-density='default']"),
+);
+
+describe('MANIFEST — vendor surface contrast', () => {
+  it.each([
+    ['ink on sheet', 'ink', 'sheet', 4.5],
+    ['ink on ground', 'ink', 'ground', 4.5],
+    ['ink-2 on sheet', 'ink-2', 'sheet', 4.5],
+    ['ink-2 on ground', 'ink-2', 'ground', 4.5],
+    ['ink-3 on sheet', 'ink-3', 'sheet', 4.5],
+    ['ink-3 on ground', 'ink-3', 'ground', 4.5],
+    ['ink-4 on sheet', 'ink-4', 'sheet', 3.0],
+    ['acc-ink on sheet', 'acc-ink', 'sheet', 4.5],
+    ['acc-ink on acc-wash', 'acc-ink', 'acc-wash', 4.5],
+    ['acc-on on acc', 'acc-on', 'acc', 4.5],
+    ['pass on sheet', 'pass', 'sheet', 4.5],
+    ['warn on sheet', 'warn', 'sheet', 4.5],
+    ['fail on sheet', 'fail', 'sheet', 4.5],
+    ['on-chrome on chrome', 'on-chrome', 'chrome', 4.5],
+  ] as const)('%s clears %s:1', (_n, fg, bg, min) => {
+    expect(contrast(token(MANIFEST, fg), token(MANIFEST, bg))).toBeGreaterThanOrEqual(min);
+  });
+});
+
 describe('density — the three row heights', () => {
   const block = (selector: string): string => {
     const start = css.indexOf(selector);

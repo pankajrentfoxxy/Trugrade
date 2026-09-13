@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Button,
   Checkbox,
+  ClauseHeading,
   DataBoard,
   EmptyState,
   GradeBadge,
@@ -11,7 +12,7 @@ import {
   type Column,
 } from '@trugrade/ui';
 import { GRADES, type Grade } from '@trugrade/contracts';
-import { Board, NotMeasured, PageHeader, Select } from '../../lib/controls';
+import { Board, NotMeasured, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, gradeLabel, onDate, postJson, rupees, type Page, type VendorListing } from './api';
 import { machineTitle } from './ListingMachine';
@@ -284,16 +285,16 @@ export function VendorListingsRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack">
-      <PageHeader
-        title="Your stock"
-        action={
+      <ClauseHeading
+        n="01"
+        kicker="Sell"
+        title="Listings"
+        actions={
           <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
-            List stock
+            Create listing
           </Button>
         }
-      >
-        Your declared grade, our corrected grade where one exists, and the inspection clock.
-      </PageHeader>
+      />
 
       <div className="flex flex-wrap items-end gap-4">
         <Select

@@ -2,83 +2,40 @@ import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   Button,
+  ClauseHeading,
   EmptyState,
-  KpiRow,
-  QueueList,
+  InfoPopover,
+  LedgerRow,
+  LedgerSection,
+  RegisterStrip,
   Skeleton,
   Stepper,
-  type Kpi,
-  type QueueItem,
+  type RegisterCell,
 } from '@trugrade/ui';
-import { PageHeader } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, NO_DATE, onDate, rupees, type DashboardTiles, type VendorQueue } from './api';
 
 /**
- * ARCHETYPE E — Workspace. A KPI row, then queues ordered by SLA breach.
- * DENSITY: default (vendor portal), set on the app root by the shell.
- *
- * The vendor's landing screen: what needs them today.
- *
- * **The queues are the screen, not the tiles.** The first pass of this route was
- * a KPI row and nothing else, which is archetype B's furniture wearing E's name:
- * six counts, no ordering, no promise, nothing saying which to open first. A
- * workspace ranks the work. `QueueList` does that ordering itself — worst first
- * — so this file never sorts.
- *
- * **What is not here, and why.** There is no revenue figure and no retail price,
- * for the same reason there is none in the wizard: what the vendor is owed is
- * theirs, what we sell it for is not their business per unit. There is no
- * scorecard or tier tile, which `03_UX_SPEC.md` §3B.2 asks for, because nothing
- * computes one — `qc.internal.vendor-quality` has no route and no screen. There
- * is no "POs to fulfil today" tile for the same reason: `procurement` has zero
- * internals and zero routes, so a PO exists in the database and nowhere a vendor
- * can reach it. Four honest tiles beat seven with three invented.
- *
- * **A tile links only where a board actually answers it.** Three of the six
- * links on the first pass did not: `/vendor/payables` and `/vendor/qc/corrections`
- * are routes that do not exist, and `?expiring=14` is a parameter the listings
- * board silently ignores — it would have shown the vendor their whole catalogue
- * under the heading "expiring within 14 days". A number with no board beats a
- * link to the wrong one.
+ * ARCHETYPE E — Workspace.
+ * MANIFEST: clause heading, register strip, needs-you table, money ledger.
  */
 
-/** The three-step guide a vendor with no stock reads instead of a grid of zeroes. */
 const FIRST_RUN = [
-  'Pick the machine from our catalog and declare its condition. Four steps, and a paste of serial numbers does fifty at once.',
-  'We inspect at your site. Nothing goes on sale before it has been inspected and sealed.',
-  'Machines that pass go live. You are paid after delivery and after the buyer’s inspection window closes.',
+  'Pick the machine from our catalog and declare its condition.',
+  'We inspect at your site. Nothing goes on sale before it is sealed.',
+  'Machines that pass go live. You are paid after delivery.',
 ] as const;
 
 const FIRST_RUN_LABELS = ['Declare it', 'We inspect it', 'It goes live'] as const;
 
-/**
- * The server's queue numbers, as `QueueList` wants them.
- *
- * Every one of `oldestWaitHours`, `breachedCount` and `slaHours` is dropped
- * rather than defaulted when the API sends `null`. `QueueItem` treats an absent
- * field as "not measured" and renders it as such; supplying `0` instead would
- * print "Within SLA" under a queue nobody has ever timed, and "0 past SLA"
- * against a promise nobody made. `exactOptionalPropertyTypes` is what forces the
- * spread here rather than letting `undefined` be assigned.
- */
-function toQueue(
-  key: string,
-  label: string,
-  href: string,
-  description: React.ReactNode,
-  q: VendorQueue,
-): QueueItem {
-  return {
-    key,
-    label,
-    href,
-    description,
-    count: q.count,
-    ...(q.oldestWaitHours === null ? {} : { oldestWaitHours: q.oldestWaitHours }),
-    ...(q.breachedCount === null ? {} : { breachedCount: q.breachedCount }),
-    ...(q.slaHours === null ? {} : { slaHours: q.slaHours }),
-  };
+function slaText(q: VendorQueue): string {
+  if (q.slaHours === null) return '—';
+  if (q.breachedCount !== null && q.breachedCount > 0) return `Over by ${q.breachedCount}`;
+  return `${q.slaHours} h`;
+}
+
+function ageText(q: VendorQueue): string {
+  return q.oldestWaitHours === null ? '—' : `${q.oldestWaitHours} h`;
 }
 
 export function VendorDashboardRoute(): React.JSX.Element {
@@ -92,9 +49,9 @@ export function VendorDashboardRoute(): React.JSX.Element {
     return (
       <EmptyState
         title="Your dashboard did not load"
-        body={`${error}. Nothing has been changed — reload to try again, or go straight to your listings.`}
+        body={`${error}. Nothing has been changed — reload to try again.`}
         action={
-          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings">
+          <Link className="vl-link" to="/vendor/listings">
             Open your listings
           </Link>
         }
@@ -104,39 +61,26 @@ export function VendorDashboardRoute(): React.JSX.Element {
 
   if (!data) {
     return (
-      <div className="tg-stack">
-        <PageHeader title="Today">Loading what needs you.</PageHeader>
-        {/* Skeletons that keep the box, so the grid does not jump when it lands. */}
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="tg-card rounded-lg border border-rule bg-sheet">
-              <Skeleton lines={3} />
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 2 }, (_, i) => (
-            <div key={i} className="tg-card rounded-lg border border-rule bg-sheet">
-              <Skeleton lines={2} />
-            </div>
-          ))}
-        </div>
+      <div className="vl-page">
+        <ClauseHeading n="01" kicker="Vendor day sheet" title="Today" />
+        <Skeleton lines={4} />
       </div>
     );
   }
 
   if (data.unitsEverListed === 0) {
-    // First run is a three-step guide, not an empty grid of zeroes. A new vendor
-    // reading "0 live" learns nothing about what to do next.
-    //
-    // `unitsEverListed` and not `live + awaiting + sold`: those are all zero for
-    // a vendor whose entire first batch failed inspection, and telling them to
-    // list their first stock is both wrong and insulting.
     return (
-      <div className="tg-stack">
-        <PageHeader title="List your first stock">
-          Three steps from a machine on your shelf to a machine a buyer can order.
-        </PageHeader>
+      <div className="vl-page">
+        <ClauseHeading
+          n="01"
+          kicker="Getting started"
+          title="List your first stock"
+          actions={
+            <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
+              Create listing
+            </Button>
+          }
+        />
         <Stepper
           label="Getting started"
           steps={FIRST_RUN.map((summary, i) => ({
@@ -147,7 +91,7 @@ export function VendorDashboardRoute(): React.JSX.Element {
           }))}
         />
         <p>
-          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings/new">
+          <Link className="vl-link" to="/vendor/listings/new">
             Start the first listing
           </Link>
         </p>
@@ -155,103 +99,191 @@ export function VendorDashboardRoute(): React.JSX.Element {
     );
   }
 
-  /**
-   * A count is a count, never a percentage — `KpiPercentage` would demand a
-   * denominator, which is exactly why none of these is typed as one.
-   */
-  const kpis: Kpi[] = [
+  const cells: RegisterCell[] = [
     {
-      key: 'live',
-      label: 'Live',
-      value: data.unitsLive,
-      unit: data.unitsLive === 1 ? 'machine' : 'machines',
-      href: '/vendor/listings?status=ACTIVE',
-      hint: 'Inspected, sealed and orderable right now.',
+      label: 'Units on sale',
+      value: String(data.unitsLive),
+      sub: `${data.unitsSoldThisMonth} sold this month`,
     },
     {
-      key: 'sold',
-      label: 'Sold this month',
-      value: data.unitsSoldThisMonth,
-      unit: data.unitsSoldThisMonth === 1 ? 'machine' : 'machines',
-      // No link: this counts deliveries, and no board filters by the month a
-      // machine was delivered. `?status=OUT_OF_STOCK` was standing in for it and
-      // is a different set of listings entirely.
-      hint: 'Delivered to a buyer since the 1st.',
+      label: 'Awaiting inspection',
+      value: String(data.unitsAwaitingQc),
+      sub: data.queues.awaitingInspection.oldestWaitHours !== null
+        ? `oldest ${data.queues.awaitingInspection.oldestWaitHours} h`
+        : 'not timed',
     },
     {
-      key: 'expiring',
-      label: 'Inspection expiring',
-      value: data.unitsQcExpiring14d,
-      unit: 'within 14 days',
-      // No link: the board filters listings by status and grade, and this counts
-      // units by `qc_valid_until`. There is no query that reproduces it.
-      hint: 'At zero days they stop being sellable — automatically.',
+      label: 'Corrections',
+      value: String(data.queues.gradeCorrections.count),
+      sub:
+        data.queues.gradeCorrections.breachedCount !== null
+          ? `${data.queues.gradeCorrections.breachedCount} past SLA`
+          : 'SLA not measured',
     },
     {
-      key: 'payout',
-      label: 'Payout due',
+      label: 'Due to you',
       value: rupees(data.payoutsDue),
-      // No link: `/vendor/payables` does not exist. The figure is real —
-      // `procurement.vendor_payable`, written when we raise the purchase order —
-      // but the statement screen behind it is not built.
-      hint:
+      sub:
         data.payoutsDueOn && onDate(data.payoutsDueOn) !== NO_DATE
-          ? `Expected ${onDate(data.payoutsDueOn)}.`
-          : // Not a guessed date. The payout cycle decides it and this screen
-            // does not know the cycle.
-            'No date yet — your payout cycle sets it.',
+          ? `expected ${onDate(data.payoutsDueOn)}`
+          : 'No date — payout cycle sets it',
     },
   ];
 
-  /**
-   * Two queues, and only two, because two are all that have a vendor waiting at
-   * the end of them.
-   *
-   * One carries a real promise and one carries none, and that asymmetry is the
-   * point: `qc.grade_correction_auto_days` is configured, so the corrections
-   * queue prints its SLA and its breaches; nothing commits us to an inspection
-   * date, so the inspection queue prints neither rather than borrowing a 24 or a
-   * 48 from a queue that does have one.
-   */
-  const queues: QueueItem[] = [
-    // `/vendor/corrections`, not `/vendor/listings?corrected=1`. The board of
-    // LISTINGS with an open correction is a real board and stays, but until T31
-    // it was the only destination and nothing on it could answer anything — a
-    // queue titled "awaiting your answer" that landed you somewhere you could not
-    // give one. Both read the same predicate (`needsAnswer`), so the count here
-    // and the rows there cannot disagree.
-    toQueue(
-      'corrections',
-      'Grade corrections awaiting your answer',
-      '/vendor/corrections',
-      'When the window closes the corrected grade applies on its own, and reprices the listing.',
-      data.queues.gradeCorrections,
-    ),
-    toQueue(
-      'awaiting-qc',
-      'Machines awaiting inspection',
-      '/vendor/listings?status=AWAITING_QC',
-      'Declared but not yet inspected. No buyer can see these.',
-      data.queues.awaitingInspection,
-    ),
-  ].filter((q) => q.count > 0);
+  const needs = [
+    {
+      key: 'corrections',
+      type: 'Grade correction',
+      subject: 'Grade corrections awaiting your answer',
+      state: data.queues.gradeCorrections.count > 0 ? 'Awaiting response' : 'Clear',
+      age: ageText(data.queues.gradeCorrections),
+      sla: slaText(data.queues.gradeCorrections),
+      href: '/vendor/corrections',
+      count: data.queues.gradeCorrections.count,
+      breached: data.queues.gradeCorrections.breachedCount,
+      slaHours: data.queues.gradeCorrections.slaHours,
+    },
+    {
+      key: 'awaiting-qc',
+      type: 'Inspection',
+      subject: 'Machines awaiting inspection',
+      state: data.queues.awaitingInspection.count > 0 ? 'Unscheduled' : 'Clear',
+      age: ageText(data.queues.awaitingInspection),
+      sla: slaText(data.queues.awaitingInspection),
+      href: '/vendor/listings?status=AWAITING_QC',
+      count: data.queues.awaitingInspection.count,
+      breached: data.queues.awaitingInspection.breachedCount,
+      slaHours: data.queues.awaitingInspection.slaHours,
+    },
+  ]
+    .filter((row) => row.count > 0)
+    .sort((a, b) => {
+      const aKnown = a.breached === null ? 1 : 0;
+      const bKnown = b.breached === null ? 1 : 0;
+      if (aKnown !== bKnown) return aKnown - bKnown;
+      return (b.breached ?? 0) - (a.breached ?? 0);
+    });
+
+  const now = new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date());
 
   return (
-    <div className="tg-stack">
-      <PageHeader
+    <div className="vl-page">
+      <ClauseHeading
+        n="01"
+        kicker="Vendor day sheet"
         title="Today"
-        action={
-          <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
-            List stock
-          </Button>
+        meta={`${now} IST`}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => void navigate('/vendor/listings')}>
+              Bulk upload
+            </Button>
+            <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
+              Create listing
+            </Button>
+          </>
+        }
+      />
+
+      <div data-testid="kpi-row">
+        <RegisterStrip cells={cells} />
+        <Link className="sr-only" to="/vendor/listings?status=ACTIVE">
+          Live units
+        </Link>
+      </div>
+
+      <LedgerSection
+        n="02"
+        title="Needs you"
+        count={needs.length > 0 ? needs.length : undefined}
+        aside="Ordered by SLA"
+      >
+        {needs.length > 0 ? (
+          <div className="vl-table-wrap" data-testid="queue-list">
+            <table className="vl-table min-w-[720px]">
+              <thead>
+                <tr>
+                  {['Type', 'Subject', 'State', 'Age', 'SLA', ''].map((h) => (
+                    <th key={h || 'act'}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {needs.map((row) => {
+                  const sev =
+                    row.breached !== null && row.breached > 0
+                      ? 'vl-sev vl-sev--fail'
+                      : row.slaHours === null
+                        ? 'vl-sev vl-sev--warn'
+                        : 'vl-sev vl-sev--ok';
+                  return (
+                    <tr key={row.key}>
+                      <td>
+                        <span className={sev} aria-hidden="true" />
+                        {row.type}
+                      </td>
+                      <td className="vl-td-ink">{row.subject}</td>
+                      <td>{row.state}</td>
+                      <td className="font-mono tabular-nums vl-td-ink">{row.age}</td>
+                      <td
+                        className={`font-mono tabular-nums ${
+                          row.breached !== null && row.breached > 0 ? 'text-fail' : 'vl-td-ink'
+                        }`}
+                      >
+                        {row.slaHours !== null ? (
+                          <>
+                            SLA
+                            {row.breached !== null && row.breached > 0
+                              ? ` · ${row.breached} past SLA`
+                              : ` ${row.slaHours} h`}
+                          </>
+                        ) : (
+                          <span className="text-ink-4">Breaches not measured</span>
+                        )}
+                      </td>
+                      <td className="text-right">
+                        <Link to={row.href} className="vl-link">
+                          Open
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </LedgerSection>
+
+      <LedgerSection
+        n="03"
+        title="Money"
+        aside={
+          <Link to="/vendor/payables" className="vl-section__aside">
+            Payables
+          </Link>
         }
       >
-        Your stock, then what is waiting on you — worst first.
-      </PageHeader>
-
-      <KpiRow label="Your stock right now" items={kpis} />
-
-      {queues.length > 0 ? <QueueList label="Waiting on you" items={queues} /> : null}
+        <div className="vl-money">
+          <LedgerRow
+            label={
+              <span className="inline-flex items-center gap-2">
+                Net due
+                <InfoPopover label="About net due">
+                  Accrued and eligible payables, net of TDS. No payout date is invented when the
+                  cycle has not set one.
+                </InfoPopover>
+              </span>
+            }
+            value={rupees(data.payoutsDue)}
+            total
+          />
+        </div>
+      </LedgerSection>
     </div>
   );
 }

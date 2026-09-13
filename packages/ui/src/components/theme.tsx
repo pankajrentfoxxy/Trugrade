@@ -83,7 +83,11 @@ export const THEME_STOREFRONT_PREPAINT_SCRIPT =
  */
 export const THEME_CONSOLE_PREPAINT_SCRIPT =
   `try{document.documentElement.setAttribute('data-t','light');` +
-  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','light')}catch(e){}`;
+  `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','light');` +
+  `if(location.pathname.indexOf('/vendor')===0){` +
+  `document.documentElement.setAttribute('data-surface','manifest');` +
+  `document.documentElement.setAttribute('data-density','default')}` +
+  `}catch(e){}`;
 
 /** Archetype F routes — light working surfaces, dark brand panel on the right. */
 export const CONSOLE_AUTH_PATHS = ['/login', '/forgot-password', '/sell/register'] as const;

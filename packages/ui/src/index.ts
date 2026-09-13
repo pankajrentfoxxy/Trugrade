@@ -162,6 +162,24 @@ export {
 } from './components/theme';
 
 export {
+  ClauseHeading,
+  type ClauseHeadingProps,
+  LedgerSection,
+  type LedgerSectionProps,
+  LedgerRow,
+  type LedgerRowProps,
+  RegisterStrip,
+  type RegisterStripProps,
+  type RegisterCell,
+  REGISTER_SUB_MAX,
+  InfoPopover,
+  type InfoPopoverProps,
+  PermissionGrid,
+  type PermissionGridProps,
+  type PermissionMark,
+} from './components/manifest';
+
+export {
   QcChip,
   type QcChipProps,
   BatteryBar,

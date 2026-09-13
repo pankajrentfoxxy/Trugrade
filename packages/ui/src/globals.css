@@ -59,6 +59,10 @@
     --pass: #35c08a;
     --fail: #f0715c;
     --warn: #e0a53f;
+    --pass-wash: #0d2a22;
+    --warn-wash: #2a2010;
+    --fail-wash: #2a1210;
+    --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   }
 
@@ -108,6 +112,10 @@
     --warn: #9a620a;
     --score-bar-warn: #d9910a;
     --score-bar-warn-wash: #fdf0d4;
+    --pass-wash: #e2ede8;
+    --warn-wash: #f6eddd;
+    --fail-wash: #f7e6e4;
+    --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 8px 26px rgba(16, 19, 25, 0.1);
   }
 
@@ -146,6 +154,10 @@
     --pass: #35c08a;
     --fail: #f0715c;
     --warn: #e0a53f;
+    --pass-wash: #0d2a22;
+    --warn-wash: #2a2010;
+    --fail-wash: #2a1210;
+    --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   }
 
@@ -178,6 +190,10 @@
     --pass: #35c08a;
     --fail: #f0715c;
     --warn: #e0a53f;
+    --pass-wash: #0d2a22;
+    --warn-wash: #2a2010;
+    --fail-wash: #2a1210;
+    --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   }
 
@@ -210,6 +226,10 @@
     --pass: #0f7048;
     --fail: #c13527;
     --warn: #9a620a;
+    --pass-wash: #e2ede8;
+    --warn-wash: #f6eddd;
+    --fail-wash: #f7e6e4;
+    --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 8px 26px rgba(42, 36, 28, 0.1);
   }
 
@@ -233,6 +253,7 @@
     --maxw: 1400px;
 
     --font-sans: 'Inter', system-ui, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
     --font-deva: 'IBM Plex Sans Devanagari', 'Inter', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
@@ -278,6 +299,82 @@
     --d-card: var(--s4);
     --d-stack: var(--s3);
     --d-section: var(--s6);
+  }
+
+  /**
+   * MANIFEST — the vendor surface. The shipping manifest and the bound ledger.
+   * Paper ground, hairline rules, square corners, NO cards. Authority comes
+   * from typography and rules, never from boxes.
+   *
+   * Composes with data-t and data-density; knows about neither. Absent, this
+   * block changes nothing.
+   *
+   * Three rules:
+   *   1. Radius is 0 everywhere. A rounded corner in MANIFEST is a bug.
+   *   2. No box-shadow. Ever. Separation is a rule or a background step.
+   *   3. --acc is viridian and means the same three things the amber meant:
+   *      a primary action, a measured value, an active state.
+   */
+  :root[data-surface='manifest'] {
+    --chrome: #14170f;
+    --chrome-2: #1e2318;
+    --chrome-3: #2c3325;
+    --on-chrome: #f2f3ee;
+    --on-chrome-2: rgba(242, 243, 238, 0.82);
+    --on-chrome-3: rgba(242, 243, 238, 0.62);
+    --chrome-line: rgba(242, 243, 238, 0.12);
+    --chrome-line-2: rgba(242, 243, 238, 0.22);
+
+    --ground: #edeeea;
+    --sheet: #ffffff;
+    --sheet-2: #f7f8f5;
+    --sheet-3: #e4e6e0;
+
+    --ink: #191b18;
+    --ink-2: #4a4f4a;
+    --ink-3: #666c66;
+    --ink-4: #82887f;
+
+    --rule: #d6d8d1;
+    --rule-2: #e4e6e0;
+
+    --acc: #1d5c4a;
+    --acc-dk: #164638;
+    --acc-on: #ffffff;
+    --acc-ink: #144537;
+    --acc-wash: #e2ede8;
+    --acc-glow: rgba(29, 92, 74, 0.18);
+    --scan: rgba(29, 92, 74, 0.7);
+
+    --pass: #1d5c4a;
+    --warn: #7a4e0a;
+    --fail: #9b2c21;
+    --pass-wash: #e2ede8;
+    --warn-wash: #f6eddd;
+    --fail-wash: #f7e6e4;
+
+    /* Square. Every corner. */
+    --r-xs: 0px;
+    --r-sm: 0px;
+    --r: 0px;
+    --r-lg: 0px;
+    --r-xl: 0px;
+
+    /* No elevation exists in this language. */
+    --shadow: none;
+
+    --font-sans: 'Public Sans', system-ui, sans-serif;
+    --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+    --maxw: 1360px;
+  }
+
+  :root[data-surface='manifest'][data-density='default'] {
+    --d-row-h: 40px;
+  }
+  :root[data-surface='manifest'][data-density='compact'] {
+    --d-row-h: 34px;
   }
 
   html {
@@ -664,6 +761,40 @@
   display: inline-flex;
   align-items: center;
 }
+/**
+ * MANIFEST component behaviour. Scoped to the vendor surface so admin is
+ * untouched. Tokens already square every corner and drop shadows.
+ */
+:root[data-surface='manifest'] table thead tr {
+  background: var(--sheet-2);
+  border-bottom: 2px solid var(--ink);
+}
+:root[data-surface='manifest'] table th + th,
+:root[data-surface='manifest'] table td + td {
+  border-left: 1px solid var(--rule-2);
+}
+:root[data-surface='manifest'] table tbody tr:hover {
+  background: var(--sheet-2);
+}
+:root[data-surface='manifest'] table tbody tr[data-selected='true'] {
+  background: var(--acc-wash);
+  box-shadow: inset 2px 0 0 var(--acc);
+}
+
+:root[data-surface='manifest'] button {
+  box-shadow: none;
+}
+
+:root[data-surface='manifest'] h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+:root[data-surface='manifest'] [class*='animate-skeleton'] {
+  animation: none;
+  background: var(--sheet-3);
+}
+
 .tg-theme-name {
   display: none;
   font-size: 11px;

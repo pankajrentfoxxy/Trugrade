@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Button, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
+import { Button, ClauseHeading, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
 import { Board, NotMeasured, Section, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import {
@@ -498,6 +498,7 @@ export function VendorPayablesRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack payables-record">
+      <ClauseHeading n="01" kicker="Money" title="Payables" />
       {!data ? (
         <>
           <div className="payables-hero payables-hero-loading">
