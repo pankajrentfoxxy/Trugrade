@@ -71,8 +71,13 @@ export class FakeNotification extends NotificationPort {
     }
     const id = randomUUID();
     this.outbox.record(req, id);
+    // The outbox keeps the code for tests; the log must not. This line once
+    // wrote live OTPs to a pm2 log on a server whose provider keys were unset.
+    const { code: _code, ...loggable } = req.variables;
     this.logger.debug(
-      `[${req.channel}] ${req.templateCode} -> ${req.to} ${JSON.stringify(req.variables)}`,
+      `[${req.channel}] ${req.templateCode} -> ${req.to} ${JSON.stringify(
+        'code' in req.variables ? { ...loggable, code: '[redacted]' } : loggable,
+      )}`,
     );
     return { providerMessageId: id, accepted: true };
   }
