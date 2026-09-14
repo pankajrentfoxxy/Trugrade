@@ -1,6 +1,13 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Button, HubPageHeader, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
+import {
+  Button,
+  HubPageHeader,
+  DataBoard,
+  EmptyState,
+  StatusPill,
+  type Column,
+} from '@trugrade/ui';
 import { Board, NotMeasured, Section, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { useProfileGateOrRender } from './ProfileLockGate';
@@ -77,7 +84,8 @@ function WaitingOn({ row }: { row: PayableRow }): React.JSX.Element {
     case 'ON_HOLD':
       return wrap(
         <>
-          {row.holdReason ?? 'Held. No reason was recorded, which is itself a defect — raise a ticket.'}
+          {row.holdReason ??
+            'Held. No reason was recorded, which is itself a defect — raise a ticket.'}
         </>,
       );
     case 'NOT_DELIVERED':
@@ -94,13 +102,16 @@ function WaitingOn({ row }: { row: PayableRow }): React.JSX.Element {
       );
     case 'INSPECTION_WINDOW_OPEN':
       return wrap(
-        <>Delivered {delivered} · the buyer’s inspection window closes {closes}.</>,
+        <>
+          Delivered {delivered} · the buyer’s inspection window closes {closes}.
+        </>,
       );
     case 'NO_PAYOUT_RUN':
       return wrap(
         <>
-          Payable since {closes}. <strong className="font-normal text-ink">No payout run has been executed</strong>,
-          so this is ours to move, not yours.
+          Payable since {closes}.{' '}
+          <strong className="font-normal text-ink">No payout run has been executed</strong>, so this
+          is ours to move, not yours.
         </>,
       );
   }
@@ -156,9 +167,9 @@ function DeductionStack({ view }: { view: PayablesView }): React.JSX.Element {
           ) : (
             <p className="payables-ledger-hint">
               <span className="font-mono tnum">{s.tds.ratePct}%</span> above the threshold, on{' '}
-              <span className="font-mono tnum">{rupees(s.tds.financialYearPurchases)}</span> purchased
-              from you in FY <span className="font-mono tnum">{s.tds.financialYear}</span>.{' '}
-              {s.tds.reason}
+              <span className="font-mono tnum">{rupees(s.tds.financialYearPurchases)}</span>{' '}
+              purchased from you in FY <span className="font-mono tnum">{s.tds.financialYear}</span>
+              . {s.tds.reason}
               {!s.tds.hasVerifiedPan &&
                 ' This is the higher no-PAN rate — a verified PAN on your profile brings it down.'}
             </p>
@@ -190,7 +201,8 @@ function DeductionStack({ view }: { view: PayablesView }): React.JSX.Element {
         <div>
           <p className="payables-ledger-label">Less inspection fees</p>
           <p className="payables-ledger-hint">
-            Inspections are paid for by us, so this line is zero by policy rather than by coincidence.
+            Inspections are paid for by us, so this line is zero by policy rather than by
+            coincidence.
           </p>
         </div>
         <span className="payables-ledger-amount font-mono tnum text-ink-2">
@@ -224,22 +236,20 @@ function PayablesSummary({ view }: { view: PayablesView }): React.JSX.Element {
           <p className="payables-hero-sub">
             {hasMoney ? (
               <>
-                Net payable across {s.payables} open{' '}
-                {s.payables === 1 ? 'payable' : 'payables'}. Money moves after delivery and the
-                buyer’s inspection window closes — not when the purchase order is raised.
+                Net payable across {s.payables} open {s.payables === 1 ? 'payable' : 'payables'}.
+                Money moves after delivery and the buyer’s inspection window closes — not when the
+                purchase order is raised.
               </>
             ) : (
               <>
-                A payable appears the moment we buy a machine from you. It becomes ours to settle once
-                the buyer has taken delivery and their inspection window has closed.
+                A payable appears the moment we buy a machine from you. It becomes ours to settle
+                once the buyer has taken delivery and their inspection window has closed.
               </>
             )}
           </p>
         </div>
         <div className="payables-hero-badges">
-          {overdue > 0 ? (
-            <StatusPill tone="warn" label={`${overdue} past our deadline`} />
-          ) : null}
+          {overdue > 0 ? <StatusPill tone="warn" label={`${overdue} past our deadline`} /> : null}
           {waitingDelivery > 0 ? (
             <StatusPill tone="processing" label={`${waitingDelivery} awaiting delivery`} />
           ) : null}
@@ -279,9 +289,9 @@ function PayablesSummary({ view }: { view: PayablesView }): React.JSX.Element {
           ) : (
             <div className="payables-empty-state">
               <p className="text-body-sm text-ink-2">
-                Nothing is owed to you right now. The moment a payable exists this is where the whole
-                deduction stack appears — gross, TDS with the rule it was struck under, any penalty with
-                its evidence, inspection fees, and the net.
+                Nothing is owed to you right now. The moment a payable exists this is where the
+                whole deduction stack appears — gross, TDS with the rule it was struck under, any
+                penalty with its evidence, inspection fees, and the net.
               </p>
             </div>
           )}
@@ -331,8 +341,8 @@ function PayablesSummary({ view }: { view: PayablesView }): React.JSX.Element {
                     <>
                       Section 15 of the MSMED Act binds us to pay within{' '}
                       <span className="font-mono tnum">{view.msme.maxPaymentDays}</span> days of
-                      acceptance. Section 16 charges compound interest at three times the RBI bank rate
-                      on any delay — a legal deadline, not a payout cycle.
+                      acceptance. Section 16 charges compound interest at three times the RBI bank
+                      rate on any delay — a legal deadline, not a payout cycle.
                     </>
                   )
                 ) : (
@@ -382,7 +392,8 @@ function PayablesSummary({ view }: { view: PayablesView }): React.JSX.Element {
                 view.account === null ? (
                   <>
                     Nothing can be paid until a bank account is added and the ₹1 penny-drop confirms
-                    the name your bank holds. This is the one item on this page you can clear yourself.
+                    the name your bank holds. This is the one item on this page you can clear
+                    yourself.
                   </>
                 ) : (
                   <>
@@ -393,7 +404,9 @@ function PayablesSummary({ view }: { view: PayablesView }): React.JSX.Element {
                       <>
                         {' '}
                         Payouts frozen until{' '}
-                        <span className="font-mono tnum">{onDateTime(view.account.frozenUntil)}</span>{' '}
+                        <span className="font-mono tnum">
+                          {onDateTime(view.account.frozenUntil)}
+                        </span>{' '}
                         after a recent bank-account change.
                       </>
                     )}
@@ -457,9 +470,12 @@ export function VendorPayablesRoute(): React.JSX.Element {
         numeric: true,
         cell: (r) => <span className="text-ink-2">{rupees(r.tds)}</span>,
       },
-      { key: 'net', header: 'Net to you', numeric: true, cell: (r) => (
-          <span className="font-mono tnum font-medium text-ink">{rupees(r.net)}</span>
-        ) },
+      {
+        key: 'net',
+        header: 'Net to you',
+        numeric: true,
+        cell: (r) => <span className="font-mono tnum font-medium text-ink">{rupees(r.net)}</span>,
+      },
       { key: 'waiting', header: 'Waiting on', cell: (r) => <WaitingOn row={r} /> },
       {
         key: 'payBy',
@@ -493,7 +509,7 @@ export function VendorPayablesRoute(): React.JSX.Element {
         title="Your payables did not load"
         body={
           forbidden
-            ? `${error}. Your account may not have payables access yet — sign out and sign back in so your permissions refresh. Use owner@northgate.example, finance@northgate.example, or admin@northgate.example.`
+            ? `${error}. Payables are visible to the account owner and finance. If you were given that access recently, sign out and back in so your permissions refresh.`
             : `${error}. Nothing has been changed — reload to try again.`
         }
       />
@@ -570,7 +586,10 @@ export function VendorPayablesRoute(): React.JSX.Element {
                     }
                     action={
                       status ? (
-                        <Button variant="secondary" onClick={() => setParams(new URLSearchParams())}>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setParams(new URLSearchParams())}
+                        >
                           Clear the filter
                         </Button>
                       ) : (

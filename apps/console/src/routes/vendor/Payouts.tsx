@@ -1,12 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import {
-  HubPageHeader,
-  EmptyState,
-  LedgerRow,
-  HubKpiRow,
-  Skeleton,
-} from '@trugrade/ui';
+import { HubPageHeader, EmptyState, LedgerRow, HubKpiRow, Skeleton } from '@trugrade/ui';
 import { daysSince } from '../../lib/clock';
 import { useResource } from '../../lib/useResource';
 import { API, onDate, rupees, type PayablesView } from './api';
@@ -82,7 +76,10 @@ export function VendorPayoutsRoute(): React.JSX.Element {
               <thead>
                 <tr className="border-b border-ink bg-sheet-2">
                   {['Reference', 'PO', 'Raised', 'Age', 'Amount'].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left font-mono text-[10px] uppercase text-ink-3">
+                    <th
+                      key={h}
+                      className="px-3 py-2 text-left font-mono text-[10px] uppercase text-ink-3"
+                    >
                       {h}
                     </th>
                   ))}
@@ -116,13 +113,13 @@ export function VendorPayoutsRoute(): React.JSX.Element {
 
       <section>
         <h2 className="mb-2 text-body font-medium text-ink">Payout history</h2>
-        <HubKpiRow
-          cells={[
-            { label: 'Runs', value: '0', sub: 'of 0 issued' },
-            { label: 'Paid', value: '₹0', sub: 'of ₹0 accrued' },
-          ]}
-        />
-        <EmptyState title="No payout runs" body="None issued yet." />
+        {/* Only what the API computed. "0 of 0 issued" and "₹0 of ₹0 accrued" were
+            typed into this screen, whatever the account had actually been paid. */}
+        {data.payoutsEver === 0 ? (
+          <EmptyState title="No payout runs yet" body="Nothing has been paid to this account." />
+        ) : (
+          <HubKpiRow cells={[{ label: 'Payout runs', value: String(data.payoutsEver) }]} />
+        )}
       </section>
 
       <Link className="text-body-sm underline" to="/vendor/payables">
