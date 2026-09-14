@@ -447,6 +447,23 @@ export function PoDetailDialog({
   );
 }
 
+/**
+ * A unit shows up here `RESERVED` when it is the exact machine our system
+ * committed at the moment the buyer's order was placed — see
+ * `hold.service.ts` / `order-transaction.service.ts`. The attachable-units
+ * query only ever returns a `RESERVED` row when it is reserved for *this*
+ * order (`reservedUnitIdsForOrder`), so it can never be someone else's stock
+ * leaking in. It is the machine the vendor is expected to confirm, not a
+ * blocker — which is why it is pre-selected below rather than merely shown.
+ */
+function unitStatusPill(status: string): React.JSX.Element {
+  return status === 'RESERVED' ? (
+    <StatusPill tone="processing" label="Reserved for this order" />
+  ) : (
+    <StatusPill tone="info" label="Available" />
+  );
+}
+
 function AttachPicker({
   poId,
   group,
@@ -463,9 +480,31 @@ function AttachPicker({
     'Matching machines unavailable',
   );
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [query, setQuery] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [pickError, setPickError] = React.useState<string | null>(null);
   const needed = group.qty - group.attachedCount;
+
+  // The machines already reserved for this exact order are the ones the
+  // vendor almost always wants — pre-check them so the normal case is
+  // "confirm and go" rather than "guess which of these is the right one".
+  // Guarded on `selected.size === 0` so a reopened picker never clobbers a
+  // choice the vendor already made.
+  React.useEffect(() => {
+    if (!data || selected.size > 0) return;
+    const reserved = data.filter((u) => u.status === 'RESERVED').slice(0, needed);
+    if (reserved.length > 0) setSelected(new Set(reserved.map((u) => u.unitId)));
+    // `needed` is read but intentionally not a dependency: it is constant for
+    // the life of this dialog (derived from `group`, not restated fetches),
+    // and this effect's own job is "run once when the fetch lands", not "run
+    // again whenever the demand count is recomputed".
+  }, [data]);
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || !data) return data ?? [];
+    return data.filter((u) => u.serialNumber.toLowerCase().includes(q));
+  }, [data, query]);
 
   function toggle(id: string): void {
     setSelected((prev) => {
@@ -522,20 +561,50 @@ function AttachPicker({
       ) : data.length === 0 ? (
         <EmptyState title="No sealed machines match" body="List matching stock at this facility first." />
       ) : (
-        <ul className="flex list-none flex-col gap-2 p-0">
-          {data.map((u) => (
-            <li
-              key={u.unitId}
-              className={`flex cursor-pointer items-center justify-between gap-3 rounded border px-4 py-3 ${
-                selected.has(u.unitId) ? 'border-acc bg-acc-wash' : 'border-rule bg-sheet'
-              }`}
-              onClick={() => toggle(u.unitId)}
-            >
-              <span className="font-mono tnum text-ink">{u.serialNumber}</span>
-              <span className="text-label text-ink-3">{humanise(u.status)}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-body-sm">
+            <span className="text-label text-ink-3">Search serials</span>
+            <input
+              type="search"
+              className="rounded border border-rule bg-sheet px-3 py-2 font-mono tnum"
+              placeholder="Type part of a serial number"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
+
+          <p className="text-body-sm text-ink-2">
+            <span className="font-mono tnum text-ink">{selected.size}</span> of{' '}
+            <span className="font-mono tnum">{needed}</span> selected
+          </p>
+
+          {filtered.length === 0 ? (
+            <p className="text-body-sm text-ink-3">No serial matches “{query.trim()}”.</p>
+          ) : (
+            <ul className="flex max-h-[min(24rem,50vh)] list-none flex-col gap-2 overflow-y-auto p-0">
+              {filtered.map((u) => (
+                <li
+                  key={u.unitId}
+                  className={`flex cursor-pointer items-center gap-3 rounded border px-4 py-3 ${
+                    selected.has(u.unitId) ? 'border-acc bg-acc-wash' : 'border-rule bg-sheet'
+                  }`}
+                  onClick={() => toggle(u.unitId)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(u.unitId)}
+                    onChange={() => toggle(u.unitId)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select serial ${u.serialNumber}`}
+                    className="h-4 w-4 shrink-0 accent-acc"
+                  />
+                  <span className="flex-1 font-mono tnum text-ink">{u.serialNumber}</span>
+                  {unitStatusPill(u.status)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       <div className="mt-4 flex justify-end">
         <Button loading={busy} onClick={() => void confirm()}>
