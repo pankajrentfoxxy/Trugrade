@@ -59,6 +59,12 @@ module.exports = {
         'pass-wash': v('pass-wash'),
         'warn-wash': v('warn-wash'),
         'fail-wash': v('fail-wash'),
+        'pass-line': v('pass-line'),
+        'warn-line': v('warn-line'),
+        'fail-line': v('fail-line'),
+        'warn-track': v('warn-track'),
+        'acc-2': v('acc-2'),
+        'brand-tint': v('brand-tint'),
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'Inter', 'system-ui', 'sans-serif'],
@@ -110,7 +116,7 @@ module.exports = {
         lg: 'var(--r-lg)',
         xl: 'var(--r-xl)',
       },
-      boxShadow: { 1: 'var(--shadow)', 2: 'var(--shadow)' },
+      boxShadow: { 1: 'var(--shadow)', 2: 'var(--shadow-2)' },
       maxWidth: { container: 'var(--maxw)' },
       transitionTimingFunction: { standard: 'cubic-bezier(.2,0,0,1)' },
       keyframes: {

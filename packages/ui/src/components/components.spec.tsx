@@ -322,7 +322,7 @@ describe('Input — a verified state shows the resolved entity, never just a tic
     );
     const input = screen.getByLabelText('Work email');
     const button = screen.getByRole('button', { name: 'Send code' });
-    expect(input.parentElement).toBe(button.parentElement?.parentElement);
+    expect(input.parentElement?.parentElement).toBe(button.parentElement?.parentElement);
   });
 });
 

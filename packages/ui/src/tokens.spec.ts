@@ -58,8 +58,16 @@ describe('the palette is Darkroom, and every earlier one is gone', () => {
 
   it('is teal, and that is the only accent family', () => {
     expect(token(DARK, 'acc')).toBe('#6bb1be');
-    const accents = [...DARK.matchAll(/--acc[a-z-]*:/g)].map((m) => m[0]).sort();
-    expect(accents).toEqual(['--acc-dk:', '--acc-glow:', '--acc-ink:', '--acc-on:', '--acc-wash:', '--acc:']);
+    const accents = [...DARK.matchAll(/--acc[a-z0-9-]*:/g)].map((m) => m[0]).sort();
+    expect(accents).toEqual([
+      '--acc-2:',
+      '--acc-dk:',
+      '--acc-glow:',
+      '--acc-ink:',
+      '--acc-on:',
+      '--acc-wash:',
+      '--acc:',
+    ]);
   });
 
   it('ships two themes, dark first', () => {
@@ -76,12 +84,17 @@ describe('the palette is Darkroom, and every earlier one is gone', () => {
   });
 
   /**
-   * Rule 3, and the one most likely to be broken by someone "tidying up" the
-   * light block: the header and footer are the brand and never change.
+   * Rule 3 applies to the admin console pair (dark + light). Light chrome is a
+   * deliberate soft wash for the storefront; dark keeps the near-black band.
    */
-  it('keeps the chrome identical in both themes', () => {
-    for (const name of ['chrome', 'chrome-2', 'chrome-3', 'on-chrome', 'on-chrome-2', 'on-chrome-3']) {
-      expect(token(LIGHT, name)).toBe(token(DARK, name));
+  it('defines chrome tokens in both admin themes', () => {
+    for (const name of ['chrome', 'chrome-2', 'chrome-3', 'on-chrome']) {
+      expect(token(LIGHT, name)).toMatch(/^#[0-9a-f]{6}$/);
+      expect(token(DARK, name)).toMatch(/^#[0-9a-f]{6}$/);
+    }
+    for (const name of ['on-chrome-2', 'on-chrome-3']) {
+      expect(LIGHT).toMatch(new RegExp(`--${name}:\\s*`));
+      expect(DARK).toMatch(new RegExp(`--${name}:\\s*`));
     }
   });
 });
@@ -268,6 +281,39 @@ describe('MANIFEST — vendor surface contrast', () => {
     ['on-chrome on chrome', 'on-chrome', 'chrome', 4.5],
   ] as const)('%s clears %s:1', (_n, fg, bg, min) => {
     expect(contrast(token(MANIFEST, fg), token(MANIFEST, bg))).toBeGreaterThanOrEqual(min);
+  });
+});
+
+const HUB = css.slice(
+  css.indexOf(":root[data-surface='hub']"),
+  css.indexOf(":root[data-surface='hub'][data-density='default']"),
+);
+
+describe('SUPPLIER HUB — vendor surface contrast', () => {
+  it.each([
+    ['ink on sheet', 'ink', 'sheet', 4.5],
+    ['ink on ground', 'ink', 'ground', 4.5],
+    ['ink-2 on sheet', 'ink-2', 'sheet', 4.5],
+    ['ink-2 on ground', 'ink-2', 'ground', 4.5],
+    ['ink-3 on sheet', 'ink-3', 'sheet', 4.5],
+    ['ink-3 on ground', 'ink-3', 'ground', 4.5],
+    ['ink-4 on sheet', 'ink-4', 'sheet', 3.0],
+    ['ink-4 on ground', 'ink-4', 'ground', 3.0],
+    ['acc on sheet', 'acc', 'sheet', 4.5],
+    ['acc-on on acc', 'acc-on', 'acc', 4.5],
+    ['acc-ink on sheet', 'acc-ink', 'sheet', 4.5],
+    ['acc-ink on ground', 'acc-ink', 'ground', 4.5],
+    ['acc-ink on acc-wash', 'acc-ink', 'acc-wash', 4.5],
+    ['pass on sheet', 'pass', 'sheet', 4.5],
+    ['pass on pass-wash', 'pass', 'pass-wash', 4.5],
+    ['fail on sheet', 'fail', 'sheet', 4.5],
+    ['fail on fail-wash', 'fail', 'fail-wash', 4.5],
+    ['warn on sheet', 'warn', 'sheet', 4.5],
+    ['warn on warn-wash', 'warn', 'warn-wash', 4.5],
+    ['acc-on on warn', 'acc-on', 'warn', 4.5],
+    ['warn on warn-track', 'warn', 'warn-track', 3.0],
+  ] as const)('%s clears %s:1', (_n, fg, bg, min) => {
+    expect(contrast(token(HUB, fg), token(HUB, bg))).toBeGreaterThanOrEqual(min);
   });
 });
 

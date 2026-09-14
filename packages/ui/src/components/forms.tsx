@@ -412,7 +412,7 @@ export function Uploader({
   label,
   hint,
   accept,
-  maxSizeMb,
+  maxSizeMb: _maxSizeMb,
   multiple = false,
   files,
   onSelect,

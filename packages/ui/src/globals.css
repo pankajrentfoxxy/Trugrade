@@ -62,8 +62,15 @@
     --pass-wash: #0d2a22;
     --warn-wash: #2a2010;
     --fail-wash: #2a1210;
+    --pass-line: #1a5040;
+    --warn-line: #5a4018;
+    --fail-line: #5a2820;
+    --warn-track: #2a2010;
+    --acc-2: #153038;
+    --brand-tint: #6bb1be;
     --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
   }
 
   :root[data-t='light'] {
@@ -115,8 +122,15 @@
     --pass-wash: #e2ede8;
     --warn-wash: #f6eddd;
     --fail-wash: #f7e6e4;
+    --pass-line: #b6e0cb;
+    --warn-line: #f2dca9;
+    --fail-line: #f0c7c1;
+    --warn-track: #efe6d4;
+    --acc-2: #cfe7eb;
+    --brand-tint: #6bb1be;
     --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 8px 26px rgba(16, 19, 25, 0.1);
+    --shadow-2: 0 6px 24px rgba(16, 19, 25, 0.13), 0 18px 60px rgba(16, 19, 25, 0.13);
   }
 
   /**
@@ -157,8 +171,15 @@
     --pass-wash: #0d2a22;
     --warn-wash: #2a2010;
     --fail-wash: #2a1210;
+    --pass-line: #1a5040;
+    --warn-line: #5a4018;
+    --fail-line: #5a2820;
+    --warn-track: #2a2010;
+    --acc-2: #153038;
+    --brand-tint: #6bb1be;
     --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
   }
 
   :root[data-t='olive'] {
@@ -193,8 +214,15 @@
     --pass-wash: #0d2a22;
     --warn-wash: #2a2010;
     --fail-wash: #2a1210;
+    --pass-line: #1a5040;
+    --warn-line: #5a4018;
+    --fail-line: #5a2820;
+    --warn-track: #2a2010;
+    --acc-2: #153038;
+    --brand-tint: #6bb1be;
     --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
   }
 
   :root[data-t='sand'] {
@@ -229,8 +257,15 @@
     --pass-wash: #e2ede8;
     --warn-wash: #f6eddd;
     --fail-wash: #f7e6e4;
+    --pass-line: #b6e0cb;
+    --warn-line: #f2dca9;
+    --fail-line: #f0c7c1;
+    --warn-track: #efe6d4;
+    --acc-2: #cfe7eb;
+    --brand-tint: #6bb1be;
     --font-display: 'Inter', system-ui, sans-serif;
     --shadow: 0 8px 26px rgba(42, 36, 28, 0.1);
+    --shadow-2: 0 6px 24px rgba(42, 36, 28, 0.13), 0 18px 60px rgba(42, 36, 28, 0.13);
   }
 
   :root {
@@ -256,6 +291,14 @@
     --font-display: 'Inter', system-ui, sans-serif;
     --font-deva: 'IBM Plex Sans Devanagari', 'Inter', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+    --pass-line: #1a5040;
+    --warn-line: #5a4018;
+    --fail-line: #5a2820;
+    --warn-track: #2a2010;
+    --acc-2: #153038;
+    --brand-tint: #6bb1be;
+    --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
 
     /**
      * Density. Orthogonal to `data-t`: both live on the root, neither knows
@@ -375,6 +418,80 @@
   }
   :root[data-surface='manifest'][data-density='compact'] {
     --d-row-h: 34px;
+  }
+
+  /**
+   * SUPPLIER HUB — the vendor surface. Light, roomy, familiar to anyone who has
+   * used an Indian seller portal. Composes with data-t and data-density.
+   *
+   * ONE DELIBERATE DEPARTURE from 09_FRONTEND_LOCKED: the top bar here is WHITE,
+   * not --chrome. The dark chrome is the buyer brand; the supplier portal is a
+   * different product on a different subdomain with a different audience. This
+   * is a decision, not a drift — do not "fix" it back.
+   */
+  :root[data-surface='hub'] {
+    --chrome: #ffffff;
+    --chrome-2: #f7f9fa;
+    --chrome-3: #e1e6eb;
+    --on-chrome: #17202b;
+    --on-chrome-2: #4d5a69;
+    --on-chrome-3: #66717f;
+    --chrome-line: #e1e6eb;
+    --chrome-line-2: #eef1f4;
+
+    --ground: #f2f4f7;
+    --sheet: #ffffff;
+    --sheet-2: #f7f9fa;
+    --sheet-3: #eef1f4;
+
+    --ink: #17202b;
+    --ink-2: #4d5a69;
+    --ink-3: #66717f;
+    --ink-4: #818b99;
+
+    --rule: #e1e6eb;
+    --rule-2: #eef1f4;
+
+    --acc: #0f7c8a;
+    --acc-dk: #0b6b77;
+    --acc-on: #ffffff;
+    --acc-ink: #0b6b77;
+    --acc-wash: #e8f4f6;
+    --acc-2: #cfe7eb;
+    --brand-tint: #6bb1be;
+
+    --pass: #0c7a50;
+    --pass-wash: #e4f4ec;
+    --pass-line: #b6e0cb;
+    /* Prototype #a86609 is 4.31:1 on warn-wash — #a56008 clears 4.5:1 */
+    --warn: #a56008;
+    --warn-wash: #fff7e6;
+    --warn-line: #f2dca9;
+    --warn-track: #efe6d4;
+    --fail: #be3423;
+    --fail-wash: #fbebe9;
+    --fail-line: #f0c7c1;
+
+    --r-xs: 4px;
+    --r-sm: 5px;
+    --r: 6px;
+    --r-lg: 8px;
+    --r-xl: 10px;
+    --shadow: 0 1px 2px rgba(23, 32, 43, 0.05), 0 1px 3px rgba(23, 32, 43, 0.07);
+    --shadow-2: 0 6px 24px rgba(23, 32, 43, 0.13), 0 18px 60px rgba(23, 32, 43, 0.13);
+
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+    --maxw: 1800px;
+  }
+
+  :root[data-surface='hub'][data-density='default'] {
+    --d-row-h: 48px;
+  }
+
+  :root[data-surface='hub'] {
+    font-size: 15px;
   }
 
   html {
@@ -793,6 +910,83 @@
 :root[data-surface='manifest'] [class*='animate-skeleton'] {
   animation: none;
   background: var(--sheet-3);
+}
+
+/**
+ * SUPPLIER HUB — type scale and page layout. Scoped so admin stays at 14px.
+ */
+:root[data-surface='hub'] body {
+  font-size: 15px;
+}
+
+:root[data-surface='hub'] h1 {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+}
+
+:root[data-surface='hub'] h2 {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+}
+
+:root[data-surface='hub'] h3 {
+  font-size: 16.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+}
+
+:root[data-surface='hub'] .text-body-sm,
+:root[data-surface='hub'] .text-data {
+  font-size: 13.5px;
+}
+
+:root[data-surface='hub'] .text-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+:root[data-surface='hub'] .tg-hub-kpi-value {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+:root[data-surface='hub'] table {
+  font-size: 14.5px;
+}
+
+:root[data-surface='hub'] table th {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+:root[data-surface='hub'] .tg-hub-page {
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding: 26px 32px 70px;
+}
+
+:root[data-surface='hub'] .tg-hub-topbar {
+  height: 62px;
+}
+
+:root[data-surface='hub'] .tg-hub-rail {
+  width: 96px;
 }
 
 .tg-theme-name {
