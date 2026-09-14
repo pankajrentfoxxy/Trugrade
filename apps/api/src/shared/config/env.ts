@@ -14,6 +14,9 @@ import { z } from 'zod';
  * stops a CI run from calling a real carrier and booking a real pickup.
  */
 export const INTEGRATION_MODES = ['mock', 'fixture', 'sandbox', 'live'] as const;
+
+const DEV_SQL_CONSOLE_IN_PRODUCTION =
+  'DEV_SQL_CONSOLE must not be set when NODE_ENV=production. It exposes an unauthenticated endpoint that runs arbitrary SQL.';
 export type IntegrationMode = (typeof INTEGRATION_MODES)[number];
 
 const boolish = z
@@ -101,6 +104,13 @@ export const envSchema = z
 
     /** Column-encryption key for PAN, bank account, personal mobile. 32 bytes, base64. */
     PII_ENCRYPTION_KEY: z.string().optional(),
+
+    /**
+     * Opt-in for the unauthenticated raw-SQL console (`platform/dev`). Read by
+     * `DevSqlModule.register`; declared here so production refuses to boot with
+     * it set rather than silently ignoring it.
+     */
+    DEV_SQL_CONSOLE: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     // 04_TEST_PLAN.md §1.4.3: `live` is impossible in CI. Not a warning — a throw.
@@ -113,6 +123,13 @@ export const envSchema = z
       });
     }
     if (env.NODE_ENV === 'production') {
+      if (env.DEV_SQL_CONSOLE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['DEV_SQL_CONSOLE'],
+          message: DEV_SQL_CONSOLE_IN_PRODUCTION,
+        });
+      }
       if (!env.PII_ENCRYPTION_KEY) {
         ctx.addIssue({
           code: 'custom',
@@ -154,6 +171,9 @@ function crossFieldIssues(source: NodeJS.ProcessEnv): string[] {
   }
 
   if (nodeEnv === 'production') {
+    if (source.DEV_SQL_CONSOLE) {
+      issues.push(`  DEV_SQL_CONSOLE: ${DEV_SQL_CONSOLE_IN_PRODUCTION}`);
+    }
     if (!source.PII_ENCRYPTION_KEY) {
       issues.push(
         '  PII_ENCRYPTION_KEY: PII_ENCRYPTION_KEY is required in production — PAN and bank details are encrypted at the column.',

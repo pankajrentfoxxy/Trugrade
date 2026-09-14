@@ -8,7 +8,8 @@ import { DevSqlService, type DevSqlResult } from './dev-sql.service';
  * Local SQL console — **development only**.
  *
  * Sends raw SQL to Postgres and returns rows or an affected-row count. The route
- * is not registered when `NODE_ENV=production`.
+ * is registered only when `DEV_SQL_CONSOLE` carries the explicit opt-in and
+ * `NODE_ENV` is not production — see `isDevSqlConsoleEnabled`.
  */
 @Controller('dev/sql')
 export class DevSqlController {
