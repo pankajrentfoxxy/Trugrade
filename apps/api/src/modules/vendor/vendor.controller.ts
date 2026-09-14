@@ -365,6 +365,12 @@ export class VendorController {
    * Four fields, chosen rather than spread. `identity.org_address` also carries
    * a contact name, a mobile number and coordinates, and none of them belong in
    * a `<select>`.
+   *
+   * `units_held` joins through `listing.listing` on purpose: `pickup_location_id`
+   * lives there, not on `listing.unit` — a unit only knows its physical
+   * `location` (VENDOR/TRANSIT/HUB/BUYER). Reading it off `u.pickup_location_id`
+   * 500'd this route outright, which meant no vendor could ever see a facility
+   * to pick, which meant no vendor could ever create a listing.
    */
   @Get('facilities')
   @RequirePermissions('listing.own.read')
@@ -383,8 +389,14 @@ export class VendorController {
     >`
       SELECT a.id, a.label, a.line1, a.city, a.pincode,
              da.line1 AS dispatch_line1,
+             -- pickup_location_id lives on the listing, not the unit — a unit
+             -- only knows its physical location (VENDOR/TRANSIT/HUB/BUYER).
+             -- Reading it off u.pickup_location_id 500'd this route outright,
+             -- which meant no vendor could ever see a facility to pick, which
+             -- meant no vendor could ever create a listing.
              (SELECT count(*) FROM listing.unit u
-               WHERE u.pickup_location_id = a.id
+               JOIN listing.listing l ON l.id = u.listing_id
+               WHERE l.pickup_location_id = a.id
                  AND u.vendor_org_id = ${orgId}::uuid
                  AND u.status NOT IN ('DELIVERED','SCRAPPED'))                  AS units_held
         FROM identity.org_address a

@@ -85,11 +85,17 @@ export function CreateListingDialog({
         grade,
         conditionType: 'REFURBISHED',
         functionalStatus: 'FULLY_FUNCTIONAL',
-        batteryHealthBand: 'GOOD',
-        partsStatus: 'ORIGINAL',
+        // These three are the ones `createListingDraftSchema` restricts to a
+        // closed enum. This dialog is the quick path — grade, quantity, ask —
+        // and does not ask the vendor to declare a band or a wipe method the
+        // way the wizard's own condition step does, so it declares the most
+        // conservative honest default for each rather than inventing a value
+        // outside the enum the server actually accepts.
+        batteryHealthBand: 'GOOD_80_89',
+        partsStatus: 'ALL_ORIGINAL',
         partsReplaced: [],
         repairHistory: 'NONE',
-        dataWipeStatus: 'CERTIFIED',
+        dataWipeStatus: 'CERTIFICATE_AVAILABLE',
         sellerWarranty: 'M6',
         oemWarrantyRemaining: 'NONE',
         vendorWarrantyMonths: 6,
