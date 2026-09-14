@@ -40,6 +40,22 @@ const STEP_LABELS = ['Mobile', 'Verify', 'Email', 'Account'] as const;
 
 type Step = 1 | 2 | 3 | 4;
 
+/**
+ * A contact `POST /auth/register` refused at the last step. `expired` is the
+ * thirty-minute proof lapsing while the supplier chose a password; `taken` is a
+ * duplicate the server names only once both channels are proved.
+ */
+interface ContactRefusal {
+  channel: 'EMAIL' | 'MOBILE';
+  kind: 'expired' | 'taken';
+  message: string;
+  sentTo: string | null;
+  code: string;
+  devCode: string | null;
+  busy: boolean;
+  error: string | null;
+}
+
 /** Hub tokens live on `:root[data-surface='hub']`, not on a nested div. */
 function SignupSurfaceSync(): null {
   React.useLayoutEffect(() => {
@@ -78,14 +94,15 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const [password, setPassword] = React.useState('');
   const [confirm, setConfirm] = React.useState('');
   const [error, setError] = React.useState<string | undefined>();
-  const [serverErrors, setServerErrors] = React.useState<
-    Partial<Record<SignupFieldKey, string>>
-  >({});
+  const [serverErrors, setServerErrors] = React.useState<Partial<Record<SignupFieldKey, string>>>(
+    {},
+  );
   const [busy, setBusy] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
   const [mfaSentTo, setMfaSentTo] = React.useState<string | null>(null);
   const [focused, setFocused] = React.useState<SignupFieldKey | null>(null);
   const [active, setActive] = React.useState<Partial<Record<SignupFieldKey, boolean>>>({});
+  const [refusal, setRefusal] = React.useState<ContactRefusal | null>(null);
 
   const mobileDisplay = mobileDigits.length > 0 ? `+91 ${mobileDigits}` : '+91 ';
   const e164 = toE164(mobileDisplay);
@@ -220,9 +237,27 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     });
     setBusy(false);
     if (!result.ok) {
+      // Email and mobile are not on this step, so a refusal naming either one
+      // used to be stored against a field that was not drawn — and the supplier
+      // pressed "Create account" to no visible effect at all.
+      const contactMessage = result.fields.email ?? result.fields.mobile;
+      if (contactMessage) {
+        const channel = result.fields.email ? 'EMAIL' : 'MOBILE';
+        const taken = /already registered/i.test(`${result.message} ${contactMessage}`);
+        setRefusal({
+          channel,
+          kind: taken ? 'taken' : 'expired',
+          message: taken ? contactMessage : result.message,
+          sentTo: null,
+          code: '',
+          devCode: null,
+          busy: false,
+          error: null,
+        });
+        setError(undefined);
+        return;
+      }
       const next: Partial<Record<SignupFieldKey, string>> = {};
-      if (result.fields.mobile) next.mobile = result.fields.mobile;
-      if (result.fields.email) next.email = result.fields.email;
       if (result.fields.password) next.password = result.fields.password;
       if (result.fields.fullName) next.fullName = result.fields.fullName;
       setServerErrors(next);
@@ -271,6 +306,54 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
       return;
     }
     void navigate('/vendor', { replace: true });
+  };
+
+  const refusalValue = refusal?.channel === 'EMAIL' ? email.trim() : e164;
+
+  const patchRefusal = (patch: Partial<ContactRefusal>): void =>
+    setRefusal((prev) => (prev ? { ...prev, ...patch } : prev));
+
+  /** Re-prove a lapsed channel here, without losing the name and password typed. */
+  const resendForRefusal = async (): Promise<void> => {
+    if (!refusal) return;
+    patchRefusal({ busy: true, error: null });
+    const result = await sendOtp(refusal.channel, refusalValue);
+    if (!result.ok) {
+      patchRefusal({ busy: false, error: result.fields.value ?? result.message });
+      return;
+    }
+    patchRefusal({
+      busy: false,
+      sentTo: result.data.sentTo,
+      devCode: result.data.devCode ?? null,
+      code: '',
+    });
+  };
+
+  const verifyForRefusal = async (code: string): Promise<void> => {
+    if (!refusal) return;
+    patchRefusal({ busy: true, error: null });
+    const result = await verifyOtp(refusal.channel, refusalValue, code);
+    if (!result.ok) {
+      patchRefusal({ busy: false, code: '', error: result.message || result.fields.code || null });
+      return;
+    }
+    setRefusal(null);
+  };
+
+  /** A taken address cannot be re-proved; go back to the step that asks for it. */
+  const changeRefusedContact = (): void => {
+    if (!refusal) return;
+    if (refusal.channel === 'EMAIL') {
+      setEmailLocked(false);
+      setEmailCode('');
+      setEmailSentTo(null);
+      setStep(3);
+    } else {
+      setMobileCode('');
+      setStep(1);
+    }
+    setRefusal(null);
   };
 
   const strength = signupPasswordStrength(password, passwordContext);
@@ -332,12 +415,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
             <>
               <div className="sup-signup-progress" aria-label="Signup progress">
                 {STEP_LABELS.map((label, i) => (
-                  <span
-                    key={label}
-                    data-active={i + 1 <= step}
-                    title={label}
-                    aria-hidden="true"
-                  />
+                  <span key={label} data-active={i + 1 <= step} title={label} aria-hidden="true" />
                 ))}
               </div>
 
@@ -397,8 +475,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
               {step === 2 ? (
                 <div className="sup-signup-fields">
                   <p className="sup-signup-sent">
-                    Code sent to{' '}
-                    <span className="tnum">{mobileSentTo ?? e164}</span>
+                    Code sent to <span className="tnum">{mobileSentTo ?? e164}</span>
                     <button
                       type="button"
                       className="sup-signup-change"
@@ -431,9 +508,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                     <Button
                       variant="primary"
                       loading={busy}
-                      disabledReason={
-                        mobileCode.length < 6 ? 'Enter all six digits.' : undefined
-                      }
+                      disabledReason={mobileCode.length < 6 ? 'Enter all six digits.' : undefined}
                       onClick={() => void verifyMobileOtp(mobileCode)}
                     >
                       Verify
@@ -442,9 +517,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                       <Button
                         type="button"
                         variant="secondary"
-                        disabledReason={
-                          cooldown > 0 ? `Resend in ${cooldown} s` : undefined
-                        }
+                        disabledReason={cooldown > 0 ? `Resend in ${cooldown} s` : undefined}
                         loading={busy}
                         onClick={() => void sendMobileOtp()}
                       >
@@ -518,9 +591,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                           <Button
                             type="button"
                             variant="secondary"
-                            disabledReason={
-                              cooldown > 0 ? `Resend in ${cooldown} s` : undefined
-                            }
+                            disabledReason={cooldown > 0 ? `Resend in ${cooldown} s` : undefined}
                             onClick={() => void sendEmailOtp()}
                           >
                             Resend
@@ -602,6 +673,71 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                       setServerErrors((prev) => ({ ...prev, confirm: undefined }));
                     }}
                   />
+                  {refusal ? (
+                    <div
+                      className="flex flex-col gap-3 rounded border border-fail bg-sheet-2 p-4"
+                      data-testid="signup-contact-refusal"
+                    >
+                      <p role="alert" className="text-body-sm text-ink">
+                        {refusal.message}
+                      </p>
+                      <p className="text-body-sm text-ink-2">
+                        {refusal.channel === 'EMAIL' ? 'Email' : 'Mobile'}:{' '}
+                        <span className="font-mono tnum text-ink">{refusalValue}</span>
+                      </p>
+                      {refusal.kind === 'taken' ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button type="button" variant="secondary" onClick={changeRefusedContact}>
+                            {refusal.channel === 'EMAIL'
+                              ? 'Use a different email'
+                              : 'Use a different number'}
+                          </Button>
+                          <Link
+                            to="/login"
+                            className="text-body-sm text-acc-ink underline underline-offset-4"
+                          >
+                            Sign in instead
+                          </Link>
+                        </div>
+                      ) : refusal.sentTo ? (
+                        <>
+                          <OtpInput
+                            label={`Code sent to ${refusal.sentTo}`}
+                            value={refusal.code}
+                            onChange={(code) => patchRefusal({ code, error: null })}
+                            disabled={refusal.busy}
+                            error={refusal.error ?? undefined}
+                            onComplete={(code) => void verifyForRefusal(code)}
+                          />
+                          {refusal.devCode ? (
+                            <p className="sup-signup-prototype">
+                              Prototype — your code is{' '}
+                              <span className="tnum">{refusal.devCode}</span>
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              loading={refusal.busy}
+                              onClick={() => void resendForRefusal()}
+                            >
+                              Send a new code
+                            </Button>
+                          </div>
+                          {refusal.error ? (
+                            <p className="text-body-sm text-fail">{refusal.error}</p>
+                          ) : null}
+                          <p className="text-body-sm text-ink-3">
+                            Your name and password stay as you typed them.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                   {stepFourBanner ? (
                     <p className="text-body-sm text-fail" role="alert">
                       {stepFourBanner}

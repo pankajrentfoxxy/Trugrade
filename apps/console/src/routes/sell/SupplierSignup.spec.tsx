@@ -252,3 +252,139 @@ describe('the second factor, landing on /vendor', () => {
     expect(calls.indexOf('POST /api/onboarding/start')).toBeGreaterThan(-1);
   });
 });
+
+/**
+ * `POST /auth/register` names email or mobile at the last step — the half-hour
+ * verification lapsed while a password was chosen, or the address turned out to
+ * be taken. Neither field is on that step, and the refusal used to vanish.
+ */
+describe('a contact refusal at the last step', () => {
+  const calls: string[] = [];
+
+  function refusingFetch(registerReply: () => Response) {
+    return (url: string, init?: RequestInit): Promise<Response> => {
+      const method = init?.method ?? 'GET';
+      calls.push(`${method} ${url}`);
+      if (url === '/api/auth/register/otp' && method === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              channel: 'EMAIL',
+              sentTo: 'te***@acme.in',
+              expiresAt: new Date(Date.now() + 300_000).toISOString(),
+              resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
+              devCode: '111111',
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url === '/api/auth/register/otp/verify' && method === 'POST') {
+        return Promise.resolve(new Response(JSON.stringify({ verified: true }), { status: 200 }));
+      }
+      if (url === '/api/auth/register' && method === 'POST')
+        return Promise.resolve(registerReply());
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: 'Unexpected' } }), { status: 500 }),
+      );
+    };
+  }
+
+  async function reachLastStepAndSubmit(): Promise<ReturnType<typeof userEvent.setup>> {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SupplierSignup />
+      </MemoryRouter>,
+    );
+    await user.type(screen.getByLabelText(/Mobile number/i), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await screen.findByLabelText('Six-digit code');
+    fillOtp('111111');
+    await screen.findByText('Your work email');
+    await user.type(screen.getByLabelText(/Email address/i), 'test@acme.in');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await screen.findByLabelText(/Code sent to/);
+    fillOtp('111111');
+    await screen.findByText('Set a password');
+    await user.type(screen.getByLabelText(/^Your name/), 'Test Vendor');
+    await user.type(screen.getByLabelText(/^Password/), 'Qzv7$mKplWxR2b');
+    await user.type(screen.getByLabelText(/^Confirm password/), 'Qzv7$mKplWxR2b');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    return user;
+  }
+
+  beforeEach(() => {
+    calls.length = 0;
+  });
+
+  it('shows an expired verification and re-proves it inline, keeping what was typed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        refusingFetch(
+          () =>
+            new Response(
+              JSON.stringify({
+                error: {
+                  code: 'VALIDATION',
+                  message:
+                    'Verify your work email first — enter the 6-digit code we sent to it, then create the account.',
+                  fields: { email: 'This email has not been verified yet.' },
+                },
+              }),
+              { status: 422 },
+            ),
+        ),
+      ),
+    );
+    const user = await reachLastStepAndSubmit();
+
+    const refusal = await screen.findByTestId('signup-contact-refusal');
+    expect(refusal.textContent).toContain('Verify your work email first');
+    expect(refusal.textContent).toContain('test@acme.in');
+    expect(screen.getByRole('button', { name: 'Create account' })).not.toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Send a new code' }));
+    await screen.findByLabelText(/Code sent to te\*\*\*@acme.in/);
+    fillOtp('111111');
+
+    await waitFor(() => expect(screen.queryByTestId('signup-contact-refusal')).toBeNull());
+    expect(screen.getByLabelText(/^Your name/)).toHaveValue('Test Vendor');
+    expect(calls.filter((c) => c === 'POST /api/auth/register/otp/verify')).toHaveLength(3);
+  });
+
+  it('shows an address already on an account and lets the supplier change it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        refusingFetch(
+          () =>
+            new Response(
+              JSON.stringify({
+                error: {
+                  code: 'VALIDATION',
+                  message:
+                    'This email is already registered. Sign in instead, or use a different address.',
+                  fields: {
+                    email:
+                      'This email is already registered. Sign in instead, or use a different address.',
+                  },
+                },
+              }),
+              { status: 422 },
+            ),
+        ),
+      ),
+    );
+    const user = await reachLastStepAndSubmit();
+
+    const refusal = await screen.findByTestId('signup-contact-refusal');
+    expect(refusal.textContent).toContain('already registered');
+    expect(screen.getByRole('link', { name: 'Sign in instead' })).toHaveAttribute('href', '/login');
+
+    await user.click(screen.getByRole('button', { name: 'Use a different email' }));
+    expect(await screen.findByText('Your work email')).toBeTruthy();
+    expect(screen.getByLabelText(/Email address/i)).not.toHaveAttribute('readonly');
+  });
+});
