@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AppConfig } from './shared/config';
+import { applyTrustedProxy } from './shared/http/trust-proxy';
 // Root import, not the '/brand' subpath: this app is on moduleResolution "Node"
 // (node10), which ignores exports maps. The root re-exports BRAND.
 import { BRAND } from '@trugrade/config';
@@ -12,6 +13,7 @@ import { BRAND } from '@trugrade/config';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
   const config = app.get(AppConfig);
+  applyTrustedProxy(app.getHttpAdapter().getInstance());
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   app.use(cookieParser());
