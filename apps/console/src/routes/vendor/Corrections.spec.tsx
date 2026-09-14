@@ -48,9 +48,20 @@ const OPEN = {
 };
 
 function mockApi(body: unknown, ok = true, status = 200): void {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-    Promise.resolve({ ok, status, json: async () => body } as Response),
-  );
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+    // The rail's profile gate reads this on every vendor route. A blanket
+    // mock would otherwise hand it whatever `body` this test is answering
+    // corrections with, which has no `status: 'VERIFIED'` and would replace
+    // the screen under test with the "finish your profile" card instead.
+    if (String(input).includes('/api/onboarding/steps')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'VERIFIED' }),
+      } as Response);
+    }
+    return Promise.resolve({ ok, status, json: async () => body } as Response);
+  });
 }
 
 const drawBoard = (): ReturnType<typeof render> =>

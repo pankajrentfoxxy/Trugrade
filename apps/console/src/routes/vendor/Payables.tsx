@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Button, HubPageHeader, DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
 import { Board, NotMeasured, Section, Select } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
+import { useProfileGateOrRender } from './ProfileLockGate';
 import {
   API,
   PAYABLE_STATUSES,
@@ -408,6 +409,7 @@ function PayablesSummary({ view }: { view: PayablesView }): React.JSX.Element {
 }
 
 export function VendorPayablesRoute(): React.JSX.Element {
+  const gate = useProfileGateOrRender('payables', 'Payouts');
   const [params, setParams] = useSearchParams();
   const status = params.get('status') ?? '';
 
@@ -481,6 +483,8 @@ export function VendorPayablesRoute(): React.JSX.Element {
     ],
     [],
   );
+
+  if (gate.locked) return gate.locked;
 
   if (error) {
     const forbidden = error.includes('(403)');

@@ -22,8 +22,24 @@ import './vendor-hub.css';
  * See the note on `:root[data-surface='hub']` in packages/ui/src/globals.css.
  */
 
-/** Listing and SKU work is refused by the API until onboarding is verified. */
-const GATED_UNTIL_VERIFIED = new Set(['/vendor/listings/new', '/vendor/sku-request']);
+/**
+ * Padlocked on the rail, and gated with a "finish your profile" card if
+ * opened directly — see `useProfileGateOrRender` in `routes/vendor/ProfileLockGate.tsx`,
+ * which every route named here (plus the two off-rail children reached only
+ * from Orders and Payables — Dispatch and Payout history) checks for itself.
+ * Listing an item here without also gating its route is a lock the rail shows
+ * and the URL bar ignores; the reverse — a route that gates itself without a
+ * padlock here — is a vendor discovering the wall only by walking into it.
+ */
+const GATED_UNTIL_VERIFIED = new Set([
+  '/vendor/listings',
+  '/vendor/listings/new',
+  '/vendor/sku-request',
+  '/vendor/qc/visits',
+  '/vendor/corrections',
+  '/vendor/orders',
+  '/vendor/payables',
+]);
 
 function initials(fullName: string | null | undefined): string {
   const trimmed = fullName?.trim();

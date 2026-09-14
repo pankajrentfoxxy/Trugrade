@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { HubPageHeader, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
 import { useResource } from '../../lib/useResource';
 import { API, onDate, type Page, type PurchaseOrder } from './api';
+import { useProfileGateOrRender } from './ProfileLockGate';
 
 /**
  * ARCHETYPE B — Board. Acknowledged POs awaiting dispatch.
@@ -10,6 +11,10 @@ import { API, onDate, type Page, type PurchaseOrder } from './api';
  */
 
 export function VendorDispatchRoute(): React.JSX.Element {
+  // Gated with Orders, not separately named on the rail: there is nothing to
+  // dispatch before a purchase order can exist, and this screen is reached
+  // only from Orders' own link once that is true.
+  const gate = useProfileGateOrRender('purchase orders', 'Dispatch');
   const [params] = useSearchParams();
   const query = new URLSearchParams({ page: '1', pageSize: '50', status: 'ACKNOWLEDGED' });
   if (params.get('status')) query.set('status', params.get('status')!);
@@ -18,6 +23,8 @@ export function VendorDispatchRoute(): React.JSX.Element {
     `${API.purchaseOrders}?${query.toString()}`,
     'Dispatch is unavailable',
   );
+
+  if (gate.locked) return gate.locked;
 
   if (error) {
     return (

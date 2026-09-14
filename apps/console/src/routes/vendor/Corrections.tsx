@@ -17,6 +17,7 @@ import {
 import type { Grade } from '@trugrade/contracts';
 import { Board, Datum, NotMeasured, Section, Select, Textarea } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
+import { useProfileGateOrRender } from './ProfileLockGate';
 import {
   API,
   VENDOR_RESPONSES,
@@ -213,6 +214,7 @@ const SHOWS = [
 ] as const;
 
 export function VendorCorrectionsRoute(): React.JSX.Element {
+  const gate = useProfileGateOrRender('grade corrections', 'Grade corrections');
   const [params, setParams] = useSearchParams();
   // Board state in the URL: a vendor must be able to send a colleague the
   // filtered board they are looking at, and the dashboard queue links straight
@@ -284,6 +286,8 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
     ],
     [],
   );
+
+  if (gate.locked) return gate.locked;
 
   if (error) {
     return (

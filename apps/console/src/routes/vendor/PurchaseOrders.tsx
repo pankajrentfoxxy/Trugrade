@@ -22,6 +22,7 @@ import {
   type PurchaseOrderDetail,
 } from './api';
 import { PoDetailDialog } from './orders/PoDetailDialog';
+import { useProfileGateOrRender } from './ProfileLockGate';
 
 /**
  * ARCHETYPE B — Board. KPI strip + filter rail + expandable table + row dialog.
@@ -48,6 +49,7 @@ function statusLabel(s: string): string {
 }
 
 export function VendorPurchaseOrdersRoute(): React.JSX.Element {
+  const gate = useProfileGateOrRender('purchase orders', 'Purchase orders');
   const [params, setParams] = useSearchParams();
   const status = params.get('status') ?? '';
   const from = params.get('from') ?? '';
@@ -79,6 +81,8 @@ export function VendorPurchaseOrdersRoute(): React.JSX.Element {
   function refresh(): void {
     setReloadKey((k) => k + 1);
   }
+
+  if (gate.locked) return gate.locked;
 
   if (error) {
     return (

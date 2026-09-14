@@ -1,0 +1,117 @@
+import * as React from 'react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { useProfileGateOrRender } from './ProfileLockGate';
+
+/**
+ * The one gate every board named on the rail as locked — Listings, Inspect,
+ * Grades, Orders, Payouts — asks for the same three answers before it shows
+ * anything. Tested once here, against a harness, rather than five times
+ * against five boards each carrying their own fetch mocks.
+ */
+
+function Harness({
+  section = 'listings',
+  title = 'Listings',
+}: {
+  section?: string;
+  title?: string;
+}): React.JSX.Element {
+  const gate = useProfileGateOrRender(section, title);
+  if (gate.locked) return gate.locked;
+  return <div data-testid="unlocked">The board itself.</div>;
+}
+
+function draw(initialEntries = ['/vendor/listings']): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <Routes>
+        <Route path="/vendor/listings" element={<Harness />} />
+        <Route path="/vendor/profile" element={<div data-testid="profile-route">Profile</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+function mockOnboarding(body: unknown, ok = true, status = 200): void {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok,
+    status,
+    json: async () => body,
+  } as Response);
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('a locked board', () => {
+  it('renders nothing definite while the profile status is still in flight', () => {
+    // Never resolves within the test — the point is what shows up before it does.
+    vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+    draw();
+    expect(screen.getByText('Listings')).toBeTruthy();
+    expect(screen.queryByTestId('unlocked')).toBeNull();
+    expect(screen.queryByText(/Finish your profile/)).toBeNull();
+  });
+
+  it('shows the lock card when the org is not VERIFIED, naming every required section', async () => {
+    mockOnboarding({
+      status: 'REGISTERED',
+      answers: { DOCUMENTS_BANK: { bankCommitted: false, documentsComplete: false } },
+      progress: { steps: [] },
+    });
+    draw();
+
+    expect(await screen.findByText('Finish your profile to unlock listings')).toBeTruthy();
+    expect(screen.getByText('We verify every supplier before machines go on sale.')).toBeTruthy();
+    for (const title of ['Business & GST', 'Pickup address', 'Bank account', 'Documents', 'Supplier agreement']) {
+      expect(screen.getByText(title)).toBeTruthy();
+    }
+    // Recommended and unweighted — "What you stock" is not one of the five
+    // that block listing, and does not belong in the checklist.
+    expect(screen.queryByText('What you stock')).toBeNull();
+    expect(screen.queryByTestId('unlocked')).toBeNull();
+  });
+
+  it('names the first INCOMPLETE section on the button, not simply the first one', async () => {
+    mockOnboarding({
+      status: 'REGISTERED',
+      // Business is done; Pickup is the next thing actually blocking.
+      progress: { steps: [{ stepCode: 'BUSINESS_PROFILE', status: 'COMPLETE' }, { stepCode: 'STATUTORY', status: 'COMPLETE' }] },
+      answers: { DOCUMENTS_BANK: {} },
+    });
+    draw();
+
+    const button = await screen.findByRole('button', { name: 'Continue — Pickup address' });
+    expect(button).toBeTruthy();
+  });
+
+  it('sends the vendor to Profile with the right section queued to open', async () => {
+    const user = userEvent.setup();
+    mockOnboarding({ status: 'REGISTERED', progress: { steps: [] }, answers: {} });
+    draw();
+
+    await user.click(await screen.findByRole('button', { name: /^Continue —/ }));
+    expect(await screen.findByTestId('profile-route')).toBeTruthy();
+  });
+
+  it('lets the board render once the org is VERIFIED', async () => {
+    mockOnboarding({ status: 'VERIFIED', progress: { steps: [] }, answers: {} });
+    draw();
+
+    expect(await screen.findByTestId('unlocked')).toBeTruthy();
+    expect(screen.queryByText(/Finish your profile/)).toBeNull();
+  });
+
+  it('does not lock the board just because the profile fetch itself failed', async () => {
+    // A 500 on /api/onboarding/steps is not proof the account is unverified —
+    // it is a second, unrelated failure, and the board still has its own
+    // error state for its own data. Refusing on top of that would be a
+    // failure the vendor cannot act on from this screen at all.
+    mockOnboarding({ error: 'boom' }, false, 500);
+    draw();
+
+    expect(await screen.findByTestId('unlocked')).toBeTruthy();
+  });
+});

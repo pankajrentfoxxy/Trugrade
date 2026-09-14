@@ -28,6 +28,7 @@ import {
 } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { useUrlState } from '../../lib/urlState';
+import { useProfileGateOrRender } from './ProfileLockGate';
 import {
   API,
   VISIT_STATUSES,
@@ -471,6 +472,7 @@ const BOARD_COLUMNS: ReadonlyArray<Column<VendorVisit>> = [
 ];
 
 export function VendorVisitsRoute(): React.JSX.Element {
+  const gate = useProfileGateOrRender('inspections', 'Visits');
   const navigate = useNavigate();
   const [status, setStatus] = useUrlState('status');
   const { data, error } = useResource<VendorVisit[]>(API.visits, 'Your inspections did not load');
@@ -484,6 +486,8 @@ export function VendorVisitsRoute(): React.JSX.Element {
     () => (data ?? []).filter((v) => !status || v.status === status),
     [data, status],
   );
+
+  if (gate.locked) return gate.locked;
 
   return (
     <div className="tg-stack">

@@ -16,6 +16,7 @@ import { useResource } from '../../lib/useResource';
 import { API, gradeLabel, rupees, type Page, type VendorListing } from './api';
 import { machineTitle } from './ListingMachine';
 import { CreateListingDialog } from './listings/CreateListingDialog';
+import { useProfileGateOrRender } from './ProfileLockGate';
 
 /** ARCHETYPE B — Board. */
 
@@ -37,6 +38,7 @@ const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = 
 const STATUSES = Object.keys(STATUS_TONE);
 
 export function VendorListingsRoute(): React.JSX.Element {
+  const gate = useProfileGateOrRender('listings', 'Listings');
   const [params, setParams] = useSearchParams();
   const [createOpen, setCreateOpen] = React.useState(false);
   const status = params.get('status') ?? '';
@@ -139,6 +141,8 @@ export function VendorListingsRoute(): React.JSX.Element {
     ],
     [],
   );
+
+  if (gate.locked) return gate.locked;
 
   if (error) {
     return <EmptyState title="Listings did not load" body={error} />;
