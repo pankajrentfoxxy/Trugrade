@@ -323,6 +323,20 @@ export const OTP_POLICY = Object.freeze({
   resendCooldownSeconds: 60,
   maxResendsPerHour: 5,
   maxResendsPerDay: 20,
+  /** Verify calls per target per hour, on top of the per-code attempt count. */
+  maxVerifiesPerHour: 20,
+  /**
+   * The second factor's own budget. Its buckets are keyed on the `MFA` purpose,
+   * which no unauthenticated route issues or verifies, so nobody who merely
+   * knows an owner's email can spend it. Tunable apart from the public sign-in
+   * code, which is the budget an attacker can reach.
+   */
+  mfa: Object.freeze({
+    maxVerifyAttempts: 5,
+    maxResendsPerHour: 5,
+    maxResendsPerDay: 20,
+    maxVerifiesPerHour: 20,
+  }),
   expiredMessage: "That code has expired. Tap 'Resend' for a new one.",
   burnedMessage: 'Too many incorrect attempts. Request a new code.',
   usedMessage: 'That code has already been used.',
@@ -340,8 +354,27 @@ export const OTP_PURPOSES = Object.freeze([
   'QC_VISIT_SIGNOFF',
   'DELIVERY',
   'PASSWORD_RESET',
+  /**
+   * The second factor after a password. Never `LOGIN`: the public sign-in-code
+   * routes issue and verify LOGIN for any typed address, and sharing the purpose
+   * let an unauthenticated caller supersede an owner's live second-factor code
+   * and exhaust its resend and verify budgets.
+   */
+  'MFA',
 ] as const);
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
+
+export interface OtpBudget {
+  maxVerifyAttempts: number;
+  maxResendsPerHour: number;
+  maxResendsPerDay: number;
+  maxVerifiesPerHour: number;
+}
+
+/** The resend and attempt budget a purpose is held to. */
+export function otpBudgetFor(purpose: OtpPurpose): OtpBudget {
+  return purpose === 'MFA' ? OTP_POLICY.mfa : OTP_POLICY;
+}
 
 export const TOTP_POLICY = Object.freeze({
   id: 'VR-056',

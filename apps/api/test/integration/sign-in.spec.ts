@@ -185,17 +185,22 @@ describe('a pre-session code route must not be able to say whether an address ha
     ['password/forgot', (email: string) => controller.sendPasswordResetCode({ email })],
   ] as const;
 
-  it.each(senders)('%s answers identically for a known and an unknown address', async (_n, send) => {
-    const known = await inRequest(() => send(KNOWN));
-    const unknown = await inRequest(() => send(UNKNOWN));
+  it.each(senders)(
+    '%s answers identically for a known and an unknown address',
+    async (_n, send) => {
+      const known = await inRequest(() => send(KNOWN));
+      const unknown = await inRequest(() => send(UNKNOWN));
 
-    // `sentTo` is a mask of what was typed, so it differs only where the input
-    // did. Everything derived from anything else must be identical.
-    expect(Object.keys(observable(unknown)).sort()).toEqual(Object.keys(observable(known)).sort());
-    expect(unknown.channel).toBe(known.channel);
-    expect(unknown.expiresAt).toBe(known.expiresAt);
-    expect(unknown.resendAvailableAt).toBe(known.resendAvailableAt);
-  });
+      // `sentTo` is a mask of what was typed, so it differs only where the input
+      // did. Everything derived from anything else must be identical.
+      expect(Object.keys(observable(unknown)).sort()).toEqual(
+        Object.keys(observable(known)).sort(),
+      );
+      expect(unknown.channel).toBe(known.channel);
+      expect(unknown.expiresAt).toBe(known.expiresAt);
+      expect(unknown.resendAvailableAt).toBe(known.resendAvailableAt);
+    },
+  );
 
   it.each(senders)('%s refuses a second call the same way for both', async (_n, send) => {
     // The whole point of `deliver: false`: an unknown address consumes the same
@@ -232,7 +237,11 @@ describe('a pre-session code route must not be able to say whether an address ha
     );
     const onUnknown = await thrown(() =>
       inRequest(() =>
-        controller.verifyLoginCode({ email: UNKNOWN, code: '000000' }, fakeRequest(), fakeResponse()),
+        controller.verifyLoginCode(
+          { email: UNKNOWN, code: '000000' },
+          fakeRequest(),
+          fakeResponse(),
+        ),
       ),
     );
 
@@ -243,9 +252,7 @@ describe('a pre-session code route must not be able to say whether an address ha
     // controller flattens both. This is the assertion that catches somebody
     // helpfully restoring the attempt counter.
     expect(onUnknown.message).toBe(onKnown.message);
-    expect((onKnown as ValidationError).fields).toEqual(
-      (onUnknown as ValidationError).fields,
-    );
+    expect((onKnown as ValidationError).fields).toEqual((onUnknown as ValidationError).fields);
   });
 });
 
@@ -273,7 +280,9 @@ describe('signing in with a code is the same sign-in, not a shortcut around it',
       UPDATE identity.organization SET status = 'SUSPENDED' WHERE id = ${orgId}::uuid`;
 
     const refusal = await thrown(() =>
-      inRequest(() => controller.verifyLoginCode({ email: KNOWN, code }, fakeRequest(), fakeResponse())),
+      inRequest(() =>
+        controller.verifyLoginCode({ email: KNOWN, code }, fakeRequest(), fakeResponse()),
+      ),
     );
     expect(refusal).toBeInstanceOf(ForbiddenError);
     expect(refusal.message).toContain('suspended');
@@ -281,7 +290,9 @@ describe('signing in with a code is the same sign-in, not a shortcut around it',
     // And the password path says the identical thing, because it is the identical
     // code. Two copies of "is this organisation suspended" is one copy too many.
     const byPassword = await thrown(() =>
-      inRequest(() => controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse())),
+      inRequest(() =>
+        controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse()),
+      ),
     );
     expect(byPassword.message).toBe(refusal.message);
   });
@@ -320,7 +331,13 @@ describe('a reset ends every session that was open at the time', () => {
     // that sent them here.
     for (let i = 0; i < 5; i += 1) {
       await thrown(() =>
-        inRequest(() => controller.login({ email: KNOWN, password: `Wrong-${i}!` }, fakeRequest(), fakeResponse())),
+        inRequest(() =>
+          controller.login(
+            { email: KNOWN, password: `Wrong-${i}!` },
+            fakeRequest(),
+            fakeResponse(),
+          ),
+        ),
       );
     }
 
@@ -332,7 +349,9 @@ describe('a reset ends every session that was open at the time', () => {
 
     // The old password no longer opens anything…
     const stale = await thrown(() =>
-      inRequest(() => controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse())),
+      inRequest(() =>
+        controller.login({ email: KNOWN, password: PASSWORD }, fakeRequest(), fakeResponse()),
+      ),
     );
     expect(stale.message).toBe('That email or password is not right.');
 
@@ -439,5 +458,62 @@ describe('the wait a client renders is the wait the server measured', () => {
     const detail = (refusal as unknown as { detail?: { retryAfterSeconds?: number } }).detail;
     expect(detail?.retryAfterSeconds).toBeGreaterThan(0);
     expect(refusal.message).toMatch(/Try again in \d+ minute/);
+  });
+});
+
+describe('the public sign-in-code routes cannot reach a live second-factor code', () => {
+  /** The owner's half-signed-in session: the principal `mfa/otp` reads. */
+  const asOwner = <T>(fn: () => Promise<T>): Promise<T> =>
+    ctx.run(
+      {
+        requestId: 'owner',
+        ip: '203.0.113.10',
+        userAgent: 'jest',
+        principal: {
+          userId,
+          orgId,
+          orgType: 'VENDOR',
+          roles: ['VENDOR_OWNER'],
+          permissions: new Set(),
+          sessionId: '00000000-0000-4000-8000-000000000001',
+          mfaSatisfied: false,
+        },
+      },
+      fn,
+    );
+
+  beforeEach(async () => {
+    await identity.assignRole(userId, 'VENDOR_OWNER');
+  });
+
+  it('a sign-in code issued for the owner’s email does not supersede their MFA code', async () => {
+    const mfa = await asOwner(() => controller.requestMfaCode());
+    if (!mfa.devCode) throw new Error('no devCode — is OTP_DEV_CODE_IN_RESPONSE on?');
+
+    // The attacker: no session, only the address.
+    await inRequest(() => controller.sendLoginCode({ email: KNOWN }), '198.51.100.66');
+
+    await expect(
+      moduleRef.get(OtpService).verify({ target: KNOWN, purpose: 'MFA', code: mfa.devCode }),
+    ).resolves.toMatchObject({ refId: userId });
+  });
+
+  it('exhausting the public verify budget for that email leaves the MFA verify budget untouched', async () => {
+    const mfa = await asOwner(() => controller.requestMfaCode());
+    if (!mfa.devCode) throw new Error('no devCode — is OTP_DEV_CODE_IN_RESPONSE on?');
+
+    for (let i = 0; i < 25; i += 1) {
+      await inRequest(
+        () =>
+          controller
+            .verifyLoginCode({ email: KNOWN, code: '000000' }, fakeRequest(), fakeResponse())
+            .catch(() => undefined),
+        `198.51.100.${i + 1}`,
+      );
+    }
+
+    await expect(
+      moduleRef.get(OtpService).verify({ target: KNOWN, purpose: 'MFA', code: mfa.devCode }),
+    ).resolves.toMatchObject({ refId: userId });
   });
 });

@@ -821,7 +821,7 @@ export class IdentityController {
 
     const issued = await this.otp.issue({
       target,
-      purpose: 'LOGIN',
+      purpose: 'MFA',
       channel: user.email ? 'EMAIL' : 'WHATSAPP',
       templateCode: LOGIN_OTP_TEMPLATE,
       refType: 'user_account',
@@ -862,7 +862,7 @@ export class IdentityController {
     if (!presented) throw new UnauthenticatedError();
 
     const user = await this.identity.getUser(principal.userId);
-    await this.otp.verify({ target: mfaTarget(user), purpose: 'LOGIN', code: body.code });
+    await this.otp.verify({ target: mfaTarget(user), purpose: 'MFA', code: body.code });
     await this.tokens.markMfaSatisfied(principal.sessionId);
 
     const tokens = await this.identity.refresh(presented);

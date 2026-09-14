@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomInt } from 'node:crypto';
-import { OTP_POLICY, type OtpPurpose } from '@trugrade/contracts';
+import { OTP_POLICY, otpBudgetFor, type OtpPurpose } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { RateLimiter } from '../../../shared/redis/redis.service';
@@ -88,6 +88,7 @@ export class OtpService {
     deliver?: boolean;
   }): Promise<IssueOtpResult> {
     const { target, purpose } = input;
+    const budget = otpBudgetFor(purpose);
 
     // VR-053: 60 s between resends, 5 per hour, 20 per day. Three windows,
     // because each catches a different shape of abuse — impatience, a script,
@@ -101,11 +102,11 @@ export class OtpService {
       target,
     );
     await this.limiter.consume(
-      { name: `otp-hour:${purpose}`, limit: OTP_POLICY.maxResendsPerHour, windowSeconds: 3600 },
+      { name: `otp-hour:${purpose}`, limit: budget.maxResendsPerHour, windowSeconds: 3600 },
       target,
     );
     await this.limiter.consume(
-      { name: `otp-day:${purpose}`, limit: OTP_POLICY.maxResendsPerDay, windowSeconds: 86_400 },
+      { name: `otp-day:${purpose}`, limit: budget.maxResendsPerDay, windowSeconds: 86_400 },
       target,
     );
 
@@ -173,11 +174,12 @@ export class OtpService {
     code: string;
   }): Promise<{ otpId: string; refType: string | null; refId: string | null }> {
     const now = this.clock.now();
+    const budget = otpBudgetFor(input.purpose);
 
     // A wrong-guess budget per target, on top of the per-code attempt count.
     // Without it, an attacker just requests a new code every five guesses.
     await this.limiter.consume(
-      { name: `otp-verify:${input.purpose}`, limit: 20, windowSeconds: 3600 },
+      { name: `otp-verify:${input.purpose}`, limit: budget.maxVerifiesPerHour, windowSeconds: 3600 },
       input.target,
     );
 
@@ -196,7 +198,7 @@ export class OtpService {
 
     if (row.code_hash !== this.hash(input.code, input.target)) {
       const attempts = row.attempts + 1;
-      const burned = attempts >= OTP_POLICY.maxVerifyAttempts;
+      const burned = attempts >= budget.maxVerifyAttempts;
       await this.prisma.db.otp_request.update({
         where: { id: row.id },
         data: { attempts, burned_at: burned ? now : null },
@@ -205,7 +207,7 @@ export class OtpService {
       if (burned) {
         throw new ValidationError(OTP_POLICY.burnedMessage, { code: OTP_POLICY.burnedMessage });
       }
-      const left = OTP_POLICY.maxVerifyAttempts - attempts;
+      const left = budget.maxVerifyAttempts - attempts;
       throw new ValidationError(
         `That code is not right. ${left} attempt${left === 1 ? '' : 's'} left before you need a new one.`,
         { code: 'That code is not right.' },
