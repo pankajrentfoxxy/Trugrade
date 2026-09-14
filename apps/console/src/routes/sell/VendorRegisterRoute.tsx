@@ -9,9 +9,12 @@ import { SupplierSignup } from './SupplierSignup';
 export function VendorRegisterRoute(): React.JSX.Element {
   const { syncSession } = useAuth();
 
-  const handleSessionEstablished = React.useCallback((): void => {
-    void syncSession();
-  }, [syncSession]);
+  // Returned, not fired-and-forgotten: `SupplierSignup` awaits this before it
+  // navigates to `/vendor`, so the route guard sees the current session
+  // instead of racing a `setPrincipal` that has not landed yet.
+  const handleSessionEstablished = React.useCallback((): Promise<void> => syncSession(), [
+    syncSession,
+  ]);
 
   return <SupplierSignup onSessionEstablished={handleSessionEstablished} />;
 }

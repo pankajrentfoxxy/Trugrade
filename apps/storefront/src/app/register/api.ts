@@ -174,10 +174,15 @@ export interface SessionView {
    * it lands. True for `MFA_REQUIRED_ROLES` — VENDOR_OWNER among them — so a
    * supplier meets this the moment their account is created.
    *
-   * **Trustworthy on the registration response, not on `GET /auth/session`**:
-   * that route reports `false` whenever a principal resolves, and it resolves
-   * for a session whose token says `mfa: false`. Reported. On a resumed session
-   * the 403 from the first onboarding call is what tells us instead.
+   * Trustworthy on `GET /auth/session` too, not only on the registration
+   * response: that route reads it off `principal.mfaSatisfied`, which is the
+   * current session cookie's own `mfa` claim — `identity.controller.ts`'s
+   * `session()` used to hardcode `false` here, which is precisely how a vendor
+   * could register, be told they were signed in, and have the very next call
+   * refused. Fixed there; a caller that re-fetches the session after
+   * `verifyMfa` — see `syncSession` in the console's `AuthContext` — gets a
+   * `false` back the moment the second factor lands, with no need to infer it
+   * from a 403.
    */
   mfaRequired: boolean;
   /** The signed-in user's own details — survives after the ACCOUNT draft is cleared. */

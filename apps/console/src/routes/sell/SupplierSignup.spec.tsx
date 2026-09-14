@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { SupplierSignup } from './SupplierSignup';
@@ -70,5 +70,185 @@ describe('SupplierSignup', () => {
     await user.click(screen.getByRole('button', { name: 'Send OTP' }));
     await waitFor(() => expect(screen.getByText('Verify your mobile')).toBeInTheDocument());
     expect(screen.getByLabelText('Six-digit code')).toBeInTheDocument();
+  });
+});
+
+/**
+ * `OtpInput`'s label is `aria-labelledby` on the `role="group"` wrapper, not on
+ * any one of its six boxes, so `getByLabelText` resolves to the group — not a
+ * form element `userEvent.type` can type into. A real browser fills every box
+ * this way too: autofill and paste both land the whole code on one input and
+ * `OtpInput` redistributes it, which is the `typed.length > 1` branch this
+ * exercises.
+ */
+function fillOtp(code: string): void {
+  const first = document.querySelector('[data-testid="otp-input"] input');
+  if (!first) throw new Error('No OTP input on screen.');
+  fireEvent.change(first, { target: { value: code } });
+}
+
+/**
+ * The full path for the role every self-registered supplier gets —
+ * VENDOR_OWNER, which `MFA_REQUIRED_ROLES` covers — asserted by attempting the
+ * bug that shipped here: a vendor completed the second factor correctly and
+ * was bounced straight back to a screen demanding another one.
+ *
+ * `onSessionEstablished` stands in for `VendorRegisterRoute`'s real
+ * `syncSession()` — the console's `AuthContext` is what `RequirePermission`
+ * reads on `/vendor`, and nothing else in this component ever calls back into
+ * it. If `completeOnboarding` stopped awaiting that call, or called it before
+ * the second factor actually cleared, this is the test that would still pass
+ * on the broken build: `navigate` fires, but a moment too early or with the
+ * pre-MFA session, and it is only the guard on `/vendor` — not this
+ * component — that would have caught it.
+ */
+describe('the second factor, landing on /vendor', () => {
+  const calls: string[] = [];
+
+  function mfaFetch(url: string, init?: RequestInit): Promise<Response> {
+    const method = init?.method ?? 'GET';
+    calls.push(`${method} ${url}`);
+    if (url === '/api/auth/register/otp' && method === 'POST') {
+      const body = JSON.parse(String(init?.body)) as { channel: string };
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            channel: body.channel,
+            sentTo: body.channel === 'MOBILE' ? '+91 98xxx xx210' : 'te***@acme.in',
+            expiresAt: new Date(Date.now() + 300_000).toISOString(),
+            resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
+            devCode: '111111',
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+    if (url === '/api/auth/register/otp/verify' && method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            channel: 'MOBILE',
+            value: '+919876543210',
+            verified: true,
+            proofExpiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+    if (url === '/api/auth/register' && method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            userId: 'u1',
+            orgId: 'o1',
+            orgType: 'VENDOR',
+            roles: ['VENDOR_OWNER'],
+            permissions: ['listing.own.read'],
+            mfaRequired: true,
+            accessToken: 'pre-mfa-token',
+            fullName: 'Test Vendor',
+            email: 'test@acme.in',
+            mobile: '+919876543210',
+          }),
+          { status: 201 },
+        ),
+      );
+    }
+    if (url === '/api/auth/mfa/otp' && method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            sentTo: 'te***@acme.in',
+            expiresAt: new Date(Date.now() + 300_000).toISOString(),
+            resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
+            devCode: '222222',
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+    if (url === '/api/auth/mfa/verify' && method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            userId: 'u1',
+            orgId: 'o1',
+            orgType: 'VENDOR',
+            roles: ['VENDOR_OWNER'],
+            permissions: ['listing.own.read'],
+            mfaRequired: false,
+            accessToken: 'post-mfa-token',
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+    if (url === '/api/onboarding/start' && method === 'POST') {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify({ error: { message: 'Unexpected' } }), { status: 500 }),
+    );
+  }
+
+  beforeEach(() => {
+    calls.length = 0;
+    vi.stubGlobal('fetch', vi.fn(mfaFetch));
+  });
+
+  it('does not navigate to /vendor until the awaited session sync resolves', async () => {
+    const order: string[] = [];
+    let releaseSync: () => void = () => {};
+    const sessionSynced = new Promise<void>((resolve) => {
+      releaseSync = () => {
+        order.push('session-synced');
+        resolve();
+      };
+    });
+    const onSessionEstablished = vi.fn(() => sessionSynced);
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SupplierSignup onSessionEstablished={onSessionEstablished} />
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText(/Mobile number/i), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await screen.findByLabelText('Six-digit code');
+    fillOtp('111111');
+
+    await screen.findByText('Your work email');
+    await user.type(screen.getByLabelText(/Email address/i), 'test@acme.in');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await screen.findByLabelText(/Code sent to/);
+    fillOtp('111111');
+
+    await screen.findByText('Set a password');
+    await user.type(screen.getByLabelText(/^Your name/), 'Test Vendor');
+    await user.type(screen.getByLabelText(/^Password/), 'Qzv7$mKplWxR2b');
+    await user.type(screen.getByLabelText(/^Confirm password/), 'Qzv7$mKplWxR2b');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+    // The second factor, on the account the moment it exists — not something
+    // this test is trying to route around.
+    await screen.findByText(/needs a second code/);
+    fillOtp('222222');
+
+    // `onSessionEstablished` has been called, but its promise is still
+    // pending — `navigate` must not have fired yet.
+    await waitFor(() => expect(onSessionEstablished).toHaveBeenCalled());
+    expect(navigate).not.toHaveBeenCalled();
+    expect(calls).not.toContain('POST /api/onboarding/start');
+
+    releaseSync();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/vendor', { replace: true }));
+
+    // The order that matters: the session was synced, THEN onboarding was
+    // started, THEN the route changed — never the reverse.
+    expect(order).toEqual(['session-synced']);
+    expect(calls.indexOf('POST /api/onboarding/start')).toBeGreaterThan(-1);
   });
 });

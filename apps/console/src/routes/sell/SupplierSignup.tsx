@@ -53,7 +53,13 @@ function SignupSurfaceSync(): null {
 }
 
 export interface SupplierSignupProps {
-  onSessionEstablished?: () => void;
+  /**
+   * Awaited before this screen navigates anywhere. Called once right after
+   * `register()` succeeds and, separately, once the second factor clears — see
+   * the note on `completeOnboarding` for why the second call has to happen and
+   * has to be awaited, not fired and forgotten.
+   */
+  onSessionEstablished?: () => Promise<void> | void;
 }
 
 export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): React.JSX.Element {
@@ -224,7 +230,6 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
       setError(hasField ? undefined : result.message);
       return;
     }
-    onSessionEstablished?.();
     if (result.data.mfaRequired) {
       setBusy(true);
       const sent = await requestMfaCode();
@@ -239,8 +244,26 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     await completeOnboarding();
   };
 
+  /**
+   * Reached twice: directly from `finishSignup` when the fresh account needs
+   * no second factor, and from `MfaGate.onVerified` once it clears one. Either
+   * way the browser is about to land on `/vendor`, which `RequirePermission`
+   * guards on `useAuth().principal` — and that principal lives in React
+   * context, not in the cookies `register`, `verifyMfa` and `startOnboarding`
+   * read and write directly.
+   *
+   * Nothing else on this screen ever calls back into the console's
+   * `AuthContext`, so skipping this await left context holding the PRE-MFA
+   * principal (`mfaRequired: true`) at the moment `/vendor` first rendered —
+   * `RequirePermission` saw that flag and bounced the brand-new account to
+   * `/login`, which read the same stale flag off its own session check and
+   * asked for a second, redundant code. `onSessionEstablished` is `syncSession`
+   * (see `VendorRegisterRoute`), and awaiting it here is what makes the
+   * principal current before the guard ever looks at it.
+   */
   const completeOnboarding = async (): Promise<void> => {
     setBusy(true);
+    await onSessionEstablished?.();
     const started = await startOnboarding();
     setBusy(false);
     if (!started.ok) {
