@@ -459,6 +459,24 @@ export class VerificationService {
   // Bank
   // -------------------------------------------------------------------------
 
+  /** Branch lookup only — no attempt recorded, no penny spent. */
+  async lookupIfsc(ifsc: string): Promise<{ bank: string; branch: string; city: string }> {
+    const code = ifsc.trim().toUpperCase();
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(code)) {
+      throw new ValidationError('Enter a valid IFSC — four letters, a zero, then six characters.', {
+        ifsc: 'Enter a valid IFSC — four letters, a zero, then six characters.',
+      });
+    }
+    const result = await this.bank.lookupIfsc(code);
+    if (result.outcome !== 'PASS' || !result.data) {
+      throw new ValidationError(
+        result.reason ?? 'We could not find that IFSC. Check it against your cheque or passbook.',
+        { ifsc: result.reason ?? 'We could not find that IFSC.' },
+      );
+    }
+    return result.data;
+  }
+
   async pennyDrop(
     accountNumber: string,
     ifsc: string,

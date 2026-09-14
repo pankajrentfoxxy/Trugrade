@@ -17,6 +17,21 @@
 | 8 | Team & access | PARTIAL | f15a886 | — | Members from `GET /api/account/team`. Invite send not wired (no invite API). |
 | 9 | Close-out | TODO | — | — | Screenshots, word-count pass, `SUPPLIER_HUB_REVIEW.md`, CI green. |
 
+## Progressive supplier profile (plan §4)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `SectionDialog` modal engine | DONE | `packages/ui` — 620px, segment strip, focus trap, escape/scrim close. |
+| `/vendor/profile` card hub | DONE | `ProfileHub.tsx` — six sections, auto-advance ~700ms after save. |
+| Business & GST dialog | DONE | Constitution tiles + GSTIN verify; state/PAN derived. |
+| Pickup address dialog | DONE | Pincode-first lookup; city/state read-only. |
+| Bank account dialog | DONE | IFSC lookup + penny-drop; `GET /api/onboarding/ifsc/:ifsc`. |
+| Documents dialog | DONE | Three uploads via `Uploader`; **ObjectStorePort remains fixture-backed** — uploads lost on container restart; do not ship to production without real object storage. |
+| Supplier agreement dialog | DONE | Recorded acceptance (name, version, timestamp) — no e-sign provider. |
+| What you stock dialog | DONE | Optional; badged Recommended; excluded from %. |
+| BankVerificationPort | FIXTURE | Penny-drop uses fake adapter — ledger records must not reach production as-is. |
+| Screenshots `4-vendor-profile-*` | TODO | 1900 / 1440 / 600 px. |
+
 ## One-minute supplier signup (plan §3)
 
 | Item | Status | Notes |

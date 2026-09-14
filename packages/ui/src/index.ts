@@ -60,6 +60,8 @@ export {
   type ToastTone,
 } from './components/overlays';
 
+export { SectionDialog, type SectionDialogProps } from './components/section-dialog';
+
 export {
   Chip,
   type ChipProps,

@@ -489,6 +489,13 @@ export interface BankAccountHolder {
  * same rule about the last two: a bank that did not answer is our problem, costs
  * them no attempt, and is never coloured as a refusal.
  */
+export const lookupIfsc = (
+  ifsc: string,
+): Promise<ApiResult<{ bank: string; branch: string; city: string }>> =>
+  get<{ bank: string; branch: string; city: string }>(
+    `/api/onboarding/ifsc/${encodeURIComponent(ifsc.trim().toUpperCase())}`,
+  );
+
 export const pennyDrop = (input: {
   accountNumber: string;
   ifsc: string;

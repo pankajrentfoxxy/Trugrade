@@ -15,17 +15,7 @@ import {
 import type { ResumableOnboarding } from '../../../../storefront/src/app/register/api';
 import { useResource } from '../../lib/useResource';
 import { API, NO_DATE, onDate, rupees, type DashboardTiles, type VendorQueue } from './api';
-
-function profileCompletionPct(onboarding: ResumableOnboarding | undefined): number {
-  if (!onboarding?.progress?.steps) return 0;
-  const required = onboarding.progress.steps.filter((s) => s.isRequired);
-  if (required.length === 0) return 0;
-  const sum = required.reduce(
-    (acc, s) => acc + (s.status === 'COMPLETE' ? 100 : s.completionPct),
-    0,
-  );
-  return Math.round(sum / required.length);
-}
+import { profileCompletionPct } from './profile/sections.config';
 
 /**
  * ARCHETYPE E — Workspace.

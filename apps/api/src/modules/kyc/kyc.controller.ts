@@ -645,6 +645,13 @@ export class OnboardingController {
     );
   }
 
+  @Get('ifsc/:ifsc')
+  lookupIfsc(
+    @Param('ifsc', new ZodValidationPipe(ifscSchema)) ifsc: string,
+  ): Promise<{ bank: string; branch: string; city: string }> {
+    return this.kyc.lookupIfsc(ifsc);
+  }
+
   @Post('verify/bank')
   @HttpCode(200)
   pennyDrop(

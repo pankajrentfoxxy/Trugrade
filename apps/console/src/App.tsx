@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ToastProvider } from '@trugrade/ui';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, RequirePermission, useAuth } from './lib/auth';
 import { ConsoleThemeSync } from './lib/console-theme';
@@ -56,9 +57,10 @@ function Landing(): React.JSX.Element {
 export function App(): React.JSX.Element {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <ConsoleThemeSync />
-        <Routes>
+      <ToastProvider>
+        <BrowserRouter>
+          <ConsoleThemeSync />
+          <Routes>
           {/*
             The one route that is deliberately NOT in the shell: signing in is
             archetype F — one task, centred, no navigation. Chrome offering
@@ -261,8 +263,9 @@ export function App(): React.JSX.Element {
 
           <Route path="/" element={<Landing />} />
           <Route path="*" element={<Landing />} />
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }

@@ -651,6 +651,10 @@ export class KycService implements IKycService {
     return this.verification.pennyDrop(accountNumber, ifsc, expectedName, subject, triggeredBy);
   }
 
+  lookupIfsc(ifsc: string): Promise<{ bank: string; branch: string; city: string }> {
+    return this.verification.lookupIfsc(ifsc);
+  }
+
   verificationHistory(subject: {
     orgId?: string | null;
     leadId?: string | null;
