@@ -46,6 +46,8 @@ import {
 const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = {
   RAISED: 'warn',
   ACKNOWLEDGED: 'processing',
+  PARTIAL: 'warn',
+  REJECTED: 'neutral',
   DISPATCH_READY: 'processing',
   DISPATCHED: 'processing',
   RECEIVED: 'processing',
@@ -57,7 +59,7 @@ const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = 
   DISPUTED: 'warn',
 };
 
-const ATTACHABLE = new Set(['ACKNOWLEDGED']);
+const ATTACHABLE = new Set(['ACKNOWLEDGED', 'PARTIAL']);
 
 function AttachModal({
   poId,

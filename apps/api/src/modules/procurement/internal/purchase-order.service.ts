@@ -3,6 +3,8 @@ import { Money, moneyFromDb } from '@trugrade/contracts';
 import { CatalogService } from '../../catalog';
 import { QcService } from '../../qc';
 import { ClockPort } from '../../../shared/clock';
+import { RequestContextService } from '../../../shared/db/org-scope';
+import { EventBus } from '../../../shared/events/event-bus';
 import {
   ConflictError,
   NotFoundError,
@@ -11,8 +13,10 @@ import {
 } from '../../../shared/errors/domain-errors';
 import {
   PurchaseOrderRepository,
+  type LineRespondInput,
   type PoFilter,
   type PoHeaderRow,
+  type PoKpiSummary,
   type PoLineRow,
 } from './purchase-order.repository';
 
@@ -37,6 +41,7 @@ import {
 
 /** What the vendor is owed for one machine, and what we can prove about it. */
 export interface VendorPoLineView {
+  lineId: string;
   /**
    * The vendor's own `listing.unit` id — a stable row key for a line whose
    * serial may be null. Theirs to see: it is already on their units board, and
@@ -52,6 +57,8 @@ export interface VendorPoLineView {
   specSummary: string | null;
   /** `purchase_order_line.grade_at_po` — the grade this line was priced at. */
   gradeAtPo: string;
+  lineStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  rejectionReason: string | null;
   agreedNetPayout: Money;
   /**
    * The numbered seal on the machine, from `qc`'s own allow-list.
@@ -118,8 +125,41 @@ export interface VendorPoView {
   cancelledAt: Date | null;
   rejectedAt: Date | null;
   rejectionReason: string | null;
+  consignmentCarrier: string | null;
+  consignmentAwb: string | null;
+  dispatchedAt: Date | null;
+  /** Sum of every line before any rejection — for strike-through on the board. */
+  originalTotalNet: Money;
+  /** Accepted-line total after response; equals totalNet once responded. */
+  owedNet: Money;
+  modelCount: number;
+  modelNames: string[];
   /** Null when the order or its address is gone. Never an empty string. */
   deliverTo: DeliveryCityView | null;
+}
+
+/** One grouped line on the PO — SKU + grade with quantity. */
+export interface VendorPoLineGroupView {
+  lineIds: string[];
+  skuId: string;
+  skuCode: string | null;
+  title: string | null;
+  specSummary: string | null;
+  gradeAtPo: string;
+  qty: number;
+  unitPrice: Money;
+  lineTotal: Money;
+  lineStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'MIXED';
+  rejectionReason: string | null;
+  attachedCount: number;
+  serials: Array<{ unitId: string; serialNumber: string | null }>;
+}
+
+export interface VendorPoTotalsView {
+  orderTotal: Money;
+  rejectedTotal: Money;
+  tdsAmount: Money;
+  owedIfAccepted: Money;
 }
 
 /** One SKU + grade the vendor must fulfil. Serials are attached later. */
@@ -137,6 +177,8 @@ export interface VendorPoDemandView {
 
 export interface VendorPoDetail extends VendorPoView {
   demands: VendorPoDemandView[];
+  lineGroups: VendorPoLineGroupView[];
+  totals: VendorPoTotalsView;
 }
 
 /** A machine the vendor may attach to a vacant slot. */
@@ -161,6 +203,24 @@ export interface PickListAddress {
   state: string;
   pincode: string;
   landmark: string | null;
+}
+
+/** One machine on the pick list, grouped under a model header. */
+export interface PickListMachine {
+  unitId: string;
+  serialNumber: string | null;
+  sealCode: string | null;
+  sealStatus: string | null;
+}
+
+/** Model header with its machines — printable as-is. */
+export interface PickListModelGroup {
+  title: string | null;
+  skuCode: string | null;
+  gradeAtPo: string;
+  attachedCount: number;
+  requiredCount: number;
+  machines: PickListMachine[];
 }
 
 /** One row a warehouse reads off a screen with a laptop in the other hand. */
@@ -190,6 +250,7 @@ export interface VendorPickList {
   units: number;
   shipTo: PickListAddress | null;
   lines: PickListLine[];
+  modelGroups: PickListModelGroup[];
 }
 
 @Injectable()
@@ -199,7 +260,13 @@ export class PurchaseOrderService {
     private readonly catalog: CatalogService,
     private readonly qc: QcService,
     private readonly clock: ClockPort,
+    private readonly ctx: RequestContextService,
+    private readonly events: EventBus,
   ) {}
+
+  kpiSummary(): Promise<PoKpiSummary> {
+    return this.repo.kpiSummary();
+  }
 
   async list(
     filter: PoFilter,
@@ -207,8 +274,22 @@ export class PurchaseOrderService {
   ): Promise<{ rows: VendorPoView[]; total: number; page: number; pageSize: number }> {
     const { rows, total } = await this.repo.list(filter, page);
     const cities = await this.deliveryCities(rows);
+    const enriched = await Promise.all(
+      rows.map(async (r) => {
+        const base = this.header(r, cities.get(r.order_id) ?? null);
+        const originalTotalNet = moneyFromDb(r.original_total_net) ?? base.totalNet;
+        const lineViews = await this.lines(r.id);
+        return {
+          ...base,
+          originalTotalNet,
+          owedNet: base.totalNet,
+          modelCount: Number(r.model_count),
+          modelNames: [...new Set(lineViews.map((l) => l.title).filter(Boolean))] as string[],
+        };
+      }),
+    );
     return {
-      rows: rows.map((r) => this.header(r, cities.get(r.order_id) ?? null)),
+      rows: enriched,
       total,
       page: page.page,
       pageSize: page.pageSize,
@@ -221,13 +302,29 @@ export class PurchaseOrderService {
 
   async detail(poId: string): Promise<VendorPoDetail> {
     const po = await this.mine(poId);
-    const [lines, shipTo] = await Promise.all([
+    const [lineViews, shipTo] = await Promise.all([
       this.lines(poId),
       this.repo.shipToForOrder(po.order_id),
     ]);
+    const lineGroups = this.asLineGroups(lineViews);
+    const totals = this.computeTotals(
+      lineViews,
+      Number(po.tds_rate_pct),
+      moneyFromDb(po.tds_amount) ?? Money.ZERO,
+      po.status,
+    );
+    const header = await this.headerWithModels(
+      po,
+      shipTo && { city: shipTo.city, state: shipTo.state },
+      lineViews,
+      totals,
+    );
     return {
-      ...this.header(po, shipTo && { city: shipTo.city, state: shipTo.state }),
-      demands: this.asDemands(lines),
+      ...header,
+      tdsAmount: totals.tdsAmount,
+      demands: this.asDemands(lineViews),
+      lineGroups,
+      totals,
     };
   }
 
@@ -253,14 +350,15 @@ export class PurchaseOrderService {
       lines: lines
         .filter((l): l is VendorPoLineView & { unitId: string } => !!l.unitId)
         .map((l) => ({
-        unitId: l.unitId,
-        serialNumber: l.serialNumber,
-        sealCode: l.seal?.code ?? null,
-        sealStatus: l.seal?.status ?? null,
-        title: l.title,
-        skuCode: l.skuCode,
-        gradeAtPo: l.gradeAtPo,
-      })),
+          unitId: l.unitId,
+          serialNumber: l.serialNumber,
+          sealCode: l.seal?.code ?? null,
+          sealStatus: l.seal?.status ?? null,
+          title: l.title,
+          skuCode: l.skuCode,
+          gradeAtPo: l.gradeAtPo,
+        })),
+      modelGroups: this.pickListGroups(lines),
     };
   }
 
@@ -271,13 +369,67 @@ export class PurchaseOrderService {
    * PO the vendor has already accepted is indistinguishable from a broken button.
    */
   async acknowledge(poId: string): Promise<VendorPoDetail> {
+    const rows = await this.repo.linesOf(poId);
+    return this.respond(
+      poId,
+      rows.map((l) => ({ lineId: l.id, accept: true })),
+    );
+  }
+
+  async respond(
+    poId: string,
+    input: Array<{ lineId: string; accept: boolean; reason?: string }>,
+  ): Promise<VendorPoDetail> {
     const po = await this.mine(poId);
-    if (!(await this.repo.acknowledge(poId, this.clock.now()))) {
+    const actor = this.ctx.requirePrincipal();
+    const payload: LineRespondInput[] = input.map((l) => ({
+      lineId: l.lineId,
+      accept: l.accept,
+      reason: l.accept ? null : (l.reason ?? null),
+    }));
+
+    const result = await this.repo.respondLines(poId, payload, this.clock.now(), actor.userId);
+    if (!result) {
       throw new PreconditionFailedError(
         po.acknowledged_at
           ? `${po.po_number} was already acknowledged. Nothing has changed.`
-          : `${po.po_number} is ${po.status.toLowerCase().replaceAll('_', ' ')}, so it is past the point where it can be acknowledged.`,
-        { reason: 'po_not_acknowledgeable', status: po.status },
+          : `${po.po_number} is ${po.status.toLowerCase().replaceAll('_', ' ')}, so it cannot be responded to again.`,
+        { reason: 'po_already_responded', status: po.status },
+      );
+    }
+
+    if (result.newStatus === 'PARTIAL') {
+      await this.events.publish('po.partially_rejected', {
+        purchaseOrderId: poId,
+        poNumber: result.poNumber,
+        vendorOrgId: actor.orgId!,
+        orderId: result.orderId,
+        acceptedLineIds: result.acceptedLineIds,
+        rejectedLineIds: result.rejectedLineIds,
+        shortQty: result.rejectedLineIds.length,
+        owedNet: result.owedNet,
+      });
+    }
+
+    return this.detail(poId);
+  }
+
+  async dispatch(
+    poId: string,
+    input: { carrier: string; awb: string; dispatchedAt?: string },
+  ): Promise<VendorPoDetail> {
+    const po = await this.mine(poId);
+    const actor = this.ctx.requirePrincipal();
+    const when = input.dispatchedAt ? new Date(input.dispatchedAt) : this.clock.now();
+    const result = await this.repo.dispatchPo(
+      poId,
+      { carrier: input.carrier, awb: input.awb, dispatchedAt: when },
+      actor.userId,
+    );
+    if (!result) {
+      throw new PreconditionFailedError(
+        `${po.po_number} is ${po.status.toLowerCase().replaceAll('_', ' ')}, so it cannot be dispatched from here.`,
+        { reason: 'po_not_dispatchable', status: po.status },
       );
     }
     return this.detail(poId);
@@ -306,7 +458,7 @@ export class PurchaseOrderService {
     input: { skuId: string; grade: string; unitId: string },
   ): Promise<VendorPoDetail> {
     const po = await this.mine(poId);
-    if (po.status !== 'ACKNOWLEDGED') {
+    if (!['ACKNOWLEDGED', 'PARTIAL'].includes(po.status)) {
       throw new PreconditionFailedError(
         po.status === 'RAISED'
           ? `${po.po_number} has not been accepted yet. Accept it before attaching a machine.`
@@ -316,7 +468,10 @@ export class PurchaseOrderService {
     }
 
     const slots = (await this.repo.linesOf(poId)).filter(
-      (l) => l.sku_id === input.skuId && l.grade_at_po === input.grade,
+      (l) =>
+        l.sku_id === input.skuId &&
+        l.grade_at_po === input.grade &&
+        l.line_status === 'ACCEPTED',
     );
     if (slots.length === 0) {
       throw new ValidationError('That SKU and grade are not on this purchase order.', {
@@ -408,13 +563,14 @@ export class PurchaseOrderService {
   }
 
   private header(r: PoHeaderRow, deliverTo: DeliveryCityView | null): VendorPoView {
+    const totalNet = moneyFromDb(r.total_net) ?? Money.ZERO;
     return {
       poId: r.id,
       poNumber: r.po_number,
       status: r.status,
       raisedAt: r.created_at,
       units: Number(r.line_count),
-      totalNet: moneyFromDb(r.total_net) ?? Money.ZERO,
+      totalNet,
       tdsRatePct: Number(r.tds_rate_pct),
       tdsAmount: moneyFromDb(r.tds_amount) ?? Money.ZERO,
       valuationMethod: r.valuation_method,
@@ -425,7 +581,32 @@ export class PurchaseOrderService {
       cancelledAt: r.cancelled_at,
       rejectedAt: r.rejected_at,
       rejectionReason: r.rejection_reason,
+      consignmentCarrier: r.consignment_carrier,
+      consignmentAwb: r.consignment_awb,
+      dispatchedAt: r.dispatched_at,
+      originalTotalNet: moneyFromDb(r.original_total_net) ?? totalNet,
+      owedNet: totalNet,
+      modelCount: Number(r.model_count ?? r.line_count),
+      modelNames: [],
       deliverTo,
+    };
+  }
+
+  private async headerWithModels(
+    r: PoHeaderRow,
+    deliverTo: DeliveryCityView | null,
+    lineViews: readonly VendorPoLineView[],
+    totals: VendorPoTotalsView,
+  ): Promise<VendorPoView> {
+    const base = this.header(r, deliverTo);
+    const groups = this.asLineGroups(lineViews);
+    return {
+      ...base,
+      originalTotalNet: totals.orderTotal,
+      owedNet: totals.owedIfAccepted,
+      totalNet: totals.owedIfAccepted,
+      modelCount: groups.length,
+      modelNames: groups.map((g) => g.title ?? g.skuCode ?? 'Unknown model'),
     };
   }
 
@@ -460,6 +641,7 @@ export class PurchaseOrderService {
         const sku = skus.get(r.sku_id) ?? null;
         const inspection = r.qc_report_id ? (inspections.get(r.qc_report_id) ?? null) : null;
         return {
+          lineId: r.id,
           unitId: r.unit_id,
           skuId: r.sku_id,
           serialNumber: r.unit_id ? (serials.get(r.unit_id) ?? null) : null,
@@ -471,6 +653,8 @@ export class PurchaseOrderService {
               )
             : null,
           gradeAtPo: r.grade_at_po,
+          lineStatus: r.line_status as 'PENDING' | 'ACCEPTED' | 'REJECTED',
+          rejectionReason: r.rejection_reason,
           agreedNetPayout: moneyFromDb(r.agreed_net_payout) ?? Money.ZERO,
           // The seal, and nothing else `qc` offers. `inspectionsByReport` also
           // returns a score and an inspection date; a purchase order is about
@@ -482,6 +666,19 @@ export class PurchaseOrderService {
   }
 
   private asDemands(lines: readonly VendorPoLineView[]): VendorPoDemandView[] {
+    return this.asLineGroups(lines).map((g) => ({
+      skuId: g.skuId,
+      skuCode: g.skuCode,
+      title: g.title,
+      specSummary: g.specSummary,
+      gradeAtPo: g.gradeAtPo,
+      qty: g.qty,
+      attachedCount: g.attachedCount,
+      agreedNetPayout: g.lineTotal,
+    }));
+  }
+
+  private asLineGroups(lines: readonly VendorPoLineView[]): VendorPoLineGroupView[] {
     const groups = new Map<string, VendorPoLineView[]>();
     for (const line of lines) {
       const key = `${line.skuId}:${line.gradeAtPo}`;
@@ -491,16 +688,74 @@ export class PurchaseOrderService {
     }
     return [...groups.values()].map((bucket) => {
       const first = bucket[0]!;
+      const statuses = new Set(bucket.map((l) => l.lineStatus));
+      let lineStatus: VendorPoLineGroupView['lineStatus'] = first.lineStatus;
+      if (statuses.size > 1) lineStatus = 'MIXED';
+      const unitPrice = first.agreedNetPayout;
       return {
+        lineIds: bucket.map((l) => l.lineId),
         skuId: first.skuId,
         skuCode: first.skuCode,
         title: first.title,
         specSummary: first.specSummary,
         gradeAtPo: first.gradeAtPo,
         qty: bucket.length,
+        unitPrice,
+        lineTotal: Money.sum(bucket.map((l) => l.agreedNetPayout)),
+        lineStatus,
+        rejectionReason:
+          lineStatus === 'REJECTED' ? (bucket.find((l) => l.rejectionReason)?.rejectionReason ?? null) : null,
         attachedCount: bucket.filter((l) => l.unitId).length,
-        agreedNetPayout: Money.sum(bucket.map((l) => l.agreedNetPayout)),
+        serials: bucket
+          .filter((l) => l.unitId)
+          .map((l) => ({ unitId: l.unitId!, serialNumber: l.serialNumber })),
       };
     });
+  }
+
+  private computeTotals(
+    lines: readonly VendorPoLineView[],
+    tdsRatePct: number,
+    storedTds: Money,
+    poStatus: string,
+  ): VendorPoTotalsView {
+    const orderTotal = Money.sum(lines.map((l) => l.agreedNetPayout));
+    const rejectedTotal = Money.sum(
+      lines.filter((l) => l.lineStatus === 'REJECTED').map((l) => l.agreedNetPayout),
+    );
+    const owedIfAccepted = Money.sum(
+      lines.filter((l) => l.lineStatus !== 'REJECTED').map((l) => l.agreedNetPayout),
+    );
+    const tdsAmount =
+      poStatus === 'RAISED'
+        ? Money.parse((Number(owedIfAccepted.toString()) * (tdsRatePct / 100)).toFixed(2))
+        : storedTds;
+    return {
+      orderTotal,
+      rejectedTotal,
+      tdsAmount,
+      owedIfAccepted,
+    };
+  }
+
+  private pickListGroups(lines: readonly VendorPoLineView[]): PickListModelGroup[] {
+    return this.asLineGroups(lines)
+      .filter((g) => g.lineStatus === 'ACCEPTED' || g.attachedCount > 0)
+      .map((g) => ({
+        title: g.title,
+        skuCode: g.skuCode,
+        gradeAtPo: g.gradeAtPo,
+        attachedCount: g.attachedCount,
+        requiredCount: g.qty,
+        machines: g.serials.map((s) => {
+          const src = lines.find((l) => l.unitId === s.unitId);
+          return {
+            unitId: s.unitId,
+            serialNumber: s.serialNumber,
+            sealCode: src?.seal?.code ?? null,
+            sealStatus: src?.seal?.status ?? null,
+          };
+        }),
+      }));
   }
 }

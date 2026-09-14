@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { FacilityScope, OrgScope } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
-import { ForbiddenError } from '../../../shared/errors/domain-errors';
+import {
+  ForbiddenError,
+  PreconditionFailedError,
+  ValidationError,
+} from '../../../shared/errors/domain-errors';
 
 /**
  * Every read behind the vendor's purchase-order screens, scoped to one org.
@@ -37,8 +41,13 @@ export interface PoHeaderRow {
   rejected_at: Date | null;
   rejection_reason: string | null;
   cancelled_at: Date | null;
+  consignment_carrier: string | null;
+  consignment_awb: string | null;
+  dispatched_at: Date | null;
   created_at: Date;
   line_count: bigint;
+  model_count: bigint;
+  original_total_net: string;
 }
 
 export interface PoLineRow {
@@ -48,6 +57,33 @@ export interface PoLineRow {
   agreed_net_payout: string;
   grade_at_po: string;
   qc_report_id: string | null;
+  line_status: string;
+  rejection_reason: string | null;
+}
+
+export interface LineRespondInput {
+  lineId: string;
+  accept: boolean;
+  reason: string | null;
+}
+
+export interface PoRespondResult {
+  orderId: string;
+  poNumber: string;
+  previousStatus: string;
+  newStatus: string;
+  acceptedLineIds: string[];
+  rejectedLineIds: string[];
+  owedNet: string;
+  tdsAmount: string;
+}
+
+export interface PoKpiSummary {
+  openOrders: number;
+  waitingOrders: number;
+  waitingMachines: number;
+  machinesToPick: number;
+  valueAccepted: string;
 }
 
 export interface AttachableUnitRow {
@@ -120,9 +156,15 @@ export class PurchaseOrderRepository {
              po.total_net::text AS total_net, po.tds_rate_pct::text AS tds_rate_pct,
              po.tds_amount::text AS tds_amount, po.valuation_method, po.terms_days,
              po.expected_dispatch_at, po.acknowledged_at, po.rejected_at,
-             po.rejection_reason, po.cancelled_at, po.created_at,
+             po.rejection_reason, po.cancelled_at,
+             po.consignment_carrier, po.consignment_awb, po.dispatched_at,
+             po.created_at,
              (SELECT count(*) FROM procurement.purchase_order_line l
-               WHERE l.po_id = po.id) AS line_count
+               WHERE l.po_id = po.id) AS line_count,
+             (SELECT count(DISTINCT l.sku_id) FROM procurement.purchase_order_line l
+               WHERE l.po_id = po.id) AS model_count,
+             (SELECT coalesce(sum(l.agreed_net_payout), 0)::text
+                FROM procurement.purchase_order_line l WHERE l.po_id = po.id) AS original_total_net
         FROM procurement.purchase_order po
        WHERE po.vendor_org_id = ${orgId}::uuid
          AND (${status}::text IS NULL OR po.status::text = ${status}::text)
@@ -180,9 +222,15 @@ export class PurchaseOrderRepository {
              po.total_net::text AS total_net, po.tds_rate_pct::text AS tds_rate_pct,
              po.tds_amount::text AS tds_amount, po.valuation_method, po.terms_days,
              po.expected_dispatch_at, po.acknowledged_at, po.rejected_at,
-             po.rejection_reason, po.cancelled_at, po.created_at,
+             po.rejection_reason, po.cancelled_at,
+             po.consignment_carrier, po.consignment_awb, po.dispatched_at,
+             po.created_at,
              (SELECT count(*) FROM procurement.purchase_order_line l
-               WHERE l.po_id = po.id) AS line_count
+               WHERE l.po_id = po.id) AS line_count,
+             (SELECT count(DISTINCT l.sku_id) FROM procurement.purchase_order_line l
+               WHERE l.po_id = po.id) AS model_count,
+             (SELECT coalesce(sum(l.agreed_net_payout), 0)::text
+                FROM procurement.purchase_order_line l WHERE l.po_id = po.id) AS original_total_net
         FROM procurement.purchase_order po
        WHERE po.id = ${poId}::uuid AND po.vendor_org_id = ${orgId}::uuid
          AND (
@@ -197,11 +245,63 @@ export class PurchaseOrderRepository {
     const orgId = this.vendorOrgId();
     return this.prisma.$queryRaw<PoLineRow[]>`
       SELECT l.id, l.unit_id, l.sku_id, l.agreed_net_payout::text AS agreed_net_payout,
-             l.grade_at_po::text AS grade_at_po, l.qc_report_id
+             l.grade_at_po::text AS grade_at_po, l.qc_report_id,
+             l.line_status::text AS line_status, l.rejection_reason
         FROM procurement.purchase_order_line l
         JOIN procurement.purchase_order po ON po.id = l.po_id
        WHERE l.po_id = ${poId}::uuid AND po.vendor_org_id = ${orgId}::uuid
        ORDER BY l.created_at`;
+  }
+
+  async kpiSummary(): Promise<PoKpiSummary> {
+    const orgId = this.vendorOrgId();
+    const scopedFacilities = await this.facilities.assignedFacilityIds();
+    const facilityFilter =
+      scopedFacilities && scopedFacilities.length > 0 ? scopedFacilities : null;
+
+    const [counts] = await this.prisma.$queryRaw<
+      Array<{
+        open_orders: bigint;
+        waiting_orders: bigint;
+        waiting_machines: bigint;
+        machines_to_pick: bigint;
+        value_accepted: string;
+      }>
+    >`
+      SELECT
+        count(*) FILTER (WHERE po.status IN ('RAISED', 'ACKNOWLEDGED', 'PARTIAL', 'DISPATCH_READY')) AS open_orders,
+        count(*) FILTER (WHERE po.status = 'RAISED') AS waiting_orders,
+        coalesce(sum(
+          CASE WHEN po.status = 'RAISED' THEN (
+            SELECT count(*) FROM procurement.purchase_order_line l WHERE l.po_id = po.id
+          ) ELSE 0 END
+        ), 0) AS waiting_machines,
+        coalesce(sum(
+          (SELECT count(*)
+             FROM procurement.purchase_order_line l
+            WHERE l.po_id = po.id
+              AND l.line_status = 'ACCEPTED'
+              AND l.unit_id IS NULL)
+        ), 0) AS machines_to_pick,
+        coalesce(sum(
+          (SELECT coalesce(sum(l.agreed_net_payout), 0)
+             FROM procurement.purchase_order_line l
+            WHERE l.po_id = po.id AND l.line_status = 'ACCEPTED')
+        ), 0)::text AS value_accepted
+        FROM procurement.purchase_order po
+       WHERE po.vendor_org_id = ${orgId}::uuid
+         AND (
+           ${facilityFilter}::uuid[] IS NULL
+           OR po.fulfillment_facility_id = ANY(${facilityFilter}::uuid[])
+         )`;
+
+    return {
+      openOrders: Number(counts?.open_orders ?? 0),
+      waitingOrders: Number(counts?.waiting_orders ?? 0),
+      waitingMachines: Number(counts?.waiting_machines ?? 0),
+      machinesToPick: Number(counts?.machines_to_pick ?? 0),
+      valueAccepted: counts?.value_accepted ?? '0',
+    };
   }
 
   /**
@@ -308,7 +408,8 @@ export class PurchaseOrderRepository {
            JOIN procurement.purchase_order po ON po.id = l2.po_id
           WHERE po.id = ${input.poId}::uuid
             AND po.vendor_org_id = ${orgId}::uuid
-            AND po.status = 'ACKNOWLEDGED'
+            AND po.status IN ('ACKNOWLEDGED', 'PARTIAL')
+            AND l2.line_status = 'ACCEPTED'::identity.po_line_status
             AND l2.sku_id = ${input.skuId}::uuid
             AND l2.grade_at_po::text = ${input.grade}
             AND l2.unit_id IS NULL
@@ -416,5 +517,232 @@ export class PurchaseOrderRepository {
          AND vendor_org_id = ${orgId}::uuid
          AND status = 'RAISED'`;
     return updated > 0;
+  }
+
+  /**
+   * Per-line accept/reject in one transaction. Returns null when the PO is not
+   * in RAISED — the caller re-reads to say why.
+   */
+  async respondLines(
+    poId: string,
+    lines: readonly LineRespondInput[],
+    now: Date,
+    actorUserId: string,
+  ): Promise<PoRespondResult | null> {
+    const orgId = this.vendorOrgId();
+    return this.prisma.runInTransaction(async () => {
+      const [po] = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          order_id: string;
+          po_number: string;
+          status: string;
+          tds_rate_pct: string;
+        }>
+      >`
+        SELECT id, order_id, po_number, status::text AS status, tds_rate_pct::text AS tds_rate_pct
+          FROM procurement.purchase_order
+         WHERE id = ${poId}::uuid AND vendor_org_id = ${orgId}::uuid
+         FOR UPDATE`;
+      if (!po || po.status !== 'RAISED') return null;
+
+      const existing = await this.linesOf(poId);
+      const existingIds = new Set(existing.map((l) => l.id));
+      const inputIds = new Set(lines.map((l) => l.lineId));
+      if (existingIds.size !== inputIds.size || ![...existingIds].every((id) => inputIds.has(id))) {
+        throw new ValidationError(
+          'Send one response for every line on this purchase order — no more, no fewer.',
+          { lines: 'Include each line exactly once.' },
+        );
+      }
+
+      const acceptedLineIds: string[] = [];
+      const rejectedLineIds: string[] = [];
+      for (const row of lines) {
+        if (row.accept) {
+          acceptedLineIds.push(row.lineId);
+          await this.prisma.$executeRaw`
+            UPDATE procurement.purchase_order_line
+               SET line_status = 'ACCEPTED'::identity.po_line_status, rejection_reason = NULL
+             WHERE id = ${row.lineId}::uuid AND po_id = ${poId}::uuid`;
+        } else {
+          if (!row.reason) {
+            throw new ValidationError('Every rejected line needs a reason.', {
+              reason: 'Pick why this line is rejected.',
+            });
+          }
+          rejectedLineIds.push(row.lineId);
+          await this.prisma.$executeRaw`
+            UPDATE procurement.purchase_order_line
+               SET line_status = 'REJECTED'::identity.po_line_status, rejection_reason = ${row.reason}
+             WHERE id = ${row.lineId}::uuid AND po_id = ${poId}::uuid`;
+        }
+      }
+
+      const [totals] = await this.prisma.$queryRaw<
+        Array<{ owed: string; rejected: string; total: string }>
+      >`
+        SELECT
+          coalesce(sum(agreed_net_payout) FILTER (WHERE line_status = 'ACCEPTED'), 0)::text AS owed,
+          coalesce(sum(agreed_net_payout) FILTER (WHERE line_status = 'REJECTED'), 0)::text AS rejected,
+          coalesce(sum(agreed_net_payout), 0)::text AS total
+          FROM procurement.purchase_order_line
+         WHERE po_id = ${poId}::uuid`;
+
+      const owedNet = totals?.owed ?? '0';
+      const tdsRate = Number(po.tds_rate_pct);
+      const tdsAmount = ((Number(owedNet) * tdsRate) / 100).toFixed(2);
+
+      let newStatus: string;
+      if (acceptedLineIds.length === existing.length) newStatus = 'ACKNOWLEDGED';
+      else if (rejectedLineIds.length === existing.length) newStatus = 'REJECTED';
+      else newStatus = 'PARTIAL';
+
+      const payableGross = Number(owedNet) > 0 ? owedNet : '0.01';
+      await this.prisma.$executeRaw`
+        UPDATE procurement.purchase_order
+           SET status = ${newStatus}::identity.po_status,
+               total_net = CASE
+                 WHEN ${Number(owedNet) > 0} THEN ${owedNet}::numeric
+                 ELSE total_net
+               END,
+               tds_amount = ${tdsAmount}::numeric,
+               acknowledged_at = CASE WHEN ${acceptedLineIds.length} > 0 THEN ${now} ELSE acknowledged_at END,
+               rejected_at = CASE WHEN ${newStatus} = 'REJECTED' THEN ${now} ELSE rejected_at END,
+               rejection_reason = CASE
+                 WHEN ${newStatus} = 'REJECTED' THEN 'All lines rejected by the vendor.'
+                 ELSE rejection_reason
+               END,
+               updated_at = ${now}
+         WHERE id = ${poId}::uuid`;
+
+      await this.prisma.$executeRaw`
+        UPDATE procurement.vendor_payable
+           SET gross = ${payableGross}::numeric,
+               tds = ${tdsAmount}::numeric,
+               net_payable = GREATEST((${payableGross}::numeric - ${tdsAmount}::numeric), 0)
+         WHERE purchase_order_id = ${poId}::uuid`;
+
+      await this.prisma.$executeRaw`
+        INSERT INTO ordering.order_event
+          (order_id, event_type, from_status, to_status, note, occurred_at, actor_id)
+        VALUES (
+          ${po.order_id}::uuid,
+          'PO_VENDOR_RESPONSE',
+          ${po.status},
+          ${newStatus},
+          ${`Vendor responded to ${po.po_number}: ${acceptedLineIds.length} accepted, ${rejectedLineIds.length} rejected.`},
+          ${now},
+          ${actorUserId}::uuid
+        )`;
+
+      await this.prisma.db.audit_log.create({
+        data: {
+          actor_user_id: actorUserId,
+          actor_org_id: orgId,
+          action: 'procurement.po.responded',
+          entity_type: 'purchase_order',
+          entity_id: poId,
+          before_json: { status: po.status, lineCount: existing.length },
+          after_json: {
+            status: newStatus,
+            acceptedLineIds,
+            rejectedLineIds,
+            owedNet,
+          },
+          created_at: now,
+        },
+      });
+
+      return {
+        orderId: po.order_id,
+        poNumber: po.po_number,
+        previousStatus: po.status,
+        newStatus,
+        acceptedLineIds,
+        rejectedLineIds,
+        owedNet,
+        tdsAmount,
+      };
+    });
+  }
+
+  /** Mark consignment dispatched once every accepted line has its serials. */
+  async dispatchPo(
+    poId: string,
+    input: { carrier: string; awb: string; dispatchedAt: Date },
+    actorUserId: string,
+  ): Promise<{ orderId: string; poNumber: string; previousStatus: string } | null> {
+    const orgId = this.vendorOrgId();
+    return this.prisma.runInTransaction(async () => {
+      const [po] = await this.prisma.$queryRaw<
+        Array<{ id: string; order_id: string; po_number: string; status: string }>
+      >`
+        SELECT id, order_id, po_number, status::text AS status
+          FROM procurement.purchase_order
+         WHERE id = ${poId}::uuid AND vendor_org_id = ${orgId}::uuid
+         FOR UPDATE`;
+      if (!po || !['ACKNOWLEDGED', 'PARTIAL'].includes(po.status)) return null;
+
+      const [missing] = await this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*) AS n
+          FROM procurement.purchase_order_line
+         WHERE po_id = ${poId}::uuid
+           AND line_status = 'ACCEPTED'
+           AND unit_id IS NULL`;
+      if (Number(missing?.n ?? 0) > 0) {
+        throw new PreconditionFailedError(
+          `${Number(missing?.n ?? 0)} accepted machine(s) still have no serial attached. Attach every accepted line before dispatch.`,
+          { reason: 'serials_incomplete', missing: Number(missing?.n ?? 0) },
+        );
+      }
+
+      const [acceptedCount] = await this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*) AS n FROM procurement.purchase_order_line
+         WHERE po_id = ${poId}::uuid AND line_status = 'ACCEPTED'`;
+      if (Number(acceptedCount?.n ?? 0) === 0) {
+        throw new PreconditionFailedError(
+          'There are no accepted lines to dispatch.',
+          { reason: 'no_accepted_lines' },
+        );
+      }
+
+      await this.prisma.$executeRaw`
+        UPDATE procurement.purchase_order
+           SET status = 'DISPATCHED'::identity.po_status,
+               consignment_carrier = ${input.carrier},
+               consignment_awb = ${input.awb},
+               dispatched_at = ${input.dispatchedAt},
+               updated_at = ${input.dispatchedAt}
+         WHERE id = ${poId}::uuid`;
+
+      await this.prisma.$executeRaw`
+        INSERT INTO ordering.order_event
+          (order_id, event_type, from_status, to_status, note, occurred_at, actor_id)
+        VALUES (
+          ${po.order_id}::uuid,
+          'PO_DISPATCHED',
+          ${po.status},
+          'DISPATCHED',
+          ${`${po.po_number} dispatched via ${input.carrier}, AWB ${input.awb}.`},
+          ${input.dispatchedAt},
+          ${actorUserId}::uuid
+        )`;
+
+      await this.prisma.db.audit_log.create({
+        data: {
+          actor_user_id: actorUserId,
+          actor_org_id: orgId,
+          action: 'procurement.po.dispatched',
+          entity_type: 'purchase_order',
+          entity_id: poId,
+          before_json: { status: po.status },
+          after_json: { status: 'DISPATCHED', carrier: input.carrier, awb: input.awb },
+          created_at: input.dispatchedAt,
+        },
+      });
+
+      return { orderId: po.order_id, poNumber: po.po_number, previousStatus: po.status };
+    });
   }
 }

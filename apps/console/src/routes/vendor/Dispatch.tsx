@@ -37,7 +37,12 @@ export function VendorDispatchRoute(): React.JSX.Element {
     );
   }
 
-  const rows = data.rows.filter((po) => po.status === 'ACKNOWLEDGED' || po.status === 'DISPATCH_READY');
+  const rows = data.rows.filter(
+    (po) =>
+      po.status === 'ACKNOWLEDGED' ||
+      po.status === 'PARTIAL' ||
+      po.status === 'DISPATCH_READY',
+  );
 
   if (rows.length === 0) {
     return (

@@ -12,7 +12,7 @@
 | 3 | Ledger primitives + scoped CSS | DONE | f15a886 | — | `ClauseHeading`, `LedgerRow`, `RegisterStrip`, `InfoPopover`, `PermissionGrid`. MANIFEST table/button overrides in `globals.css`. |
 | 4 | Today, Listings, Units | DONE | f15a886 | — | Dashboard rebuilt. Listings/units restyled. |
 | 5 | Inspect | DONE | f15a886 | — | Visits + corrections restyled. Auto-apply job still unwired (see Open questions). |
-| 6 | Fulfil + reject/dispatch API | PARTIAL | f15a886 | — | Dispatch board reads existing POs. `POST …/reject` and `POST …/dispatch` not added. |
+| 6 | PO line response + orders board | DONE | — | — | Per-line accept/reject, KPI board, detail dialog, serial attach, dispatch. |
 | 7 | Money | DONE | f15a886 | — | Payables restyled. Payouts honest empty state. |
 | 8 | Team & access | DONE | — | — | Superseded by plan §5 below; invite flow + facility scope landed in this stage. |
 | 9 | Close-out | TODO | — | — | Screenshots, word-count pass, `SUPPLIER_HUB_REVIEW.md`, CI green. |
@@ -97,13 +97,14 @@ None captured yet under Supplier Hub naming. Prior MANIFEST pass did not save re
 ## Open questions
 
 1. **Grade correction auto-apply** — `GradeCorrectionService.autoApplyDue()` has no scheduler. Copy must not promise automatic apply.
-2. **PO reject / dispatch writers** — schema columns exist; no vendor POST endpoints yet.
+2. ~~**PO reject / dispatch writers**~~ — Resolved in Stage 6: `POST …/respond`, `POST …/dispatch`; legacy `acknowledge` wraps respond-all.
 3. ~~**Team invites**~~ — Resolved in plan §5: invite link + set-password at `/team/accept`; no credential emailed.
 4. **Facility dispatch address** — vendor facility payload is `label / city / pincode` only. Dispatch column shows "—" in `--fail` until address field exists.
 5. **Accent** — MANIFEST `--acc` is viridian `#1D5C4A` on vendor surface only. Storefront keeps `#6BB1BE`.
 6. **Payout history** — `procurement.payout_run` never written. Screen is zeros + empty state.
 7. **Mono font on manifest surface** — `--font-mono` is JetBrains Mono under `data-surface=manifest`; hub uses IBM Plex Mono. MANIFEST may be retired when hub shell lands.
 8. **Hub `--warn`** — prototype `#a86609` is 4.31:1 on `--warn-wash`. Token uses `#a56008` to clear 4.5:1 per WCAG arithmetic.
+9. **Partial PO rejection leaves buyer short** — When a vendor accepts some lines and rejects others, the buyer's order is short on the rejected SKUs. Either re-source from another supply point or notify the buyer — a commercial decision and admin screen, not built here. Stage 6 emits `po.partially_rejected` for admin consumption later.
 
 ## Safety checklist
 

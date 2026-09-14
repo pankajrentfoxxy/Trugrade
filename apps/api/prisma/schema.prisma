@@ -3341,23 +3341,27 @@ model payout_run {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model purchase_order {
-  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  po_number            String                @unique
-  vendor_org_id        String                @db.Uuid
-  order_id             String                @db.Uuid
-  status               po_status             @default(RAISED)
-  total_net            Decimal               @db.Decimal(14, 2)
-  tds_rate_pct         Decimal               @default(0) @db.Decimal(5, 2)
-  tds_amount           Decimal               @default(0) @db.Decimal(14, 2)
-  valuation_method     String
-  terms_days           Int                   @default(15)
-  expected_dispatch_at DateTime?             @db.Timestamptz(6)
-  acknowledged_at      DateTime?             @db.Timestamptz(6)
-  rejected_at          DateTime?             @db.Timestamptz(6)
-  rejection_reason     String?
-  cancelled_at         DateTime?             @db.Timestamptz(6)
-  created_at           DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime              @default(now()) @db.Timestamptz(6)
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  po_number               String                @unique
+  vendor_org_id           String                @db.Uuid
+  order_id                String                @db.Uuid
+  status                  po_status             @default(RAISED)
+  total_net               Decimal               @db.Decimal(14, 2)
+  tds_rate_pct            Decimal               @default(0) @db.Decimal(5, 2)
+  tds_amount              Decimal               @default(0) @db.Decimal(14, 2)
+  valuation_method        String
+  terms_days              Int                   @default(15)
+  expected_dispatch_at    DateTime?             @db.Timestamptz(6)
+  acknowledged_at         DateTime?             @db.Timestamptz(6)
+  rejected_at             DateTime?             @db.Timestamptz(6)
+  rejection_reason        String?
+  cancelled_at            DateTime?             @db.Timestamptz(6)
+  fulfillment_facility_id String?               @db.Uuid
+  consignment_carrier     String?
+  consignment_awb         String?
+  dispatched_at           DateTime?             @db.Timestamptz(6)
+  created_at              DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime              @default(now()) @db.Timestamptz(6)
   goods_receipt        goods_receipt?
   order                order                 @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   organization         organization          @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -3375,14 +3379,16 @@ model purchase_order {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model purchase_order_line {
-  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  po_id             String         @db.Uuid
-  unit_id           String?        @unique @db.Uuid
-  sku_id            String         @db.Uuid
-  agreed_net_payout Decimal        @db.Decimal(14, 2)
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  po_id             String          @db.Uuid
+  unit_id           String?         @unique @db.Uuid
+  sku_id            String          @db.Uuid
+  agreed_net_payout Decimal         @db.Decimal(14, 2)
   grade_at_po       grade_type
-  qc_report_id      String?        @db.Uuid
-  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  qc_report_id      String?         @db.Uuid
+  line_status       po_line_status  @default(PENDING)
+  rejection_reason  String?
+  created_at        DateTime        @default(now()) @db.Timestamptz(6)
   itc_entry         itc_entry?
   purchase_order    purchase_order @relation(fields: [po_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   qc_report         qc_report?     @relation(fields: [qc_report_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -3831,6 +3837,8 @@ enum wipe_status_type {
 enum po_status {
   RAISED
   ACKNOWLEDGED
+  PARTIAL
+  REJECTED
   DISPATCH_READY
   DISPATCHED
   RECEIVED
@@ -3841,5 +3849,13 @@ enum po_status {
   CANCELLED
   DISPUTED
 
-  @@schema("public")
+  @@schema("identity")
+}
+
+enum po_line_status {
+  PENDING
+  ACCEPTED
+  REJECTED
+
+  @@schema("identity")
 }

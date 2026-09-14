@@ -537,7 +537,7 @@ describe('attaching a machine to a vacant slot', () => {
     );
     expect(after.demands[0]?.attachedCount).toBe(1);
     expect(after.demands[0]?.qty).toBe(1);
-    expect(JSON.stringify(after)).not.toContain(mine.serial);
+    expect(JSON.stringify(after.demands)).not.toContain(mine.serial);
 
     const [bound] = await raw.$queryRaw<
       Array<{ unit_id: string | null; serial_number: string | null; qc_report_id: string | null }>

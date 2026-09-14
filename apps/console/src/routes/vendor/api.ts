@@ -105,10 +105,13 @@ export const API = {
    * in this file that could hold a buyer.
    */
   purchaseOrders: '/api/vendor/purchase-orders',
+  purchaseOrderKpis: '/api/vendor/purchase-orders/kpis',
   purchaseOrderStatusCounts: '/api/vendor/purchase-orders/status-counts',
   purchaseOrder: (poId: string) => `/api/vendor/purchase-orders/${poId}`,
   pickList: (poId: string) => `/api/vendor/purchase-orders/${poId}/pick-list`,
   acknowledgePo: (poId: string) => `/api/vendor/purchase-orders/${poId}/acknowledge`,
+  respondPo: (poId: string) => `/api/vendor/purchase-orders/${poId}/respond`,
+  dispatchPo: (poId: string) => `/api/vendor/purchase-orders/${poId}/dispatch`,
   attachableUnits: (poId: string, skuId: string, grade: string) =>
     `/api/vendor/purchase-orders/${poId}/attachable-units?skuId=${encodeURIComponent(skuId)}&grade=${encodeURIComponent(grade)}`,
   attachPoUnit: (poId: string) => `/api/vendor/purchase-orders/${poId}/attach`,
@@ -456,6 +459,8 @@ export interface AddUnitsOutcome {
 export const PO_STATUSES = [
   'RAISED',
   'ACKNOWLEDGED',
+  'PARTIAL',
+  'REJECTED',
   'DISPATCH_READY',
   'DISPATCHED',
   'RECEIVED',
@@ -466,6 +471,45 @@ export const PO_STATUSES = [
   'CANCELLED',
   'DISPUTED',
 ] as const;
+
+export const PO_LINE_REJECTION_REASONS = [
+  { value: 'OUT_OF_STOCK', label: 'Out of stock' },
+  { value: 'GRADE_MISMATCH', label: 'Grade does not match' },
+  { value: 'PRICE_DISPUTED', label: 'Price disputed' },
+  { value: 'DISPATCH_DATE', label: 'Cannot meet the dispatch date' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
+
+export interface PoKpis {
+  openOrders: number;
+  waitingOrders: number;
+  waitingMachines: number;
+  machinesToPick: number;
+  valueAccepted: string;
+}
+
+export interface PoLineGroup {
+  lineIds: string[];
+  skuId: string;
+  skuCode: string | null;
+  title: string | null;
+  specSummary: string | null;
+  gradeAtPo: string;
+  qty: number;
+  unitPrice: MoneyString;
+  lineTotal: MoneyString;
+  lineStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'MIXED';
+  rejectionReason: string | null;
+  attachedCount: number;
+  serials: Array<{ unitId: string; serialNumber: string | null }>;
+}
+
+export interface PoTotals {
+  orderTotal: MoneyString;
+  rejectedTotal: MoneyString;
+  tdsAmount: MoneyString;
+  owedIfAccepted: MoneyString;
+}
 
 /** Where the machines go. City only — the street is on the pick list and nowhere else. */
 export interface DeliveryCity {
@@ -510,6 +554,13 @@ export interface PurchaseOrder {
   cancelledAt: IsoDate | null;
   rejectedAt: IsoDate | null;
   rejectionReason: string | null;
+  consignmentCarrier: string | null;
+  consignmentAwb: string | null;
+  dispatchedAt: IsoDate | null;
+  originalTotalNet: MoneyString;
+  owedNet: MoneyString;
+  modelCount: number;
+  modelNames: string[];
   deliverTo: DeliveryCity | null;
 }
 
@@ -533,6 +584,8 @@ export interface AttachableUnit {
 
 export interface PurchaseOrderDetail extends PurchaseOrder {
   demands: PurchaseOrderDemand[];
+  lineGroups: PoLineGroup[];
+  totals: PoTotals;
 }
 
 export interface PickListAddress {
@@ -553,20 +606,35 @@ export interface PickListAddress {
  * `agreedNetPayout` and this type does not — two types rather than one with a
  * flag, so the omission cannot be undone by passing `true`.
  */
+export interface PickListMachine {
+  unitId: string;
+  serialNumber: string | null;
+  sealCode: string | null;
+  sealStatus: string | null;
+}
+
+export interface PickListModelGroup {
+  title: string | null;
+  skuCode: string | null;
+  gradeAtPo: string;
+  attachedCount: number;
+  requiredCount: number;
+  machines: PickListMachine[];
+}
+
 export interface PickList {
   poNumber: string;
   raisedAt: IsoDate;
   units: number;
   shipTo: PickListAddress | null;
-  lines: Array<{
-    unitId: string;
-    serialNumber: string | null;
-    sealCode: string | null;
-    sealStatus: string | null;
-    title: string | null;
-    skuCode: string | null;
-    gradeAtPo: string;
-  }>;
+  lines: Array<
+    PickListMachine & {
+      title: string | null;
+      skuCode: string | null;
+      gradeAtPo: string;
+    }
+  >;
+  modelGroups: PickListModelGroup[];
 }
 
 /* --------------------------------------------------------------------------

@@ -12,6 +12,8 @@ import { gradeSchema, paginationSchema, uuidSchema } from '@trugrade/contracts';
 export const poStatusSchema = z.enum([
   'RAISED',
   'ACKNOWLEDGED',
+  'PARTIAL',
+  'REJECTED',
   'DISPATCH_READY',
   'DISPATCHED',
   'RECEIVED',
@@ -22,6 +24,36 @@ export const poStatusSchema = z.enum([
   'CANCELLED',
   'DISPUTED',
 ]);
+
+export const poLineRejectionReasonSchema = z.enum([
+  'OUT_OF_STOCK',
+  'GRADE_MISMATCH',
+  'PRICE_DISPUTED',
+  'DISPATCH_DATE',
+  'OTHER',
+]);
+
+export const respondPoLinesSchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        lineId: uuidSchema,
+        accept: z.boolean(),
+        reason: poLineRejectionReasonSchema.optional(),
+      }),
+    )
+    .min(1),
+});
+
+export type RespondPoLinesDto = z.infer<typeof respondPoLinesSchema>;
+
+export const dispatchPoSchema = z.object({
+  carrier: z.string().trim().min(1, 'Enter the courier name.'),
+  awb: z.string().trim().min(1, 'Enter the AWB or tracking number.'),
+  dispatchedAt: z.string().datetime().optional(),
+});
+
+export type DispatchPoDto = z.infer<typeof dispatchPoSchema>;
 
 /** `YYYY-MM-DD`, the form a native `<input type="date">` produces. */
 const isoDaySchema = z

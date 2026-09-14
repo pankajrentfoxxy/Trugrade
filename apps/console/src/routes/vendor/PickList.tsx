@@ -1,15 +1,16 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router';
-import { Button, EmptyState, SealChip, Skeleton, type SealStatus } from '@trugrade/ui';
+import { Button, EmptyState, GradeBadge, SealChip, Skeleton, type SealStatus } from '@trugrade/ui';
+import type { Grade } from '@trugrade/contracts';
 import { NotMeasured } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, gradeLabel, onDate, type PickList } from './api';
+import { API, gradeLabel, onDate, type PickList, type PickListModelGroup } from './api';
 
 /**
  * ARCHETYPE F — Focus. One task, centred, no navigation.
  * DENSITY: default (vendor portal), set on the app root by the shell.
  *
- * The pick list — `03_UX_SPEC.md` §3B.3, `/vendor/orders/[poId]/packing-list`.
+ * The pick list — `03_UX_SPEC.md` §3B.3, `/vendor/orders/[poId]/pick-list`.
  *
  * **This is a physical document.** Somebody stands in a warehouse holding a
  * laptop in one hand and reads a serial off this screen with the other, then
@@ -50,8 +51,97 @@ const PRINT_CSS = `
   .tg-picklist, .tg-picklist * { color: #000 !important; background: transparent !important; }
   .tg-picklist tr { break-inside: avoid; }
   .tg-picklist th, .tg-picklist td { border-color: #999 !important; }
+  .tg-picklist input[type="checkbox"] { accent-color: #000; }
 }
 `;
+
+function ModelGroupBlock({
+  group,
+  picked,
+  onToggle,
+}: {
+  group: PickListModelGroup;
+  picked: Set<string>;
+  onToggle: (unitId: string) => void;
+}): React.JSX.Element {
+  return (
+    <section className="mt-6">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule pb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <GradeBadge grade={group.gradeAtPo as Grade} />
+          <h2 className="text-body font-medium text-ink">{group.title ?? 'Unknown model'}</h2>
+          {group.skuCode && (
+            <span className="font-mono text-body-sm text-ink-3">{group.skuCode}</span>
+          )}
+        </div>
+        <span className="font-mono tnum text-body-sm text-ink-2">
+          {group.attachedCount} of {group.requiredCount}
+        </span>
+      </header>
+
+      <table className="mt-2 w-full min-w-[620px] border-collapse text-left">
+        <caption className="sr-only">
+          {group.title ?? 'Machines'} — grade {gradeLabel(group.gradeAtPo)}
+        </caption>
+        <thead>
+          <tr className="border-b border-rule">
+            {['', 'Serial', 'Seal code'].map((h) => (
+              <th
+                key={h || 'pick'}
+                scope="col"
+                className="py-2 pr-4 font-mono text-label uppercase tracking-[0.13em] text-ink-3"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {group.machines.map((m) => (
+            <tr key={m.unitId} className="border-b border-rule-2 last:border-b-0">
+              <td className="py-4 pr-3 align-top">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-acc"
+                  checked={picked.has(m.unitId)}
+                  onChange={() => onToggle(m.unitId)}
+                  aria-label={`Picked ${m.serialNumber ?? m.unitId}`}
+                />
+              </td>
+              <td className="py-4 pr-4 align-top">
+                {m.serialNumber ? (
+                  <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
+                    {m.serialNumber}
+                  </span>
+                ) : (
+                  <NotMeasured
+                    why="This machine is no longer on your stock records"
+                    label="Serial unavailable"
+                  />
+                )}
+              </td>
+              <td className="py-4 pr-4 align-top">
+                {m.sealCode ? (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
+                      {m.sealCode}
+                    </span>
+                    {m.sealStatus && <SealChip status={m.sealStatus as SealStatus} />}
+                  </span>
+                ) : (
+                  <NotMeasured
+                    why="No seal is recorded against this machine"
+                    label="No seal recorded"
+                  />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
 export function VendorPickListRoute(): React.JSX.Element {
   const { poId = '' } = useParams();
@@ -59,6 +149,16 @@ export function VendorPickListRoute(): React.JSX.Element {
     API.pickList(poId),
     'That pick list is unavailable',
   );
+  const [picked, setPicked] = React.useState<Set<string>>(() => new Set());
+
+  function togglePick(unitId: string): void {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(unitId)) next.delete(unitId);
+      else next.add(unitId);
+      return next;
+    });
+  }
 
   if (error) {
     return (
@@ -85,6 +185,25 @@ export function VendorPickListRoute(): React.JSX.Element {
     );
   }
 
+  const groups =
+    data.modelGroups?.length > 0
+      ? data.modelGroups
+      : [
+          {
+            title: null,
+            skuCode: null,
+            gradeAtPo: data.lines[0]?.gradeAtPo ?? 'A',
+            attachedCount: data.lines.length,
+            requiredCount: data.lines.length,
+            machines: data.lines.map((l) => ({
+              unitId: l.unitId,
+              serialNumber: l.serialNumber,
+              sealCode: l.sealCode,
+              sealStatus: l.sealStatus,
+            })),
+          },
+        ];
+
   return (
     <div className="mx-auto max-w-[820px]">
       <style>{PRINT_CSS}</style>
@@ -96,8 +215,6 @@ export function VendorPickListRoute(): React.JSX.Element {
         >
           Back to {data.poNumber}
         </Link>
-        {/* The one amber control on this screen, and the only thing it does.
-            `Button` defaults to `secondary`; the primary is asked for by name. */}
         <Button variant="primary" className="ml-auto" onClick={() => window.print()}>
           Print this list
         </Button>
@@ -159,10 +276,6 @@ export function VendorPickListRoute(): React.JSX.Element {
               Carrier reference
             </h2>
             <p className="mt-2">
-              {/* No shipment has been raised for any purchase order on this
-                  platform — `logistics.shipment` has no writer yet — so there is
-                  no AWB and no pickup task to quote. Saying so is the honest
-                  answer; printing a blank line reads as one already filled in. */}
               <NotMeasured
                 why="No shipment has been raised against this purchase order yet, so there is no carrier reference"
                 label="Not assigned yet"
@@ -175,77 +288,14 @@ export function VendorPickListRoute(): React.JSX.Element {
           </div>
         </section>
 
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[620px] border-collapse text-left">
-            <caption className="sr-only">
-              The {data.units} machines to produce against {data.poNumber}, by serial.
-            </caption>
-            <thead>
-              <tr className="border-b border-rule">
-                {['Serial', 'Seal code', 'Grade', 'Machine'].map((h) => (
-                  <th
-                    key={h}
-                    scope="col"
-                    className="py-2 pr-4 font-mono text-label uppercase tracking-[0.13em] text-ink-3"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.lines.map((l) => (
-                // 52px minimum: this is ticked off with a finger on a tablet on
-                // a warehouse floor, not clicked with a mouse.
-                <tr key={l.unitId} className="border-b border-rule-2 last:border-b-0">
-                  <td className="py-4 pr-4 align-top">
-                    {l.serialNumber ? (
-                      <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
-                        {l.serialNumber}
-                      </span>
-                    ) : (
-                      <NotMeasured
-                        why="This machine is no longer on your stock records"
-                        label="Serial unavailable"
-                      />
-                    )}
-                  </td>
-                  <td className="py-4 pr-4 align-top">
-                    {l.sealCode ? (
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
-                          {l.sealCode}
-                        </span>
-                        {l.sealStatus && <SealChip status={l.sealStatus as SealStatus} />}
-                      </span>
-                    ) : (
-                      <NotMeasured
-                        why="No seal is recorded against this machine"
-                        label="No seal recorded"
-                      />
-                    )}
-                  </td>
-                  <td className="py-4 pr-4 align-top font-mono tnum text-ink">
-                    {gradeLabel(l.gradeAtPo)}
-                  </td>
-                  <td className="py-4 align-top text-body-sm text-ink-2">
-                    {l.title ?? (
-                      <NotMeasured
-                        why="The catalog entry for this machine could not be read"
-                        label="No catalog entry"
-                      />
-                    )}
-                    {l.skuCode && (
-                      <span className="mt-1 block font-mono text-body-sm text-ink-3">
-                        {l.skuCode}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {groups.map((group, i) => (
+          <ModelGroupBlock
+            key={`${group.skuCode ?? 'sku'}-${group.gradeAtPo}-${i}`}
+            group={group}
+            picked={picked}
+            onToggle={togglePick}
+          />
+        ))}
 
         <p className="mt-6 border-t border-rule pt-4 text-body-sm text-ink-2">
           No prices appear on this document. Under s.10(1)(b) of the IGST Act the goods travel

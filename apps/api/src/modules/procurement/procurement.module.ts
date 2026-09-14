@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CatalogModule } from '../catalog';
 import { QcModule } from '../qc';
+import { EventBusModule } from '../../shared/events/event-bus';
 import { ProcurementController } from './procurement.controller';
 import { PayablesController } from './payables.controller';
 import { OpsProcurementController } from './ops-procurement.controller';
@@ -28,7 +29,7 @@ import { OpsPurchaseOrderService } from './internal/ops-purchase-order.service';
  * the current one", which is a rule `qc` owns.
  */
 @Module({
-  imports: [CatalogModule, QcModule],
+  imports: [CatalogModule, QcModule, EventBusModule],
   controllers: [ProcurementController, PayablesController, OpsProcurementController],
   providers: [
     ProcurementService,

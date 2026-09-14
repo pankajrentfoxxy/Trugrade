@@ -5,11 +5,15 @@ import { ZodValidationPipe } from '../../shared/http/http';
 import {
   attachPoUnitSchema,
   attachableUnitsQuerySchema,
+  dispatchPoSchema,
   listPurchaseOrdersQuerySchema,
   poStatusSchema,
+  respondPoLinesSchema,
   type AttachPoUnitDto,
   type AttachableUnitsQueryDto,
+  type DispatchPoDto,
   type ListPurchaseOrdersQueryDto,
+  type RespondPoLinesDto,
 } from './dto/purchase-order.dto';
 import {
   PurchaseOrderService,
@@ -65,6 +69,12 @@ export class ProcurementController {
    * come back as a 422 about a malformed UUID — a failure nobody reading the
    * client could explain.
    */
+  @Get('kpis')
+  @RequirePermissions('procurement.po.read_own')
+  kpiSummary() {
+    return this.pos.kpiSummary();
+  }
+
   @Get('status-counts')
   @RequirePermissions('procurement.po.read_own')
   async statusCounts(): Promise<{ counts: Record<string, number>; total: number }> {
@@ -130,5 +140,25 @@ export class ProcurementController {
     @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
   ): Promise<VendorPoDetail> {
     return this.pos.acknowledge(poId);
+  }
+
+  @Post(':poId/respond')
+  @HttpCode(200)
+  @RequirePermissions('procurement.po.acknowledge')
+  respond(
+    @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
+    @Body(new ZodValidationPipe(respondPoLinesSchema)) body: RespondPoLinesDto,
+  ): Promise<VendorPoDetail> {
+    return this.pos.respond(poId, body.lines);
+  }
+
+  @Post(':poId/dispatch')
+  @HttpCode(200)
+  @RequirePermissions('procurement.po.acknowledge')
+  dispatch(
+    @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
+    @Body(new ZodValidationPipe(dispatchPoSchema)) body: DispatchPoDto,
+  ): Promise<VendorPoDetail> {
+    return this.pos.dispatch(poId, body);
   }
 }

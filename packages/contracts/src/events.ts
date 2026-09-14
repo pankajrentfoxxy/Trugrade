@@ -118,6 +118,18 @@ export const poRaisedPayload = z.object({
   valuationMethod: z.enum(['REGULAR', 'MARGIN']),
 });
 
+/** Emitted when a vendor accepts some lines and rejects others — buyer order is short. */
+export const poPartiallyRejectedPayload = z.object({
+  purchaseOrderId: z.string().uuid(),
+  poNumber: z.string(),
+  vendorOrgId: z.string().uuid(),
+  orderId: z.string().uuid(),
+  acceptedLineIds: z.array(z.string().uuid()),
+  rejectedLineIds: z.array(z.string().uuid()),
+  shortQty: z.number().int().nonnegative(),
+  owedNet: z.string(),
+});
+
 export const goodsReceiptWrittenPayload = z.object({
   purchaseOrderId: z.string().uuid(),
   unitIds: z.array(z.string().uuid()),
@@ -202,6 +214,7 @@ export const EVENT_PAYLOADS = {
   'qc.seal.broken': sealBrokenPayload,
   'order.confirmed': orderConfirmedPayload,
   'po.raised': poRaisedPayload,
+  'po.partially_rejected': poPartiallyRejectedPayload,
   'procurement.goods_receipt.written': goodsReceiptWrittenPayload,
   'payment.invoice.issued': invoiceIssuedPayload,
   'payment.captured': paymentCapturedPayload,
