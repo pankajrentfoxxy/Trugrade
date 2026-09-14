@@ -5,6 +5,7 @@ import {
   nextIncompleteSection,
   profileCompletionPct,
 } from '../routes/vendor/profile/sections.config';
+import { SubmitForReview, submitStage } from '../routes/vendor/profile/SubmitForReview';
 
 /**
  * Profile completion, on every screen rather than only on Home.
@@ -35,13 +36,31 @@ export function ProfileBanner({
   const next = nextIncompleteSection(null, onboarding);
   const done = next === null;
   const canAct = roles.some((r) => CAN_COMPLETE.has(r));
+  const verified = onboarding.status === 'VERIFIED';
+  const stage = submitStage(onboarding, roles);
 
   // A member who cannot complete a profile is told about it only while it is
-  // still blocking them. Once it is done the bar is noise on every screen.
-  if (done && !canAct) return null;
+  // still blocking them. Once the business is verified the bar is noise.
+  if (verified && !canAct) return null;
+
+  // Complete is not the same as verified. A finished profile that is waiting on
+  // the supplier to submit it, or on us to review it, says so here — the bar used
+  // to read "Listing is open" while every listing screen was still padlocked.
+  if (!verified && stage !== 'hidden') {
+    return (
+      <div className="hub-banner" data-testid="profile-banner">
+        <span className="hub-banner__label">Profile completion</span>
+        <span className="hub-banner__pill font-mono tnum">{pct}%</span>
+        <SubmitForReview className="hub-banner__next" onboarding={onboarding} roles={roles} />
+      </div>
+    );
+  }
 
   return (
-    <div className={done ? 'hub-banner hub-banner--done' : 'hub-banner'} data-testid="profile-banner">
+    <div
+      className={done ? 'hub-banner hub-banner--done' : 'hub-banner'}
+      data-testid="profile-banner"
+    >
       <span className="hub-banner__label">Profile completion</span>
       <span className="hub-banner__pill font-mono tnum">{pct}%</span>
       <span

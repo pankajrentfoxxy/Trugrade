@@ -8,8 +8,12 @@ import {
   StatusPill,
   useToast,
 } from '@trugrade/ui';
-import { getOnboarding, type ResumableOnboarding } from '../../../../../storefront/src/app/register/api';
+import type { ResumableOnboarding } from '@trugrade/contracts';
+import { getOnboarding } from '../../../../../storefront/src/app/register/api';
+import { useAuth } from '../../../lib/auth';
 import { useResource } from '../../../lib/useResource';
+import { useOnboardingReload } from '../../../lib/vendorOnboarding';
+import { SubmitForReview } from './SubmitForReview';
 import { API, type OrgProfile } from '../profile-api';
 import { BusinessGstSection } from './sections/BusinessGstSection';
 import { PickupSection } from './sections/PickupSection';
@@ -30,8 +34,21 @@ import './profile-hub.css';
 /**
  * ARCHETYPE C — Record cards that open Archetype F dialogs.
  */
+/** The org's status in the supplier's words. "In progress" used to cover all of these. */
+const STATUS_LABEL: Readonly<Record<string, string>> = {
+  VERIFIED: 'Verified',
+  PROFILE_SUBMITTED: 'In review',
+  KYC_SUBMITTED: 'In review',
+  UNDER_REVIEW: 'In review',
+  INFO_REQUESTED: 'Changes requested',
+  REJECTED: 'Not approved',
+  SUSPENDED: 'Suspended',
+};
+
 export function ProfileHub(): React.JSX.Element {
-  const { data: profile } = useResource<OrgProfile>(`${API}/account/profile`, 'Profile');
+  const { principal } = useAuth();
+  const { token, reload } = useOnboardingReload();
+  const { data: profile } = useResource<OrgProfile>(`${API}/account/profile`, 'Profile', token);
   const [onboarding, setOnboarding] = React.useState<ResumableOnboarding | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState<ProfileSectionId | null>(null);
@@ -50,12 +67,11 @@ export function ProfileHub(): React.JSX.Element {
 
   React.useEffect(() => {
     void loadOnboarding();
-  }, [loadOnboarding]);
+  }, [loadOnboarding, token]);
 
   const pct = profileCompletionPct(onboarding ?? undefined);
   const legalName =
-    profile?.legalName ??
-    String(onboarding?.answers.STATUTORY?.legalName ?? 'Your business');
+    profile?.legalName ?? String(onboarding?.answers.STATUTORY?.legalName ?? 'Your business');
 
   const handleSaved = (sectionId: ProfileSectionId): void => {
     void (async () => {
@@ -64,6 +80,8 @@ export function ProfileHub(): React.JSX.Element {
       const fresh = result.data;
       setOnboarding(fresh);
       setOpen(null);
+      // The shell's banner reads the same progress; keep it in step.
+      reload();
       const next = nextIncompleteSection(sectionId, fresh);
       if (next) {
         window.setTimeout(() => setOpen(next.id), 700);
@@ -73,7 +91,7 @@ export function ProfileHub(): React.JSX.Element {
         toast({
           tone: 'success',
           title: 'Profile complete',
-          body: 'Every required section is saved. You can submit for review when you are ready.',
+          body: 'Every required section is saved. Submit it for review from this page.',
         });
       }
     })();
@@ -115,11 +133,15 @@ export function ProfileHub(): React.JSX.Element {
           { label: 'Progress', value: `${pct}%`, sub: 'required sections' },
           {
             label: 'Status',
-            value: profile?.status === 'VERIFIED' ? 'Verified' : 'In progress',
+            value: (onboarding && STATUS_LABEL[onboarding.status]) ?? 'Not submitted',
             sub: 'listing unlocks after approval',
           },
         ]}
       />
+
+      {onboarding ? (
+        <SubmitForReview className="mt-6" onboarding={onboarding} roles={principal?.roles ?? []} />
+      ) : null}
 
       <div className="profile-hub-grid mt-6">
         {PROFILE_SECTIONS.map((section, index) => {
@@ -141,11 +163,11 @@ export function ProfileHub(): React.JSX.Element {
                   )}
                 </div>
                 {done ? <StatusPill tone="pass" label="Done" /> : null}
-                {!done && section.required ? (
-                  <StatusPill tone="warn" label="Required" />
-                ) : null}
+                {!done && section.required ? <StatusPill tone="warn" label="Required" /> : null}
               </div>
-              <p className="profile-hub-summary">{sectionSummary(section, onboarding ?? undefined)}</p>
+              <p className="profile-hub-summary">
+                {sectionSummary(section, onboarding ?? undefined)}
+              </p>
               <Button variant={done ? 'secondary' : 'primary'} onClick={() => setOpen(section.id)}>
                 {done ? 'Edit' : 'Fill now'}
               </Button>
