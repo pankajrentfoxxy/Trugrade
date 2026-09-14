@@ -309,7 +309,7 @@ describe('the batch-size decision', () => {
     const afterFirst = posts.filter((u) => u.endsWith('/api/vendor/listings')).length;
     expect(afterFirst).toBe(1);
 
-    await userEvent.click(screen.getByRole('button', { name: /inspect now/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Inspect now/i }));
 
     // The forbidden thing, attempted: a second create and a second attach of the
     // same three serials.

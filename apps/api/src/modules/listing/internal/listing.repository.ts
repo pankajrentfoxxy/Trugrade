@@ -592,6 +592,15 @@ export class ListingRepository {
       });
     }
 
+    const [org] = await this.prisma.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM identity.organization WHERE id = ${orgId}::uuid`;
+    if (!org || org.status !== 'VERIFIED') {
+      throw new ForbiddenError(
+        'Complete your supplier profile and wait for approval before listing stock.',
+        { reason: 'vendor_not_verified' },
+      );
+    }
+
     // The foreign key proves the address exists; it does not prove it is the
     // caller's. Pointing a listing at another org's pickup address would put
     // their warehouse on our dispatch paperwork, so ownership is checked here

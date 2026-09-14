@@ -12,8 +12,20 @@ import {
   Stepper,
   type RegisterCell,
 } from '@trugrade/ui';
+import type { ResumableOnboarding } from '../../../../storefront/src/app/register/api';
 import { useResource } from '../../lib/useResource';
 import { API, NO_DATE, onDate, rupees, type DashboardTiles, type VendorQueue } from './api';
+
+function profileCompletionPct(onboarding: ResumableOnboarding | undefined): number {
+  if (!onboarding?.progress?.steps) return 0;
+  const required = onboarding.progress.steps.filter((s) => s.isRequired);
+  if (required.length === 0) return 0;
+  const sum = required.reduce(
+    (acc, s) => acc + (s.status === 'COMPLETE' ? 100 : s.completionPct),
+    0,
+  );
+  return Math.round(sum / required.length);
+}
 
 /**
  * ARCHETYPE E — Workspace.
@@ -44,6 +56,13 @@ export function VendorDashboardRoute(): React.JSX.Element {
     API.dashboard,
     'Your dashboard is unavailable',
   );
+  const { data: onboarding } = useResource<ResumableOnboarding>(
+    '/api/onboarding/steps',
+    'Profile progress is unavailable',
+  );
+
+  const profilePct = profileCompletionPct(onboarding ?? undefined);
+  const listingUnlocked = onboarding?.status === 'VERIFIED';
 
   if (error) {
     return (
@@ -74,12 +93,28 @@ export function VendorDashboardRoute(): React.JSX.Element {
         <ClauseHeading
           n="01"
           kicker="Getting started"
-          title="List your first stock"
+          title="Complete your profile"
           actions={
-            <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
-              Create listing
-            </Button>
+            listingUnlocked ? (
+              <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
+                Create listing
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => void navigate('/vendor/profile')}>
+                Open profile
+              </Button>
+            )
           }
+        />
+        <RegisterStrip
+          cells={[
+            { label: 'Profile', value: `${profilePct}%`, sub: 'required before listing' },
+            {
+              label: 'Listings',
+              value: listingUnlocked ? 'Unlocked' : 'Locked',
+              sub: listingUnlocked ? 'ready to sell' : 'after approval',
+            },
+          ]}
         />
         <Stepper
           label="Getting started"
@@ -90,11 +125,20 @@ export function VendorDashboardRoute(): React.JSX.Element {
             summary,
           }))}
         />
-        <p>
-          <Link className="vl-link" to="/vendor/listings/new">
-            Start the first listing
-          </Link>
-        </p>
+        {listingUnlocked ? (
+          <p>
+            <Link className="vl-link" to="/vendor/listings/new">
+              Start the first listing
+            </Link>
+          </p>
+        ) : (
+          <p className="text-body-sm text-ink-3">
+            <Link className="vl-link" to="/vendor/profile">
+              Finish your supplier profile
+            </Link>{' '}
+            — listing opens after approval.
+          </p>
+        )}
       </div>
     );
   }

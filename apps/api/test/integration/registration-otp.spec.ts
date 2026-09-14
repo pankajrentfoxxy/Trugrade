@@ -1,6 +1,6 @@
 /**
- * Registration OTP refuses an address that is already in use before a code is
- * sent — the applicant should not have to finish step 1 to learn that.
+ * Registration OTP must not reveal whether an address is already registered.
+ * The send response is byte-identical; only delivery differs.
  */
 
 import { Test } from '@nestjs/testing';
@@ -15,7 +15,6 @@ import { AdaptersModule } from '../../src/shared/adapters/adapters.module';
 import { NotificationOutbox } from '../../src/shared/adapters/fakes/infra.fakes';
 import { TokenService } from '../../src/shared/auth/token.service';
 import { EventBus } from '../../src/shared/events';
-import { ValidationError } from '../../src/shared/errors/domain-errors';
 import { IdentityService } from '../../src/modules/identity/identity.service';
 import { IdentityController } from '../../src/modules/identity/identity.controller';
 import { PasswordService } from '../../src/modules/identity/internal/password.service';
@@ -42,6 +41,8 @@ let raw: PrismaClient;
 
 const KNOWN_EMAIL = 'procurement@harbourpoint.example';
 const KNOWN_MOBILE = '+919876543210';
+const NEW_EMAIL = 'new.applicant@harbourpoint.example';
+const NEW_MOBILE = '+919123456789';
 
 beforeAll(async () => {
   migrateTestDatabase();
@@ -96,11 +97,7 @@ beforeEach(async () => {
   clock.advanceTo(new Date('2026-08-27T06:00:00.000Z'));
 
   const orgId = await makeOrganization({ legal_name: 'Harbourpoint Devices Pvt Ltd' }, raw);
-  await makeUser(
-    orgId,
-    { email: KNOWN_EMAIL, full_name: 'Ishaan Malhotra' },
-    raw,
-  );
+  await makeUser(orgId, { email: KNOWN_EMAIL, full_name: 'Ishaan Malhotra' }, raw);
   await raw.$executeRaw`
     UPDATE identity.user_account SET mobile = ${KNOWN_MOBILE} WHERE email = ${KNOWN_EMAIL}`;
 });
@@ -109,50 +106,59 @@ function inRequest<T>(fn: () => Promise<T>, ip = '203.0.113.10'): Promise<T> {
   return ctx.run({ requestId: 'test', ip, userAgent: 'jest' }, fn);
 }
 
-const thrown = async (fn: () => Promise<unknown>): Promise<ValidationError> => {
-  try {
-    await fn();
-    throw new Error('Expected refusal');
-  } catch (error) {
-    if (!(error instanceof ValidationError)) throw error;
-    return error;
-  }
-};
+function withoutDevCode(body: Record<string, unknown>): Record<string, unknown> {
+  const { devCode: _d, ...rest } = body;
+  return rest;
+}
 
-describe('registration OTP availability', () => {
-  it('refuses a work email that is already registered before sending a code', async () => {
-    const error = await inRequest(() =>
-      thrown(() =>
-        controller.sendRegistrationOtp({ channel: 'EMAIL', value: KNOWN_EMAIL }),
-      ),
+describe('registration OTP — enumeration-safe send', () => {
+  it('returns the same response shape for a known and an unknown email', async () => {
+    const known = await inRequest(() =>
+      controller.sendRegistrationOtp({ channel: 'EMAIL', value: KNOWN_EMAIL }),
+    );
+    outbox.clear();
+    const unknown = await inRequest(() =>
+      controller.sendRegistrationOtp({ channel: 'EMAIL', value: NEW_EMAIL }),
     );
 
-    expect(error.message).toMatch(/already registered/i);
-    expect(error.fields?.value).toMatch(/already registered/i);
-    expect(outbox.all()).toHaveLength(0);
+    expect(Object.keys(withoutDevCode(known)).sort()).toEqual(
+      Object.keys(withoutDevCode(unknown)).sort(),
+    );
+    expect(known.channel).toBe('EMAIL');
+    expect(unknown.channel).toBe('EMAIL');
+    expect(outbox.all()).toHaveLength(1);
   });
 
-  it('refuses a mobile that is already registered before sending a code', async () => {
-    const error = await inRequest(() =>
-      thrown(() =>
-        controller.sendRegistrationOtp({ channel: 'MOBILE', value: KNOWN_MOBILE }),
-      ),
+  it('returns the same response shape for a known and an unknown mobile', async () => {
+    const known = await inRequest(() =>
+      controller.sendRegistrationOtp({ channel: 'MOBILE', value: KNOWN_MOBILE }),
+    );
+    outbox.clear();
+    const unknown = await inRequest(() =>
+      controller.sendRegistrationOtp({ channel: 'MOBILE', value: NEW_MOBILE }),
     );
 
-    expect(error.message).toMatch(/already registered/i);
-    expect(error.fields?.value).toMatch(/already registered/i);
-    expect(outbox.all()).toHaveLength(0);
+    expect(Object.keys(withoutDevCode(known)).sort()).toEqual(
+      Object.keys(withoutDevCode(unknown)).sort(),
+    );
+    expect(outbox.all()).toHaveLength(1);
   });
 
-  it('sends a code to an address nobody has registered yet', async () => {
-    const reply = await inRequest(() =>
-      controller.sendRegistrationOtp({
-        channel: 'EMAIL',
-        value: 'new.applicant@harbourpoint.example',
-      }),
+  it('sends nothing to an address that is already registered', async () => {
+    await inRequest(() =>
+      controller.sendRegistrationOtp({ channel: 'EMAIL', value: KNOWN_EMAIL }),
     );
+    expect(outbox.all()).toHaveLength(0);
+  });
+});
 
-    expect(reply.sentTo).toMatch(/new\./);
-    expect(outbox.all().length).toBeGreaterThan(0);
+describe('registration OTP — duplicate caught at register', () => {
+  it('names a duplicate mobile when register is attempted', async () => {
+    const identity = moduleRef.get(IdentityService);
+    await expect(
+      identity.assertRegistrationContactAvailable('MOBILE', KNOWN_MOBILE),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/already registered/i) as unknown,
+    });
   });
 });

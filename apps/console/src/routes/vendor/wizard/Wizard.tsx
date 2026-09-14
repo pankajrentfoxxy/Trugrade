@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button, EmptyState, type Step } from '@trugrade/ui';
 import { PageHeader } from '../../../lib/controls';
-import { API, postJson, rupees, type MoneyString, type VendorListing } from '../api';
+import { API, postJson, type MoneyString, type VendorListing } from '../api';
 import { payoutBlocker, useDraft, type WizardDraft } from './draft';
 import { StepMachine } from './StepMachine';
 import { StepCondition } from './StepCondition';

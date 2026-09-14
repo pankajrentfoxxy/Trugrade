@@ -39,7 +39,6 @@ export function StepPrice({
   const [preview, setPreview] = React.useState<PayoutPreview | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const units = draft.serials.length;
-  const amount = draft.netPayoutRupees.trim();
   const payoutError = payoutBlocker(draft.netPayoutRupees) || undefined;
 
   React.useEffect(() => {

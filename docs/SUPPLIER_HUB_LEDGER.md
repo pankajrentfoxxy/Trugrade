@@ -7,7 +7,7 @@
 | Stage | What | Status | Commit | Screens verified | Notes |
 |-------|------|--------|--------|------------------|-------|
 | 0 | Context / ledger | DONE | — | — | This file. Stage 0 rules re-read each session. |
-| 1 | Hub token scope, type scale, contrast | DONE | pending | 1-admin-* | `data-surface=hub` in `globals.css`, `hub-scope.spec.ts`, hub block in `tokens.spec.ts`. Safety: absent attribute → no change. |
+| 1 | Hub token scope, type scale, contrast | DONE | 8b7a443 | 1-admin-* | `data-surface=hub` in `globals.css`, `hub-scope.spec.ts`, hub block in `tokens.spec.ts`. Safety: absent attribute → no change. |
 | 2 | VendorShell + grouped nav | DONE | f15a886 | — | `VendorShell.tsx`, `useVendorCounts.ts`, `vendor-surface.tsx`, nav regrouped (Today/Sell/Inspect/Fulfil/Money/Account). `Shell.tsx` filter: `surface !== 'VENDOR'` only. |
 | 3 | Ledger primitives + scoped CSS | DONE | f15a886 | — | `ClauseHeading`, `LedgerRow`, `RegisterStrip`, `InfoPopover`, `PermissionGrid`. MANIFEST table/button overrides in `globals.css`. |
 | 4 | Today, Listings, Units | DONE | f15a886 | — | Dashboard rebuilt. Listings/units restyled. |
@@ -16,6 +16,16 @@
 | 7 | Money | DONE | f15a886 | — | Payables restyled. Payouts honest empty state. |
 | 8 | Team & access | PARTIAL | f15a886 | — | Members from `GET /api/account/team`. Invite send not wired (no invite API). |
 | 9 | Close-out | TODO | — | — | Screenshots, word-count pass, `SUPPLIER_HUB_REVIEW.md`, CI green. |
+
+## One-minute supplier signup (plan §3)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `/sell/register` four-step flow | DONE | `SupplierSignup.tsx` on console; old seven-step components kept for Stage 9 cleanup. |
+| Enumeration-safe register OTP | DONE | Same response shape for known/unknown; duplicate named at `POST /auth/register`. |
+| Org bootstrap | DONE | `POST /auth/register` + `POST /api/onboarding/start` — no new KYC endpoint. |
+| Listing lock until VERIFIED | DONE | UI on dashboard + `createDraft` server gate. |
+| Screenshots `3-sell-register-*` | DONE | 1900 / 1440 / 600 px. |
 
 ## Dashboard fields used / omitted (Stage 2.4)
 

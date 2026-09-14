@@ -268,13 +268,11 @@ export class IdentityService implements IIdentityService {
    * and learning the address is taken before they prove the mailbox saves a form
    * full of typing.
    */
-  async assertRegistrationContactAvailable(
-    channel: 'EMAIL' | 'MOBILE',
-    value: string,
-  ): Promise<void> {
+  /** Whether a contact is already on an active account — used to gate OTP delivery. */
+  async isRegistrationContactTaken(channel: 'EMAIL' | 'MOBILE', value: string): Promise<boolean> {
     if (channel === 'EMAIL') {
       const email = normaliseEmail(value);
-      if (!email) return;
+      if (!email) return false;
 
       const found = await this.prisma.$queryRaw<Array<{ email: string | null }>>`
         SELECT email::text AS email FROM identity.user_account
@@ -282,16 +280,11 @@ export class IdentityService implements IIdentityService {
           AND status <> 'DEACTIVATED'
         LIMIT 1`;
 
-      if (found[0]?.email) {
-        throw new ValidationError(IdentityService.EMAIL_REGISTERED, {
-          value: IdentityService.EMAIL_REGISTERED,
-        });
-      }
-      return;
+      return Boolean(found[0]?.email);
     }
 
     const mobile = normaliseMobile(value);
-    if (!mobile) return;
+    if (!mobile) return false;
 
     const found = await this.prisma.$queryRaw<Array<{ mobile: string | null }>>`
       SELECT mobile FROM identity.user_account
@@ -299,11 +292,32 @@ export class IdentityService implements IIdentityService {
         AND status <> 'DEACTIVATED'
       LIMIT 1`;
 
-    if (found[0]?.mobile) {
-      throw new ValidationError(IdentityService.MOBILE_REGISTERED, {
-        value: IdentityService.MOBILE_REGISTERED,
-      });
-    }
+    return Boolean(found[0]?.mobile);
+  }
+
+  /**
+   * Checked at `POST /auth/register` so a duplicate is named after both channels
+   * are proved. The OTP send path never throws on a taken address — that would
+   * enumerate the supplier list.
+   */
+  async assertRegistrationContactAvailable(
+    channel: 'EMAIL' | 'MOBILE',
+    value: string,
+  ): Promise<void> {
+    const taken = await this.isRegistrationContactTaken(channel, value);
+    if (!taken) return;
+
+    throw new ValidationError(
+      channel === 'EMAIL'
+        ? IdentityService.EMAIL_REGISTERED
+        : IdentityService.MOBILE_REGISTERED,
+      {
+        value:
+          channel === 'EMAIL'
+            ? IdentityService.EMAIL_REGISTERED
+            : IdentityService.MOBILE_REGISTERED,
+      },
+    );
   }
 
   private async assertContactAvailable(email: string, mobile: string): Promise<void> {

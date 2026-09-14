@@ -37,10 +37,42 @@ const STOCKED = {
   queues: QUEUES,
 };
 
+const ONBOARDING_REGISTERED = {
+  orgId: 'org-test',
+  status: 'REGISTERED',
+  slaDueAt: null,
+  slaBreached: false,
+  decision: null,
+  progress: {
+    constitution: null,
+    steps: [
+      {
+        stepCode: 'LEGAL',
+        isRequired: true,
+        status: 'NOT_STARTED',
+        completionPct: 0,
+      },
+    ],
+    resumeAt: 'LEGAL',
+    completedSteps: 0,
+    requiredSteps: 1,
+    isSubmittable: false,
+  },
+  answers: {},
+};
+
 function mockDashboard(body: unknown, ok = true): void {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-    Promise.resolve({ ok, status: ok ? 200 : 500, json: async () => body } as Response),
-  );
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/api/onboarding/steps')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ONBOARDING_REGISTERED,
+      } as Response);
+    }
+    return Promise.resolve({ ok, status: ok ? 200 : 500, json: async () => body } as Response);
+  });
 }
 
 const draw = (): ReturnType<typeof render> =>
@@ -128,7 +160,9 @@ describe('a vendor with nothing listed', () => {
       },
     });
     draw();
-    expect(await screen.findByText('List your first stock')).toBeTruthy();
+    expect(await screen.findByText('Complete your profile')).toBeTruthy();
+    expect(screen.getByText('0%')).toBeTruthy();
+    expect(screen.getByText('Locked')).toBeTruthy();
     expect(screen.queryByTestId('kpi-row')).toBeNull();
   });
 

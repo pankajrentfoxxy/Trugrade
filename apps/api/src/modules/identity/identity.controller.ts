@@ -1,6 +1,12 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
 import type { CookieOptions, Request, Response } from 'express';
-import { uuidSchema, type Permission, type Role } from '@trugrade/contracts';
+import {
+  normaliseEmail,
+  normaliseMobile,
+  uuidSchema,
+  type Permission,
+  type Role,
+} from '@trugrade/contracts';
 import { Public } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
@@ -279,11 +285,10 @@ export class IdentityController {
   //
   //   1. **Cost.** Every call sends an SMS we pay for. `OtpService` caps a
   //      single target; `REGISTER_OTP_IP_LIMIT` caps a caller walking a list.
-  //   2. **Enumeration on login.** `login/otp` and `password/forgot` never look
-  //      the address up — a known-address answer would be a supplier directory.
-  //      Registration is different: the applicant is trying to *create* an
-  //      account, so `sendRegistrationOtp` refuses an address that is already
-  //      taken before it sends a code they cannot use.
+  //   2. **Enumeration on every send.** `login/otp`, `password/forgot` and
+  //      `register/otp` all answer from the typed address and the clock, never
+  //      from whether the address is already on an account. Duplicates are named
+  //      at `POST /auth/register`, after both channels are proved.
 
   /**
    * Send a six-digit code to a work email or an Indian mobile.
@@ -302,19 +307,25 @@ export class IdentityController {
     const ctx = this.ctx.get();
     await this.limiter.consume(REGISTER_OTP_IP_LIMIT, ctx?.ip ?? 'unknown');
 
-    await this.identity.assertRegistrationContactAvailable(body.channel, body.value);
+    const target =
+      body.channel === 'EMAIL'
+        ? (normaliseEmail(body.value) ?? body.value.trim().toLowerCase())
+        : (normaliseMobile(body.value) ?? body.value.trim());
+
+    const deliver = !(await this.identity.isRegistrationContactTaken(body.channel, body.value));
 
     const issued = await this.otp.issue({
-      target: body.value,
+      target,
       purpose: 'REGISTRATION',
       channel: body.channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
       templateCode: REGISTER_OTP_TEMPLATE,
       isProduction: this.config.isProduction,
+      deliver,
     });
 
     return {
       channel: body.channel,
-      sentTo: maskValue(body.value),
+      sentTo: maskValue(target),
       expiresAt: issued.expiresAt.toISOString(),
       resendAvailableAt: issued.resendAvailableAt.toISOString(),
       ...(issued.devCode ? { devCode: issued.devCode } : {}),

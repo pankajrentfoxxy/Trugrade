@@ -1,0 +1,165 @@
+/**
+ * Supplier one-minute signup — Archetype F, outside HubShell.
+ */
+.sup-signup-page {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px 48px;
+  background: var(--ground);
+}
+
+.sup-signup-card {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  width: min(980px, 100%);
+  min-height: 520px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  background: var(--sheet);
+}
+
+.sup-signup-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 32px 28px;
+  background: linear-gradient(165deg, var(--acc) 0%, var(--acc-dk) 100%);
+  color: var(--acc-on);
+}
+
+.sup-signup-brand .wm {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sup-signup-brand .wm .g {
+  color: var(--brand-tint, var(--acc-on));
+}
+
+.sup-signup-claim {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 28px 0 20px;
+}
+
+.sup-signup-ticks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.sup-signup-ticks li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sup-signup-ticks li::before {
+  content: '✓';
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sup-signup-legal {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+.sup-signup-main {
+  padding: 28px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sup-signup-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.sup-signup-progress span {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--rule);
+}
+
+.sup-signup-progress span[data-active='true'] {
+  background: var(--acc);
+}
+
+.sup-signup-step-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.sup-signup-mobile-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sup-signup-prefix {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet-2);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.sup-signup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.sup-signup-meter {
+  display: flex;
+  gap: 4px;
+  height: 4px;
+}
+
+.sup-signup-meter span {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--rule);
+}
+
+.sup-signup-meter span[data-on='true'] {
+  background: var(--acc);
+}
+
+@media (max-width: 979px) {
+  .sup-signup-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sup-signup-brand {
+    display: none;
+  }
+}
