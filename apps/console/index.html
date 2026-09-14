@@ -11,10 +11,10 @@
     />
     <!--
       Console pre-paint read. Light everywhere. A first paint on /vendor/* and
-      /sell/* already carries the supplier hub surface, so neither the admin
+      /sell/*, /login, /forgot-password and /team/accept already carry the supplier hub surface, so neither the admin
       palette nor the dark masthead flashes.
     -->
-    <script>try{document.documentElement.setAttribute('data-t','light');localStorage.setItem('tg-console-theme','light');var p=location.pathname;if(p.indexOf('/vendor')===0||p.indexOf('/sell')===0){document.documentElement.setAttribute('data-surface','hub');document.documentElement.setAttribute('data-density','default')}}catch(e){}</script>
+    <script>try{document.documentElement.setAttribute('data-t','light');localStorage.setItem('tg-console-theme','light');var p=location.pathname;if(p.indexOf('/vendor')===0||p.indexOf('/sell')===0||p.indexOf('/login')===0||p.indexOf('/forgot-password')===0||p.indexOf('/team/accept')===0){document.documentElement.setAttribute('data-surface','hub');document.documentElement.setAttribute('data-density','default')}}catch(e){}</script>
     <title>Console</title>
   </head>
   <body>

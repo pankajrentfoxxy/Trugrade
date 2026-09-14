@@ -22,6 +22,31 @@
   background: var(--sheet);
 }
 
+/* A credential screen whose panel needs the whole card (a reviewer's decision). */
+.sup-signup-card--solo {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(760px, 100%);
+}
+
+/* The wordmark above a console credential form, linking to the storefront. */
+.sup-signup-home {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.sup-signup-home .g {
+  color: var(--acc-ink);
+}
+
+/* The brand panel already carries the wordmark beside the form. */
+.sup-signup-card:not(.sup-signup-card--solo) .sup-signup-home {
+  display: none;
+}
+
 .sup-signup-brand {
   display: flex;
   flex-direction: column;
@@ -321,6 +346,10 @@
 
   .sup-signup-brand {
     display: none;
+  }
+
+  .sup-signup-card:not(.sup-signup-card--solo) .sup-signup-home {
+    display: inline-block;
   }
 
   .sup-signup-main {

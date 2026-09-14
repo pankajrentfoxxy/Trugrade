@@ -110,20 +110,6 @@ export function LoginRoute(): React.JSX.Element {
     }
   }, [principal, stage.k, navigate]);
 
-  /** Archetype F: one screen, no document scroll behind the form. */
-  React.useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtml = html.style.overflow;
-    const prevBody = body.style.overflow;
-    html.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
-    return () => {
-      html.style.overflow = prevHtml;
-      body.style.overflow = prevBody;
-    };
-  }, []);
-
   const refuse = (failure: AuthFailure): void => {
     setBusy(false);
     if (failure.code === 'RATE_LIMITED') {

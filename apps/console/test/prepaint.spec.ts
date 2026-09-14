@@ -26,4 +26,27 @@ describe('the pre-paint theme read', () => {
     expect(html.indexOf('<script>')).toBeGreaterThan(html.indexOf('fonts.googleapis.com/css2'));
     expect(html).toContain('data-t="light"');
   });
+
+  it('paints every supplier-facing credential route on the hub surface, and no staff route', () => {
+    const surfaceFor = (path: string): string | null => {
+      window.history.replaceState(null, '', path);
+      document.documentElement.removeAttribute('data-surface');
+      new Function(THEME_CONSOLE_PREPAINT_SCRIPT)();
+      return document.documentElement.getAttribute('data-surface');
+    };
+    for (const path of [
+      '/login',
+      '/forgot-password',
+      '/team/accept?token=x',
+      '/sell/register',
+      '/vendor',
+    ]) {
+      expect(surfaceFor(path)).toBe('hub');
+    }
+    for (const path of ['/overview', '/kyc', '/']) {
+      expect(surfaceFor(path)).toBeNull();
+    }
+    document.documentElement.removeAttribute('data-surface');
+    document.documentElement.removeAttribute('data-density');
+  });
 });

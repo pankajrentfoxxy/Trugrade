@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { Button, Input, OtpInput } from '@trugrade/ui';
+import { SupplierBrandPanel } from '../../AuthShell';
+import { VendorSurfaceSync } from '../../lib/vendor-surface';
 import { OTP_POLICY } from '@trugrade/contracts';
 import {
   register,
@@ -29,13 +30,6 @@ import './supplier-signup.css';
 /**
  * ARCHETYPE F — Focus. One-minute supplier signup; business details come later.
  */
-const CLAIMS = [
-  'We inspect, grade and seal every machine before it goes live',
-  'Your name is never shown to buyers',
-  'Payment on a fixed cycle, every deduction itemised',
-  'No listing fee, no monthly fee',
-] as const;
-
 const STEP_LABELS = ['Mobile', 'Verify', 'Email', 'Account'] as const;
 
 type Step = 1 | 2 | 3 | 4;
@@ -54,18 +48,6 @@ interface ContactRefusal {
   devCode: string | null;
   busy: boolean;
   error: string | null;
-}
-
-/** Hub tokens live on `:root[data-surface='hub']`, not on a nested div. */
-function SignupSurfaceSync(): null {
-  React.useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.setAttribute('data-surface', 'hub');
-    return () => {
-      root.removeAttribute('data-surface');
-    };
-  }, []);
-  return null;
 }
 
 export interface SupplierSignupProps {
@@ -396,27 +378,9 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
 
   return (
     <div className="sup-signup-page">
-      <SignupSurfaceSync />
+      <VendorSurfaceSync />
       <div className="sup-signup-card">
-        <aside className="sup-signup-brand" aria-hidden="true">
-          <div>
-            <p className="sup-signup-wm">
-              tru<span className="g">grade</span>
-            </p>
-            <p className="sup-signup-claim">Sell refurbished laptops to Indian businesses.</p>
-            <ul className="sup-signup-ticks">
-              {CLAIMS.map((line) => (
-                <li key={line}>
-                  <span className="sup-signup-tick-icon" aria-hidden="true">
-                    ✓
-                  </span>
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <p className="sup-signup-legal">{LEGAL_DISCLOSURE.legalName}</p>
-        </aside>
+        <SupplierBrandPanel />
 
         <div className="sup-signup-main">
           {mfaSentTo ? (
