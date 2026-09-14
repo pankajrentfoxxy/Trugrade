@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { useProfileGateOrRender } from './ProfileLockGate';
@@ -65,7 +65,13 @@ describe('a locked board', () => {
 
     expect(await screen.findByText('Finish your profile to unlock listings')).toBeTruthy();
     expect(screen.getByText('We verify every supplier before machines go on sale.')).toBeTruthy();
-    for (const title of ['Business & GST', 'Pickup address', 'Bank account', 'Documents', 'Supplier agreement']) {
+    for (const title of [
+      'Business & GST',
+      'Pickup address',
+      'Bank account',
+      'Documents',
+      'Supplier agreement',
+    ]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
     // Recommended and unweighted — "What you stock" is not one of the five
@@ -78,7 +84,12 @@ describe('a locked board', () => {
     mockOnboarding({
       status: 'REGISTERED',
       // Business is done; Pickup is the next thing actually blocking.
-      progress: { steps: [{ stepCode: 'BUSINESS_PROFILE', status: 'COMPLETE' }, { stepCode: 'STATUTORY', status: 'COMPLETE' }] },
+      progress: {
+        steps: [
+          { stepCode: 'BUSINESS_PROFILE', status: 'COMPLETE' },
+          { stepCode: 'STATUTORY', status: 'COMPLETE' },
+        ],
+      },
       answers: { DOCUMENTS_BANK: {} },
     });
     draw();
@@ -102,6 +113,38 @@ describe('a locked board', () => {
 
     expect(await screen.findByTestId('unlocked')).toBeTruthy();
     expect(screen.queryByText(/Finish your profile/)).toBeNull();
+  });
+
+  describe('for a seat refused onboarding (403)', () => {
+    const mockSeat = (orgStatus: string): void => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.includes('/api/onboarding/steps')) {
+          return Promise.resolve({ ok: false, status: 403, json: async () => ({}) } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ status: orgStatus }),
+        } as Response);
+      });
+    };
+
+    it('reads the org status instead and names who can unlock it', async () => {
+      mockSeat('REGISTERED');
+      draw();
+      expect(
+        await screen.findByText(/Ask your account owner to finish the supplier profile/),
+      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /^Continue —/ })).toBeNull();
+      expect(screen.queryByTestId('unlocked')).toBeNull();
+    });
+
+    it('lets the board render once the org is VERIFIED', async () => {
+      mockSeat('VERIFIED');
+      draw();
+      expect(await screen.findByTestId('unlocked')).toBeTruthy();
+    });
   });
 
   it('does not lock the board just because the profile fetch itself failed', async () => {

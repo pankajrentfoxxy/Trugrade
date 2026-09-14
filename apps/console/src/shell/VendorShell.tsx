@@ -5,13 +5,13 @@ import { cn } from '@trugrade/ui';
 import { useAuth, type Principal } from '../lib/auth';
 import { VendorSurfaceSync } from '../lib/vendor-surface';
 import { useResource } from '../lib/useResource';
+import { OnboardingReloadContext, useVendorOnboarding } from '../lib/vendorOnboarding';
 import type { OrgProfile } from '../routes/vendor/profile-api';
 import { ROLE_LABEL } from '../routes/vendor/team/capability-matrix';
 import { VendorCountsProvider, useVendorCounts, type VendorCounts } from './useVendorCounts';
 import { activeEntry, canSee, NAV, visibleGroups, type NavEntry } from './nav';
 import { LockIcon, RailIcon, SearchIcon } from './rail-icons';
 import { ProfileBanner } from './ProfileBanner';
-import type { ResumableOnboarding } from '../../../storefront/src/app/register/api';
 import './vendor-hub.css';
 
 /**
@@ -62,7 +62,10 @@ function roleLabel(principal: Principal | null | undefined): string | null {
  * carried a rounded rupee total here; five glyphs do not fit a 40px tile, and a
  * figure that matters is worth reading in full on the screen that owns it.
  */
-function countFor(entry: NavEntry, counts: VendorCounts | undefined): { text: string; work: boolean } | null {
+function countFor(
+  entry: NavEntry,
+  counts: VendorCounts | undefined,
+): { text: string; work: boolean } | null {
   if (!counts) return null;
   switch (entry.to) {
     case '/vendor/listings':
@@ -187,7 +190,11 @@ function Rail({
       >
         {open ? 'Close menu' : 'Menu'}
       </button>
-      <aside id="vendor-rail" aria-label="Vendor" className={cn('hub-rail', !open && 'max-[899px]:hidden')}>
+      <aside
+        id="vendor-rail"
+        aria-label="Vendor"
+        className={cn('hub-rail', !open && 'max-[899px]:hidden')}
+      >
         {groups.map(([group, entries]) => (
           <div key={group} className="contents">
             <div className="hub-rail__group">{group}</div>
@@ -244,13 +251,18 @@ function VendorFooter(): React.JSX.Element {
           <p className="mt-2 font-mono text-[11px] text-ink-3">{legalName}</p>
         </div>
         <div>
-          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">Office</h5>
+          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">
+            Office
+          </h5>
           <address className="mt-2 font-mono text-[12px] not-italic leading-[1.7] text-ink-3">
             {office.line1}
             <br />
             {office.city}, {office.state} {office.pincode}
           </address>
-          <a href={website} className="mt-2 inline-block font-mono text-[12px] text-ink-3 underline">
+          <a
+            href={website}
+            className="mt-2 inline-block font-mono text-[12px] text-ink-3 underline"
+          >
             {website}
           </a>
         </div>
@@ -273,11 +285,15 @@ function VendorFooter(): React.JSX.Element {
 export function VendorShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const { principal } = useAuth();
   const { pathname } = useLocation();
-  const { data: profile } = useResource<OrgProfile>('/api/account/profile', 'Profile');
-  const { data: onboarding } = useResource<ResumableOnboarding>(
-    '/api/onboarding/steps',
-    'Onboarding',
+  const [reloadToken, setReloadToken] = React.useState(0);
+  const reload = React.useMemo(
+    () => ({ token: reloadToken, reload: () => setReloadToken((n) => n + 1) }),
+    [reloadToken],
   );
+  const { data: profile } = useResource<OrgProfile>('/api/account/profile', 'Profile', reloadToken);
+  // Never blocks the frame: the rail, masthead and page do not depend on it, and
+  // a seat refused onboarding (403) simply gets no banner.
+  const onboarding = useVendorOnboarding(reloadToken);
 
   const vendorEntries = principal
     ? NAV.filter((n) => n.surface === 'VENDOR' && canSee(n, principal))
@@ -297,31 +313,36 @@ export function VendorShell({ children }: { children: React.ReactNode }): React.
   const active = activeEntry(pathname, vendorEntries);
 
   return (
-    <VendorCountsProvider>
-      <VendorSurfaceSync />
-      <div className="vendor-hub">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-2 focus:z-40 focus:rounded focus:bg-acc focus:px-3 focus:py-2 focus:text-acc-on"
-        >
-          Skip to content
-        </a>
-        <Masthead profile={profile} />
-        <ProfileBanner onboarding={onboarding ?? null} roles={principal?.roles ?? []} />
-        <div className="hub-body">
-          {groups.length > 0 ? (
-            <Rail
-              groups={groups}
-              active={active}
-              verified={profile ? profile.status === 'VERIFIED' : undefined}
-            />
-          ) : null}
-          <main id="main" className="hub-main">
-            {children}
-          </main>
+    <OnboardingReloadContext.Provider value={reload}>
+      <VendorCountsProvider>
+        <VendorSurfaceSync />
+        <div className="vendor-hub">
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-2 focus:z-40 focus:rounded focus:bg-acc focus:px-3 focus:py-2 focus:text-acc-on"
+          >
+            Skip to content
+          </a>
+          <Masthead profile={profile} />
+          <ProfileBanner
+            onboarding={onboarding.kind === 'ready' ? onboarding.data : null}
+            roles={principal?.roles ?? []}
+          />
+          <div className="hub-body">
+            {groups.length > 0 ? (
+              <Rail
+                groups={groups}
+                active={active}
+                verified={profile ? profile.status === 'VERIFIED' : undefined}
+              />
+            ) : null}
+            <main id="main" className="hub-main">
+              {children}
+            </main>
+          </div>
+          <VendorFooter />
         </div>
-        <VendorFooter />
-      </div>
-    </VendorCountsProvider>
+      </VendorCountsProvider>
+    </OnboardingReloadContext.Provider>
   );
 }

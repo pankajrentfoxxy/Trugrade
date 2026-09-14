@@ -10,8 +10,11 @@ import {
   Skeleton,
   StatusPill,
 } from '@trugrade/ui';
-import type { ResumableOnboarding } from '../../../../storefront/src/app/register/api';
+import type { ResumableOnboarding } from '@trugrade/contracts';
 import { useResource } from '../../lib/useResource';
+import { useVendorOnboarding } from '../../lib/vendorOnboarding';
+import { AskOwnerGate } from './ProfileLockGate';
+import type { OrgProfile } from './profile-api';
 import { API, rupees, type DashboardTiles, type PayablesView, type VendorQueue } from './api';
 import { getTeam, type TeamPayload } from './team/teamApi';
 import { ROLE_LABEL } from './team/capability-matrix';
@@ -108,7 +111,11 @@ function ProfileGate({
             <article key={section.id} className="rounded border border-rule bg-sheet p-4">
               <div className="flex items-start justify-between gap-2">
                 <h2 className="text-body font-medium text-ink">{section.title}</h2>
-                {done ? <StatusPill tone="pass" label="Done" /> : <StatusPill tone="warn" label="Open" />}
+                {done ? (
+                  <StatusPill tone="pass" label="Done" />
+                ) : (
+                  <StatusPill tone="warn" label="Open" />
+                )}
               </div>
               <p className="mt-2 text-body-sm text-ink-3">{sectionSummary(section, onboarding)}</p>
               <Button
@@ -129,11 +136,15 @@ function ProfileGate({
 export function VendorDashboardRoute(): React.JSX.Element {
   const navigate = useNavigate();
   const { data, error } = useResource<DashboardTiles>(API.dashboard, 'Dashboard unavailable');
-  const { data: onboarding } = useResource<ResumableOnboarding>(
-    '/api/onboarding/steps',
+  const onboarding = useVendorOnboarding();
+  const { data: profile, error: profileError } = useResource<OrgProfile>(
+    '/api/account/profile',
     'Profile unavailable',
   );
-  const { data: payables } = useResource<PayablesView>(API.payables, 'Payables unavailable');
+  const { data: payables, error: payablesError } = useResource<PayablesView>(
+    API.payables,
+    'Payables unavailable',
+  );
   const [team, setTeam] = React.useState<TeamPayload | null>(null);
 
   React.useEffect(() => {
@@ -142,13 +153,25 @@ export function VendorDashboardRoute(): React.JSX.Element {
     });
   }, []);
 
-  const profileComplete = onboarding != null && onboarding.status === 'VERIFIED';
+  // Onboarding answers the question for the owner and admin; every other seat is
+  // refused it by design (403), and reads the org's own status instead. Neither
+  // answer is allowed to hold the whole page on a skeleton.
+  const verified =
+    onboarding.kind === 'ready'
+      ? onboarding.data.status === 'VERIFIED'
+      : profile
+        ? profile.status === 'VERIFIED'
+        : undefined;
 
   if (error) {
     return <EmptyState title="Dashboard did not load" body={error} />;
   }
 
-  if (!data || !onboarding) {
+  if (onboarding.kind !== 'ready' && verified === undefined && profileError) {
+    return <EmptyState title="Dashboard did not load" body={profileError} />;
+  }
+
+  if (!data || onboarding.kind === 'loading' || verified === undefined) {
     return (
       <div className="hub-page">
         <HubPageHeader title="Home" />
@@ -157,7 +180,15 @@ export function VendorDashboardRoute(): React.JSX.Element {
     );
   }
 
-  if (!profileComplete) {
+  if (!verified) {
+    if (onboarding.kind !== 'ready') {
+      return (
+        <div className="hub-page">
+          <HubPageHeader title="Home" />
+          <AskOwnerGate section="listings, orders and payouts" />
+        </div>
+      );
+    }
     return (
       <div className="hub-page">
         <HubPageHeader
@@ -168,7 +199,7 @@ export function VendorDashboardRoute(): React.JSX.Element {
             </Button>
           }
         />
-        <ProfileGate onboarding={onboarding} onOpen={() => void navigate('/vendor/profile')} />
+        <ProfileGate onboarding={onboarding.data} onOpen={() => void navigate('/vendor/profile')} />
       </div>
     );
   }
@@ -244,6 +275,12 @@ export function VendorDashboardRoute(): React.JSX.Element {
                 <LedgerRow label="QC fees" value={`− ${rupees(payables.statement.qcFees)}`} />
                 <LedgerRow label="Net" value={rupees(payables.statement.net)} total />
               </>
+            ) : payablesError ? (
+              <p className="px-5 py-4 text-body-sm text-ink-3">
+                {payablesError.includes('(403)')
+                  ? 'Payouts are visible to the account owner and finance.'
+                  : `${payablesError}. Reload to try again.`}
+              </p>
             ) : (
               <div className="px-5 py-4">
                 <Skeleton lines={4} />

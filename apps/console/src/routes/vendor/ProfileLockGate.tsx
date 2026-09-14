@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { Button, HubPageHeader, Skeleton } from '@trugrade/ui';
-import type { ResumableOnboarding } from '../../../../storefront/src/app/register/api';
+import type { ResumableOnboarding } from '@trugrade/contracts';
+import { fetchOnboarding } from '../../lib/vendorOnboarding';
+import type { OrgProfile } from './profile-api';
 import { nextIncompleteSection, PROFILE_SECTIONS, sectionIsDone } from './profile/sections.config';
 
 /**
@@ -18,22 +20,36 @@ import { nextIncompleteSection, PROFILE_SECTIONS, sectionIsDone } from './profil
 
 /** Where each gated route sends a vendor to keep working. */
 export function useProfileGate(): {
-  /** `undefined` while in flight — never render the gate on a guess. */
+  /** `undefined` while in flight, and for a seat that may not read onboarding. */
   onboarding: ResumableOnboarding | undefined;
   loadError: string | null;
   verified: boolean | undefined;
 } {
   const [onboarding, setOnboarding] = React.useState<ResumableOnboarding | undefined>(undefined);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [verified, setVerified] = React.useState<boolean | undefined>(undefined);
 
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const state = await fetchOnboarding();
+      if (cancelled) return;
+      if (state.kind === 'ready') {
+        setOnboarding(state.data);
+        setVerified(state.data.status === 'VERIFIED');
+        return;
+      }
+      if (state.kind === 'error') {
+        setLoadError(state.message);
+        return;
+      }
+      // 403: this seat cannot read onboarding (Ops, Finance, Viewer), but every
+      // member can read the org's own status, and that is all the gate needs.
       try {
-        const res = await fetch('/api/onboarding/steps', { credentials: 'include' });
+        const res = await fetch('/api/account/profile', { credentials: 'include' });
         if (!res.ok) throw new Error(`Profile unavailable (${res.status})`);
-        const data = (await res.json()) as ResumableOnboarding;
-        if (!cancelled) setOnboarding(data);
+        const profile = (await res.json()) as OrgProfile;
+        if (!cancelled) setVerified(profile.status === 'VERIFIED');
       } catch (e) {
         if (!cancelled) setLoadError((e as Error).message);
       }
@@ -43,11 +59,7 @@ export function useProfileGate(): {
     };
   }, []);
 
-  return {
-    onboarding,
-    loadError,
-    verified: onboarding ? onboarding.status === 'VERIFIED' : undefined,
-  };
+  return { onboarding, loadError, verified };
 }
 
 function LockGlyph(): React.JSX.Element {
@@ -112,6 +124,25 @@ export function ProfileLockGate({
 }
 
 /**
+ * The same lock, for a seat that cannot complete the profile. Finishing KYC is
+ * the owner's or an admin's to do, so this names who can unlock it rather than
+ * offering a checklist this person cannot act on.
+ */
+export function AskOwnerGate({ section }: { section: string }): React.JSX.Element {
+  return (
+    <div className="mx-auto mt-8 flex max-w-[620px] flex-col items-center gap-4 rounded-lg border border-rule bg-sheet p-10 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-fail-wash">
+        <LockGlyph />
+      </span>
+      <h2 className="text-h2 text-ink">{`${section.charAt(0).toUpperCase()}${section.slice(1)} open once your business is verified`}</h2>
+      <p className="text-body-sm text-ink-3">
+        Ask your account owner to finish the supplier profile and submit it for review.
+      </p>
+    </div>
+  );
+}
+
+/**
  * The two branches every gated route needs before its own loading/error
  * checks: unknown yet (skeleton) and known-and-locked (the gate card). A
  * profile that failed to load is not evidence of an unverified one — that
@@ -141,12 +172,16 @@ export function useProfileGateOrRender(
       ),
     };
   }
-  if (!verified && onboarding) {
+  if (!verified) {
     return {
       locked: (
         <div className="hub-page">
           <HubPageHeader title={title} />
-          <ProfileLockGate onboarding={onboarding} section={section} />
+          {onboarding ? (
+            <ProfileLockGate onboarding={onboarding} section={section} />
+          ) : (
+            <AskOwnerGate section={section} />
+          )}
         </div>
       ),
     };

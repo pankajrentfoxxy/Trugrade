@@ -214,3 +214,79 @@ export const VENDOR_STEP_SCHEMAS = Object.freeze({
   FACILITY_CONTACTS: dispatchAddressCapture,
   AGREEMENT: payoutPreferenceCapture,
 });
+
+/* -------------------------------------------------------------------------- */
+/* The stepper, as GET /onboarding/steps returns it                             */
+/* -------------------------------------------------------------------------- */
+
+/** A step as defined, before any org has answered it. `GET /onboarding/steps/definitions`. */
+export interface StepDefinition {
+  stepCode: string;
+  stepOrder: number;
+  title: string;
+  purposeNote: string | null;
+  estimatedMinutes: number | null;
+}
+
+export type StepStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'SUBMITTED' | 'NEEDS_FIX' | 'COMPLETE';
+
+/**
+ * A field this org must supply on a step, after the constitution gate.
+ * `onboarding_field_requirement` data — CIN for a private limited company, an
+ * LLPIN for an LLP, and nothing at all for a proprietorship.
+ */
+export interface FieldRequirement {
+  fieldCode: string;
+  label: string;
+  required: boolean;
+  helpText: string | null;
+}
+
+export interface StepProgress extends StepDefinition {
+  isRequired: boolean;
+  status: StepStatus;
+  completionPct: number;
+  /** Verbatim from the reviewer. Rendered as written, never summarised. */
+  blockingReason: string | null;
+  lastSavedAt: string | null;
+  /** Already gated by constitution: render these, do not re-derive them. */
+  fields: FieldRequirement[];
+}
+
+/**
+ * What a reviewer decided, in the reviewer's own words.
+ *
+ * `notes` is the sentence a rejected applicant is owed, and `KycService.decide`
+ * refuses a rejection without one precisely because "the applicant sees it". It
+ * is rendered verbatim wherever it appears.
+ */
+export interface ReviewDecision {
+  /** APPROVE / REJECT / REQUEST_INFO. */
+  decision: string;
+  notes: string | null;
+  reasonCodes: string[];
+  decidedAt: string;
+}
+
+export interface ResumableOnboarding {
+  orgId: string;
+  /** `org_status`: REGISTERED → KYC_SUBMITTED → UNDER_REVIEW → VERIFIED / REJECTED. */
+  status: string;
+  /** Set by `POST /submit`. The promise made to the applicant, in working hours. */
+  slaDueAt: string | null;
+  /** The server's own answer, not a clock comparison done here. */
+  slaBreached: boolean;
+  /** The latest decision, or null while the application is still with us. */
+  decision: ReviewDecision | null;
+  progress: {
+    /** `constitution_type`, the org's own. Survives step 2's draft being cleared. */
+    constitution: string | null;
+    steps: StepProgress[];
+    /** Where the client lands: the first required step that is not COMPLETE. */
+    resumeAt: string | null;
+    completedSteps: number;
+    requiredSteps: number;
+    isSubmittable: boolean;
+  };
+  answers: Record<string, Record<string, unknown>>;
+}

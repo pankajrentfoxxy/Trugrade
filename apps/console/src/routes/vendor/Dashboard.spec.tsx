@@ -43,7 +43,14 @@ const PAYABLES = {
   statement: {
     payables: 2,
     gross: '100000.00',
-    tds: { amount: '1000.00', ratePct: 1, financialYearPurchases: '0', financialYear: '2026', reason: '', hasVerifiedPan: true },
+    tds: {
+      amount: '1000.00',
+      ratePct: 1,
+      financialYearPurchases: '0',
+      financialYear: '2026',
+      reason: '',
+      hasVerifiedPan: true,
+    },
     penalties: '0.00',
     qcFees: '0.00',
     net: '99000.00',
@@ -121,6 +128,39 @@ describe('VendorDashboardRoute', () => {
     });
     draw();
     expect(await screen.findByText(/Profile .* complete/)).toBeTruthy();
+  });
+
+  describe('a seat that may not read onboarding (Ops, Finance, Viewer → 403)', () => {
+    const mockSeat = (orgStatus: string): void => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const reply = (status: number, body: unknown): Promise<Response> =>
+          Promise.resolve({ ok: status < 400, status, json: async () => body } as Response);
+        if (url.includes('/api/onboarding/steps')) return reply(403, { error: { message: 'no' } });
+        if (url.includes('/api/account/profile')) return reply(200, { status: orgStatus });
+        if (url.includes('/api/vendor/payables')) return reply(403, { error: { message: 'no' } });
+        if (url.includes('/api/account/team')) return reply(403, { error: { message: 'no' } });
+        return reply(200, STOCKED);
+      });
+    };
+
+    it('gets the dashboard on a verified org instead of a skeleton that never resolves', async () => {
+      mockSeat('VERIFIED');
+      draw();
+      expect(await screen.findByText('Live listings')).toBeTruthy();
+      expect(
+        await screen.findByText('Payouts are visible to the account owner and finance.'),
+      ).toBeTruthy();
+    });
+
+    it('is told who can unlock an unverified org, not shown a checklist it cannot act on', async () => {
+      mockSeat('REGISTERED');
+      draw();
+      expect(
+        await screen.findByText(/Ask your account owner to finish the supplier profile/),
+      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Open profile' })).toBeNull();
+    });
   });
 
   it('shows error state when dashboard fails', async () => {

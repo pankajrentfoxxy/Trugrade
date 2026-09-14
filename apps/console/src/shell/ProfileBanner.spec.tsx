@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { ProfileBanner } from './ProfileBanner';
-import type { ResumableOnboarding } from '../../../storefront/src/app/register/api';
+import type { ResumableOnboarding } from '@trugrade/contracts';
 
 /**
  * The bar's whole claim is that its number means something.

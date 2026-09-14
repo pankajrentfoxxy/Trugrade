@@ -15,7 +15,12 @@ export interface Resource<T> {
  * one place: a route left mid-flight otherwise sets state on a dead component,
  * and the warning that produces is one nobody reads until it hides a real bug.
  */
-export function useResource<T>(url: string, failureLabel: string): Resource<T> {
+export function useResource<T>(
+  url: string,
+  failureLabel: string,
+  /** Change it to fetch the same URL again. */
+  reloadToken = 0,
+): Resource<T> {
   const [data, setData] = React.useState<T | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -56,7 +61,7 @@ export function useResource<T>(url: string, failureLabel: string): Resource<T> {
     return () => {
       cancelled = true;
     };
-  }, [url, failureLabel]);
+  }, [url, failureLabel, reloadToken]);
 
   return { data, error };
 }

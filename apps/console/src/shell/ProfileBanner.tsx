@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import type { ResumableOnboarding } from '../../../storefront/src/app/register/api';
+import type { ResumableOnboarding } from '@trugrade/contracts';
 import {
   nextIncompleteSection,
   profileCompletionPct,

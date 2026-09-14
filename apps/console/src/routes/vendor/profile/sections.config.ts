@@ -1,4 +1,4 @@
-import type { ResumableOnboarding } from '../../../../../storefront/src/app/register/api';
+import type { ResumableOnboarding } from '@trugrade/contracts';
 
 export type ProfileSectionId =
   | 'business'
