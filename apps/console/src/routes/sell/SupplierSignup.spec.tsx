@@ -388,3 +388,20 @@ describe('a contact refusal at the last step', () => {
     expect(screen.getByLabelText(/Email address/i)).not.toHaveAttribute('readonly');
   });
 });
+
+describe('the resend wait on a phone', () => {
+  it('is written out as text, not left in a tooltip a touch screen never shows', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SupplierSignup />
+      </MemoryRouter>,
+    );
+    await user.type(screen.getByLabelText(/Mobile number/i), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await screen.findByLabelText('Six-digit code');
+
+    const countdown = screen.getByTestId('resend-countdown');
+    expect(countdown).toHaveTextContent(/You can ask for another code in \d+ seconds\./);
+  });
+});

@@ -78,6 +78,21 @@ export interface SupplierSignupProps {
   onSessionEstablished?: () => Promise<void> | void;
 }
 
+/**
+ * The resend wait, as text. It used to exist only as the disabled button's
+ * `title` tooltip, which a phone never shows — and a phone is where most
+ * suppliers sign up — so the button simply looked broken for a minute.
+ */
+function ResendCountdown({ seconds }: { seconds: number }): React.JSX.Element | null {
+  if (seconds <= 0) return null;
+  return (
+    <p className="text-body-sm text-ink-3" aria-live="polite" data-testid="resend-countdown">
+      You can ask for another code in <span className="font-mono tnum">{seconds}</span>{' '}
+      {seconds === 1 ? 'second' : 'seconds'}.
+    </p>
+  );
+}
+
 export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): React.JSX.Element {
   const navigate = useNavigate();
   const [step, setStep] = React.useState<Step>(1);
@@ -523,6 +538,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                       >
                         Resend
                       </Button>
+                      <ResendCountdown seconds={cooldown} />
                     </div>
                   </div>
                 </div>
@@ -596,6 +612,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                           >
                             Resend
                           </Button>
+                          <ResendCountdown seconds={cooldown} />
                         </div>
                       </div>
                     </>
