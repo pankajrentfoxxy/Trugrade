@@ -51,6 +51,14 @@ interface SessionRecord {
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
+/**
+ * A PEM held in an env var. Most env files are one line per variable, so the
+ * newlines arrive as the two characters `\n`; `createPrivateKey` refuses that.
+ * A value that already has real newlines passes through untouched.
+ */
+export const pemFromEnv = (value: string): string =>
+  value.includes('\n') ? value : value.replace(/\\n/g, '\n');
+
 /** `IssuedTokens` carries two `Date`s, which do not survive a Redis round trip. */
 const serializeIssued = (t: IssuedTokens): string =>
   JSON.stringify({
@@ -99,7 +107,9 @@ export class TokenService implements OnModuleInit {
   private resolveKeys(): { privatePem: string; publicPem: string } {
     const inlinePriv = this.config.get('JWT_PRIVATE_KEY');
     const inlinePub = this.config.get('JWT_PUBLIC_KEY');
-    if (inlinePriv && inlinePub) return { privatePem: inlinePriv, publicPem: inlinePub };
+    if (inlinePriv && inlinePub) {
+      return { privatePem: pemFromEnv(inlinePriv), publicPem: pemFromEnv(inlinePub) };
+    }
 
     const privPath = this.config.get('JWT_PRIVATE_KEY_PATH');
     const pubPath = this.config.get('JWT_PUBLIC_KEY_PATH');
