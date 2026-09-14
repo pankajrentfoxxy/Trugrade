@@ -67,6 +67,8 @@ if (testDb && !/^trugrade_(test|verify)/.test(testDb)) {
 // The suites drive OTP flows by reading `devCode` off the response. It is an
 // explicit switch now (never implied by NODE_ENV), so the harness turns it on.
 process.env.OTP_DEV_CODE_IN_RESPONSE ??= 'true';
+// PII columns have no fallback key any more; the suites need one of their own.
+process.env.PII_ENCRYPTION_KEY ??= 'integration-suite-only-pii-key';
 
 if (process.env.DATABASE_URL_TEST && process.env.DATABASE_URL !== process.env.DATABASE_URL_TEST) {
   process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;

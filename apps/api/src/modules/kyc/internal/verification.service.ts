@@ -84,15 +84,6 @@ const FREEZE_HOURS_KEY = 'kyc.bank_change_freeze_hours';
 /** The DLT/Meta template the owner alert is sent under, on every channel. */
 export const BANK_CHANGE_ALERT_TEMPLATE = 'BANK_ACCOUNT_CHANGED';
 
-/**
- * The column-encryption key outside production.
- *
- * `PII_ENCRYPTION_KEY` is required in production by the env loader precisely
- * because this column exists; a dev machine and CI still have to produce a
- * ciphertext, and a fixed local key is honest about being local. What must never
- * happen is a readable account number sitting in a column named `_enc`.
- */
-export const DEV_PII_KEY = 'trugrade-local-pii-key';
 
 export type CheckType =
   | 'GSTIN'
@@ -734,7 +725,7 @@ export class VerificationService {
   }
 
   private piiKey(): string {
-    return this.config.get('PII_ENCRYPTION_KEY') ?? DEV_PII_KEY;
+    return this.config.piiEncryptionKey;
   }
 
   // -------------------------------------------------------------------------

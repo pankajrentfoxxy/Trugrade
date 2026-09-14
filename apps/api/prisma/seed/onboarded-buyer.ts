@@ -5,11 +5,9 @@ import type { TestingModule } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { RequestContextService } from '../../src/shared/db/org-scope';
 import { PrismaService } from '../../src/shared/db/prisma.service';
-import { AppConfig } from '../../src/shared/config';
 import { IdentityService } from '../../src/modules/identity/identity.service';
 import { KycService } from '../../src/modules/kyc/kyc.service';
 import { StepPromotionService } from '../../src/modules/kyc/internal/promotion.service';
-import { DEV_PII_KEY } from '../../src/modules/kyc/internal/verification.service';
 
 /** Login for the fully onboarded buyer this script creates. */
 export const ONBOARDED_BUYER_EMAIL = 'priya.meridian@yopmail.com';
@@ -165,7 +163,6 @@ export async function seedOnboardedBuyer(log: (m: string) => void = console.log)
   const kyc = moduleRef.get(KycService);
   const promotions = moduleRef.get(StepPromotionService);
   const prisma = moduleRef.get(PrismaService);
-  const config = moduleRef.get(AppConfig);
 
   const run = <T>(fn: () => Promise<T>): Promise<T> =>
     ctx.run({ requestId: 'seed-buyer', ip: '127.0.0.1', userAgent: 'seed' }, fn);
@@ -329,10 +326,6 @@ export async function seedOnboardedBuyer(log: (m: string) => void = console.log)
   log(`  Org ID:   ${orgId}`);
   log(`  Status:   VERIFIED (all 5 steps complete)`);
   log(`  Sign in:  http://localhost:3000/sign-in`);
-
-  if (!config.get('PII_ENCRYPTION_KEY')) {
-    log(`  Note: PII key unset — using dev default (${DEV_PII_KEY.slice(0, 8)}…)`);
-  }
 
   await moduleRef.close();
 }

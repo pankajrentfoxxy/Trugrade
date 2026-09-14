@@ -511,7 +511,7 @@ describe('STATUTORY promotes into gst_profile and pan_record', () => {
     expect(Buffer.from(pan.pan_enc).toString('utf8')).not.toContain(COMPANY_PAN);
 
     const [decrypted] = await raw.$queryRaw<Array<{ pan: string }>>`
-      SELECT pgp_sym_decrypt(pan_enc, 'trugrade-local-pii-key') AS pan
+      SELECT pgp_sym_decrypt(pan_enc, ${process.env.PII_ENCRYPTION_KEY}) AS pan
         FROM kyc.pan_record WHERE org_id = ${who.orgId}::uuid`;
     expect(decrypted!.pan).toBe(COMPANY_PAN);
   });

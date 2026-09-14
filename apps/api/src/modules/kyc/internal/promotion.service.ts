@@ -18,7 +18,6 @@ import {
   timeOfDay,
   type Draft,
 } from '../../../shared/onboarding/draft';
-import { DEV_PII_KEY } from './verification.service';
 
 /**
  * Step promotion: where a completed step's answers actually go.
@@ -300,7 +299,7 @@ export class StepPromotionService {
     if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) return;
 
     const holder = await this.verifiedPayload<{ name?: string }>(orgId, 'PAN', pan);
-    const key = this.config.get('PII_ENCRYPTION_KEY') ?? DEV_PII_KEY;
+    const key = this.config.piiEncryptionKey;
 
     await this.prisma.$executeRaw`
       INSERT INTO kyc.pan_record

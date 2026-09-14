@@ -369,7 +369,7 @@ describe('the organisation profile', () => {
       VALUES (${orgId}::uuid, '06AAFFN1234K1Z5', 'Acme Retail Pvt Ltd', '06', 'ACTIVE', ${NOW}, TRUE)`;
     await db.$executeRaw`
       INSERT INTO kyc.pan_record (org_id, pan_enc, pan_last4, pan_hash, name_as_per_pan, verified)
-      VALUES (${orgId}::uuid, pgp_sym_encrypt('AAFFN1234K', 'trugrade-local-pii-key'), '234K',
+      VALUES (${orgId}::uuid, pgp_sym_encrypt('AAFFN1234K', ${process.env.PII_ENCRYPTION_KEY}), '234K',
               ${randomUUID()}, 'Acme Retail Pvt Ltd', TRUE)`;
     await db.$executeRaw`
       INSERT INTO identity.org_address (id, org_id, type, line1, city, state, state_code, pincode,

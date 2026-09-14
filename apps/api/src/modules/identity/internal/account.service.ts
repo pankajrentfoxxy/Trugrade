@@ -258,7 +258,7 @@ export class AccountService {
   async profile(): Promise<OrgProfileView> {
     const orgId = this.orgId();
     const me = this.ctx.requirePrincipal();
-    const piiKey = this.config.get('PII_ENCRYPTION_KEY') ?? 'trugrade-local-pii-key';
+    const piiKey = this.config.piiEncryptionKey;
 
     const [row] = await this.prisma.$queryRaw<
       Array<{
