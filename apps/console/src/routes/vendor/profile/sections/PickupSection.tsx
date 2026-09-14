@@ -1,6 +1,11 @@
 import * as React from 'react';
+import { persistInOrder } from '../persist';
 import { Chip, Input, SectionDialog } from '@trugrade/ui';
-import { completeStep, lookupPincode, saveStep } from '../../../../../../storefront/src/app/register/api';
+import {
+  completeStep,
+  lookupPincode,
+  saveStep,
+} from '../../../../../../storefront/src/app/register/api';
 import {
   mobileSubscriberDigits,
   toE164,
@@ -16,7 +21,9 @@ const WINDOWS = [
   { id: 'ALL_DAYS', label: 'All days' },
 ] as const;
 
-function hoursForWindow(id: (typeof WINDOWS)[number]['id']): Record<string, { closed: boolean; opensAt: string; closesAt: string }> {
+function hoursForWindow(
+  id: (typeof WINDOWS)[number]['id'],
+): Record<string, { closed: boolean; opensAt: string; closesAt: string }> {
   const closed = (_day: number) => ({ closed: true, opensAt: '', closesAt: '' });
   const open = (from: string, to: string) => ({ closed: false, opensAt: from, closesAt: to });
   const base: Record<number, { closed: boolean; opensAt: string; closesAt: string }> = {
@@ -57,12 +64,26 @@ export interface PickupSectionProps {
   initial: Record<string, unknown>;
 }
 
-export function PickupSection({ open, onClose, onSaved, initial }: PickupSectionProps): React.JSX.Element {
+export function PickupSection({
+  open,
+  onClose,
+  onSaved,
+  initial,
+}: PickupSectionProps): React.JSX.Element {
   const readInitial = (): PickupDraft => {
     const fac = (initial.facilities as unknown[])?.[0] as
-      | { address?: { pincode?: string; city?: string; state?: string; line1?: string; line2?: string } }
+      | {
+          address?: {
+            pincode?: string;
+            city?: string;
+            state?: string;
+            line1?: string;
+            line2?: string;
+          };
+        }
       | undefined;
-    const wh = (initial.contacts as { WAREHOUSE?: { fullName?: string; mobile?: string } })?.WAREHOUSE;
+    const wh = (initial.contacts as { WAREHOUSE?: { fullName?: string; mobile?: string } })
+      ?.WAREHOUSE;
     return {
       pincode: fac?.address?.pincode ?? '',
       city: fac?.address?.city ?? '',
@@ -157,9 +178,15 @@ export function PickupSection({ open, onClose, onSaved, initial }: PickupSection
         },
       },
     };
-    await saveStep('FACILITY_CONTACTS', answers, 100);
-    await completeStep('FACILITY_CONTACTS');
+    const failed = await persistInOrder([
+      () => saveStep('FACILITY_CONTACTS', answers, 100),
+      () => completeStep('FACILITY_CONTACTS'),
+    ]);
     setBusy(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
     onSaved();
   };
 
@@ -237,13 +264,7 @@ export function PickupSection({ open, onClose, onSaved, initial }: PickupSection
             inputMode="numeric"
             maxLength={10}
             value={draft.contactMobile}
-            error={liveFieldError(
-              'mobile',
-              mobileDisplay,
-              validateMobile,
-              focused,
-              active,
-            )}
+            error={liveFieldError('mobile', mobileDisplay, validateMobile, focused, active)}
             onFocus={() => setFocused('mobile')}
             onBlur={() => setFocused(null)}
             onChange={(e) => {

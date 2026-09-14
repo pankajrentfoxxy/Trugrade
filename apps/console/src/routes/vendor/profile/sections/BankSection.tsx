@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { bankCommitRefusal, persistInOrder } from '../persist';
 import { Input, SectionDialog } from '@trugrade/ui';
 import {
   commitBankAccount,
@@ -7,7 +8,11 @@ import {
   saveStep,
   type VerificationOutcomeView,
 } from '../../../../../../storefront/src/app/register/api';
-import { ProviderProblem, isProviderProblem, useRetryLadder } from '../../../../../../storefront/src/app/register/verification';
+import {
+  ProviderProblem,
+  isProviderProblem,
+  useRetryLadder,
+} from '../../../../../../storefront/src/app/register/verification';
 import {
   toAccountNumber,
   toIfsc,
@@ -146,18 +151,33 @@ export function BankSection({
       setError(commit.message);
       return;
     }
-    await saveStep(
-      'DOCUMENTS_BANK',
-      {
-        ...initial,
-        ifsc: toIfsc(draft.ifsc),
-        bankName: draft.bank,
-        branch: draft.branch,
-        bankCommitted: true,
-      },
-      50,
-    );
+    // 200 is not "saved": the server answers 200 with no account when its own
+    // penny-drop did not pass. Nothing is marked committed unless one exists.
+    const refused = bankCommitRefusal(commit.data);
+    if (refused) {
+      setBusy(false);
+      setError(refused);
+      return;
+    }
+    const failed = await persistInOrder([
+      () =>
+        saveStep(
+          'DOCUMENTS_BANK',
+          {
+            ...initial,
+            ifsc: toIfsc(draft.ifsc),
+            bankName: draft.bank,
+            branch: draft.branch,
+            bankCommitted: true,
+          },
+          50,
+        ),
+    ]);
     setBusy(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
     onSaved();
   };
 
@@ -198,7 +218,12 @@ export function BankSection({
             }}
           />
           <Input label="Bank" readOnly className="profile-hub-readonly" value={draft.bank || '—'} />
-          <Input label="Branch" readOnly className="profile-hub-readonly" value={draft.branch || '—'} />
+          <Input
+            label="Branch"
+            readOnly
+            className="profile-hub-readonly"
+            value={draft.branch || '—'}
+          />
           <Input
             label="Account number"
             mono
@@ -248,7 +273,9 @@ export function BankSection({
       ) : (
         <div className="profile-hub-pass-block">
           <p className="text-body-sm text-ink-2">Penny-drop verified</p>
-          <p className="mt-1 text-body font-medium text-ink">{holder?.beneficiaryName ?? legalName}</p>
+          <p className="mt-1 text-body font-medium text-ink">
+            {holder?.beneficiaryName ?? legalName}
+          </p>
           <p className="mt-2 font-mono text-body-sm tnum text-ink-2">
             ••••{draft.account.slice(-4)} · {draft.bank} · {toIfsc(draft.ifsc)}
           </p>

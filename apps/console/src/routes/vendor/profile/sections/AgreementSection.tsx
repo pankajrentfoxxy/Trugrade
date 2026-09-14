@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { persistInOrder } from '../persist';
 import { Checkbox, Input, SectionDialog } from '@trugrade/ui';
 import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { completeStep, saveStep } from '../../../../../../storefront/src/app/register/api';
@@ -57,20 +58,27 @@ export function AgreementSection({
       return;
     }
     setBusy(true);
-    await saveStep(
-      'AGREEMENT',
-      {
-        acceptedName: name.trim(),
-        accepted: true,
-        agreementVersion: VERSION,
-        acceptedAt: new Date().toISOString(),
-        agreements: { VENDOR_AGREEMENT: true },
-        pricingMode: 'NET_PAYOUT',
-      },
-      100,
-    );
-    await completeStep('AGREEMENT');
+    const failed = await persistInOrder([
+      () =>
+        saveStep(
+          'AGREEMENT',
+          {
+            acceptedName: name.trim(),
+            accepted: true,
+            agreementVersion: VERSION,
+            acceptedAt: new Date().toISOString(),
+            agreements: { VENDOR_AGREEMENT: true },
+            pricingMode: 'NET_PAYOUT',
+          },
+          100,
+        ),
+      () => completeStep('AGREEMENT'),
+    ]);
     setBusy(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
     onSaved();
   };
 

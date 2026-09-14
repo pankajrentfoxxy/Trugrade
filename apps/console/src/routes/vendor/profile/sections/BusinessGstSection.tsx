@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { persistInOrder } from '../persist';
 import { INDIAN_STATES, panFromGstin, stateCodeFromGstin } from '@trugrade/contracts';
 import { Button, Input, SectionDialog, SelectTile } from '@trugrade/ui';
 import {
@@ -7,12 +8,24 @@ import {
   verifyGstin,
   type VerificationOutcomeView,
 } from '../../../../../../storefront/src/app/register/api';
-import { ProviderProblem, isProviderProblem, useRetryLadder } from '../../../../../../storefront/src/app/register/verification';
-import { toGstin, validateGstin, validateIdentifier } from '../../../../../../storefront/src/app/register/validation';
+import {
+  ProviderProblem,
+  isProviderProblem,
+  useRetryLadder,
+} from '../../../../../../storefront/src/app/register/verification';
+import {
+  toGstin,
+  validateGstin,
+  validateIdentifier,
+} from '../../../../../../storefront/src/app/register/validation';
 import { liveFieldError } from '../live-field';
 
 const CONSTITUTIONS = [
-  { value: 'PROPRIETORSHIP', label: 'Proprietorship', description: 'Single owner, no separate legal entity.' },
+  {
+    value: 'PROPRIETORSHIP',
+    label: 'Proprietorship',
+    description: 'Single owner, no separate legal entity.',
+  },
   { value: 'PARTNERSHIP', label: 'Partnership', description: 'Registered or unregistered firm.' },
   { value: 'LLP', label: 'LLP', description: 'Limited liability partnership.' },
   { value: 'PVT_LTD', label: 'Private Limited', description: 'Private limited company.' },
@@ -68,7 +81,9 @@ export function BusinessGstSection({
     setDraft({
       constitution: initialConstitution ?? String(initial.constitutionType ?? ''),
       gstin: String(initial.primaryGstin ?? ''),
-      udyam: String((initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? ''),
+      udyam: String(
+        (initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? '',
+      ),
       verified: null,
       confirmed: false,
     });
@@ -78,8 +93,7 @@ export function BusinessGstSection({
   const pan = panFromGstin(toGstin(draft.gstin));
   const stateCode = stateCodeFromGstin(toGstin(draft.gstin));
 
-  const gstError =
-    liveFieldError('gstin', draft.gstin, validateGstin, focused, active) ?? error;
+  const gstError = liveFieldError('gstin', draft.gstin, validateGstin, focused, active) ?? error;
 
   const verify = async (): Promise<void> => {
     const msg = validateGstin(draft.gstin);
@@ -89,7 +103,10 @@ export function BusinessGstSection({
     }
     setBusy(true);
     setError(undefined);
-    const result = await verifyGstin({ gstin: toGstin(draft.gstin), expectedPan: pan ?? undefined });
+    const result = await verifyGstin({
+      gstin: toGstin(draft.gstin),
+      expectedPan: pan ?? undefined,
+    });
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
@@ -118,36 +135,44 @@ export function BusinessGstSection({
       (draft.verified.resolved as { legalName?: string } | undefined)?.legalName ??
       '';
     setBusy(true);
-    await saveStep('BUSINESS_PROFILE', { constitutionType: draft.constitution }, 100);
-    await saveStep(
-      'STATUTORY',
-      {
-        legalName,
-        pan: pan ?? '',
-        primaryGstin: gstin,
-        gstins: [
+    const failed = await persistInOrder([
+      () => saveStep('BUSINESS_PROFILE', { constitutionType: draft.constitution }, 100),
+      () =>
+        saveStep(
+          'STATUTORY',
           {
-            key: 'primary',
-            gstin,
-            isPrimary: true,
-            confirmed: true,
-            deferred: false,
+            legalName,
+            pan: pan ?? '',
+            primaryGstin: gstin,
+            gstins: [
+              {
+                key: 'primary',
+                gstin,
+                isPrimary: true,
+                confirmed: true,
+                deferred: false,
+              },
+            ],
+            captured: draft.udyam.trim() ? { udyam_number: draft.udyam.trim().toUpperCase() } : {},
           },
-        ],
-        captured: draft.udyam.trim()
-          ? { udyam_number: draft.udyam.trim().toUpperCase() }
-          : {},
-      },
-      100,
-    );
-    await completeStep('BUSINESS_PROFILE');
-    await completeStep('STATUTORY');
+          100,
+        ),
+      () => completeStep('BUSINESS_PROFILE'),
+      () => completeStep('STATUTORY'),
+    ]);
     setBusy(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
     onSaved();
   };
 
   const taxpayer = draft.verified?.resolved as
-    | { legalName?: string; registeredAddress?: { line1?: string; city?: string; state?: string; pincode?: string } }
+    | {
+        legalName?: string;
+        registeredAddress?: { line1?: string; city?: string; state?: string; pincode?: string };
+      }
     | undefined;
 
   return (
@@ -155,7 +180,9 @@ export function BusinessGstSection({
       open={open}
       onClose={onClose}
       title="Business & GST"
-      subtitle={step === 1 ? 'How your business is registered.' : 'Primary GSTIN for invoices and payouts.'}
+      subtitle={
+        step === 1 ? 'How your business is registered.' : 'Primary GSTIN for invoices and payouts.'
+      }
       stepIndex={step}
       stepCount={2}
       primaryLabel={step === 1 ? 'Continue' : 'Save'}
@@ -206,7 +233,12 @@ export function BusinessGstSection({
               setError(undefined);
             }}
             action={
-              <Button type="button" variant="secondary" loading={busy} onClick={() => void verify()}>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={busy}
+                onClick={() => void verify()}
+              >
                 Verify
               </Button>
             }
@@ -273,7 +305,7 @@ export function BusinessGstSection({
             }}
             error={
               draft.udyam.trim()
-                ? validateIdentifier('udyam_number', draft.udyam, false, 'Udyam') ?? undefined
+                ? (validateIdentifier('udyam_number', draft.udyam, false, 'Udyam') ?? undefined)
                 : undefined
             }
           />

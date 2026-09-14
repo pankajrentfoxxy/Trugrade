@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { persistInOrder } from '../persist';
 import { SectionDialog, StatusPill, Uploader, type UploadedFile } from '@trugrade/ui';
 import {
   completeStep,
@@ -50,9 +51,15 @@ export function DocumentsSection({
       return;
     }
     setBusy(true);
-    await saveStep('DOCUMENTS_BANK', { ...initial, documentsComplete: true }, 100);
-    await completeStep('DOCUMENTS_BANK');
+    const failed = await persistInOrder([
+      () => saveStep('DOCUMENTS_BANK', { ...initial, documentsComplete: true }, 100),
+      () => completeStep('DOCUMENTS_BANK'),
+    ]);
     setBusy(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
     onSaved();
   };
 

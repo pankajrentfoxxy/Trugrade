@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { persistInOrder } from '../persist';
 import { Chip, SectionDialog, SelectTile } from '@trugrade/ui';
 import { completeStep, saveStep } from '../../../../../../storefront/src/app/register/api';
 
@@ -19,7 +20,12 @@ export interface StockSectionProps {
   initial: Record<string, unknown>;
 }
 
-export function StockSection({ open, onClose, onSaved, initial }: StockSectionProps): React.JSX.Element {
+export function StockSection({
+  open,
+  onClose,
+  onSaved,
+  initial,
+}: StockSectionProps): React.JSX.Element {
   const [step, setStep] = React.useState<1 | 2>(1);
   const [brands, setBrands] = React.useState<string[]>(
     Array.isArray(initial.brands) ? (initial.brands as string[]) : [],
@@ -50,7 +56,9 @@ export function StockSection({ open, onClose, onSaved, initial }: StockSectionPr
       setStep(1);
       setBrands(Array.isArray(initial.brands) ? (initial.brands as string[]) : []);
       setVolume(String(initial.monthlyVolume ?? ''));
-      setCanDropship(typeof initial.canDropship === 'boolean' ? (initial.canDropship as boolean) : null);
+      setCanDropship(
+        typeof initial.canDropship === 'boolean' ? (initial.canDropship as boolean) : null,
+      );
       setGrades(Array.isArray(initial.grades) ? (initial.grades as string[]) : []);
       setError(undefined);
     }
@@ -70,19 +78,26 @@ export function StockSection({ open, onClose, onSaved, initial }: StockSectionPr
       return;
     }
     setBusy(true);
-    await saveStep(
-      'CAPABILITY',
-      {
-        brands,
-        monthlyVolume: volume,
-        canDropship,
-        grades,
-        categories: ['LAPTOP'],
-      },
-      100,
-    );
-    await completeStep('CAPABILITY');
+    const failed = await persistInOrder([
+      () =>
+        saveStep(
+          'CAPABILITY',
+          {
+            brands,
+            monthlyVolume: volume,
+            canDropship,
+            grades,
+            categories: ['LAPTOP'],
+          },
+          100,
+        ),
+      () => completeStep('CAPABILITY'),
+    ]);
     setBusy(false);
+    if (failed) {
+      setError(failed);
+      return;
+    }
     onSaved();
   };
 
