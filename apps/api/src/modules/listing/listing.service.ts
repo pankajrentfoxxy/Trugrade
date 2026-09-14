@@ -17,6 +17,7 @@ import {
   type UnitRow,
   type UpdateDraftInput,
 } from './internal/listing.repository';
+import { PricingService } from './internal/pricing.service';
 import { SerialService, type SerialCsvReport } from './internal/serial.service';
 
 /**
@@ -129,6 +130,9 @@ export interface VendorListingView {
   expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** Present when `vendorAskPrice` is set — from the pricing engine, never client-side. */
+  commissionPct: number | null;
+  commissionAmount: Money | null;
 }
 
 /** One physical laptop, as its owner sees it. Also free of any selling price. */
@@ -370,6 +374,7 @@ export class ListingService implements IListingService {
     private readonly prisma: PrismaService,
     private readonly listings: ListingRepository,
     private readonly serials: SerialService,
+    private readonly pricing: PricingService,
   ) {}
 
   /**
@@ -650,7 +655,30 @@ export class ListingService implements IListingService {
 
   private async asVendorViews(rows: readonly ListingRow[]): Promise<VendorListingView[]> {
     const skus = await this.listings.skuDetails(rows.map((r) => r.skuId));
-    return rows.map((r) => ({ ...toVendorView(r), sku: skus.get(r.skuId) ?? null }));
+    return Promise.all(
+      rows.map(async (r) => {
+        const base = { ...toVendorView(r), sku: skus.get(r.skuId) ?? null };
+        if (!r.vendorAskPrice || r.qtyTotal === 0) {
+          return { ...base, commissionPct: null, commissionAmount: null };
+        }
+        try {
+          const preview = await this.pricing.previewPayout({
+            skuId: r.skuId,
+            grade: r.grade as Grade,
+            vendorWarrantyMonths: r.vendorWarrantyMonths,
+            units: r.qtyTotal,
+            ask: { mode: 'NET_PAYOUT', vendorNetPayout: r.vendorAskPrice.toString() },
+          });
+          return {
+            ...base,
+            commissionPct: preview.commissionPct,
+            commissionAmount: preview.commissionAmount,
+          };
+        } catch {
+          return { ...base, commissionPct: null, commissionAmount: null };
+        }
+      }),
+    );
   }
 
   getListing(id: string): Promise<ListingRow | null> {
@@ -872,6 +900,8 @@ function toVendorView(r: ListingRow): Omit<VendorListingView, 'sku'> {
     expiresAt: r.expiresAt,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
+    commissionPct: null,
+    commissionAmount: null,
   };
 }
 

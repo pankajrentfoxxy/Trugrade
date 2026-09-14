@@ -111,6 +111,10 @@ export interface VendorPayoutPreview {
   netPayout: Money;
   /** Our whole charge as a percentage of the selling price. PHASE_03 Task 5. */
   commissionPct: number;
+  /** Margin amount per listing line — our charge in rupees, not TDS. */
+  commissionAmount: Money;
+  /** What the buyer pays in total for this line — not labelled retail on vendor screens. */
+  buyerPays: Money;
   vendorWarrantyMonths: number;
   /**
    * What the customer is sold. Shown so the sentence "we sell longer than you
@@ -281,6 +285,8 @@ export class PricingService {
       totalDeductions,
       netPayout: grossPayout.sub(totalDeductions),
       commissionPct: breakdown.commissionPct,
+      commissionAmount: breakdown.marginAmount.times(input.units),
+      buyerPays: breakdown.sellingPrice.times(input.units),
       vendorWarrantyMonths: input.vendorWarrantyMonths,
       customerWarrantyMonths: breakdown.totalWarrantyMonths,
     };

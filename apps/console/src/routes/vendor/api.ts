@@ -126,6 +126,7 @@ export const API = {
    * by this one endpoint.
    */
   payables: '/api/vendor/payables',
+  documents: '/api/onboarding/documents',
 
   /**
    * The vendor's own QC visits (T30) — org-scoped, and NOT the QC console's
@@ -176,7 +177,9 @@ export interface DashboardTiles {
   unitsEverListed: number;
   unitsAwaitingQc: number;
   unitsLive: number;
+  liveListings: number;
   unitsSoldThisMonth: number;
+  posToAccept: number;
   /** `qc.v_expiring_qc` — reports valid 90 days, warned at T−14. */
   unitsQcExpiring14d: number;
   payoutsDue: MoneyString;
@@ -269,8 +272,21 @@ export interface VendorFacility {
   /** `identity.org_address.id` — what `listing.pickup_location_id` points at. */
   addressId: string;
   label: string;
+  line1: string;
   city: string;
   pincode: string;
+  dispatchFrom: string | null;
+  unitsHeld: number;
+}
+
+export interface VendorDocument {
+  id: string;
+  docType: string;
+  label: string;
+  originalFilename: string | null;
+  status: string;
+  expiresOn: IsoDate | null;
+  uploadedAt: IsoDate;
 }
 
 /** Grades this vendor said they supply. Empty is never returned — the API falls back to all. */
@@ -324,6 +340,8 @@ export interface VendorListing {
   qcCompletedAt: IsoDate | null;
   expiresAt: IsoDate | null;
   createdAt: IsoDate;
+  commissionPct: number | null;
+  commissionAmount: MoneyString | null;
 }
 
 export interface VendorUnit {
@@ -775,6 +793,8 @@ export interface PayoutPreview {
   totalDeductions: MoneyString;
   netPayout: MoneyString;
   commissionPct: number;
+  commissionAmount: MoneyString;
+  buyerPays: MoneyString;
   vendorWarrantyMonths: number;
   customerWarrantyMonths: number;
   expectedPayoutDate?: IsoDate | null;

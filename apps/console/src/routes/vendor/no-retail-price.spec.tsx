@@ -109,6 +109,8 @@ const PREVIEW = {
   totalDeductions: '2100.00',
   netPayout: '2097900.00',
   commissionPct: 12.5,
+  commissionAmount: '26250.00',
+  buyerPays: '2126250.00',
   vendorWarrantyMonths: 6,
   customerWarrantyMonths: 9,
   expectedPayoutDate: '2026-09-15T00:00:00.000Z',

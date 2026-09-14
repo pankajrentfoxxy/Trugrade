@@ -97,7 +97,7 @@ const RESPONSE_CONSEQUENCE: Readonly<Record<VendorResponse, string>> = Object.fr
  */
 function Window({ c }: { c: GradeCorrection }): React.JSX.Element {
   if (c.autoAppliedAt) {
-    return <StatusPill tone="neutral" label={`Applied on its own ${onDate(c.autoAppliedAt)}`} />;
+    return <StatusPill tone="neutral" label={`Applied ${onDate(c.autoAppliedAt)}`} />;
   }
   if (c.vendorResponse) {
     return <StatusPill tone="neutral" label={RESPONSE_LABEL[c.vendorResponse]} />;
@@ -113,7 +113,7 @@ function Window({ c }: { c: GradeCorrection }): React.JSX.Element {
   if (c.hoursUntilAutoApply <= 0) {
     // Warn, never fail. Nothing about the machine failed and the row is still
     // answerable — the corrected grade applies when the job next runs, not now.
-    return <StatusPill tone="warn" label="Window closed — you can still answer" />;
+    return <StatusPill tone="warn" label="Window closed" />;
   }
   const hours = Math.floor(c.hoursUntilAutoApply);
   return (
@@ -155,16 +155,9 @@ function respondByLabel(c: GradeCorrection): React.ReactNode {
 function IfYouDoNothing({ c }: { c: GradeCorrection }): React.JSX.Element {
   if (!needsAnswer(c)) return <></>;
   return (
-    <div className="correction-callout">
-      <p className="text-body-sm font-medium text-ink">If you do not answer</p>
-      <p className="mt-2 text-body-sm text-ink-2">
-        The machine is re-listed at Grade {gradeLabel(c.gradeCorrected)} and priced for that
-        grade. Your declared Grade {gradeLabel(c.gradeDeclared)} no longer applies.
-        {c.countsAgainstAccuracy
-          ? ' This correction counts against your grade-accuracy score until you dispute it and we uphold your side.'
-          : null}
-      </p>
-    </div>
+    <p className="text-body-sm text-ink-2">
+      No answer keeps this open. Automatic apply is not enabled — respond before the window closes.
+    </p>
   );
 }
 
@@ -228,54 +221,35 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
     () => [
       { key: 'machine', header: 'Machine', cell: (c) => <Machine c={c} /> },
       {
-        key: 'grade',
-        header: 'Grade',
+        key: 'grades',
+        header: 'Grades',
         cell: (c) => (
-          <GradeBadge
-            grade={c.gradeCorrected as Grade}
-            variant="corrected"
-            previousGrade={c.gradeDeclared as Grade}
-          />
+          <span className="flex flex-wrap items-center gap-2">
+            <GradeBadge grade={c.gradeDeclared as Grade} variant="declared" />
+            <span className="text-ink-3">→</span>
+            <GradeBadge grade={c.gradeCorrected as Grade} variant="corrected" />
+          </span>
         ),
-      },
-      {
-        key: 'ask',
-        header: 'Your ask',
-        cell: (c) =>
-          c.askBefore === null ? (
-            <NotMeasured
-              why="No amount was recorded against this machine when the correction was raised"
-              label="No amount"
-            />
-          ) : (
-            <span className="font-mono text-data tnum text-ink">{rupees(c.askBefore)}</span>
-          ),
       },
       {
         key: 'reason',
-        header: 'What we found',
-        cell: (c) => <span className="block max-w-sm">{c.reason}</span>,
+        header: 'Finding',
+        cell: (c) => <span className="block max-w-xs text-body-sm">{c.reason}</span>,
       },
       {
-        key: 'window',
-        header: 'Window',
+        key: 'payout',
+        header: 'Payout',
         cell: (c) => (
-          <>
-            <Window c={c} />
-            <span className="mt-1 block text-body-sm text-ink-3">
-              Told you {onDate(c.vendorNotifiedAt)}
-            </span>
-          </>
+          <span className="text-body-sm text-fail">Band changes at Grade {gradeLabel(c.gradeCorrected)}</span>
         ),
       },
+      { key: 'window', header: 'Window', cell: (c) => <Window c={c} /> },
       {
         key: 'action',
         header: '',
-        // `--ink`, not `--acc-ink`. Fifty rows of amber links beside the one
-        // amber control that means something is how amber stops meaning anything.
         cell: (c) => (
           <Link className="text-ink underline underline-offset-4" to={`/vendor/corrections/${c.id}`}>
-            {needsAnswer(c) ? 'Answer' : 'Open'}
+            {needsAnswer(c) ? 'Respond' : 'Open'}
           </Link>
         ),
       },
@@ -628,19 +602,9 @@ export function VendorCorrectionDetailRoute(): React.JSX.Element {
               : undefined
           }
           footnote={
-            answerable ? (
-              c.hoursUntilAutoApply !== null && c.hoursUntilAutoApply <= 0 ? (
-                <>
-                  Your window has already closed. The corrected grade applies by itself the next
-                  time the job runs — until then, an answer here still counts.
-                </>
-              ) : (
-                <>
-                  No answer inside the window and the corrected grade applies by itself, at the
-                  price band that grade carries.
-                </>
-              )
-            ) : undefined
+            answerable
+              ? 'Automatic apply when the window closes is not live yet — your answer is required.'
+              : undefined
           }
         >
           {!answerable ? (
@@ -648,8 +612,8 @@ export function VendorCorrectionDetailRoute(): React.JSX.Element {
               <Window c={c} />
               <p className="text-body-sm text-ink-2">
                 {c.autoAppliedAt
-                  ? 'Nobody answered inside the window, so the corrected grade was applied automatically.'
-                  : 'Recorded. There is nothing further to do here.'}
+                  ? 'Applied without your answer.'
+                  : 'Recorded.'}
               </p>
               {c.vendorResponse === 'DISPUTE' && (
                 <p className="text-body-sm text-ink-2">

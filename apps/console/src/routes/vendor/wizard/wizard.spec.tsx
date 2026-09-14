@@ -278,6 +278,8 @@ describe('the batch-size decision', () => {
                     totalDeductions: '0.00',
                     netPayout: '126000.00',
                     commissionPct: 14,
+                    commissionAmount: '17640.00',
+                    buyerPays: '143640.00',
                     vendorWarrantyMonths: 3,
                     customerWarrantyMonths: 6,
                   }

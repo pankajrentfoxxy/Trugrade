@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import {
   Breadcrumb,
   Button,
+  ClauseHeading,
   DataBoard,
   EmptyState,
   GradeBadge,
@@ -159,12 +160,7 @@ const AREA_LABEL = (area: string): string =>
 /** The booked day and slot, or the fact that there is not one. */
 function When({ v }: { v: VendorVisit }): React.JSX.Element {
   if (v.scheduledDate === null) {
-    return (
-      <NotMeasured
-        why="No date has been agreed for this inspection yet"
-        label="Not scheduled yet"
-      />
-    );
+    return <span className="text-ink-4">—</span>;
   }
   return (
     <>
@@ -488,33 +484,16 @@ export function VendorVisitsRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack">
-      <PageHeader
-        title="Inspections"
-        action={
-          // The one amber control. It is a primary action and it is the real
-          // path: a visit is requested by submitting a listing, and there is no
-          // second way to raise one — so this links to the wizard rather than
-          // opening a form that would duplicate it.
-          //
-          // `navigate` and not `location.assign`: the console holds its access
-          // token in memory, so a full page load signs the vendor out on the way
-          // to the screen the button promised.
+      <ClauseHeading
+        n="01"
+        kicker="Inspect"
+        title="Visits"
+        actions={
           <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>
-            List stock for inspection
+            Request inspection
           </Button>
         }
-      >
-        A technician comes to your site, opens every machine on the manifest and grades it.
-        {data && awaiting > 0 && (
-          <>
-            {' '}
-            <span className="text-ink">
-              {awaiting} {awaiting === 1 ? 'inspection has' : 'inspections have'} not been carried
-              out yet.
-            </span>
-          </>
-        )}
-      </PageHeader>
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Select

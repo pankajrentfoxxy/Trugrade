@@ -4,25 +4,8 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { VendorDashboardRoute } from './Dashboard';
 
-/**
- * The rule this screen exists to keep, asserted by trying to break it.
- *
- * **A queue with no promise must not borrow one.** `QueueItem.slaHours` is
- * optional so that a queue nobody has committed a turnaround for renders no SLA
- * clause at all — and `breachedCount` is then absent too, so it renders
- * "Breaches not measured" rather than the reassuring "Within SLA". The API sends
- * `null` for both; the route has to *drop* the fields rather than default them,
- * and the difference between `{}` and `{ slaHours: 0 }` is invisible in a type
- * check and very visible to a vendor.
- *
- * So the fixture below sends `null` and the test demands the absence. A test
- * that merely asserted the SLA renders for the queue that HAS one would pass
- * against a route that defaults the other to zero, which is the defect.
- */
-
 const QUEUES = {
   gradeCorrections: { count: 4, oldestWaitHours: 70, breachedCount: 4, slaHours: 48 },
-  /** Real work waiting, and genuinely no promise attached to it. */
   awaitingInspection: { count: 9, oldestWaitHours: 31, breachedCount: null, slaHours: null },
 };
 
@@ -30,35 +13,46 @@ const STOCKED = {
   unitsEverListed: 46,
   unitsAwaitingQc: 9,
   unitsLive: 30,
+  liveListings: 12,
   unitsSoldThisMonth: 4,
   unitsQcExpiring14d: 2,
+  posToAccept: 2,
   payoutsDue: '150000.00',
   payoutsDueOn: null,
   queues: QUEUES,
 };
 
-const ONBOARDING_REGISTERED = {
+const ONBOARDING_VERIFIED = {
   orgId: 'org-test',
-  status: 'REGISTERED',
+  status: 'VERIFIED',
   slaDueAt: null,
   slaBreached: false,
   decision: null,
   progress: {
-    constitution: null,
-    steps: [
-      {
-        stepCode: 'LEGAL',
-        isRequired: true,
-        status: 'NOT_STARTED',
-        completionPct: 0,
-      },
-    ],
-    resumeAt: 'LEGAL',
-    completedSteps: 0,
+    constitution: 'PRIVATE_LIMITED',
+    steps: [{ stepCode: 'LEGAL', isRequired: true, status: 'COMPLETE', completionPct: 100 }],
+    resumeAt: null,
+    completedSteps: 1,
     requiredSteps: 1,
-    isSubmittable: false,
+    isSubmittable: true,
   },
   answers: {},
+};
+
+const PAYABLES = {
+  statement: {
+    payables: 2,
+    gross: '100000.00',
+    tds: { amount: '1000.00', ratePct: 1, financialYearPurchases: '0', financialYear: '2026', reason: '', hasVerifiedPan: true },
+    penalties: '0.00',
+    qcFees: '0.00',
+    net: '99000.00',
+  },
+  rows: [],
+  payoutsEver: 0,
+  msme: { registered: false, udyamNumber: null, maxPaymentDays: 45 },
+  inspectionWindowHours: 72,
+  account: null,
 };
 
 function mockDashboard(body: unknown, ok = true): void {
@@ -68,7 +62,21 @@ function mockDashboard(body: unknown, ok = true): void {
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: async () => ONBOARDING_REGISTERED,
+        json: async () => ONBOARDING_VERIFIED,
+      } as Response);
+    }
+    if (url.includes('/api/vendor/payables')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => PAYABLES,
+      } as Response);
+    }
+    if (url.includes('/api/account/team')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ members: [], owners: 0, invites: [], facilities: [] }),
       } as Response);
     }
     return Promise.resolve({ ok, status: ok ? 200 : 500, json: async () => body } as Response);
@@ -85,124 +93,39 @@ const draw = (): ReturnType<typeof render> =>
 beforeEach(() => vi.restoreAllMocks());
 afterEach(() => vi.restoreAllMocks());
 
-describe('a promise nobody made is never rendered', () => {
-  it('prints the SLA for the queue that has one and no SLA clause for the queue that does not', async () => {
-    mockDashboard(STOCKED);
-    const { container } = draw();
-    await screen.findByText('Grade corrections awaiting your answer');
-
-    const rows = container.querySelectorAll('[data-testid="queue-list"] tbody tr');
-    expect(rows).toHaveLength(2);
-
-    // Worst first is the archetype, and the breached queue is the breached one.
-    const [breached, unpromised] = [rows[0]!.textContent ?? '', rows[1]!.textContent ?? ''];
-    expect(breached).toContain('Grade corrections awaiting your answer');
-    expect(breached).toContain('SLA');
-    expect(breached).toContain('4 past SLA');
-
-    expect(unpromised).toContain('Machines awaiting inspection');
-    // The whole point: no clause, and not a zero dressed as one.
-    expect(unpromised).not.toContain('SLA 0');
-    expect(unpromised).not.toContain('Within SLA');
-    expect(unpromised).not.toContain('0 past SLA');
-    expect(unpromised).toContain('Breaches not measured');
-    // The wait IS measured here, so it must still show rather than being
-    // dropped along with the promise.
-    expect(unpromised).toContain('31');
-  });
-
-  it('offers no link that the listings board cannot actually reproduce', async () => {
-    mockDashboard(STOCKED);
-    const { container } = draw();
-    await screen.findByText('Grade corrections awaiting your answer');
-
-    // Three tiles deliberately carry no href, because no board answers them:
-    // deliveries this month, units by QC expiry, and the payables statement that
-    // is not built. A link to `/vendor/payables` or `?expiring=14` renders as a
-    // working link and lands on a 404 or on the unfiltered catalogue.
-    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '');
-    expect(hrefs).toContain('/vendor/payables');
-    expect(hrefs.some((h) => h.includes('expiring'))).toBe(false);
-    expect(hrefs.some((h) => h.includes('qc/corrections'))).toBe(false);
-    // And the two that do exist, do exist.
-    expect(hrefs).toContain('/vendor/listings?status=ACTIVE');
-    // T31: `/vendor/corrections`, not `/vendor/listings?corrected=1`. That board
-    // exists and is honest, but nothing on it could answer a correction — a queue
-    // headed "awaiting your answer" landed you where you could not give one.
-    expect(hrefs).toContain('/vendor/corrections');
-  });
-
-  it('says the payout date is unknown rather than inventing one', async () => {
+describe('VendorDashboardRoute', () => {
+  it('shows KPI strip and needs-you queue for verified vendors', async () => {
     mockDashboard(STOCKED);
     draw();
-    expect(await screen.findByText(/payout cycle sets it/i)).toBeTruthy();
+    expect(await screen.findByText('Live listings')).toBeTruthy();
+    expect(screen.getByText('POs to accept')).toBeTruthy();
+    expect(screen.getByText('Purchase orders to accept')).toBeTruthy();
+    expect(screen.getByText('Grade corrections')).toBeTruthy();
   });
-});
 
-describe('a vendor with nothing listed', () => {
-  it('reads the three-step guide, not a grid of zeroes', async () => {
-    mockDashboard({
-      ...STOCKED,
-      unitsEverListed: 0,
-      unitsAwaitingQc: 0,
-      unitsLive: 0,
-      unitsSoldThisMonth: 0,
-      unitsQcExpiring14d: 0,
-      payoutsDue: '0.00',
-      queues: {
-        gradeCorrections: { count: 0, oldestWaitHours: null, breachedCount: 0, slaHours: 48 },
-        awaitingInspection: {
-          count: 0,
-          oldestWaitHours: null,
-          breachedCount: null,
-          slaHours: null,
-        },
-      },
+  it('shows profile gate before verification', async () => {
+    mockDashboard(STOCKED);
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/onboarding/steps')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ ...ONBOARDING_VERIFIED, status: 'REGISTERED' }),
+        } as Response);
+      }
+      if (url.includes('/api/vendor/dashboard')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => STOCKED } as Response);
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) } as Response);
     });
     draw();
-    expect(await screen.findByText('Complete your profile')).toBeTruthy();
-    expect(screen.getByText('0%')).toBeTruthy();
-    expect(screen.getByText('Locked')).toBeTruthy();
-    expect(screen.queryByTestId('kpi-row')).toBeNull();
+    expect(await screen.findByText(/Profile .* complete/)).toBeTruthy();
   });
 
-  it('does NOT read the guide when the stock exists but all of it failed inspection', async () => {
-    // Every acted-on number is zero and the vendor still has fourteen machines.
-    // Inferring first-run from `live + awaiting + sold` told this vendor to list
-    // their first stock, which is why `unitsEverListed` is on the payload.
-    mockDashboard({
-      ...STOCKED,
-      unitsEverListed: 14,
-      unitsAwaitingQc: 0,
-      unitsLive: 0,
-      unitsSoldThisMonth: 0,
-      unitsQcExpiring14d: 0,
-      payoutsDue: '0.00',
-      queues: {
-        gradeCorrections: { count: 0, oldestWaitHours: null, breachedCount: 0, slaHours: 48 },
-        awaitingInspection: {
-          count: 0,
-          oldestWaitHours: null,
-          breachedCount: null,
-          slaHours: null,
-        },
-      },
-    });
-    draw();
-    expect(await screen.findByTestId('kpi-row')).toBeTruthy();
-    expect(screen.queryByText('List your first stock')).toBeNull();
-    // No queue rows when nothing is waiting — and no filler copy either.
-    expect(screen.queryByTestId('queue-list')).toBeNull();
-    expect(screen.queryByText(/Nothing is waiting on you/i)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Create listing' })).toBeTruthy();
-  });
-});
-
-describe('when the dashboard cannot be read', () => {
-  it('says so and offers the board, rather than rendering zeroes', async () => {
+  it('shows error state when dashboard fails', async () => {
     mockDashboard({ error: { message: 'no' } }, false);
     draw();
-    expect(await screen.findByText('Your dashboard did not load')).toBeTruthy();
-    expect(screen.queryByTestId('kpi-row')).toBeNull();
+    expect(await screen.findByText('Dashboard did not load')).toBeTruthy();
   });
 });

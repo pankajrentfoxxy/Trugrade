@@ -3,16 +3,16 @@ import { ClauseHeading, EmptyState, Skeleton } from '@trugrade/ui';
 import { useResource } from '../../lib/useResource';
 import { API, type VendorFacility } from './api';
 
-/** ARCHETYPE B — Board. Pickup locations this vendor declared. */
+/** ARCHETYPE B — Board. */
 
 export function VendorFacilitiesRoute(): React.JSX.Element {
-  const { data, error } = useResource<VendorFacility[]>(API.facilities, 'Facilities are unavailable');
+  const { data, error } = useResource<VendorFacility[]>(API.facilities, 'Facilities unavailable');
 
   if (error) {
     return (
       <div>
         <ClauseHeading n="01" kicker="Account" title="Facilities" />
-        <EmptyState title="Facilities did not load" body={`${error}. Nothing has changed.`} />
+        <EmptyState title="Did not load" body={error} />
       </div>
     );
   }
@@ -30,7 +30,7 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
     return (
       <div>
         <ClauseHeading n="01" kicker="Account" title="Facilities" />
-        <EmptyState title="No facilities" body="Add a pickup location when you list stock." />
+        <EmptyState title="No facilities" body="Add one in profile." />
       </div>
     );
   }
@@ -39,10 +39,10 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
     <div className="flex flex-col gap-6">
       <ClauseHeading n="01" kicker="Account" title="Facilities" />
       <div className="overflow-x-auto border border-rule bg-sheet">
-        <table className="w-full min-w-[640px] border-collapse text-[13px]">
+        <table className="w-full min-w-[720px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b-2 border-ink bg-sheet-2">
-              {['Name', 'City', 'Pincode', 'Dispatch address'].map((h) => (
+              {['Name', 'Address', 'Dispatch from', 'Units held'].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-2 text-left font-mono text-[10px] uppercase tracking-[0.11em] text-ink-3"
@@ -56,9 +56,14 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
             {data.map((f) => (
               <tr key={f.addressId} className="border-b border-rule-2 last:border-b-0">
                 <td className="px-3 py-2 text-ink">{f.label}</td>
-                <td className="px-3 py-2 text-ink-2">{f.city}</td>
-                <td className="px-3 py-2 font-mono tabular-nums">{f.pincode}</td>
-                <td className="px-3 py-2 text-fail">—</td>
+                <td className="px-3 py-2 text-ink-2">
+                  {f.line1}, {f.city}{' '}
+                  <span className="font-mono tnum">{f.pincode}</span>
+                </td>
+                <td className={`px-3 py-2 ${f.dispatchFrom ? 'text-ink-2' : 'text-fail'}`}>
+                  {f.dispatchFrom ?? '—'}
+                </td>
+                <td className="px-3 py-2 font-mono tabular-nums">{f.unitsHeld}</td>
               </tr>
             ))}
           </tbody>

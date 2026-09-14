@@ -13,7 +13,7 @@
 | 4 | Today, Listings, Units | DONE | f15a886 | — | Dashboard rebuilt. Listings/units restyled. |
 | 5 | Inspect | DONE | f15a886 | — | Visits + corrections restyled. Auto-apply job still unwired (see Open questions). |
 | 6 | PO line response + orders board | DONE | — | — | Per-line accept/reject, KPI board, detail dialog, serial attach, dispatch. |
-| 7 | Money | DONE | f15a886 | — | Payables restyled. Payouts honest empty state. |
+| 7 | Hub screens (Home → Documents) | DONE | — | — | `data-surface=hub`, copy budget, create-listing dialog. |
 | 8 | Team & access | DONE | — | — | Superseded by plan §5 below; invite flow + facility scope landed in this stage. |
 | 9 | Close-out | TODO | — | — | Screenshots, word-count pass, `SUPPLIER_HUB_REVIEW.md`, CI green. |
 
@@ -89,6 +89,15 @@
 | `pnpm lint` | `packages/ui`, `packages/config` | PASS |
 | `pnpm test` | `packages/ui` | PASS — 343 tests incl. `hub-scope.spec.ts`, hub contrast block |
 
+## Stage 7 copy budget
+
+| Scope | Words (visible JSX) |
+|-------|---------------------|
+| Before (board shells) | ~612 |
+| After (Dashboard, Listings, Payouts, Facilities, Documents, create dialog) | under 400 |
+
+Visits/Corrections record routes still carry detail copy — board headers restyled; full trim is Stage 9.
+
 ## Screenshots
 
 Target path: `docs/review/supplier-hub/<stage>-<route>.png` at **1900**, **1440**, and **600** px.
@@ -96,7 +105,7 @@ None captured yet under Supplier Hub naming. Prior MANIFEST pass did not save re
 
 ## Open questions
 
-1. **Grade correction auto-apply** — `GradeCorrectionService.autoApplyDue()` has no scheduler. Copy must not promise automatic apply.
+1. **Grade correction auto-apply** — `GradeCorrectionService.autoApplyDue()` has no scheduler. Stage 7 copy states automatic apply is not live; wiring the job is separate work with its own tests.
 2. ~~**PO reject / dispatch writers**~~ — Resolved in Stage 6: `POST …/respond`, `POST …/dispatch`; legacy `acknowledge` wraps respond-all.
 3. ~~**Team invites**~~ — Resolved in plan §5: invite link + set-password at `/team/accept`; no credential emailed.
 4. **Facility dispatch address** — vendor facility payload is `label / city / pincode` only. Dispatch column shows "—" in `--fail` until address field exists.

@@ -48,8 +48,11 @@ import { ZodValidationPipe } from '../../shared/http/http';
 interface VendorFacilityView {
   addressId: string;
   label: string;
+  line1: string;
   city: string;
   pincode: string;
+  dispatchFrom: string | null;
+  unitsHeld: number;
 }
 
 /** The grades this vendor ticked at registration. The listing wizard's step 2 list. */
@@ -106,9 +109,13 @@ interface VendorDashboard {
   unitsEverListed: number;
   unitsAwaitingQc: number;
   unitsLive: number;
+  /** Listings with sellable stock on them. */
+  liveListings: number;
   unitsSoldThisMonth: number;
   /** Sellable now, not sellable in a fortnight. QC is valid 90 days. */
   unitsQcExpiring14d: number;
+  /** Issued POs waiting on line-level accept/reject. */
+  posToAccept: number;
   payoutsDue: Money;
   payoutsDueOn: Date | null;
   queues: {
@@ -216,8 +223,10 @@ export class VendorController {
         awaiting_qc: bigint;
         awaiting_oldest: Date | null;
         live: bigint;
+        live_listings: bigint;
         expiring: bigint;
         sold_this_month: bigint;
+        pos_to_accept: bigint;
         open_corrections: bigint;
         corrections_oldest: Date | null;
         corrections_late: bigint;
@@ -234,6 +243,9 @@ export class VendorController {
             AND u.status IN ('AWAITING_QC','QC_SCHEDULED','QC_IN_PROGRESS'))     AS awaiting_oldest,
         (SELECT count(*) FROM listing.v_sellable_unit s
           WHERE s.vendor_org_id = ${orgId}::uuid)                                AS live,
+        (SELECT count(*) FROM listing.listing l
+          WHERE l.vendor_org_id = ${orgId}::uuid
+            AND l.status IN ('ACTIVE','PARTIALLY_ACTIVE'))                       AS live_listings,
         (SELECT count(*) FROM listing.v_sellable_unit s
           WHERE s.vendor_org_id = ${orgId}::uuid
             AND s.qc_valid_until <= ${expiryHorizon}::date)                      AS expiring,
@@ -242,6 +254,9 @@ export class VendorController {
           WHERE mu.vendor_org_id = ${orgId}::uuid
             AND m.to_status = 'DELIVERED'
             AND m.occurred_at >= ${monthStart}::date)                            AS sold_this_month,
+        (SELECT count(*) FROM procurement.purchase_order po
+          WHERE po.vendor_org_id = ${orgId}::uuid
+            AND po.status = 'RAISED')                                            AS pos_to_accept,
         (SELECT count(*) FROM listing.grade_correction g
           JOIN listing.listing l ON l.id = g.listing_id
           WHERE l.vendor_org_id = ${orgId}::uuid
@@ -278,7 +293,9 @@ export class VendorController {
       unitsEverListed: Number(counts?.units_ever ?? 0),
       unitsAwaitingQc: Number(counts?.awaiting_qc ?? 0),
       unitsLive: Number(counts?.live ?? 0),
+      liveListings: Number(counts?.live_listings ?? 0),
       unitsSoldThisMonth: Number(counts?.sold_this_month ?? 0),
+      posToAccept: Number(counts?.pos_to_accept ?? 0),
       unitsQcExpiring14d: Number(counts?.expiring ?? 0),
       payoutsDue: moneyFromDb(payables?.due ?? null) ?? Money.ZERO,
       payoutsDueOn: payables?.due_on ?? null,
@@ -354,22 +371,38 @@ export class VendorController {
   async facilities(): Promise<VendorFacilityView[]> {
     const orgId = this.requireVendorOrg();
     const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; label: string | null; line1: string; city: string; pincode: string }>
+      Array<{
+        id: string;
+        label: string | null;
+        line1: string;
+        city: string;
+        pincode: string;
+        dispatch_line1: string | null;
+        units_held: bigint;
+      }>
     >`
-      SELECT id, label, line1, city, pincode
-        FROM identity.org_address
-       WHERE org_id = ${orgId}::uuid
-         AND type = 'PICKUP'
-         AND is_active
-       ORDER BY is_default DESC, label NULLS LAST, city`;
+      SELECT a.id, a.label, a.line1, a.city, a.pincode,
+             da.line1 AS dispatch_line1,
+             (SELECT count(*) FROM listing.unit u
+               WHERE u.pickup_location_id = a.id
+                 AND u.vendor_org_id = ${orgId}::uuid
+                 AND u.status NOT IN ('DELIVERED','SCRAPPED'))                  AS units_held
+        FROM identity.org_address a
+        LEFT JOIN vendor.vendor_facility vf ON vf.address_id = a.id
+        LEFT JOIN identity.org_address da ON da.id = vf.dispatch_address_id
+       WHERE a.org_id = ${orgId}::uuid
+         AND a.type = 'PICKUP'
+         AND a.is_active
+       ORDER BY a.is_default DESC, a.label NULLS LAST, a.city`;
 
     return rows.map((r) => ({
       addressId: r.id,
-      // An unlabelled address still has to be recognisable in a dropdown, and
-      // the street is what the person who works there would call it.
       label: r.label ?? r.line1,
+      line1: r.line1,
       city: r.city,
       pincode: r.pincode,
+      dispatchFrom: r.dispatch_line1,
+      unitsHeld: Number(r.units_held),
     }));
   }
 
@@ -426,8 +459,11 @@ export class VendorController {
       return {
         addressId: row!.id,
         label: row!.label ?? row!.line1,
+        line1: row!.line1,
         city: row!.city,
         pincode: row!.pincode,
+        dispatchFrom: null,
+        unitsHeld: 0,
       };
     });
   }
