@@ -6,14 +6,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <!--
-      Console pre-paint read. Light everywhere. A first paint on /vendor/* already
-      carries the MANIFEST surface so the admin palette never flashes.
+      Console pre-paint read. Light everywhere. A first paint on /vendor/* and
+      /sell/* already carries the supplier hub surface, so neither the admin
+      palette nor the dark masthead flashes.
     -->
-    <script>try{document.documentElement.setAttribute('data-t','light');localStorage.setItem('tg-console-theme','light');if(location.pathname.indexOf('/vendor')===0){document.documentElement.setAttribute('data-surface','manifest');document.documentElement.setAttribute('data-density','default')}}catch(e){}</script>
+    <script>try{document.documentElement.setAttribute('data-t','light');localStorage.setItem('tg-console-theme','light');var p=location.pathname;if(p.indexOf('/vendor')===0||p.indexOf('/sell')===0){document.documentElement.setAttribute('data-surface','hub');document.documentElement.setAttribute('data-density','default')}}catch(e){}</script>
     <title>Console</title>
   </head>
   <body>

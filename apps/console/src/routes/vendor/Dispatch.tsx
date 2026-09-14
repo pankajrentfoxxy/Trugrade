@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { ClauseHeading, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
+import { HubPageHeader, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
 import { useResource } from '../../lib/useResource';
 import { API, onDate, type Page, type PurchaseOrder } from './api';
 
@@ -22,7 +22,7 @@ export function VendorDispatchRoute(): React.JSX.Element {
   if (error) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Fulfil" title="Dispatch" />
+        <HubPageHeader title="Dispatch" />
         <EmptyState title="Dispatch did not load" body={`${error}. Nothing has changed.`} />
       </div>
     );
@@ -31,7 +31,7 @@ export function VendorDispatchRoute(): React.JSX.Element {
   if (!data) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Fulfil" title="Dispatch" />
+        <HubPageHeader title="Dispatch" />
         <Skeleton lines={6} />
       </div>
     );
@@ -47,7 +47,7 @@ export function VendorDispatchRoute(): React.JSX.Element {
   if (rows.length === 0) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Fulfil" title="Dispatch" />
+        <HubPageHeader title="Dispatch" />
         <EmptyState title="Nothing to dispatch" body="Acknowledged purchase orders appear here." />
       </div>
     );
@@ -55,7 +55,7 @@ export function VendorDispatchRoute(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-6">
-      <ClauseHeading n="01" kicker="Fulfil" title="Dispatch" />
+      <HubPageHeader title="Dispatch" />
       <div className="overflow-x-auto border border-rule bg-sheet">
         <table className="w-full min-w-[800px] border-collapse text-[13px]">
           <thead>

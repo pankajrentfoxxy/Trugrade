@@ -667,7 +667,7 @@ export class ListingService implements IListingService {
             grade: r.grade as Grade,
             vendorWarrantyMonths: r.vendorWarrantyMonths,
             units: r.qtyTotal,
-            ask: { mode: 'NET_PAYOUT', vendorNetPayout: r.vendorAskPrice.toString() },
+            ask: { mode: 'NET_PAYOUT', vendorNetPayout: r.vendorAskPrice },
           });
           return {
             ...base,

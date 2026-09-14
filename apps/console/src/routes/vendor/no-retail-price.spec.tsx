@@ -196,13 +196,18 @@ describe('no vendor screen shows the retail price', () => {
           ...POISON,
         },
       ],
+      // Home gates on a complete profile before it renders any figure at all,
+      // so an unmocked onboarding call leaves the board on its skeleton and the
+      // retail-price assertion passes against an empty page.
+      [/onboarding\/steps/, { status: 'VERIFIED', steps: [] }],
     ]);
     const { container } = render(
       <MemoryRouter>
         <VendorDashboardRoute />
       </MemoryRouter>,
     );
-    await screen.findByText('Machines awaiting inspection');
+    // Just an anchor for "the KPI row has rendered" — the assertion is below.
+    await screen.findAllByText('Awaiting inspection');
     assertNoRetailPrice(container);
   });
 

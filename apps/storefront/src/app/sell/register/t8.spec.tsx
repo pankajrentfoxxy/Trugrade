@@ -115,7 +115,9 @@ describe('nothing arrives ticked', () => {
     const { container, unmount } = renderFacility();
 
     const allowedDefaults = new Set([
-      ...screen.getAllByRole('checkbox', { name: 'Closed' }).filter((box) => box.checked),
+      ...screen
+        .getAllByRole<HTMLInputElement>('checkbox', { name: 'Closed' })
+        .filter((box) => box.checked),
       screen.getByRole('checkbox', { name: /Copy to every open day/ }),
     ]);
     expect(allowedDefaults.size).toBe(2);

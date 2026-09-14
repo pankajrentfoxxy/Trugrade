@@ -345,82 +345,6 @@
   }
 
   /**
-   * MANIFEST — the vendor surface. The shipping manifest and the bound ledger.
-   * Paper ground, hairline rules, square corners, NO cards. Authority comes
-   * from typography and rules, never from boxes.
-   *
-   * Composes with data-t and data-density; knows about neither. Absent, this
-   * block changes nothing.
-   *
-   * Three rules:
-   *   1. Radius is 0 everywhere. A rounded corner in MANIFEST is a bug.
-   *   2. No box-shadow. Ever. Separation is a rule or a background step.
-   *   3. --acc is viridian and means the same three things the amber meant:
-   *      a primary action, a measured value, an active state.
-   */
-  :root[data-surface='manifest'] {
-    --chrome: #14170f;
-    --chrome-2: #1e2318;
-    --chrome-3: #2c3325;
-    --on-chrome: #f2f3ee;
-    --on-chrome-2: rgba(242, 243, 238, 0.82);
-    --on-chrome-3: rgba(242, 243, 238, 0.62);
-    --chrome-line: rgba(242, 243, 238, 0.12);
-    --chrome-line-2: rgba(242, 243, 238, 0.22);
-
-    --ground: #edeeea;
-    --sheet: #ffffff;
-    --sheet-2: #f7f8f5;
-    --sheet-3: #e4e6e0;
-
-    --ink: #191b18;
-    --ink-2: #4a4f4a;
-    --ink-3: #666c66;
-    --ink-4: #82887f;
-
-    --rule: #d6d8d1;
-    --rule-2: #e4e6e0;
-
-    --acc: #1d5c4a;
-    --acc-dk: #164638;
-    --acc-on: #ffffff;
-    --acc-ink: #144537;
-    --acc-wash: #e2ede8;
-    --acc-glow: rgba(29, 92, 74, 0.18);
-    --scan: rgba(29, 92, 74, 0.7);
-
-    --pass: #1d5c4a;
-    --warn: #7a4e0a;
-    --fail: #9b2c21;
-    --pass-wash: #e2ede8;
-    --warn-wash: #f6eddd;
-    --fail-wash: #f7e6e4;
-
-    /* Square. Every corner. */
-    --r-xs: 0px;
-    --r-sm: 0px;
-    --r: 0px;
-    --r-lg: 0px;
-    --r-xl: 0px;
-
-    /* No elevation exists in this language. */
-    --shadow: none;
-
-    --font-sans: 'Public Sans', system-ui, sans-serif;
-    --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-
-    --maxw: 1360px;
-  }
-
-  :root[data-surface='manifest'][data-density='default'] {
-    --d-row-h: 40px;
-  }
-  :root[data-surface='manifest'][data-density='compact'] {
-    --d-row-h: 34px;
-  }
-
-  /**
    * SUPPLIER HUB — the vendor surface. Light, roomy, familiar to anyone who has
    * used an Indian seller portal. Composes with data-t and data-density.
    *
@@ -458,6 +382,8 @@
     --acc-ink: #0b6b77;
     --acc-wash: #e8f4f6;
     --acc-2: #cfe7eb;
+    --acc-glow: rgba(15, 124, 138, 0.18);
+    --scan: rgba(15, 124, 138, 0.7);
     --brand-tint: #6bb1be;
 
     --pass: #0c7a50;
@@ -480,7 +406,10 @@
     --shadow: 0 1px 2px rgba(23, 32, 43, 0.05), 0 1px 3px rgba(23, 32, 43, 0.07);
     --shadow-2: 0 6px 24px rgba(23, 32, 43, 0.13), 0 18px 60px rgba(23, 32, 43, 0.13);
 
+    /* No serif on this surface. --font-display exists only so the shared
+       components that reach for it do not fall back to the buyer's Newsreader. */
     --font-sans: 'Inter', system-ui, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
     --maxw: 1800px;
@@ -488,6 +417,9 @@
 
   :root[data-surface='hub'][data-density='default'] {
     --d-row-h: 48px;
+  }
+  :root[data-surface='hub'][data-density='compact'] {
+    --d-row-h: 40px;
   }
 
   :root[data-surface='hub'] {
@@ -879,37 +811,23 @@
   align-items: center;
 }
 /**
- * MANIFEST component behaviour. Scoped to the vendor surface so admin is
- * untouched. Tokens already square every corner and drop shadows.
+ * SUPPLIER HUB component behaviour. Scoped to the vendor surface so admin is
+ * untouched. The vertical column rule was the ledger signature and it is gone —
+ * a seller portal table is read across, not down a column of figures.
  */
-:root[data-surface='manifest'] table thead tr {
+:root[data-surface='hub'] table thead tr {
   background: var(--sheet-2);
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
 }
-:root[data-surface='manifest'] table th + th,
-:root[data-surface='manifest'] table td + td {
-  border-left: 1px solid var(--rule-2);
-}
-:root[data-surface='manifest'] table tbody tr:hover {
+:root[data-surface='hub'] table tbody tr:hover {
   background: var(--sheet-2);
 }
-:root[data-surface='manifest'] table tbody tr[data-selected='true'] {
+:root[data-surface='hub'] table tbody tr[data-selected='true'] {
   background: var(--acc-wash);
-  box-shadow: inset 2px 0 0 var(--acc);
 }
 
-:root[data-surface='manifest'] button {
-  box-shadow: none;
-}
-
-:root[data-surface='manifest'] h1 {
-  font-family: var(--font-display);
-  font-weight: 600;
-}
-
-:root[data-surface='manifest'] [class*='animate-skeleton'] {
-  animation: none;
-  background: var(--sheet-3);
+:root[data-surface='hub'] button {
+  border-radius: var(--r);
 }
 
 /**
@@ -955,15 +873,6 @@
   text-transform: uppercase;
 }
 
-:root[data-surface='hub'] .tg-hub-kpi-value {
-  font-family: var(--font-mono);
-  font-size: 30px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  color: var(--ink);
-}
-
 :root[data-surface='hub'] table {
   font-size: 14.5px;
 }
@@ -973,20 +882,6 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-:root[data-surface='hub'] .tg-hub-page {
-  max-width: var(--maxw);
-  margin-inline: auto;
-  padding: 26px 32px 70px;
-}
-
-:root[data-surface='hub'] .tg-hub-topbar {
-  height: 62px;
-}
-
-:root[data-surface='hub'] .tg-hub-rail {
-  width: 96px;
 }
 
 .tg-theme-name {

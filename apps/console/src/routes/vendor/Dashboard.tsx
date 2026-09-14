@@ -2,11 +2,11 @@ import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   Button,
-  ClauseHeading,
+  HubPageHeader,
   EmptyState,
   LedgerRow,
-  LedgerSection,
-  RegisterStrip,
+  Panel,
+  HubKpiRow,
   Skeleton,
   StatusPill,
 } from '@trugrade/ui';
@@ -14,6 +14,7 @@ import type { ResumableOnboarding } from '../../../../storefront/src/app/registe
 import { useResource } from '../../lib/useResource';
 import { API, rupees, type DashboardTiles, type PayablesView, type VendorQueue } from './api';
 import { getTeam, type TeamPayload } from './team/teamApi';
+import { ROLE_LABEL } from './team/capability-matrix';
 import {
   PROFILE_SECTIONS,
   profileCompletionPct,
@@ -34,6 +35,15 @@ type NeedRow = {
   age: string;
   href: string;
 };
+
+/**
+ * The tiles are typed as numbers, but an older API build that predates a field
+ * simply omits it, and `String(undefined)` puts the word "undefined" on screen
+ * where a count belongs. Say nothing rather than say that.
+ */
+function count(n: number | undefined): string | null {
+  return typeof n === 'number' ? String(n) : null;
+}
 
 function queueAge(q: VendorQueue): string {
   return q.oldestWaitHours === null ? '—' : `${q.oldestWaitHours} h`;
@@ -140,8 +150,8 @@ export function VendorDashboardRoute(): React.JSX.Element {
 
   if (!data || !onboarding) {
     return (
-      <div className="vl-page">
-        <ClauseHeading n="01" kicker="Today" title="Home" />
+      <div className="hub-page">
+        <HubPageHeader title="Home" />
         <Skeleton lines={6} />
       </div>
     );
@@ -149,10 +159,8 @@ export function VendorDashboardRoute(): React.JSX.Element {
 
   if (!profileComplete) {
     return (
-      <div className="vl-page">
-        <ClauseHeading
-          n="01"
-          kicker="Today"
+      <div className="hub-page">
+        <HubPageHeader
           title="Home"
           actions={
             <Button variant="primary" onClick={() => void navigate('/vendor/profile')}>
@@ -167,18 +175,16 @@ export function VendorDashboardRoute(): React.JSX.Element {
 
   const needs = buildNeeds(data);
   const cells = [
-    { label: 'Live listings', value: String(data.liveListings) },
-    { label: 'Units on sale', value: String(data.unitsLive) },
-    { label: 'Awaiting inspection', value: String(data.unitsAwaitingQc) },
-    { label: 'POs to accept', value: String(data.posToAccept) },
+    { label: 'Live listings', value: count(data.liveListings) },
+    { label: 'Units on sale', value: count(data.unitsLive) },
+    { label: 'Awaiting inspection', value: count(data.unitsAwaitingQc) },
+    { label: 'POs to accept', value: count(data.posToAccept) },
     { label: 'Due to you', value: rupees(data.payoutsDue) },
   ];
 
   return (
-    <div className="vl-page">
-      <ClauseHeading
-        n="01"
-        kicker="Today"
+    <div className="hub-page">
+      <HubPageHeader
         title="Home"
         actions={
           <Button variant="primary" onClick={() => void navigate('/vendor/listings')}>
@@ -187,14 +193,16 @@ export function VendorDashboardRoute(): React.JSX.Element {
         }
       />
 
-      <RegisterStrip cells={cells} />
+      <HubKpiRow cells={cells} />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <LedgerSection n="02" title="Needs you" count={needs.length || undefined} aside="By urgency">
+        <Panel title="Needs you" count={needs.length || undefined} actions="By urgency">
           {needs.length === 0 ? (
-            <EmptyState title="Nothing waiting" body="Queues are clear." />
+            <div className="px-5 py-4">
+              <EmptyState title="Nothing waiting" body="Queues are clear." />
+            </div>
           ) : (
-            <ul className="list-none p-0">
+            <ul className="list-none px-5 py-1">
               {needs.map((row) => (
                 <li
                   key={row.key}
@@ -221,46 +229,54 @@ export function VendorDashboardRoute(): React.JSX.Element {
               ))}
             </ul>
           )}
-        </LedgerSection>
+        </Panel>
 
         <aside className="flex flex-col gap-6">
-          <LedgerSection n="03" title="Next payout">
+          <Panel title="Next payout">
             {payables ? (
-              <div className="flex flex-col gap-1">
+              <>
                 <LedgerRow label="Gross" value={rupees(payables.statement.gross)} />
-                <LedgerRow
-                  label="TDS"
-                  value={`− ${rupees(payables.statement.tds.amount)}`}
-                />
+                <LedgerRow label="TDS" value={`− ${rupees(payables.statement.tds.amount)}`} />
                 <LedgerRow
                   label="Corrections"
                   value={`− ${rupees(payables.statement.penalties)}`}
                 />
                 <LedgerRow label="QC fees" value={`− ${rupees(payables.statement.qcFees)}`} />
                 <LedgerRow label="Net" value={rupees(payables.statement.net)} total />
+              </>
+            ) : (
+              <div className="px-5 py-4">
+                <Skeleton lines={4} />
               </div>
-            ) : (
-              <Skeleton lines={4} />
             )}
-          </LedgerSection>
+          </Panel>
 
-          <LedgerSection n="04" title="Your team">
-            {team ? (
-              <ul className="list-none p-0">
-                {team.members.slice(0, 5).map((m) => (
-                  <li key={m.id} className="border-b border-rule-2 py-2 text-body-sm last:border-b-0">
-                    <span className="text-ink">{m.fullName}</span>
-                    <span className="ml-2 text-ink-3">{m.roles[0] ?? 'Member'}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-body-sm text-ink-3">Team unavailable.</p>
-            )}
-            <Link className="mt-2 inline-block text-body-sm underline" to="/vendor/team">
-              Manage team
-            </Link>
-          </LedgerSection>
+          <Panel title="Your team">
+            <div className="px-5 py-3">
+              {team ? (
+                <ul className="list-none p-0">
+                  {team.members.slice(0, 5).map((m) => (
+                    <li
+                      key={m.id}
+                      className="border-b border-rule-2 py-2 text-body-sm last:border-b-0"
+                    >
+                      <span className="text-ink">{m.fullName}</span>
+                      {/* The label, not the constant. `VENDOR_ADMIN` is our
+                          word for it; "Operations Manager" is the supplier's. */}
+                      <span className="ml-2 text-ink-3">
+                        {(m.roles[0] && ROLE_LABEL[m.roles[0]]) ?? 'Member'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-body-sm text-ink-3">Team unavailable.</p>
+              )}
+              <Link className="hub-link mt-3 inline-block text-body-sm" to="/vendor/team">
+                Manage team
+              </Link>
+            </div>
+          </Panel>
         </aside>
       </div>
     </div>

@@ -90,6 +90,12 @@ export const modelSearchQuerySchema = z.object({
 });
 export type ModelSearchQueryDto = z.infer<typeof modelSearchQuerySchema>;
 
+/** Second rung of the cascading machine picker: the models one brand carries. */
+export const pickerModelsQuerySchema = z.object({
+  brandId: z.string().uuid(),
+});
+export type PickerModelsQueryDto = z.infer<typeof pickerModelsQuerySchema>;
+
 /**
  * The grade is optional because two callers want different things from one SKU:
  * the vendor wizard needs the declared specification, to show what it is about

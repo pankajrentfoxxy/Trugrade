@@ -33,6 +33,20 @@ export interface NavEntry {
   orgType?: Principal['orgType'];
   /** Which frame renders this entry. Absent means the admin Shell. */
   surface?: 'VENDOR';
+  /**
+   * Keeps a real route out of the vendor rail without taking it out of `NAV`.
+   *
+   * The supplier hub rail is ten items. It is a set of places, not an index of
+   * routes: four of these screens are steps *inside* another screen's job —
+   * you dispatch a purchase order, you create a listing from the listings
+   * board — and a rail that lists them reads as ten places plus four verbs.
+   *
+   * They stay in `NAV` because `activeEntry()` highlights the rail item a
+   * sub-route belongs under, the command palette searches this list, and
+   * `Landing` picks from it. Only the rail skips them, and every one of them
+   * has a link on the screen that owns it — checked, not assumed.
+   */
+  rail?: false;
 }
 
 /**
@@ -128,7 +142,7 @@ export const NAV: readonly NavEntry[] = [
   ),
   {
     to: '/vendor',
-    label: 'Today',
+    label: 'Home',
     permission: 'listing.own.read',
     group: 'Today',
     orgType: 'VENDOR',
@@ -149,6 +163,8 @@ export const NAV: readonly NavEntry[] = [
     group: 'Sell',
     orgType: 'VENDOR',
     surface: 'VENDOR',
+    // Reached from the Listings board's primary action.
+    rail: false,
   },
   {
     to: '/vendor/sku-request',
@@ -157,10 +173,12 @@ export const NAV: readonly NavEntry[] = [
     group: 'Sell',
     orgType: 'VENDOR',
     surface: 'VENDOR',
+    // Reached from the machine picker, at the moment it comes up empty.
+    rail: false,
   },
   {
     to: '/vendor/qc/visits',
-    label: 'Inspections',
+    label: 'Inspect',
     permission: 'listing.own.read',
     group: 'Inspect',
     orgType: 'VENDOR',
@@ -168,7 +186,7 @@ export const NAV: readonly NavEntry[] = [
   },
   {
     to: '/vendor/corrections',
-    label: 'Grade corrections',
+    label: 'Grades',
     permission: 'listing.own.read',
     group: 'Inspect',
     orgType: 'VENDOR',
@@ -176,7 +194,7 @@ export const NAV: readonly NavEntry[] = [
   },
   {
     to: '/vendor/orders',
-    label: 'Purchase orders',
+    label: 'Orders',
     permission: 'procurement.po.read_own',
     group: 'Fulfil',
     orgType: 'VENDOR',
@@ -189,10 +207,12 @@ export const NAV: readonly NavEntry[] = [
     group: 'Fulfil',
     orgType: 'VENDOR',
     surface: 'VENDOR',
+    // Reached from Orders — you dispatch a purchase order, not the abstract noun.
+    rail: false,
   },
   {
     to: '/vendor/payables',
-    label: 'Payables',
+    label: 'Payouts',
     permission: 'procurement.payable.read_own',
     group: 'Money',
     orgType: 'VENDOR',
@@ -205,10 +225,12 @@ export const NAV: readonly NavEntry[] = [
     group: 'Money',
     orgType: 'VENDOR',
     surface: 'VENDOR',
+    // Reached from Payouts, which is where a vendor asks what they were paid.
+    rail: false,
   },
   {
     to: '/vendor/team',
-    label: 'Team & access',
+    label: 'Team',
     permission: 'listing.own.read',
     group: 'Account',
     orgType: 'VENDOR',

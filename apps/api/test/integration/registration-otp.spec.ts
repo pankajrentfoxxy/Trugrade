@@ -106,8 +106,13 @@ function inRequest<T>(fn: () => Promise<T>, ip = '203.0.113.10'): Promise<T> {
   return ctx.run({ requestId: 'test', ip, userAgent: 'jest' }, fn);
 }
 
-function withoutDevCode(body: Record<string, unknown>): Record<string, unknown> {
-  const { devCode: _d, ...rest } = body;
+/**
+ * The comparison is of KEYS, not values — the enumeration guarantee is that a
+ * known and an unknown identifier produce the same shape. `devCode` is the one
+ * field that legitimately differs in a dev build, so it is dropped first.
+ */
+function withoutDevCode<T extends object>(body: T): Record<string, unknown> {
+  const { devCode: _d, ...rest } = body as T & { devCode?: unknown };
   return rest;
 }
 

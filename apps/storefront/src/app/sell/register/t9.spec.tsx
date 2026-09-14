@@ -112,9 +112,14 @@ describe('step 6 — the documents asked for', () => {
     expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'SIGNATORY_ID')?.required).toBe(false);
     expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'ADDRESS_PROOF')?.required).toBe(false);
     expect(VENDOR_DOCUMENTS.find((d) => d.docType === 'ADDRESS_PROOF')?.dateRequired).toBe(false);
-    expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'BOARD_RESOLUTION')).toBe(false);
-    expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'CANCELLED_CHEQUE')).toBe(false);
-    expect(VENDOR_DOCUMENTS.some((d) => d.docType === 'CPCB_EWASTE')).toBe(false);
+    // Widened to `string` on purpose: these three were removed from the doc-type
+    // union itself, and comparing against the narrowed union is a type error
+    // rather than a test. The assertion that matters is that nothing asks for
+    // them, which holds whether they are absent from the list or from the type.
+    const asked: string[] = VENDOR_DOCUMENTS.map((d) => d.docType);
+    expect(asked).not.toContain('BOARD_RESOLUTION');
+    expect(asked).not.toContain('CANCELLED_CHEQUE');
+    expect(asked).not.toContain('CPCB_EWASTE');
   });
 });
 

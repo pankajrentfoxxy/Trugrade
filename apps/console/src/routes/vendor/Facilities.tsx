@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ClauseHeading, EmptyState, Skeleton } from '@trugrade/ui';
+import { HubPageHeader, EmptyState, Skeleton } from '@trugrade/ui';
 import { useResource } from '../../lib/useResource';
 import { API, type VendorFacility } from './api';
 
@@ -11,7 +11,7 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
   if (error) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Account" title="Facilities" />
+        <HubPageHeader title="Facilities" />
         <EmptyState title="Did not load" body={error} />
       </div>
     );
@@ -20,7 +20,7 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
   if (!data) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Account" title="Facilities" />
+        <HubPageHeader title="Facilities" />
         <Skeleton lines={6} />
       </div>
     );
@@ -29,7 +29,7 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
   if (data.length === 0) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Account" title="Facilities" />
+        <HubPageHeader title="Facilities" />
         <EmptyState title="No facilities" body="Add one in profile." />
       </div>
     );
@@ -37,7 +37,7 @@ export function VendorFacilitiesRoute(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-6">
-      <ClauseHeading n="01" kicker="Account" title="Facilities" />
+      <HubPageHeader title="Facilities" />
       <div className="overflow-x-auto border border-rule bg-sheet">
         <table className="w-full min-w-[720px] border-collapse text-[13px]">
           <thead>

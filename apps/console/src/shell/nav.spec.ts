@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Principal } from '../lib/auth';
-import { activeEntry, monogram, visibleGroups } from './nav';
+import { activeEntry, monogram, visibleGroups, NAV } from './nav';
 
 const principal = (p: Partial<Principal>): Principal => ({
   userId: 'u',
@@ -56,5 +56,62 @@ describe('the org-type gate', () => {
     });
     const groups = visibleGroups(vendor).map(([group]) => group);
     expect(groups).toEqual(['Today', 'Sell', 'Inspect', 'Account']);
+  });
+});
+
+/**
+ * The supplier hub rail is ten places, and the four routes it leaves out are
+ * still routes.
+ *
+ * Both halves matter. A rail that grows an item per route stops being a map and
+ * becomes an index; a route dropped from the rail with no link on the screen
+ * that owns it is simply unreachable. The second test is the one that catches
+ * the second failure, so it asserts against the actual screens rather than
+ * against a list of intentions.
+ */
+describe('the supplier hub rail', () => {
+  const owner = principal({
+    orgType: 'VENDOR',
+    roles: ['VENDOR_OWNER'],
+    permissions: [
+      'listing.own.read',
+      'listing.own.write',
+      'procurement.po.read_own',
+      'procurement.payable.read_own',
+    ],
+  });
+
+  it('shows the ten places, in order, and nothing else', () => {
+    const railed = visibleGroups(owner)
+      .flatMap(([, entries]) => entries)
+      .filter((e) => e.surface === 'VENDOR' && e.rail !== false)
+      .map((e) => e.label);
+
+    expect(railed).toEqual([
+      'Home',
+      'Listings',
+      'Inspect',
+      'Grades',
+      'Orders',
+      'Payouts',
+      'Team',
+      'Facilities',
+      'Documents',
+      'Profile',
+    ]);
+  });
+
+  it('keeps the off-rail routes in NAV so a sub-route still lights its section', () => {
+    const all = NAV.filter((e) => e.surface === 'VENDOR');
+    const off = all.filter((e) => e.rail === false).map((e) => e.to);
+
+    expect(off).toEqual([
+      '/vendor/listings/new',
+      '/vendor/sku-request',
+      '/vendor/dispatch',
+      '/vendor/payouts',
+    ]);
+    // Still in NAV, so `activeEntry` resolves them rather than lighting nothing.
+    for (const to of off) expect(activeEntry(to, all)).toBeDefined();
   });
 });

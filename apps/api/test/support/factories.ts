@@ -301,6 +301,8 @@ export interface SeededUnit {
   serial: string;
   sealId: string | null;
   qcReportId: string | null;
+  /** The grade the listing and the unit were both seeded at. */
+  grade: string;
 }
 
 /** A complete, valid, sellable vendor + catalog + listing + unit graph. */
@@ -333,5 +335,12 @@ export async function seedSellableUnit(
     },
     db,
   );
-  return { vendorOrgId, pickupAddressId, skuId: catalog.skuId, listingId, ...unit };
+  return {
+    vendorOrgId,
+    pickupAddressId,
+    skuId: catalog.skuId,
+    listingId,
+    grade: overrides.grade ?? 'A',
+    ...unit,
+  };
 }

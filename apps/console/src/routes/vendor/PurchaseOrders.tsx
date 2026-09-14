@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Button,
-  ClauseHeading,
+  HubPageHeader,
   EmptyState,
   GradeBadge,
-  RegisterStrip,
+  HubKpiRow,
   StatusPill,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
@@ -91,9 +91,21 @@ export function VendorPurchaseOrdersRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack">
-      <ClauseHeading n="01" kicker="Fulfil" title="Purchase orders" />
+      {/* Dispatch is off the rail, so this is the only way to the pick-and-ship
+          board — which is the screen this one hands work to. */}
+      <HubPageHeader
+        title="Purchase orders"
+        actions={
+          <Link
+            className="text-body-sm text-acc-ink underline underline-offset-4"
+            to="/vendor/dispatch"
+          >
+            Dispatch board
+          </Link>
+        }
+      />
 
-      <RegisterStrip
+      <HubKpiRow
         cells={[
           {
             label: 'Open orders',

@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { ClauseHeading, EmptyState, Skeleton } from '@trugrade/ui';
+import { HubPageHeader, EmptyState, Skeleton } from '@trugrade/ui';
+import { daysUntil } from '../../lib/clock';
 import { useResource } from '../../lib/useResource';
 import { API, onDate, type VendorDocument } from './api';
 
@@ -7,7 +8,7 @@ import { API, onDate, type VendorDocument } from './api';
 
 function expiryTone(expiresOn: string | null): 'neutral' | 'warn' | 'fail' {
   if (!expiresOn) return 'neutral';
-  const days = Math.ceil((new Date(expiresOn).getTime() - Date.now()) / 86_400_000);
+  const days = daysUntil(expiresOn);
   if (days < 0) return 'fail';
   if (days <= 30) return 'warn';
   return 'neutral';
@@ -19,7 +20,7 @@ export function VendorDocumentsRoute(): React.JSX.Element {
   if (error) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Account" title="Documents" />
+        <HubPageHeader title="Documents" />
         <EmptyState title="Did not load" body={error} />
       </div>
     );
@@ -28,7 +29,7 @@ export function VendorDocumentsRoute(): React.JSX.Element {
   if (!data) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Account" title="Documents" />
+        <HubPageHeader title="Documents" />
         <Skeleton lines={6} />
       </div>
     );
@@ -37,7 +38,7 @@ export function VendorDocumentsRoute(): React.JSX.Element {
   if (data.length === 0) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Account" title="Documents" />
+        <HubPageHeader title="Documents" />
         <EmptyState title="No documents" body="Upload on profile." />
       </div>
     );
@@ -45,7 +46,7 @@ export function VendorDocumentsRoute(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-6">
-      <ClauseHeading n="01" kicker="Account" title="Documents" />
+      <HubPageHeader title="Documents" />
       <div className="overflow-x-auto border border-rule bg-sheet">
         <table className="w-full min-w-[720px] border-collapse text-[13px]">
           <thead>

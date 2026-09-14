@@ -41,6 +41,10 @@ export const API = {
   catalogModelSearch: (q: string) =>
     `/api/catalog/models/search?q=${encodeURIComponent(q)}&limit=20`,
   catalogModelSkus: (modelId: string) => `/api/catalog/models/${modelId}/skus`,
+  /** The cascading machine picker: brand, then that brand's models. */
+  catalogPickerBrands: '/api/catalog/picker/brands',
+  catalogPickerModels: (brandId: string) =>
+    `/api/catalog/picker/models?brandId=${encodeURIComponent(brandId)}`,
   sku: (skuId: string) => `/api/catalog/skus/${skuId}`,
   /**
    * The reference photographs for one grade of one SKU — the same call the
@@ -195,6 +199,21 @@ export interface CatalogModelHit {
   modelId: string;
   brandName: string;
   modelName: string;
+}
+
+/** One brand offered by the cascading machine picker. */
+export interface PickerBrand {
+  brandId: string;
+  brandName: string;
+  modelCount: number;
+}
+
+/** One model under a picked brand. */
+export interface PickerModel {
+  modelId: string;
+  modelName: string;
+  seriesName: string;
+  skuCount: number;
 }
 
 /** One catalog hit, plus enough specification to recognise the machine. */

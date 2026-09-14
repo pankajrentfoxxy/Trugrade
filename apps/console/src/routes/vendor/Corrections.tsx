@@ -4,7 +4,7 @@ import {
   Breadcrumb,
   Button,
   DataBoard,
-  ClauseHeading,
+  HubPageHeader,
   EmptyState,
   GradeBadge,
   Input,
@@ -154,6 +154,17 @@ function respondByLabel(c: GradeCorrection): React.ReactNode {
 /** One sentence on what happens if they do nothing — shown before the form. */
 function IfYouDoNothing({ c }: { c: GradeCorrection }): React.JSX.Element {
   if (!needsAnswer(c)) return <></>;
+  // An elapsed window is not a failure and not a closed door. `respond()`
+  // refuses a SETTLED correction, never a late one, so saying "expired" here
+  // would be the screen telling the vendor something the API does not enforce.
+  if (c.hoursUntilAutoApply !== null && c.hoursUntilAutoApply <= 0) {
+    return (
+      <p className="text-body-sm text-ink-2">
+        The window closed, but you can still answer this — nothing has been applied. Automatic apply
+        is not enabled.
+      </p>
+    );
+  }
   return (
     <p className="text-body-sm text-ink-2">
       No answer keeps this open. Automatic apply is not enabled — respond before the window closes.
@@ -232,6 +243,23 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
         ),
       },
       {
+        // Third column on purpose: a vendor scanning this board is asking what
+        // the correction costs them, and the amount must not sit behind the
+        // prose. A dash here would read as "nothing owed" — the one reading a
+        // column of money must never give — so an unrecorded ask says so.
+        key: 'ask',
+        header: 'Your ask',
+        cell: (c) =>
+          c.askBefore === null ? (
+            <NotMeasured
+              why="No ask price is recorded against this machine today"
+              label="No amount"
+            />
+          ) : (
+            <span className="font-mono tnum text-ink">{rupees(c.askBefore)}</span>
+          ),
+      },
+      {
         key: 'reason',
         header: 'Finding',
         cell: (c) => <span className="block max-w-xs text-body-sm">{c.reason}</span>,
@@ -273,7 +301,7 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
   if (!data) {
     return (
       <div className="tg-stack">
-        <ClauseHeading n="01" kicker="Inspect" title="Grade corrections" />
+        <HubPageHeader title="Grade corrections" />
         <Skeleton lines={8} />
       </div>
     );
@@ -281,7 +309,7 @@ export function VendorCorrectionsRoute(): React.JSX.Element {
 
   return (
     <div className="tg-stack">
-      <ClauseHeading n="01" kicker="Inspect" title="Grade corrections" />
+      <HubPageHeader title="Grade corrections" />
 
       <Board
         toolbar={

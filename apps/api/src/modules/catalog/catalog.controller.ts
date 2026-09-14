@@ -28,7 +28,11 @@ import { ObjectStorePort } from '../../shared/adapters/ports';
 import { PrismaService } from '../../shared/db/prisma.service';
 import type { Principal } from '../../shared/db/org-scope';
 import { IdentityService } from '../identity';
-import { SkuRepository } from './internal/sku.repository';
+import {
+  SkuRepository,
+  type PickerBrand,
+  type PickerModel,
+} from './internal/sku.repository';
 import {
   CatalogBoardRepository,
   type CatalogBoardPage,
@@ -50,6 +54,7 @@ import {
   catalogBoardQuerySchema,
   catalogSearchQuerySchema,
   modelSearchQuerySchema,
+  pickerModelsQuerySchema,
   conditionImageUploadUrlSchema,
   importSkusSchema,
   reorderConditionImagesSchema,
@@ -63,6 +68,7 @@ import {
   type CatalogSearchQueryDto,
   type CatalogBoardQueryDto,
   type ModelSearchQueryDto,
+  type PickerModelsQueryDto,
   type ConditionImageUploadUrlDto,
   type ImportSkusDto,
   type ReorderConditionImagesDto,
@@ -535,6 +541,35 @@ export class CatalogController {
   ): Promise<ModelSearchResult> {
     await this.limiter.consume(SEARCH_LIMIT, req.ip ?? 'unknown');
     return this.search.searchModels(query.q, query.limit);
+  }
+
+  /**
+   * The first rung of the vendor's machine picker.
+   *
+   * `models/search` answers "I know what it is called". This answers "show me
+   * what you carry" — a vendor who cannot spell "EliteBook 840 G8" gets nothing
+   * from a trigram search, and typing a model name is the step where a picker
+   * quietly turns into a SKU request. Brand, then model, then configuration.
+   *
+   * `@Public()` for the same reason as the search above: no vendor role holds a
+   * `catalog.*` permission, and this is TrueTech-owned reference data a vendor
+   * reads and never writes. Nothing here is org-scoped or buyer-derived.
+   */
+  @Get('picker/brands')
+  @Public()
+  @Header('Cache-Control', 'public, max-age=300')
+  async pickerBrands(): Promise<PickerBrand[]> {
+    return this.skus.listPickerBrands();
+  }
+
+  /** The models one brand carries, for the picker's second rung. */
+  @Get('picker/models')
+  @Public()
+  @Header('Cache-Control', 'public, max-age=300')
+  async pickerModels(
+    @Query(new ZodValidationPipe(pickerModelsQuerySchema)) query: PickerModelsQueryDto,
+  ): Promise<PickerModel[]> {
+    return this.skus.listPickerModels(query.brandId);
   }
 
   /** Every active configuration under one model — the picker's dropdown source. */

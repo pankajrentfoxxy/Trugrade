@@ -163,23 +163,26 @@ export {
   applyConsoleTheme,
 } from './components/theme';
 
+/* Supplier hub — the vendor surface. */
 export {
-  ClauseHeading,
-  type ClauseHeadingProps,
-  LedgerSection,
-  type LedgerSectionProps,
+  /** Not `PageHeader` — the console's `lib/controls` owns that name. */
+  HubPageHeader,
+  type HubPageHeaderProps,
+  Panel,
+  type PanelProps,
   LedgerRow,
   type LedgerRowProps,
-  RegisterStrip,
-  type RegisterStripProps,
-  type RegisterCell,
-  REGISTER_SUB_MAX,
+  /** Not `KpiRow` — that name belongs to the Archetype E workspace component. */
+  HubKpiRow,
+  type HubKpiRowProps,
+  type HubKpiCell,
+  KPI_SUB_MAX,
   InfoPopover,
   type InfoPopoverProps,
   PermissionGrid,
   type PermissionGridProps,
   type PermissionMark,
-} from './components/manifest';
+} from './components/hub';
 
 export {
   QcChip,

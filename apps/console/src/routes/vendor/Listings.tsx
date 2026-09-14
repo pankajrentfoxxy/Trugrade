@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
   Button,
-  ClauseHeading,
+  HubPageHeader,
   DataBoard,
   EmptyState,
   GradeBadge,
@@ -146,17 +146,34 @@ export function VendorListingsRoute(): React.JSX.Element {
 
   const rows = data?.rows ?? [];
   const pageCount = data ? Math.ceil(data.total / data.pageSize) : 0;
+  const onSale = rows.reduce((n, r) => n + r.qtyAvailable, 0);
 
   return (
     <div className="tg-stack">
-      <ClauseHeading
-        n="01"
-        kicker="Sell"
+      <HubPageHeader
         title="Listings"
+        subtitle={
+          data
+            ? // `qtyAvailable` is what a buyer can actually order today, which is
+              // what "on sale" means. `qtyTotal` includes units still in QC.
+              `${data.total} created · ${onSale} unit${onSale === 1 ? '' : 's'} on sale`
+            : undefined
+        }
         actions={
-          <Button variant="primary" onClick={() => setCreateOpen(true)}>
-            Create listing
-          </Button>
+          <>
+            {/* The wizard is off the rail. The dialog is the one-screen path for
+                a vendor who knows what they hold; the wizard is the four-step
+                one for a batch with serials, and both start here. */}
+            <Link
+              className="text-body-sm text-acc-ink underline underline-offset-4"
+              to="/vendor/listings/new"
+            >
+              List a batch
+            </Link>
+            <Button variant="primary" onClick={() => setCreateOpen(true)}>
+              Create listing
+            </Button>
+          </>
         }
       />
 

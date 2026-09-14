@@ -1,14 +1,29 @@
 import * as React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
-import { cn, Mark } from '@trugrade/ui';
-import { useAuth } from '../lib/auth';
+import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
+import { cn } from '@trugrade/ui';
+import { useAuth, type Principal } from '../lib/auth';
 import { VendorSurfaceSync } from '../lib/vendor-surface';
 import { useResource } from '../lib/useResource';
 import type { OrgProfile } from '../routes/vendor/profile-api';
+import { ROLE_LABEL } from '../routes/vendor/team/capability-matrix';
 import { VendorCountsProvider, useVendorCounts, type VendorCounts } from './useVendorCounts';
 import { activeEntry, canSee, NAV, visibleGroups, type NavEntry } from './nav';
-import './vendor-ledger.css';
+import { LockIcon, RailIcon, SearchIcon } from './rail-icons';
+import { ProfileBanner } from './ProfileBanner';
+import type { ResumableOnboarding } from '../../../storefront/src/app/register/api';
+import './vendor-hub.css';
+
+/**
+ * The supplier hub frame: white masthead, 96px icon rail, white footer.
+ *
+ * The bar is white and not `--chrome`. The dark chrome is the buyer brand; this
+ * is a different product on a different subdomain for a different audience.
+ * See the note on `:root[data-surface='hub']` in packages/ui/src/globals.css.
+ */
+
+/** Listing and SKU work is refused by the API until onboarding is verified. */
+const GATED_UNTIL_VERIFIED = new Set(['/vendor/listings/new', '/vendor/sku-request']);
 
 function initials(fullName: string | null | undefined): string {
   const trimmed = fullName?.trim();
@@ -18,14 +33,19 @@ function initials(fullName: string | null | undefined): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
-function formatLakhs(amount: string): string {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return '';
-  const lakhs = n / 100_000;
-  const rounded = lakhs >= 10 ? lakhs.toFixed(0) : lakhs.toFixed(1);
-  return `₹${rounded.replace(/\.0$/, '')}L`;
+function roleLabel(principal: Principal | null | undefined): string | null {
+  for (const role of principal?.roles ?? []) {
+    const label = ROLE_LABEL[role];
+    if (label) return label;
+  }
+  return null;
 }
 
+/**
+ * A rail badge is a count of things waiting, never a measure. Payables briefly
+ * carried a rounded rupee total here; five glyphs do not fit a 40px tile, and a
+ * figure that matters is worth reading in full on the screen that owns it.
+ */
 function countFor(entry: NavEntry, counts: VendorCounts | undefined): { text: string; work: boolean } | null {
   if (!counts) return null;
   switch (entry.to) {
@@ -49,8 +69,6 @@ function countFor(entry: NavEntry, counts: VendorCounts | undefined): { text: st
       return counts.awaitingDispatch !== undefined && counts.awaitingDispatch > 0
         ? { text: String(counts.awaitingDispatch), work: false }
         : null;
-    case '/vendor/payables':
-      return counts.netDue ? { text: formatLakhs(counts.netDue), work: false } : null;
     case '/vendor/team':
       return counts.memberCount !== undefined && counts.memberCount > 0
         ? { text: String(counts.memberCount), work: false }
@@ -60,84 +78,71 @@ function countFor(entry: NavEntry, counts: VendorCounts | undefined): { text: st
   }
 }
 
-function Masthead(): React.JSX.Element {
+function Masthead({ profile }: { profile: OrgProfile | null }): React.JSX.Element {
   const { principal, signOut } = useAuth();
   const navigate = useNavigate();
-  const { data: profile } = useResource<OrgProfile>('/api/account/profile', 'Profile');
   const [q, setQ] = React.useState('');
   const [signingOut, setSigningOut] = React.useState(false);
 
-  const city = profile?.registeredAddress?.city;
-  const legal = profile?.legalName ?? profile?.tradeName;
-  const monogram = initials(principal?.fullName);
+  const monogram = initials(principal?.fullName ?? profile?.fullName);
+  const role = roleLabel(principal);
 
   return (
-    <header className="vl-mast">
-      <div className="vl-mast__util">
-        <span className="vl-mast__portal">Truegrade supplier portal</span>
-        <div className="vl-mast__meta">
-          {legal ? <span className="vl-mast__meta-item hidden sm:inline">{legal}</span> : null}
-          {city ? (
-            <>
-              <span className="vl-mast__dot hidden md:inline" aria-hidden="true">
-                ·
-              </span>
-              <span className="hidden md:inline">{city}</span>
-            </>
-          ) : null}
-          {principal?.fullName ? (
-            <>
-              <span className="vl-mast__dot hidden lg:inline" aria-hidden="true">
-                ·
-              </span>
-              <span className="hidden lg:inline">{principal.fullName}</span>
-            </>
-          ) : null}
-          <span className="vl-mast__dot" aria-hidden="true">
-            ·
+    <header className="hub-mast">
+      <Link to="/vendor" aria-label="Supplier hub home" className="hub-mast__brand">
+        <span className="hub-mast__tile" aria-hidden="true">
+          t
+        </span>
+        <span className="hub-mast__names">
+          <span className="hub-mast__wordmark">
+            tru<em>grade</em>
           </span>
-          <button
-            type="button"
-            className="vl-mast__out"
-            disabled={signingOut}
-            onClick={() => {
-              if (signingOut) return;
-              setSigningOut(true);
-              void signOut().finally(() => setSigningOut(false));
-            }}
-          >
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </button>
-        </div>
-      </div>
-      <div className="vl-mast__id">
-        <Link to="/vendor" aria-label="Vendor home" className="vl-mast__brand">
-          <Mark size={22} />
-          <span className="vl-mast__wordmark">{BRAND.name}</span>
-        </Link>
-        <form
-          className="vl-mast__search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const next = q.trim();
-            if (!next) return;
-            void navigate(`/vendor/listings?q=${encodeURIComponent(next)}`);
-          }}
-        >
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search listings, POs, serials"
-            aria-label="Search listings, POs, serials"
-          />
-        </form>
-        <span aria-hidden="true" className="vl-mast__mono">
+          <span className="hub-mast__portal">Supplier Hub</span>
+        </span>
+      </Link>
+
+      <form
+        className="hub-mast__search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const next = q.trim();
+          if (!next) return;
+          void navigate(`/vendor/listings?q=${encodeURIComponent(next)}`);
+        }}
+      >
+        <SearchIcon />
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search listings, POs, serials"
+          aria-label="Search listings, POs, serials"
+        />
+      </form>
+
+      <div className="hub-mast__account">
+        <span className="hub-mast__avatar font-mono" aria-hidden="true">
           {monogram || '—'}
         </span>
+        {principal?.fullName ? (
+          <span className="hub-mast__who">
+            <span className="hub-mast__name">{principal.fullName}</span>
+            {role ? <span className="hub-mast__role">{role}</span> : null}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="hub-mast__out"
+          disabled={signingOut}
+          onClick={() => {
+            if (signingOut) return;
+            setSigningOut(true);
+            void signOut().finally(() => setSigningOut(false));
+          }}
+        >
+          {signingOut ? 'Signing out…' : 'Sign out'}
+        </button>
       </div>
-      <div className="vl-mast__rule" aria-hidden="true" />
-      <div className="vl-mast__rule vl-mast__rule--fine" aria-hidden="true" />
     </header>
   );
 }
@@ -145,9 +150,12 @@ function Masthead(): React.JSX.Element {
 function Rail({
   groups,
   active,
+  verified,
 }: {
   groups: [string, NavEntry[]][];
   active: NavEntry | undefined;
+  /** `undefined` while the profile is in flight — no padlock on a guess. */
+  verified: boolean | undefined;
 }): React.JSX.Element {
   const counts = useVendorCounts();
   const [open, setOpen] = React.useState(false);
@@ -156,45 +164,43 @@ function Rail({
     <>
       <button
         type="button"
-        className="vl-rail-toggle"
+        className="hub-rail-toggle"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="vendor-rail"
       >
         {open ? 'Close menu' : 'Menu'}
       </button>
-      <aside
-        id="vendor-rail"
-        aria-label="Vendor"
-        className={cn('vl-rail', !open && 'max-[899px]:hidden')}
-      >
-        {groups.map(([group, entries], i) => (
-          <div key={group}>
-            <div className="vl-rail__group">
-              <span className="vl-rail__n">{String(i + 1).padStart(2, '0')}</span>
-              {group}
-            </div>
-            <nav>
-              {entries.map((n) => {
-                const badge = countFor(n, counts);
-                const current = n === active;
-                return (
-                  <Link
-                    key={n.to}
-                    to={n.to}
-                    aria-current={current ? 'page' : undefined}
-                    className="vl-rail__item"
-                  >
-                    <span>{n.label}</span>
-                    {badge ? (
-                      <span className={cn('vl-rail__count', badge.work && 'vl-rail__count--work')}>
-                        {badge.text}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </nav>
+      <aside id="vendor-rail" aria-label="Vendor" className={cn('hub-rail', !open && 'max-[899px]:hidden')}>
+        {groups.map(([group, entries]) => (
+          <div key={group} className="contents">
+            <div className="hub-rail__group">{group}</div>
+            {entries.map((n) => {
+              const badge = countFor(n, counts);
+              const gated = verified === false && GATED_UNTIL_VERIFIED.has(n.to);
+              return (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  aria-current={n === active ? 'page' : undefined}
+                  className="hub-rail__item"
+                >
+                  <span className="hub-rail__tile">
+                    <RailIcon to={n.to} />
+                  </span>
+                  <span className="hub-rail__label">{n.label}</span>
+                  {gated ? (
+                    <span className="hub-rail__lock" title="Locked until your profile is verified">
+                      <LockIcon />
+                    </span>
+                  ) : badge ? (
+                    <span className={cn('hub-rail__count', badge.work && 'hub-rail__count--work')}>
+                      {badge.text}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </div>
         ))}
       </aside>
@@ -215,30 +221,30 @@ function VendorFooter(): React.JSX.Element {
   } = LEGAL_DISCLOSURE;
 
   return (
-    <footer className="bg-chrome text-on-chrome">
+    <footer>
       <div className="mx-auto grid max-w-[var(--maxw)] gap-6 px-8 py-6 md:grid-cols-3">
         <div>
-          <span className="font-display text-[16px] font-semibold">{brandName}</span>
-          <p className="mt-2 font-mono text-[11px] text-on-chrome-2">{legalName}</p>
+          <span className="text-[16px] font-semibold text-ink">{brandName}</span>
+          <p className="mt-2 font-mono text-[11px] text-ink-3">{legalName}</p>
         </div>
         <div>
-          <h5 className="font-mono text-[10px] uppercase tracking-[0.14em] text-on-chrome-3">Office</h5>
-          <address className="mt-2 font-mono text-[12px] not-italic leading-[1.7] text-on-chrome-2">
+          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">Office</h5>
+          <address className="mt-2 font-mono text-[12px] not-italic leading-[1.7] text-ink-3">
             {office.line1}
             <br />
             {office.city}, {office.state} {office.pincode}
           </address>
-          <a href={website} className="mt-2 inline-block font-mono text-[12px] text-on-chrome-2 underline">
+          <a href={website} className="mt-2 inline-block font-mono text-[12px] text-ink-3 underline">
             {website}
           </a>
         </div>
         <div>
-          <h5 className="font-mono text-[10px] uppercase tracking-[0.14em] text-on-chrome-3">Care</h5>
-          <p className="mt-2 font-mono text-[12px] text-on-chrome-2">{customerCare.email}</p>
-          <p className="font-mono text-[12px] text-on-chrome-2">{grievanceOfficer.email}</p>
+          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">Care</h5>
+          <p className="mt-2 font-mono text-[12px] text-ink-3">{customerCare.email}</p>
+          <p className="font-mono text-[12px] text-ink-3">{grievanceOfficer.email}</p>
         </div>
       </div>
-      <div className="mx-auto max-w-[var(--maxw)] border-t border-chrome-line px-8 py-3 font-mono text-[11px] text-on-chrome-3">
+      <div className="mx-auto max-w-[var(--maxw)] border-t border-rule px-8 py-3 font-mono text-[11px] text-ink-4">
         {legalName}
         {cin ? ` · CIN ${cin}` : ''}
         {` · GSTIN ${gstin}`}
@@ -251,29 +257,50 @@ function VendorFooter(): React.JSX.Element {
 export function VendorShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const { principal } = useAuth();
   const { pathname } = useLocation();
+  const { data: profile } = useResource<OrgProfile>('/api/account/profile', 'Profile');
+  const { data: onboarding } = useResource<ResumableOnboarding>(
+    '/api/onboarding/steps',
+    'Onboarding',
+  );
 
   const vendorEntries = principal
     ? NAV.filter((n) => n.surface === 'VENDOR' && canSee(n, principal))
     : [];
+  // `rail: false` entries stay in NAV — `activeEntry` still highlights the item
+  // a sub-route belongs under, and the command palette still finds them — but
+  // the rail is ten places, not an index of every route.
   const groups = principal
-    ? visibleGroups(principal).filter(([, entries]) => entries.every((e) => e.surface === 'VENDOR'))
+    ? visibleGroups(principal)
+        .filter(([, entries]) => entries.every((e) => e.surface === 'VENDOR'))
+        .map(([group, entries]): [string, NavEntry[]] => [
+          group,
+          entries.filter((e) => e.rail !== false),
+        ])
+        .filter(([, entries]) => entries.length > 0)
     : [];
   const active = activeEntry(pathname, vendorEntries);
 
   return (
     <VendorCountsProvider>
       <VendorSurfaceSync />
-      <div className="vendor-ledger">
+      <div className="vendor-hub">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-2 focus:z-40 focus:bg-acc focus:px-3 focus:py-2 focus:text-acc-on"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-2 focus:z-40 focus:rounded focus:bg-acc focus:px-3 focus:py-2 focus:text-acc-on"
         >
           Skip to content
         </a>
-        <Masthead />
-        <div className="vl-body">
-          {groups.length > 0 ? <Rail groups={groups} active={active} /> : null}
-          <main id="main" className="vl-main">
+        <Masthead profile={profile} />
+        <ProfileBanner onboarding={onboarding ?? null} roles={principal?.roles ?? []} />
+        <div className="hub-body">
+          {groups.length > 0 ? (
+            <Rail
+              groups={groups}
+              active={active}
+              verified={profile ? profile.status === 'VERIFIED' : undefined}
+            />
+          ) : null}
+          <main id="main" className="hub-main">
             {children}
           </main>
         </div>

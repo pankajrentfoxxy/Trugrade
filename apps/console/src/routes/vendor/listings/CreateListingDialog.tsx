@@ -15,9 +15,10 @@ import {
   postJson,
   rupees,
   type PayoutPreview,
-  type SkuHit,
+  type SkuDetail,
   type VendorFacility,
 } from '../api';
+import { MachinePicker } from '../MachinePicker';
 
 export function CreateListingDialog({
   open,
@@ -28,9 +29,7 @@ export function CreateListingDialog({
 }): React.JSX.Element | null {
   const navigate = useNavigate();
   const { data: facilities } = useResource<VendorFacility[]>(API.facilities, 'Facilities unavailable');
-  const [query, setQuery] = React.useState('');
-  const [skus, setSkus] = React.useState<SkuHit[]>([]);
-  const [sku, setSku] = React.useState<SkuHit | null>(null);
+  const [sku, setSku] = React.useState<SkuDetail | null>(null);
   const [grade, setGrade] = React.useState<Grade>('A');
   const [qty, setQty] = React.useState('5');
   const [ask, setAsk] = React.useState('');
@@ -39,20 +38,6 @@ export function CreateListingDialog({
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!query.trim()) {
-      setSkus([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      void fetch(API.catalogSearch(query.trim()), { credentials: 'include' })
-        .then((r) => r.json())
-        .then((hits: SkuHit[]) => setSkus(hits))
-        .catch(() => setSkus([]));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [query]);
 
   React.useEffect(() => {
     const units = Number(qty);
@@ -128,7 +113,7 @@ export function CreateListingDialog({
     Number(ask) <= VENDOR_NET_PAYOUT.max;
 
   return (
-    <Modal open={open} onClose={onClose} title="Create listing" description="SKU, grade, quantity, ask." size="lg">
+    <Modal open={open} onClose={onClose} title="Create listing" description="Machine, grade, quantity, ask." size="lg">
       <div className="flex flex-col gap-4">
         {error && (
           <p className="text-body-sm text-fail" role="alert">
@@ -136,35 +121,7 @@ export function CreateListingDialog({
           </p>
         )}
 
-        <Input label="Search SKU" value={query} onChange={(e) => setQuery(e.target.value)} />
-        {skus.length > 0 && !sku && (
-          <ul className="max-h-40 list-none overflow-y-auto border border-rule p-0">
-            {skus.map((hit) => (
-              <li key={hit.skuId}>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-body-sm hover:bg-sheet-2"
-                  onClick={() => {
-                    setSku(hit);
-                    setQuery(hit.skuCode);
-                    setSkus([]);
-                  }}
-                >
-                  <span className="font-mono tnum">{hit.skuCode}</span>
-                  <span className="ml-2 text-ink-2">
-                    {hit.brandName} {hit.modelName}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {sku && (
-          <p className="text-body-sm text-ink-2">
-            {sku.brandName} {sku.modelName} · {sku.ramGb} GB · {sku.storageGb} GB
-          </p>
-        )}
+        <MachinePicker onSelect={setSku} />
 
         <div className="flex flex-wrap gap-2">
           {GRADES.map((g) => (
@@ -241,7 +198,7 @@ export function CreateListingDialog({
             loading={busy}
             disabledReason={
               !sku
-                ? 'Pick a SKU.'
+                ? 'Choose the machine.'
                 : !facilityId
                   ? 'Pick a facility.'
                   : !askOk

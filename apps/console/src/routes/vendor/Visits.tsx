@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import {
   Breadcrumb,
   Button,
-  ClauseHeading,
+  HubPageHeader,
   DataBoard,
   EmptyState,
   GradeBadge,
@@ -160,7 +160,12 @@ const AREA_LABEL = (area: string): string =>
 /** The booked day and slot, or the fact that there is not one. */
 function When({ v }: { v: VendorVisit }): React.JSX.Element {
   if (v.scheduledDate === null) {
-    return <span className="text-ink-4">—</span>;
+    // Words, not a dash. A dash in a date column is read as "nothing to see",
+    // and this visit is precisely the one the vendor is waiting on us for — it
+    // also carries its reason for a screen reader, which a glyph cannot.
+    return (
+      <NotMeasured why="No date has been agreed for this inspection yet" label="Not scheduled yet" />
+    );
   }
   return (
     <>
@@ -480,13 +485,9 @@ export function VendorVisitsRoute(): React.JSX.Element {
     [data, status],
   );
 
-  const awaiting = (data ?? []).filter((v) => v.arrivedAt === null).length;
-
   return (
     <div className="tg-stack">
-      <ClauseHeading
-        n="01"
-        kicker="Inspect"
+      <HubPageHeader
         title="Visits"
         actions={
           <Button variant="primary" onClick={() => void navigate('/vendor/listings/new')}>

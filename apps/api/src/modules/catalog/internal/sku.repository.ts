@@ -43,6 +43,27 @@ export interface SkuRow {
   modelName: string;
 }
 
+/**
+ * One brand in the vendor's machine picker.
+ *
+ * `modelCount` counts only models carrying an active SKU. A brand with none is
+ * not offered at all — a vendor who picked it would face an empty model list
+ * with no way to tell a catalog gap from a failed request.
+ */
+export interface PickerBrand {
+  brandId: string;
+  brandName: string;
+  modelCount: number;
+}
+
+/** One model under a picked brand. Series disambiguates; it is not its own step. */
+export interface PickerModel {
+  modelId: string;
+  modelName: string;
+  seriesName: string;
+  skuCount: number;
+}
+
 /** What a caller supplies to create a SKU. The key is never supplied. */
 export interface SkuDraft {
   modelId: string;
@@ -183,6 +204,39 @@ export class SkuRepository {
       WHERE s.model_id = ${modelId}::uuid AND s.is_active
       ORDER BY s.cpu_model, s.ram_gb, s.storage_gb, s.sku_code`;
     return rows.map(toRow);
+  }
+
+  /**
+   * Brands the vendor picker may offer — those with at least one active SKU.
+   *
+   * The picker cascades brand to model to configuration, so every step has to
+   * be answerable from the step above it. Offering a brand whose models are all
+   * deprecated drops the vendor into a dead end they cannot diagnose.
+   */
+  async listPickerBrands(): Promise<PickerBrand[]> {
+    return this.prisma.$queryRaw<PickerBrand[]>`
+      SELECT b.id AS "brandId", b.name AS "brandName",
+             COUNT(DISTINCT m.id)::int AS "modelCount"
+      FROM catalog.brand b
+      JOIN catalog.series se ON se.brand_id = b.id AND se.is_active
+      JOIN catalog.model  m  ON m.series_id = se.id AND m.is_active
+      JOIN catalog.sku    s  ON s.model_id  = m.id  AND s.is_active
+      WHERE b.is_active
+      GROUP BY b.id, b.name
+      ORDER BY b.name`;
+  }
+
+  /** Models under one brand that carry an active SKU. */
+  async listPickerModels(brandId: string): Promise<PickerModel[]> {
+    return this.prisma.$queryRaw<PickerModel[]>`
+      SELECT m.id AS "modelId", m.name AS "modelName", se.name AS "seriesName",
+             COUNT(s.id)::int AS "skuCount"
+      FROM catalog.model m
+      JOIN catalog.series se ON se.id = m.series_id AND se.is_active
+      JOIN catalog.sku    s  ON s.model_id = m.id   AND s.is_active
+      WHERE se.brand_id = ${brandId}::uuid AND m.is_active
+      GROUP BY m.id, m.name, se.name
+      ORDER BY se.name, m.name`;
   }
 
   async findById(id: string): Promise<SkuRow | null> {

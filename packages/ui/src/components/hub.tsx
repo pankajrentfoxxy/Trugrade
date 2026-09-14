@@ -3,87 +3,72 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
 
+/**
+ * SUPPLIER HUB primitives. Rendered only under `data-surface="hub"`; the
+ * styling lives in `apps/console/src/shell/vendor-hub.css`.
+ */
+
 /* ==========================================================================
- * ClauseHeading
+ * HubPageHeader
  * ======================================================================== */
 
-export interface ClauseHeadingProps {
-  n: string;
+export interface HubPageHeaderProps {
   title: React.ReactNode;
-  /** Small mono line above the title. Defaults to nothing besides `n`. */
-  kicker?: string;
-  /** Date / status, right of the title, left of actions. */
-  meta?: React.ReactNode;
+  /** One line under the title. A second sentence belongs in an InfoPopover. */
+  subtitle?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
 }
 
-/** MANIFEST page title: kicker, display face, double rule. */
-export function ClauseHeading({
-  n,
+/**
+ * Page title, optional subtitle, actions right. One primary action per screen.
+ *
+ * Prefixed because the console's `lib/controls` already exports a `PageHeader`
+ * that ~25 admin screens use, and that one takes its body as `children`.
+ */
+export function HubPageHeader({
   title,
-  kicker,
-  meta,
+  subtitle,
   actions,
   className,
-}: ClauseHeadingProps): React.JSX.Element {
+}: HubPageHeaderProps): React.JSX.Element {
   return (
-    <header className={cn('vl-heading', className)}>
-      <div className="vl-heading__row">
-        <div className="vl-heading__titles">
-          <p className="vl-heading__kicker">
-            <span className="vl-heading__n">{n}</span>
-            {kicker ? <span>{kicker}</span> : null}
-          </p>
-          <h1 className="vl-heading__title">{title}</h1>
-        </div>
-        {meta || actions ? (
-          <div className="vl-heading__aside">
-            {meta ? <div className="vl-heading__meta">{meta}</div> : null}
-            {actions ? <div className="vl-heading__actions">{actions}</div> : null}
-          </div>
-        ) : null}
+    <header className={cn('hub-heading', className)}>
+      <div className="hub-heading__titles">
+        <h1 className="hub-heading__title">{title}</h1>
+        {subtitle ? <p className="hub-heading__sub">{subtitle}</p> : null}
       </div>
-      <div className="vl-heading__rule" aria-hidden="true" />
+      {actions ? <div className="hub-heading__actions">{actions}</div> : null}
     </header>
   );
 }
 
 /* ==========================================================================
- * LedgerSection
+ * Panel
  * ======================================================================== */
 
-export interface LedgerSectionProps {
-  n: string;
+export interface PanelProps {
   title: React.ReactNode;
   count?: React.ReactNode;
-  aside?: React.ReactNode;
+  actions?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
 }
 
-/** Numbered clause over a hairline — the section that tables hang from. */
-export function LedgerSection({
-  n,
-  title,
-  count,
-  aside,
-  children,
-  className,
-}: LedgerSectionProps): React.JSX.Element {
+/** The card everything hangs from: white sheet, hairline border, soft radius. */
+export function Panel({ title, count, actions, children, className }: PanelProps): React.JSX.Element {
   return (
-    <section className={cn('vl-section', className)}>
-      <header className="vl-section__head">
-        <h2 className="vl-section__title">
-          <span className="vl-section__n">{n}</span>
+    <section className={cn('hub-panel', className)}>
+      <header className="hub-panel__head">
+        <h2 className="hub-panel__title">
           {title}
           {count !== undefined && count !== null ? (
-            <span className="vl-section__count">{count}</span>
+            <span className="hub-panel__count font-mono tabular-nums">{count}</span>
           ) : null}
         </h2>
-        {aside ? <div className="vl-section__aside">{aside}</div> : null}
+        {actions ? <div className="hub-panel__actions">{actions}</div> : null}
       </header>
-      {children}
+      <div className="hub-panel__body">{children}</div>
     </section>
   );
 }
@@ -99,50 +84,66 @@ export interface LedgerRowProps {
   className?: string;
 }
 
-/** Label left, dotted leader, mono value right. */
+/** Label left in --ink-3, mono value right in --ink, hairline between rows. */
 export function LedgerRow({ label, value, total, className }: LedgerRowProps): React.JSX.Element {
   return (
-    <div className={cn('vl-row', total && 'vl-row--total', className)}>
-      <span className="vl-row__label">{label}</span>
-      <span className="vl-row__leader" aria-hidden="true" />
-      <span className="vl-row__value font-mono tabular-nums">{value}</span>
+    <div className={cn('hub-row', total && 'hub-row--total', className)}>
+      <span className="hub-row__label">{label}</span>
+      <span className="hub-row__value font-mono tabular-nums">{value}</span>
     </div>
   );
 }
 
 /* ==========================================================================
- * RegisterStrip
+ * HubKpiRow
  * ======================================================================== */
 
-export interface RegisterCell {
+export interface HubKpiCell {
   label: string;
-  value: string;
+  /** `null` when the figure is not available. Never pre-format that as a string. */
+  value: string | null;
   /** One line of denominator. Capped at 40 characters. */
   sub?: string;
 }
 
-export interface RegisterStripProps {
-  cells: readonly RegisterCell[];
+export interface HubKpiRowProps {
+  cells: readonly HubKpiCell[];
   className?: string;
 }
 
-export const REGISTER_SUB_MAX = 40;
+export const KPI_SUB_MAX = 40;
 
-/** MANIFEST KPI strip. A paragraph is a type error: `sub` is a short string. */
-export function RegisterStrip({ cells, className }: RegisterStripProps): React.JSX.Element {
+/**
+ * The metric strip at the top of a hub screen.
+ *
+ * Named `HubKpiRow` because `KpiRow` is the Archetype E workspace component and
+ * the admin console still uses it.
+ *
+ * `sub` is a short string, not a paragraph: the cap is enforced here so a
+ * sentence cannot grow back into the strip one edit at a time.
+ *
+ * A `null` value reads "Not measured" in `--ink-4`. Every hub metric goes
+ * through here, so that is the one place a missing figure can be caught before
+ * it reaches a screen wearing the same weight as a real one.
+ */
+export function HubKpiRow({ cells, className }: HubKpiRowProps): React.JSX.Element {
   return (
     <dl
-      data-testid="register-strip"
-      className={cn('vl-strip', className)}
-      style={{ ['--vl-cols' as string]: String(Math.max(cells.length, 1)) } as React.CSSProperties}
+      data-testid="hub-kpi-row"
+      className={cn('hub-strip', className)}
+      style={{ ['--hub-cols' as string]: String(Math.max(cells.length, 1)) } as React.CSSProperties}
     >
       {cells.map((cell, i) => {
-        const sub = cell.sub && cell.sub.length > REGISTER_SUB_MAX ? cell.sub.slice(0, REGISTER_SUB_MAX) : cell.sub;
+        const sub = cell.sub && cell.sub.length > KPI_SUB_MAX ? cell.sub.slice(0, KPI_SUB_MAX) : cell.sub;
         return (
-          <div key={`${cell.label}-${i}`} className="vl-strip__cell">
-            <dt className="vl-strip__label font-mono">{cell.label}</dt>
-            <dd className="vl-strip__value font-mono tabular-nums">{cell.value}</dd>
-            {sub ? <p className="vl-strip__sub">{sub}</p> : null}
+          <div key={`${cell.label}-${i}`} className="hub-strip__cell">
+            <dt className="hub-strip__label">{cell.label}</dt>
+            {cell.value === null ? (
+              <dd className="hub-strip__value hub-strip__value--none">Not measured</dd>
+            ) : (
+              <dd className="hub-strip__value font-mono tabular-nums">{cell.value}</dd>
+            )}
+            {sub ? <p className="hub-strip__sub">{sub}</p> : null}
           </div>
         );
       })}
@@ -196,17 +197,12 @@ export function InfoPopover({ label, children, className }: InfoPopoverProps): R
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-3.5 w-3.5 items-center justify-center border border-ink font-mono text-[10px] text-ink-3 hover:text-ink"
+        className="hub-info__btn"
       >
         ?
       </button>
       {open ? (
-        <div
-          ref={panel}
-          role="dialog"
-          aria-label={label}
-          className="absolute left-0 top-5 z-40 max-w-[320px] border border-ink bg-sheet p-3 text-[12px] leading-snug text-ink-2 shadow-none"
-        >
+        <div ref={panel} role="dialog" aria-label={label} className="hub-info__panel">
           {children}
         </div>
       ) : null}
@@ -223,7 +219,10 @@ export type PermissionMark = 'full' | 'limited' | 'none';
 export interface PermissionGridProps {
   rows: readonly { capability: string; marks: readonly PermissionMark[] }[];
   columns: readonly string[];
+  /** Wash one column by index. */
   highlightColumn?: number;
+  /** Wash one column by its heading. Ignored when it names no column. */
+  highlightRole?: string;
   className?: string;
 }
 
@@ -237,20 +236,20 @@ export function PermissionGrid({
   rows,
   columns,
   highlightColumn,
+  highlightRole,
   className,
 }: PermissionGridProps): React.JSX.Element {
+  const roleIndex = highlightRole ? columns.indexOf(highlightRole) : -1;
+  const highlight = roleIndex >= 0 ? roleIndex : highlightColumn;
+
   return (
-    <div className={cn('vl-table-wrap vl-grid', className)}>
-      <table className="vl-table w-full border-collapse text-[13px]">
+    <div className={cn('hub-table-wrap hub-grid', className)}>
+      <table className="hub-table w-full border-collapse">
         <thead>
           <tr>
             <th scope="col">Capability</th>
             {columns.map((col, i) => (
-              <th
-                key={col}
-                scope="col"
-                className={cn(highlightColumn === i && 'bg-acc-wash text-acc-ink')}
-              >
+              <th key={col} scope="col" className={cn(highlight === i && 'bg-acc-wash text-acc-ink')}>
                 {col}
               </th>
             ))}
@@ -259,14 +258,11 @@ export function PermissionGrid({
         <tbody>
           {rows.map((row) => (
             <tr key={row.capability}>
-              <td className="vl-td-ink">{row.capability}</td>
+              <td className="hub-td-ink">{row.capability}</td>
               {row.marks.map((mark, i) => (
                 <td
                   key={`${row.capability}-${i}`}
-                  className={cn(
-                    'text-center font-mono text-ink-2',
-                    highlightColumn === i && 'bg-acc-wash',
-                  )}
+                  className={cn('text-center font-mono text-ink-2', highlight === i && 'bg-acc-wash')}
                 >
                   <span aria-label={mark}>{MARK[mark]}</span>
                 </td>

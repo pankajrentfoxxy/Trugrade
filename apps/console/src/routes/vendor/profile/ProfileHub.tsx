@@ -1,9 +1,9 @@
 import * as React from 'react';
 import {
   Button,
-  ClauseHeading,
+  HubPageHeader,
   EmptyState,
-  RegisterStrip,
+  HubKpiRow,
   Skeleton,
   StatusPill,
   useToast,
@@ -82,7 +82,7 @@ export function ProfileHub(): React.JSX.Element {
   if (!onboarding && !loadError) {
     return (
       <>
-        <ClauseHeading n="01" kicker="Account" title="Supplier profile" />
+        <HubPageHeader title="Supplier profile" />
         <Skeleton lines={8} />
       </>
     );
@@ -91,7 +91,7 @@ export function ProfileHub(): React.JSX.Element {
   if (loadError) {
     return (
       <>
-        <ClauseHeading n="01" kicker="Account" title="Supplier profile" />
+        <HubPageHeader title="Supplier profile" />
         <EmptyState title="Profile progress did not load" body={loadError} />
       </>
     );
@@ -99,9 +99,7 @@ export function ProfileHub(): React.JSX.Element {
 
   return (
     <>
-      <ClauseHeading
-        n="01"
-        kicker="Account"
+      <HubPageHeader
         title="Supplier profile"
         actions={
           pct >= 100 ? (
@@ -112,7 +110,7 @@ export function ProfileHub(): React.JSX.Element {
         }
       />
 
-      <RegisterStrip
+      <HubKpiRow
         cells={[
           { label: 'Progress', value: `${pct}%`, sub: 'required sections' },
           {

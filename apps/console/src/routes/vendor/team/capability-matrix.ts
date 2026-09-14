@@ -46,9 +46,19 @@ export const ROLE_OPTIONS = [
   },
 ] as const;
 
+/**
+ * Every role in `VENDOR_ROLES`, so no real role falls through to "Member".
+ *
+ * `VENDOR_OPS` is not one of the four in the plan's role table but it is in
+ * `packages/contracts` and it is assigned to real users, so it needs a name a
+ * supplier can read. "Operations" against `VENDOR_ADMIN`'s "Operations Manager"
+ * is the honest difference between them: OPS holds listings, grade corrections
+ * and POs; ADMIN adds user management and sight of payables.
+ */
 export const ROLE_LABEL: Record<string, string> = {
   VENDOR_OWNER: 'Owner',
   VENDOR_ADMIN: 'Operations Manager',
+  VENDOR_OPS: 'Operations',
   VENDOR_FINANCE: 'Finance',
   VENDOR_VIEWER: 'Warehouse',
 };

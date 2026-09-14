@@ -12,9 +12,12 @@ import {
 } from '../../../../storefront/src/app/register/api';
 import { MfaGate } from '../../../../storefront/src/app/register/MfaGate';
 import {
+  liveFieldError,
   mobileSubscriberDigits,
+  signupPasswordRules,
   signupPasswordStrength,
   toE164,
+  type SignupFieldKey,
   typeFullName,
   validateEmail,
   validateFullName,
@@ -27,15 +30,27 @@ import './supplier-signup.css';
  * ARCHETYPE F — Focus. One-minute supplier signup; business details come later.
  */
 const CLAIMS = [
-  'Every machine opened and graded on site',
-  'Paid after delivery, not before',
-  'One invoice — TrueTech is the seller',
-  'Sealed until it reaches the buyer',
+  'We inspect, grade and seal every machine before it goes live',
+  'Your name is never shown to buyers',
+  'Payment on a fixed cycle, every deduction itemised',
+  'No listing fee, no monthly fee',
 ] as const;
 
 const STEP_LABELS = ['Mobile', 'Verify', 'Email', 'Account'] as const;
 
 type Step = 1 | 2 | 3 | 4;
+
+/** Hub tokens live on `:root[data-surface='hub']`, not on a nested div. */
+function SignupSurfaceSync(): null {
+  React.useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-surface', 'hub');
+    return () => {
+      root.removeAttribute('data-surface');
+    };
+  }, []);
+  return null;
+}
 
 export interface SupplierSignupProps {
   onSessionEstablished?: () => void;
@@ -47,21 +62,66 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const [mobileDigits, setMobileDigits] = React.useState('');
   const [mobileSentTo, setMobileSentTo] = React.useState<string | null>(null);
   const [mobileCode, setMobileCode] = React.useState('');
+  const [mobileDevCode, setMobileDevCode] = React.useState<string | null>(null);
   const [email, setEmail] = React.useState('');
   const [emailLocked, setEmailLocked] = React.useState(false);
   const [emailSentTo, setEmailSentTo] = React.useState<string | null>(null);
   const [emailCode, setEmailCode] = React.useState('');
+  const [emailDevCode, setEmailDevCode] = React.useState<string | null>(null);
   const [fullName, setFullName] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [confirm, setConfirm] = React.useState('');
   const [error, setError] = React.useState<string | undefined>();
-  const [fieldError, setFieldError] = React.useState<string | undefined>();
+  const [serverErrors, setServerErrors] = React.useState<
+    Partial<Record<SignupFieldKey, string>>
+  >({});
   const [busy, setBusy] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
   const [mfaSentTo, setMfaSentTo] = React.useState<string | null>(null);
+  const [focused, setFocused] = React.useState<SignupFieldKey | null>(null);
+  const [active, setActive] = React.useState<Partial<Record<SignupFieldKey, boolean>>>({});
 
   const mobileDisplay = mobileDigits.length > 0 ? `+91 ${mobileDigits}` : '+91 ';
   const e164 = toE164(mobileDisplay);
+
+  const markActive = (key: SignupFieldKey): void => {
+    setActive((prev) => ({ ...prev, [key]: true }));
+  };
+
+  const mobileError =
+    liveFieldError('mobile', mobileDisplay, validateMobile, focused, active) ??
+    (error && step === 1 ? error : undefined);
+
+  const emailError =
+    liveFieldError('email', email, validateEmail, focused, active) ??
+    (error && step === 3 && !emailLocked ? error : undefined);
+
+  const passwordContext = React.useMemo(
+    () => ({ email: email.trim(), mobile: e164 }),
+    [email, e164],
+  );
+
+  const nameError =
+    liveFieldError('fullName', fullName, validateFullName, focused, active) ??
+    serverErrors.fullName;
+
+  const passwordError =
+    liveFieldError(
+      'password',
+      password,
+      (value) => validateSignupPassword(value, passwordContext),
+      focused,
+      active,
+    ) ?? serverErrors.password;
+
+  const confirmError =
+    liveFieldError(
+      'confirm',
+      confirm,
+      (value) => (value.length > 0 && value !== password ? 'Passwords do not match.' : undefined),
+      focused,
+      active,
+    ) ?? serverErrors.confirm;
 
   React.useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -70,12 +130,9 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   }, [cooldown]);
 
   const sendMobileOtp = async (): Promise<void> => {
+    markActive('mobile');
     const validation = validateMobile(mobileDisplay);
-    if (validation) {
-      setFieldError(validation);
-      return;
-    }
-    setFieldError(undefined);
+    if (validation) return;
     setError(undefined);
     setBusy(true);
     const result = await sendOtp('MOBILE', e164);
@@ -86,6 +143,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
       return;
     }
     setMobileSentTo(result.data.sentTo);
+    setMobileDevCode(result.data.devCode ?? null);
     setCooldown(OTP_POLICY.resendCooldownSeconds);
     setStep(2);
   };
@@ -100,16 +158,14 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
       setMobileCode('');
       return;
     }
+    setMobileDevCode(null);
     setStep(3);
   };
 
   const sendEmailOtp = async (): Promise<void> => {
+    markActive('email');
     const validation = validateEmail(email);
-    if (validation) {
-      setFieldError(validation);
-      return;
-    }
-    setFieldError(undefined);
+    if (validation) return;
     setError(undefined);
     setBusy(true);
     const result = await sendOtp('EMAIL', email.trim());
@@ -121,6 +177,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     }
     setEmailLocked(true);
     setEmailSentTo(result.data.sentTo);
+    setEmailDevCode(result.data.devCode ?? null);
     setCooldown(OTP_POLICY.resendCooldownSeconds);
   };
 
@@ -134,26 +191,20 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
       setEmailCode('');
       return;
     }
+    setEmailDevCode(null);
     setStep(4);
   };
 
   const finishSignup = async (): Promise<void> => {
+    markActive('fullName');
+    markActive('password');
+    markActive('confirm');
     const nameErr = validateFullName(fullName);
-    const passErr = validateSignupPassword(password);
-    if (nameErr) {
-      setFieldError(nameErr);
-      return;
-    }
-    if (passErr) {
-      setFieldError(passErr);
-      return;
-    }
-    if (password !== confirm) {
-      setFieldError('Passwords do not match.');
-      return;
-    }
-    setFieldError(undefined);
+    const passErr = validateSignupPassword(password, passwordContext);
+    if (nameErr || passErr) return;
+    if (password !== confirm) return;
     setError(undefined);
+    setServerErrors({});
     setBusy(true);
     const result = await register('VENDOR', {
       fullName: fullName.trim(),
@@ -163,12 +214,14 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     });
     setBusy(false);
     if (!result.ok) {
-      setError(
-        result.fields.mobile ??
-          result.fields.email ??
-          result.fields.password ??
-          result.message,
-      );
+      const next: Partial<Record<SignupFieldKey, string>> = {};
+      if (result.fields.mobile) next.mobile = result.fields.mobile;
+      if (result.fields.email) next.email = result.fields.email;
+      if (result.fields.password) next.password = result.fields.password;
+      if (result.fields.fullName) next.fullName = result.fields.fullName;
+      setServerErrors(next);
+      const hasField = Object.keys(next).length > 0;
+      setError(hasField ? undefined : result.message);
       return;
     }
     onSessionEstablished?.();
@@ -197,20 +250,47 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     void navigate('/vendor', { replace: true });
   };
 
-  const strength = signupPasswordStrength(password);
+  const strength = signupPasswordStrength(password, passwordContext);
+  const rules = signupPasswordRules(password);
+  const passwordEngaged = focused === 'password' || active.password;
+  const stepFourBanner = error && step === 4 ? error : undefined;
+
+  const stepHead =
+    step === 1
+      ? {
+          title: 'Create your supplier account',
+          sub: 'About a minute. Business details come later.',
+        }
+      : step === 2
+        ? { title: 'Verify your mobile', sub: null }
+        : step === 3
+          ? {
+              title: 'Your work email',
+              sub: 'Purchase orders and payout statements go here.',
+            }
+          : {
+              title: 'Set a password',
+              sub: 'Mobile and email verified. One more field.',
+            };
 
   return (
     <div className="sup-signup-page">
+      <SignupSurfaceSync />
       <div className="sup-signup-card">
         <aside className="sup-signup-brand" aria-hidden="true">
           <div>
-            <p className="wm">
+            <p className="sup-signup-wm">
               tru<span className="g">grade</span>
             </p>
-            <p className="sup-signup-claim">Supplier portal</p>
+            <p className="sup-signup-claim">Sell refurbished laptops to Indian businesses.</p>
             <ul className="sup-signup-ticks">
               {CLAIMS.map((line) => (
-                <li key={line}>{line}</li>
+                <li key={line}>
+                  <span className="sup-signup-tick-icon" aria-hidden="true">
+                    ✓
+                  </span>
+                  {line}
+                </li>
               ))}
             </ul>
           </div>
@@ -238,185 +318,278 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                 ))}
               </div>
 
+              <div className="sup-signup-head">
+                <h1 className="sup-signup-step-title">{stepHead.title}</h1>
+                {stepHead.sub ? <p className="sup-signup-step-sub">{stepHead.sub}</p> : null}
+              </div>
+
               {step === 1 ? (
-                <>
-                  <h1 className="sup-signup-step-title">Mobile number</h1>
-                  <div className="sup-signup-mobile-row">
-                    <span className="sup-signup-prefix">+91</span>
-                    <Input
-                      label="Mobile"
-                      inputMode="numeric"
-                      autoComplete="tel-national"
-                      mono
-                      value={mobileDigits}
-                      maxLength={10}
-                      error={fieldError}
-                      onChange={(e) => {
-                        setMobileDigits(mobileSubscriberDigits(e.target.value));
-                        setFieldError(undefined);
-                      }}
-                      placeholder="9876543210"
-                    />
+                <div className="sup-signup-fields">
+                  <div>
+                    <label htmlFor="sup-mobile" className="sup-signup-field-label">
+                      Mobile number <span className="req">*</span>
+                    </label>
+                    <div className="sup-signup-mobile-row">
+                      <span className="sup-signup-prefix">+91</span>
+                      <input
+                        id="sup-mobile"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        maxLength={10}
+                        value={mobileDigits}
+                        aria-invalid={Boolean(mobileError) || undefined}
+                        aria-describedby={mobileError ? 'sup-mobile-error' : undefined}
+                        placeholder="9876543210"
+                        onFocus={() => setFocused('mobile')}
+                        onBlur={() => setFocused(null)}
+                        onChange={(e) => {
+                          markActive('mobile');
+                          setMobileDigits(mobileSubscriberDigits(e.target.value));
+                          setError(undefined);
+                        }}
+                      />
+                    </div>
+                    {mobileError ? (
+                      <p id="sup-mobile-error" className="sup-signup-field-error" role="alert">
+                        {mobileError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="sup-signup-actions">
                     <Button
                       variant="primary"
                       loading={busy}
+                      disabledReason={validateMobile(mobileDisplay)}
                       onClick={() => void sendMobileOtp()}
                     >
-                      Send code
+                      Send OTP
                     </Button>
-                    <Link to="/login" className="text-body-sm text-acc underline">
-                      Sign in
-                    </Link>
+                    <p className="sup-signup-foot">
+                      Already with us? <Link to="/login">Sign in</Link>
+                    </p>
                   </div>
-                </>
+                </div>
               ) : null}
 
               {step === 2 ? (
-                <>
-                  <h1 className="sup-signup-step-title">Verify mobile</h1>
-                  <p className="text-body-sm text-ink-2">
+                <div className="sup-signup-fields">
+                  <p className="sup-signup-sent">
                     Code sent to{' '}
-                    <span className="tnum text-ink">{mobileSentTo ?? e164}</span>
+                    <span className="tnum">{mobileSentTo ?? e164}</span>
+                    <button
+                      type="button"
+                      className="sup-signup-change"
+                      onClick={() => {
+                        setStep(1);
+                        setMobileCode('');
+                        setError(undefined);
+                      }}
+                    >
+                      change
+                    </button>
                   </p>
                   <OtpInput
                     label="Six-digit code"
                     value={mobileCode}
-                    onChange={setMobileCode}
+                    onChange={(code) => {
+                      setMobileCode(code);
+                      setError(undefined);
+                    }}
                     disabled={busy}
                     error={error}
                     onComplete={(code) => void verifyMobileOtp(code)}
                   />
+                  {mobileDevCode ? (
+                    <p className="sup-signup-prototype">
+                      Prototype — your code is <span className="tnum">{mobileDevCode}</span>
+                    </p>
+                  ) : null}
                   <div className="sup-signup-actions">
                     <Button
-                      type="button"
-                      variant="secondary"
-                      disabledReason={
-                        cooldown > 0 ? `Resend in ${cooldown} s` : undefined
-                      }
+                      variant="primary"
                       loading={busy}
-                      onClick={() => void sendMobileOtp()}
+                      disabledReason={
+                        mobileCode.length < 6 ? 'Enter all six digits.' : undefined
+                      }
+                      onClick={() => void verifyMobileOtp(mobileCode)}
                     >
-                      Resend
+                      Verify
                     </Button>
-                    <Button type="button" variant="ghost" onClick={() => setStep(1)}>
-                      Change number
-                    </Button>
+                    <div className="sup-signup-actions-row">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabledReason={
+                          cooldown > 0 ? `Resend in ${cooldown} s` : undefined
+                        }
+                        loading={busy}
+                        onClick={() => void sendMobileOtp()}
+                      >
+                        Resend
+                      </Button>
+                    </div>
                   </div>
-                </>
+                </div>
               ) : null}
 
               {step === 3 ? (
-                <>
-                  <h1 className="sup-signup-step-title">Work email</h1>
+                <div className="sup-signup-fields">
                   <Input
-                    label="Email"
+                    label="Email address"
                     type="email"
                     autoComplete="email"
+                    required
                     value={email}
                     readOnly={emailLocked}
-                    error={fieldError}
+                    error={emailError}
+                    placeholder="name@company.com"
+                    onFocus={() => setFocused('email')}
+                    onBlur={() => setFocused(null)}
                     onChange={(e) => {
+                      markActive('email');
                       setEmail(e.target.value);
-                      setFieldError(undefined);
+                      setError(undefined);
                     }}
-                    action={
-                      !emailLocked ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          loading={busy}
-                          disabledReason={
-                            cooldown > 0 ? `Resend in ${cooldown} s` : undefined
-                          }
-                          onClick={() => void sendEmailOtp()}
-                        >
-                          Send code
-                        </Button>
-                      ) : undefined
-                    }
                   />
-                  {emailLocked ? (
+                  {!emailLocked ? (
+                    <div className="sup-signup-actions">
+                      <Button
+                        variant="primary"
+                        loading={busy}
+                        disabledReason={validateEmail(email)}
+                        onClick={() => void sendEmailOtp()}
+                      >
+                        Send OTP
+                      </Button>
+                    </div>
+                  ) : (
                     <>
                       <OtpInput
                         label={`Code sent to ${emailSentTo ?? email}`}
                         value={emailCode}
-                        onChange={setEmailCode}
+                        onChange={(code) => {
+                          setEmailCode(code);
+                          setError(undefined);
+                        }}
                         disabled={busy}
                         error={error}
                         onComplete={(code) => void verifyEmailAndContinue(code)}
                       />
+                      {emailDevCode ? (
+                        <p className="sup-signup-prototype">
+                          Prototype — your code is <span className="tnum">{emailDevCode}</span>
+                        </p>
+                      ) : null}
                       <div className="sup-signup-actions">
                         <Button
-                          type="button"
-                          variant="secondary"
+                          variant="primary"
+                          loading={busy}
                           disabledReason={
-                            cooldown > 0 ? `Resend in ${cooldown} s` : undefined
+                            emailCode.length < 6 ? 'Enter all six digits.' : undefined
                           }
-                          onClick={() => void sendEmailOtp()}
+                          onClick={() => void verifyEmailAndContinue(emailCode)}
                         >
-                          Resend
+                          Verify and continue
                         </Button>
+                        <div className="sup-signup-actions-row">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabledReason={
+                              cooldown > 0 ? `Resend in ${cooldown} s` : undefined
+                            }
+                            onClick={() => void sendEmailOtp()}
+                          >
+                            Resend
+                          </Button>
+                        </div>
                       </div>
                     </>
-                  ) : null}
-                </>
+                  )}
+                </div>
               ) : null}
 
               {step === 4 ? (
-                <>
-                  <h1 className="sup-signup-step-title">Your account</h1>
+                <div className="sup-signup-fields">
                   <Input
-                    label="Full name"
+                    label="Your name"
                     autoComplete="name"
+                    required
                     value={fullName}
-                    error={fieldError && fieldError.includes('name') ? fieldError : undefined}
+                    error={nameError}
+                    onFocus={() => setFocused('fullName')}
+                    onBlur={() => setFocused(null)}
                     onChange={(e) => {
+                      markActive('fullName');
                       setFullName(typeFullName(e.target.value));
-                      setFieldError(undefined);
+                      setError(undefined);
+                      setServerErrors((prev) => ({ ...prev, fullName: undefined }));
                     }}
                   />
-                  <Input
-                    label="Password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setFieldError(undefined);
-                    }}
-                  />
-                  <div className="sup-signup-meter" aria-hidden="true">
-                    {[1, 2, 3].map((n) => (
-                      <span key={n} data-on={strength.score >= n} />
-                    ))}
+                  <div>
+                    <Input
+                      label="Password"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={password}
+                      error={passwordError}
+                      placeholder="At least 12 characters"
+                      onFocus={() => setFocused('password')}
+                      onBlur={() => setFocused(null)}
+                      onChange={(e) => {
+                        markActive('password');
+                        setPassword(e.target.value);
+                        setError(undefined);
+                        setServerErrors((prev) => ({ ...prev, password: undefined }));
+                      }}
+                    />
+                    <div className="sup-signup-meter mt-2" aria-hidden="true">
+                      {[1, 2, 3, 4].map((n) => (
+                        <span key={n} data-on={strength.score >= n} />
+                      ))}
+                    </div>
+                    {passwordEngaged ? (
+                      <ul className="sup-signup-rules mt-2">
+                        {rules.map((rule) => (
+                          <li key={rule.id} data-met={rule.met}>
+                            {rule.label}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-body-sm text-ink-3 mt-2">
+                        12+ characters, one lowercase, one capital, one number, one symbol
+                      </p>
+                    )}
                   </div>
-                  <p className="text-body-sm text-ink-3">{strength.label}</p>
                   <Input
                     label="Confirm password"
                     type="password"
                     autoComplete="new-password"
+                    required
                     value={confirm}
-                    error={error ?? (fieldError && !fieldError.includes('name') ? fieldError : undefined)}
+                    error={confirmError}
+                    onFocus={() => setFocused('confirm')}
+                    onBlur={() => setFocused(null)}
                     onChange={(e) => {
+                      markActive('confirm');
                       setConfirm(e.target.value);
-                      setFieldError(undefined);
                       setError(undefined);
+                      setServerErrors((prev) => ({ ...prev, confirm: undefined }));
                     }}
                   />
+                  {stepFourBanner ? (
+                    <p className="text-body-sm text-fail" role="alert">
+                      {stepFourBanner}
+                    </p>
+                  ) : null}
                   <div className="sup-signup-actions">
                     <Button variant="primary" loading={busy} onClick={() => void finishSignup()}>
                       Create account
                     </Button>
                   </div>
-                </>
-              ) : null}
-
-              {error && step !== 2 && step !== 3 ? (
-                <p className="text-body-sm text-fail" role="alert">
-                  {error}
-                </p>
+                </div>
               ) : null}
             </>
           )}

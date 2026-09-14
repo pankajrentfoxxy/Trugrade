@@ -1,11 +1,11 @@
 import * as React from 'react';
 import {
   Button,
-  ClauseHeading,
+  HubPageHeader,
   EmptyState,
-  LedgerSection,
+  Panel,
   PermissionGrid,
-  RegisterStrip,
+  HubKpiRow,
   Skeleton,
   StatusPill,
 } from '@trugrade/ui';
@@ -63,7 +63,7 @@ function facilitySummary(member: TeamMember): React.ReactNode {
   const labels = member.facilityLabels;
   if (labels.length <= 2) {
     return labels.map((label) => (
-      <span key={label} className="vl-chip">
+      <span key={label} className="hub-chip">
         {label}
       </span>
     ));
@@ -71,7 +71,7 @@ function facilitySummary(member: TeamMember): React.ReactNode {
   return (
     <>
       {labels.slice(0, 2).map((label) => (
-        <span key={label} className="vl-chip">
+        <span key={label} className="hub-chip">
           {label}
         </span>
       ))}
@@ -111,8 +111,8 @@ export function VendorTeamRoute(): React.JSX.Element {
 
   if (loadError) {
     return (
-      <div className="vl-page">
-        <ClauseHeading n="01" kicker="Account" title="Team & access" />
+      <div className="hub-page">
+        <HubPageHeader title="Team & access" />
         <EmptyState title="Team did not load" body={`${loadError}. Nothing has changed.`} />
       </div>
     );
@@ -120,8 +120,8 @@ export function VendorTeamRoute(): React.JSX.Element {
 
   if (!data) {
     return (
-      <div className="vl-page">
-        <ClauseHeading n="01" kicker="Account" title="Team & access" />
+      <div className="hub-page">
+        <HubPageHeader title="Team & access" />
         <Skeleton lines={8} />
       </div>
     );
@@ -187,11 +187,10 @@ export function VendorTeamRoute(): React.JSX.Element {
   };
 
   return (
-    <div className="vl-page">
-      <ClauseHeading
-        n="01"
-        kicker="Account · register of users"
+    <div className="hub-page">
+      <HubPageHeader
         title="Team & access"
+        subtitle={`${members.filter((m) => m.status === 'ACTIVE').length} active · ${invites.length} invite${invites.length === 1 ? '' : 's'} pending`}
         actions={
           canManage ? (
             <Button variant="primary" onClick={() => setInviteOpen(true)}>
@@ -201,7 +200,7 @@ export function VendorTeamRoute(): React.JSX.Element {
         }
       />
 
-      <RegisterStrip
+      <HubKpiRow
         cells={[
           { label: 'Owner', value: String(counts.owner) },
           { label: 'Operations', value: String(counts.ops) },
@@ -211,9 +210,9 @@ export function VendorTeamRoute(): React.JSX.Element {
         ]}
       />
 
-      <LedgerSection n="02" title="Members" count={members.length}>
-        <div className="vl-table-wrap">
-          <table className="vl-table min-w-[980px]">
+      <Panel title="Members" count={members.length}>
+        <div className="hub-table-wrap">
+          <table className="hub-table min-w-[980px]">
             <thead>
               <tr>
                 {[
@@ -237,10 +236,10 @@ export function VendorTeamRoute(): React.JSX.Element {
                 return (
                   <tr key={m.id} className={m.status !== 'ACTIVE' ? 'text-ink-3' : undefined}>
                     <td>
-                      <span className="vl-who">
-                        <span className="vl-who__mono">{initials(m.fullName)}</span>
-                        <span className="vl-td-ink">{m.fullName}</span>
-                        {m.isYou ? <span className="vl-who__you">you</span> : null}
+                      <span className="hub-who">
+                        <span className="hub-who__mono">{initials(m.fullName)}</span>
+                        <span className="hub-td-ink">{m.fullName}</span>
+                        {m.isYou ? <span className="hub-who__you">you</span> : null}
                       </span>
                     </td>
                     <td className="font-mono text-[12px]">{m.email ?? '—'}</td>
@@ -280,12 +279,12 @@ export function VendorTeamRoute(): React.JSX.Element {
             </tbody>
           </table>
         </div>
-      </LedgerSection>
+      </Panel>
 
       {invites.length > 0 ? (
-        <LedgerSection n="03" title="Pending invites" count={invites.length}>
-          <div className="vl-table-wrap">
-            <table className="vl-table min-w-[860px]">
+        <Panel title="Pending invites" count={invites.length}>
+          <div className="hub-table-wrap">
+            <table className="hub-table min-w-[860px]">
               <thead>
                 <tr>
                   {['Email', 'Role', 'Facilities', 'Sent', 'Expires', ''].map((h) => (
@@ -341,10 +340,10 @@ export function VendorTeamRoute(): React.JSX.Element {
               </tbody>
             </table>
           </div>
-        </LedgerSection>
+        </Panel>
       ) : null}
 
-      <LedgerSection n="04" title="What each role can do">
+      <Panel title="What each role can do">
         <PermissionGrid
           rows={CAPABILITY_MATRIX.map((row) => ({
             capability: row.mfa ? `${row.capability} [2FA]` : row.capability,
@@ -352,10 +351,10 @@ export function VendorTeamRoute(): React.JSX.Element {
           }))}
           columns={[...TEAM_ROLE_COLUMNS]}
         />
-        <p className="mt-3 text-body-sm text-ink-3">
+        <p className="px-5 py-3 text-body-sm text-ink-3">
           ● full · ◐ assigned facilities only · – none
         </p>
-      </LedgerSection>
+      </Panel>
 
       <MemberDialog
         open={inviteOpen}

@@ -102,14 +102,7 @@ export function PoDetailDialog({
   const canRespond = canAck && data?.status === 'RAISED';
   const canAttach =
     canAck && data != null && ['ACKNOWLEDGED', 'PARTIAL'].includes(data.status);
-  const canDispatch =
-    canAck &&
-    data != null &&
-    ['ACKNOWLEDGED', 'PARTIAL'].includes(data.status) &&
-    data.lineGroups
-      .filter((g) => g.lineStatus === 'ACCEPTED')
-      .every((g) => g.attachedCount >= g.qty);
-
+  /** Empty when dispatch is allowed — it gates the button and names the block. */
   const dispatchBlockedReason =
     data && ['ACKNOWLEDGED', 'PARTIAL'].includes(data.status)
       ? (() => {

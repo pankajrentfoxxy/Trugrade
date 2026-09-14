@@ -80,12 +80,16 @@ export const THEME_STOREFRONT_PREPAINT_SCRIPT =
 /**
  * Console pre-paint read: light everywhere. Working surfaces stay light after
  * sign-in; header and footer remain dark chrome in both themes.
+ *
+ * `/sell` is in the path test alongside `/vendor` so supplier signup paints on
+ * the hub surface too, rather than flashing the admin palette first.
  */
 export const THEME_CONSOLE_PREPAINT_SCRIPT =
   `try{document.documentElement.setAttribute('data-t','light');` +
   `localStorage.setItem('${THEME_CONSOLE_STORAGE_KEY}','light');` +
-  `if(location.pathname.indexOf('/vendor')===0){` +
-  `document.documentElement.setAttribute('data-surface','manifest');` +
+  `var p=location.pathname;` +
+  `if(p.indexOf('/vendor')===0||p.indexOf('/sell')===0){` +
+  `document.documentElement.setAttribute('data-surface','hub');` +
   `document.documentElement.setAttribute('data-density','default')}` +
   `}catch(e){}`;
 

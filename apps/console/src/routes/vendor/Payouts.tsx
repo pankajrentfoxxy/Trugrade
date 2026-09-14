@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { Link } from 'react-router';
 import {
-  ClauseHeading,
+  HubPageHeader,
   EmptyState,
   LedgerRow,
-  RegisterStrip,
+  HubKpiRow,
   Skeleton,
 } from '@trugrade/ui';
+import { daysSince } from '../../lib/clock';
 import { useResource } from '../../lib/useResource';
 import { API, onDate, rupees, type PayablesView } from './api';
 
@@ -18,7 +19,7 @@ export function VendorPayoutsRoute(): React.JSX.Element {
   if (error) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Money" title="Payouts" />
+        <HubPageHeader title="Payout history" />
         <EmptyState title="Did not load" body={error} />
       </div>
     );
@@ -27,7 +28,7 @@ export function VendorPayoutsRoute(): React.JSX.Element {
   if (!data) {
     return (
       <div>
-        <ClauseHeading n="01" kicker="Money" title="Payouts" />
+        <HubPageHeader title="Payout history" />
         <Skeleton lines={8} />
       </div>
     );
@@ -37,9 +38,9 @@ export function VendorPayoutsRoute(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-6">
-      <ClauseHeading n="01" kicker="Money" title="Payouts" />
+      <HubPageHeader title="Payout history" />
 
-      <RegisterStrip
+      <HubKpiRow
         cells={[
           { label: 'Open items', value: String(s.payables) },
           { label: 'Gross', value: rupees(s.gross) },
@@ -82,10 +83,7 @@ export function VendorPayoutsRoute(): React.JSX.Element {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const age = Math.max(
-                    0,
-                    Math.floor((Date.now() - new Date(r.accruedAt).getTime()) / 86_400_000),
-                  );
+                  const age = daysSince(r.accruedAt);
                   return (
                     <tr
                       key={r.payableId}
@@ -111,7 +109,7 @@ export function VendorPayoutsRoute(): React.JSX.Element {
 
       <section>
         <h2 className="mb-2 text-body font-medium text-ink">Payout history</h2>
-        <RegisterStrip
+        <HubKpiRow
           cells={[
             { label: 'Runs', value: '0', sub: 'of 0 issued' },
             { label: 'Paid', value: '₹0', sub: 'of ₹0 accrued' },

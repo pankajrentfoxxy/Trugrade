@@ -46,15 +46,16 @@ beforeEach(() => {
 });
 
 describe('SupplierSignup', () => {
-  it('rejects a mobile not starting with 6–9', async () => {
+  it('shows mobile validation while typing', async () => {
     render(
       <MemoryRouter>
         <SupplierSignup />
       </MemoryRouter>,
     );
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Mobile'), '5123456789');
-    await user.click(screen.getByRole('button', { name: 'Send code' }));
+    const input = screen.getByLabelText(/Mobile number/i);
+    await user.click(input);
+    await user.type(input, '5123456789');
     expect(await screen.findByText(/starting 6/i)).toBeInTheDocument();
   });
 
@@ -65,9 +66,9 @@ describe('SupplierSignup', () => {
       </MemoryRouter>,
     );
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Mobile'), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Send code' }));
-    await waitFor(() => expect(screen.getByText('Verify mobile')).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/Mobile number/i), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await waitFor(() => expect(screen.getByText('Verify your mobile')).toBeInTheDocument());
     expect(screen.getByLabelText('Six-digit code')).toBeInTheDocument();
   });
 });

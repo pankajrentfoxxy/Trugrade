@@ -9,7 +9,7 @@ import { StepCondition } from './StepCondition';
 import { StepMachine } from './StepMachine';
 import { ListingWizardRoute } from './Wizard';
 import { EMPTY_DRAFT } from './draft';
-import type { CatalogModelHit, SkuDetail } from '../api';
+import type { PickerBrand, PickerModel, SkuDetail } from '../api';
 
 /**
  * The two behaviours in this wizard that are decisions rather than markup.
@@ -355,12 +355,6 @@ describe('the batch-size decision', () => {
 
 const MODEL_ID = '11111111-1111-1111-1111-111111111111';
 
-const DELL_3420: CatalogModelHit = {
-  modelId: MODEL_ID,
-  brandName: 'Dell',
-  modelName: 'Latitude 3420',
-};
-
 function catalogSku(over: Partial<SkuDetail> = {}): SkuDetail {
   return {
     skuId: 'sku-16',
@@ -386,27 +380,42 @@ function catalogSku(over: Partial<SkuDetail> = {}): SkuDetail {
   };
 }
 
-function mockModelCatalog(hits: CatalogModelHit[], skus: SkuDetail[]): void {
+const BRANDS: PickerBrand[] = [
+  { brandId: 'b-dell', brandName: 'Dell', modelCount: 1 },
+  { brandId: 'b-hp', brandName: 'HP', modelCount: 1 },
+];
+
+const DELL_MODELS: PickerModel[] = [
+  { modelId: MODEL_ID, modelName: 'Latitude 3420', seriesName: 'Latitude', skuCount: 2 },
+];
+
+function mockPickerCatalog(skus: SkuDetail[], models: PickerModel[] = DELL_MODELS): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
     const url = String(input);
-    const body = url.includes('/models/search')
-      ? { hits, total: hits.length, matchedBy: 'FULL_TEXT' as const }
-      : url.includes('/models/') && url.endsWith('/skus')
-        ? skus
-        : {};
+    const body = url.includes('/picker/brands')
+      ? BRANDS
+      : url.includes('/picker/models')
+        ? models
+        : url.includes('/models/') && url.endsWith('/skus')
+          ? skus
+          : {};
     return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
   });
 }
 
 /**
- * Step 1 identifies a machine by brand + model, then a configuration among the
- * SKUs that model actually carries. Showing a sku_code in the picker is how a
- * vendor ends up listing the wrong RAM because they clicked the first row.
+ * Step 1 narrows to one machine by cascading dropdowns: brand, model,
+ * processor, generation, RAM, hard disk. Every rung is answered from what the
+ * catalog carries under the rung above it, so a vendor cannot assemble a
+ * configuration we do not hold — and a rung with one answer is filled for them
+ * rather than left looking like an unfinished form.
  */
 describe('step 1 — machine', () => {
-  it('suggests each model once, without a SKU code or a spec chip', async () => {
+  const TWO_RAMS = [catalogSku(), catalogSku({ skuId: 'sku-32', ramGb: 32 })];
+
+  it('opens each rung only once the rung above it is answered', async () => {
     const user = userEvent.setup();
-    mockModelCatalog([DELL_3420], [catalogSku(), catalogSku({ skuId: 'sku-32', ramGb: 32 })]);
+    mockPickerCatalog(TWO_RAMS);
 
     render(
       <MemoryRouter>
@@ -414,24 +423,28 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('Search the catalog'), 'Dell Latitude');
+    const brand = await screen.findByLabelText('Brand');
+    expect(screen.getByLabelText('Model')).toBeDisabled();
+    expect(screen.getByLabelText('Processor')).toBeDisabled();
+    expect(screen.getByLabelText('Generation')).toBeDisabled();
+    expect(screen.getByLabelText('RAM')).toBeDisabled();
+    expect(screen.getByLabelText('Hard disk')).toBeDisabled();
 
-    expect(await screen.findByText('Dell Latitude 3420')).toBeInTheDocument();
-    expect(screen.queryByText(/DEL-LAT3420/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/16 GB/)).not.toBeInTheDocument();
-    expect(screen.getAllByText('Dell Latitude 3420')).toHaveLength(1);
+    await user.selectOptions(brand, 'b-dell');
+
+    // One model, so the picker answers that rung itself and moves on.
+    await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue(MODEL_ID));
+    // Processor and generation are single-valued here; RAM is the real question.
+    await waitFor(() => expect(screen.getByLabelText('Processor')).toHaveValue('Intel|Core i5|i5-1135G7'));
+    expect(screen.getByLabelText('Generation')).toHaveValue('11th');
+    expect(screen.getByLabelText('RAM')).not.toBeDisabled();
+    expect(screen.getByLabelText('RAM')).toHaveValue('');
   });
 
-  it('asks for the configuration after a model is picked, and leaves OS as a fact', async () => {
+  it('resolves the SKU only once the configuration is unique', async () => {
     const user = userEvent.setup();
     const patch = vi.fn();
-    mockModelCatalog(
-      [DELL_3420],
-      [
-        catalogSku(),
-        catalogSku({ skuId: 'sku-32', ramGb: 32 }),
-      ],
-    );
+    mockPickerCatalog(TWO_RAMS);
 
     render(
       <MemoryRouter>
@@ -439,35 +452,60 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('Search the catalog'), 'Latitude 3420');
-    await user.click(await screen.findByRole('button', { name: 'Select' }));
+    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-dell');
+    await waitFor(() => expect(screen.getByLabelText('RAM')).not.toBeDisabled());
 
-    expect(await screen.findByRole('heading', { name: 'Dell Latitude 3420' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Processor')).toBeInTheDocument();
-    expect(screen.getByLabelText('Memory')).toBeInTheDocument();
-    expect(screen.getByLabelText('Storage')).toBeInTheDocument();
-    expect(screen.getByLabelText('Graphics')).toBeInTheDocument();
-    expect(screen.getByLabelText('Screen')).toBeInTheDocument();
-    expect(screen.getByText('Windows 11 Pro')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Operating system')).not.toBeInTheDocument();
+    expect((patch.mock.calls.at(-1)?.[0] as { sku: SkuDetail | null } | undefined)?.sku ?? null)
+      .toBeNull();
 
-    const last = patch.mock.calls.at(-1)?.[0] as { sku: SkuDetail | null };
-    expect(last.sku).toBeNull();
+    await user.selectOptions(screen.getByLabelText('RAM'), '32');
 
-    await user.selectOptions(screen.getByLabelText('Memory'), '32');
-    const after = patch.mock.calls.at(-1)?.[0] as { sku: SkuDetail | null };
-    expect(after.sku?.skuId).toBe('sku-32');
+    await waitFor(() => {
+      const after = patch.mock.calls.at(-1)?.[0] as { sku: SkuDetail | null };
+      expect(after.sku?.skuId).toBe('sku-32');
+    });
+    // Storage had one answer under 32 GB, so the vendor was not asked again.
+    expect(screen.getByLabelText('Hard disk')).toHaveValue('512|NVME_SSD');
     const code = await screen.findByText('DEL-LAT3420-I5-16-512');
     expect(code).toHaveClass('text-pass');
     expect(code).toHaveClass('font-bold');
+    expect(screen.getByText('Windows 11 Pro')).toBeInTheDocument();
+  });
+
+  it('clears every rung below the one that changed', async () => {
+    const user = userEvent.setup();
+    mockPickerCatalog([
+      catalogSku(),
+      catalogSku({
+        skuId: 'sku-i7',
+        cpuFamily: 'Core i7',
+        cpuModel: 'i7-1165G7',
+        cpuGeneration: '11th',
+        ramGb: 32,
+      }),
+    ]);
+
+    render(
+      <MemoryRouter>
+        <StepMachine draft={EMPTY_DRAFT} patch={() => {}} />
+      </MemoryRouter>,
+    );
+
+    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-dell');
+    await waitFor(() => expect(screen.getByLabelText('Processor')).not.toBeDisabled());
+
+    await user.selectOptions(screen.getByLabelText('Processor'), 'Intel|Core i5|i5-1135G7');
+    await waitFor(() => expect(screen.getByLabelText('RAM')).toHaveValue('16'));
+
+    // The i7 in this catalog is a 32 GB machine. Switching processor must not
+    // leave 16 GB standing — that would resolve a SKU the vendor never chose.
+    await user.selectOptions(screen.getByLabelText('Processor'), 'Intel|Core i7|i7-1165G7');
+    await waitFor(() => expect(screen.getByLabelText('RAM')).toHaveValue('32'));
   });
 
   it('does not let Continue through until a unique configuration is chosen', async () => {
     const user = userEvent.setup();
-    mockModelCatalog(
-      [DELL_3420],
-      [catalogSku(), catalogSku({ skuId: 'sku-32', ramGb: 32 })],
-    );
+    mockPickerCatalog(TWO_RAMS);
 
     render(
       <MemoryRouter>
@@ -475,13 +513,12 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('Search the catalog'), 'Latitude 3420');
-    await user.click(await screen.findByRole('button', { name: 'Select' }));
-    await screen.findByLabelText('Memory');
+    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-dell');
+    await waitFor(() => expect(screen.getByLabelText('RAM')).not.toBeDisabled());
 
     expect(screen.getByRole('button', { name: 'Continue' })).toHaveAttribute('aria-disabled', 'true');
 
-    await user.selectOptions(screen.getByLabelText('Memory'), '32');
+    await user.selectOptions(screen.getByLabelText('RAM'), '32');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Continue' })).not.toHaveAttribute(
         'aria-disabled',
@@ -490,9 +527,9 @@ describe('step 1 — machine', () => {
     );
   });
 
-  it('hands an unknown model to the SKU-request flow without inventing a match', async () => {
+  it('hands an uncatalogued brand to the SKU-request flow without inventing a match', async () => {
     const user = userEvent.setup();
-    mockModelCatalog([], []);
+    mockPickerCatalog([], []);
 
     render(
       <MemoryRouter>
@@ -500,12 +537,13 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('Search the catalog'), 'Framework 13');
+    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-hp');
 
-    expect(await screen.findByText('No model matches this search')).toBeInTheDocument();
+    expect(await screen.findByText('We do not carry this brand yet. Request the machine below.'))
+      .toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Request this SKU' })).toHaveAttribute(
       'href',
-      '/vendor/sku-request?brand=Framework%2013',
+      '/vendor/sku-request',
     );
   });
 });
