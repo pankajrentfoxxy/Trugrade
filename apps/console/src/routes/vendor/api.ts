@@ -363,6 +363,30 @@ export interface VendorListing {
   commissionAmount: MoneyString | null;
 }
 
+/** `POST /vendor/listings/:id/submit` — three honest outcomes, one of which creates a visit. */
+export interface SubmitDecisionRequired {
+  outcome: 'DECISION_REQUIRED';
+  unitCount: number;
+  minUnitsPerVisit: number;
+  shortBy: number;
+  visitFee: MoneyString;
+  options: readonly ('HOLD' | 'ACCEPT_FEE')[];
+}
+export interface SubmitHeld {
+  outcome: 'HELD';
+  unitCount: number;
+  minUnitsPerVisit: number;
+  shortBy: number;
+}
+export interface SubmitAccepted {
+  outcome: 'SUBMITTED';
+  listingId: string;
+  unitCount: number;
+  visitNumber: string;
+  visitFee: MoneyString;
+}
+export type SubmitResult = SubmitDecisionRequired | SubmitHeld | SubmitAccepted;
+
 export interface VendorUnit {
   id: string;
   serialNumber: string;

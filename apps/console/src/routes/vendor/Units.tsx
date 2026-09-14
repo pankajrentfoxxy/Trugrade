@@ -20,8 +20,22 @@ import {
 import type { Grade } from '@trugrade/contracts';
 import { Board, Datum, NotMeasured, PageHeader, Section } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, NO_DATE, gradeLabel, humanise, locationLabel, onDate, onDateTime, rupees, type VendorListing, type VendorUnit, type VendorUnitMovement } from './api';
+import {
+  API,
+  NO_DATE,
+  gradeLabel,
+  humanise,
+  locationLabel,
+  onDate,
+  onDateTime,
+  rupees,
+  type SubmitAccepted,
+  type VendorListing,
+  type VendorUnit,
+  type VendorUnitMovement,
+} from './api';
 import { ListingMachineCard, machineTitle } from './ListingMachine';
+import { InspectionRequested, RequestInspection } from './listings/RequestInspection';
 
 /**
  * ARCHETYPE B (the list) and C (one serial). Board, then record.
@@ -272,7 +286,10 @@ function movementTimeline(
   });
 }
 
-function useUnits(listingId: string | undefined): {
+function useUnits(
+  listingId: string | undefined,
+  reloadToken = 0,
+): {
   data: VendorUnit[] | null;
   error: string | null;
 } {
@@ -281,6 +298,7 @@ function useUnits(listingId: string | undefined): {
   return useResource<VendorUnit[]>(
     API.listingUnits(listingId ?? ''),
     'These units are unavailable',
+    reloadToken,
   );
 }
 
@@ -339,7 +357,11 @@ function unitColumns(listingId: string | undefined): ReadonlyArray<Column<Vendor
       header: 'Sellable',
       cell: (u) => <span className="text-ink-2">{u.isSellable ? 'Yes' : 'No'}</span>,
     },
-    { key: 'location', header: 'Where', cell: (u) => <span className="text-ink-2">{locationLabel(u.location)}</span> },
+    {
+      key: 'location',
+      header: 'Where',
+      cell: (u) => <span className="text-ink-2">{locationLabel(u.location)}</span>,
+    },
     {
       key: 'ask',
       header: 'Your ask',
@@ -356,11 +378,14 @@ function unitColumns(listingId: string | undefined): ReadonlyArray<Column<Vendor
 
 export function ListingUnitsRoute(): React.JSX.Element {
   const { id } = useParams();
+  const [reloadToken, setReloadToken] = React.useState(0);
+  const [requested, setRequested] = React.useState<SubmitAccepted | null>(null);
   const listing = useResource<VendorListing>(
     id ? API.listing(id) : '',
     'This listing did not load',
+    reloadToken,
   );
-  const { data, error } = useUnits(id);
+  const { data, error } = useUnits(id, reloadToken);
   const columns = React.useMemo(() => unitColumns(id), [id]);
 
   if (listing.error || error) {
@@ -393,6 +418,16 @@ export function ListingUnitsRoute(): React.JSX.Element {
       </PageHeader>
 
       <ListingMachineCard listing={listing.data} />
+
+      {requested ? <InspectionRequested accepted={requested} /> : null}
+      <RequestInspection
+        listing={listing.data}
+        unitCount={data.length}
+        onSubmitted={(accepted) => {
+          setRequested(accepted);
+          setReloadToken((n) => n + 1);
+        }}
+      />
 
       {data.length === 0 ? (
         <EmptyState
@@ -623,8 +658,8 @@ export function UnitDetailRoute(): React.JSX.Element {
           footnote={
             unit.payoutLocked ? (
               <>
-                This machine&apos;s payout is locked — a purchase order has named it. Repricing applies
-                only to machines not yet committed.
+                This machine&apos;s payout is locked — a purchase order has named it. Repricing
+                applies only to machines not yet committed.
               </>
             ) : undefined
           }

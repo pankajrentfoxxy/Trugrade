@@ -231,6 +231,17 @@ export function useAuth(): AuthState {
 }
 
 /**
+ * The signed-in principal, or null — including outside `AuthProvider`.
+ *
+ * For a panel that only hides an action the seat cannot take. The API refuses
+ * the write regardless, so rendering nothing without a provider is the honest
+ * default, and it keeps a screen renderable in isolation.
+ */
+export function usePrincipal(): Principal | null {
+  return React.useContext(AuthContext)?.principal ?? null;
+}
+
+/**
  * Route-level RBAC.
  *
  * This is a *convenience*, not a control. The API authorises every request

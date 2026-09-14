@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button, EmptyState, type Step } from '@trugrade/ui';
 import { PageHeader } from '../../../lib/controls';
-import { API, postJson, type MoneyString, type VendorListing } from '../api';
+import { API, postJson, type SubmitResult, type VendorListing } from '../api';
 import { payoutBlocker, useDraft, type WizardDraft } from './draft';
 import { StepMachine } from './StepMachine';
 import { StepCondition } from './StepCondition';
@@ -28,29 +28,6 @@ import { WizardProgress } from './WizardChrome';
  */
 
 const STEPS = ['Pick the machine', 'Declare the condition', 'Serial numbers', 'Price'] as const;
-
-interface SubmitDecisionRequired {
-  outcome: 'DECISION_REQUIRED';
-  unitCount: number;
-  minUnitsPerVisit: number;
-  shortBy: number;
-  visitFee: MoneyString;
-  options: readonly ('HOLD' | 'ACCEPT_FEE')[];
-}
-interface SubmitHeld {
-  outcome: 'HELD';
-  unitCount: number;
-  minUnitsPerVisit: number;
-  shortBy: number;
-}
-interface SubmitAccepted {
-  outcome: 'SUBMITTED';
-  listingId: string;
-  unitCount: number;
-  visitNumber: string;
-  visitFee: MoneyString;
-}
-type SubmitResult = SubmitDecisionRequired | SubmitHeld | SubmitAccepted;
 
 /** Whether anything has actually been entered, which is what "saved" means here. */
 function draftStarted(draft: WizardDraft): boolean {
@@ -243,82 +220,82 @@ export function ListingWizardRoute(): React.JSX.Element {
             {draft.step === 4 && <StepPrice draft={draft} patch={patch} />}
           </div>
 
-      {result?.outcome === 'DECISION_REQUIRED' && (
-        // Not a rejection. A vendor with eighteen machines who is silently
-        // refused concludes the platform does not want them.
-        <div className="tg-card mt-7 rounded-lg border border-warn">
-          <p className="text-body text-ink">
-            {result.unitCount} machines is fewer than the {result.minUnitsPerVisit} a visit is
-            worth.
-          </p>
-          {/*
+          {result?.outcome === 'DECISION_REQUIRED' && (
+            // Not a rejection. A vendor with eighteen machines who is silently
+            // refused concludes the platform does not want them.
+            <div className="tg-card mt-7 rounded-lg border border-warn">
+              <p className="text-body text-ink">
+                {result.unitCount} machines is fewer than the {result.minUnitsPerVisit} a visit is
+                worth.
+              </p>
+              {/*
             Nothing has been submitted yet. Either hold these until you have more,
             or accept the visit fee and we come now.
           */}
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Button variant="secondary" loading={busy} onClick={() => void commit('HOLD')}>
-              Hold until I reach {result.minUnitsPerVisit}
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button variant="secondary" loading={busy} onClick={() => void commit('HOLD')}>
+                  Hold until I reach {result.minUnitsPerVisit}
+                </Button>
+                <Button variant="primary" loading={busy} onClick={() => void commit('ACCEPT_FEE')}>
+                  Inspect now
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="mt-6 text-body-sm text-fail" role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className="mt-9 flex flex-wrap items-center gap-3 border-t border-rule pt-6">
+            <Button
+              variant="ghost"
+              disabled={draft.step === 1}
+              onClick={() => patch({ step: (draft.step - 1) as WizardDraft['step'] })}
+            >
+              Back
             </Button>
-            <Button variant="primary" loading={busy} onClick={() => void commit('ACCEPT_FEE')}>
-              Inspect now
+
+            {draft.step < 4 ? (
+              <Button
+                variant="primary"
+                disabledReason={blocker}
+                onClick={() => patch({ step: (draft.step + 1) as WizardDraft['step'] })}
+              >
+                Continue
+              </Button>
+            ) : (
+              // Suppressed, not disabled, while the batch-size question is open.
+              // The two buttons in that panel ARE the submit, and leaving a third
+              // amber button under them puts two primary actions on one screen and
+              // makes the wrong one look like the way forward.
+              !decisionOpen && (
+                <Button
+                  variant="primary"
+                  loading={busy}
+                  disabled={busy}
+                  disabledReason={busy ? undefined : submitBlocker(draft)}
+                  onClick={() => void commit()}
+                >
+                  Request the inspection
+                </Button>
+              )
+            )}
+
+            <Button
+              variant="ghost"
+              className="ml-auto"
+              onClick={() => {
+                clear();
+                setListingId(null);
+                navigate('/vendor');
+              }}
+            >
+              Discard this draft
             </Button>
           </div>
-        </div>
-      )}
-
-      {error && (
-        <p className="mt-6 text-body-sm text-fail" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div className="mt-9 flex flex-wrap items-center gap-3 border-t border-rule pt-6">
-        <Button
-          variant="ghost"
-          disabled={draft.step === 1}
-          onClick={() => patch({ step: (draft.step - 1) as WizardDraft['step'] })}
-        >
-          Back
-        </Button>
-
-        {draft.step < 4 ? (
-          <Button
-            variant="primary"
-            disabledReason={blocker}
-            onClick={() => patch({ step: (draft.step + 1) as WizardDraft['step'] })}
-          >
-            Continue
-          </Button>
-        ) : (
-          // Suppressed, not disabled, while the batch-size question is open.
-          // The two buttons in that panel ARE the submit, and leaving a third
-          // amber button under them puts two primary actions on one screen and
-          // makes the wrong one look like the way forward.
-          !decisionOpen && (
-            <Button
-              variant="primary"
-              loading={busy}
-              disabled={busy}
-              disabledReason={busy ? undefined : submitBlocker(draft)}
-              onClick={() => void commit()}
-            >
-              Request the inspection
-            </Button>
-          )
-        )}
-
-        <Button
-          variant="ghost"
-          className="ml-auto"
-          onClick={() => {
-            clear();
-            setListingId(null);
-            navigate('/vendor');
-          }}
-        >
-          Discard this draft
-        </Button>
-      </div>
         </div>
       </div>
     </div>
