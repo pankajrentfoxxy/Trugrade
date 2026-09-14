@@ -38,6 +38,11 @@ async function bootstrap(): Promise<void> {
   new Logger('Bootstrap').log(
     `${BRAND.name} API listening on ${host}:${port} (${config.get('NODE_ENV')})`,
   );
+  if (config.exposeOtpDevCode) {
+    new Logger('Bootstrap').warn(
+      'OTP_DEV_CODE_IN_RESPONSE is on: OTP codes are returned in API responses. Any account can be taken over by someone who knows its email. Turn it off when testing ends.',
+    );
+  }
 }
 
 void bootstrap();

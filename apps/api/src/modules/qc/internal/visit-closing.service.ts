@@ -111,7 +111,7 @@ export interface SignoffRequest {
   /** Masked, so a QC manager can confirm which number it went to. */
   sentTo: string;
   summary: SignoffSummary;
-  /** Non-production only, so an E2E test does not need a mail-server scrape. */
+  /** Only while `OTP_DEV_CODE_IN_RESPONSE` is on, so a tester does not need a mail-server scrape. */
   devCode?: string;
 }
 
@@ -230,7 +230,7 @@ export class VisitClosingService {
       templateCode: SIGNOFF_TEMPLATE,
       refType: 'qc_visit',
       refId: visitId,
-      isProduction: this.config.isProduction,
+      exposeDevCode: this.config.exposeOtpDevCode,
       variables: {
         visit_number: summary.visitNumber,
         inspected: String(summary.unitsInspected),

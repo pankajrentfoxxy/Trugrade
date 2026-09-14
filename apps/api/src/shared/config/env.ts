@@ -118,6 +118,17 @@ export const envSchema = z
      * it set rather than silently ignoring it.
      */
     DEV_SQL_CONSOLE: z.string().optional(),
+
+    /**
+     * Return OTP codes in API responses (`devCode`) for manual testing.
+     *
+     * Off unless set, and independent of NODE_ENV: deriving it from "not
+     * production" is how a server left on NODE_ENV=development gave live codes
+     * to anyone who asked. While it is on, anyone who knows an account's email
+     * can reset its password and pass its second factor. Allowed in production
+     * only because the team is testing against it; the boot log warns loudly.
+     */
+    OTP_DEV_CODE_IN_RESPONSE: boolish.default(false),
   })
   .superRefine((env, ctx) => {
     // 04_TEST_PLAN.md §1.4.3: `live` is impossible in CI. Not a warning — a throw.

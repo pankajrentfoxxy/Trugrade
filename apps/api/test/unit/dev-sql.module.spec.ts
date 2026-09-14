@@ -34,13 +34,18 @@ describe('DevSqlModule registers the raw-SQL console only on an explicit opt-in'
 
   it('stays off in production even with the opt-in', () => {
     expect(
-      isDevSqlConsoleEnabled(env({ NODE_ENV: 'production', DEV_SQL_CONSOLE: DEV_SQL_CONSOLE_OPT_IN })),
+      isDevSqlConsoleEnabled(
+        env({ NODE_ENV: 'production', DEV_SQL_CONSOLE: DEV_SQL_CONSOLE_OPT_IN }),
+      ),
     ).toBe(false);
   });
 });
 
 describe('the API listens on loopback unless told otherwise', () => {
-  const dev = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db', REDIS_URL: 'redis://localhost:6379' };
+  const dev = {
+    DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
+    REDIS_URL: 'redis://localhost:6379',
+  };
 
   it('defaults API_HOST to 127.0.0.1, so the bare port is not published past nginx', () => {
     expect(loadEnv(env(dev)).API_HOST).toBe('127.0.0.1');

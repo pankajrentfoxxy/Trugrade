@@ -179,7 +179,7 @@ async function register(orgType: 'VENDOR' | 'BUYER' = 'VENDOR'): Promise<Applica
     purpose: 'REGISTRATION',
     channel: 'SMS',
     templateCode: 'OTP_REGISTER',
-    isProduction: false,
+    exposeDevCode: true,
     refType: 'registration_lead',
     refId: lead.leadId,
   });

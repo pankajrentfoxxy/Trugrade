@@ -30,7 +30,7 @@ export interface IssueOtpResult {
   otpId: string;
   expiresAt: Date;
   resendAvailableAt: Date;
-  /** Only in non-production, so a developer and an E2E test can read it. */
+  /** Only when `OTP_DEV_CODE_IN_RESPONSE` is on, so a tester can read it. */
   devCode?: string;
 }
 
@@ -59,9 +59,11 @@ export class OtpService {
   /**
    * Issue a code. Rate-limited per target and per purpose.
    *
-   * `isProduction` gates whether the code comes back in the response — never in
-   * production, always in dev and test, because otherwise every E2E test needs a
-   * mail-server scrape.
+   * `exposeDevCode` gates whether the code comes back in the response. It is
+   * `OTP_DEV_CODE_IN_RESPONSE`, an explicit switch, and deliberately NOT derived
+   * from NODE_ENV: a server left on NODE_ENV=development handed live codes to
+   * anyone who asked. Any environment with it on can have every account taken
+   * over by someone who knows the email address.
    *
    * `deliver: false` runs the whole issue — every rate-limit window, the
    * supersede, the row — and skips only the send. It exists for the routes that
@@ -80,7 +82,7 @@ export class OtpService {
     locale?: 'en' | 'hi';
     refType?: string;
     refId?: string;
-    isProduction: boolean;
+    exposeDevCode: boolean;
     variables?: Record<string, string>;
     /** Default true. False issues the code and sends nothing. See above. */
     deliver?: boolean;
@@ -155,7 +157,7 @@ export class OtpService {
       // Withheld when nothing was sent: a dev tool that hands out a code for an
       // address that has no account would be the enumeration oracle this flag
       // exists to close, wearing a NODE_ENV as a disguise.
-      ...(input.isProduction || input.deliver === false ? {} : { devCode: code }),
+      ...(input.exposeDevCode && input.deliver !== false ? { devCode: code } : {}),
     };
   }
 

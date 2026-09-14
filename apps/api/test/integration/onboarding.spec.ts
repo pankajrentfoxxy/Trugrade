@@ -168,7 +168,7 @@ async function registerVendor(over: { email?: string; mobile?: string } = {}) {
     purpose: 'REGISTRATION',
     channel: 'SMS',
     templateCode: 'OTP_REGISTER',
-    isProduction: false,
+    exposeDevCode: true,
     refType: 'registration_lead',
     refId: lead.leadId,
   });
@@ -664,7 +664,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     expect(outbox.last('OTP_LOGIN')?.to).toBe(target);
@@ -682,7 +682,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     await expect(
@@ -697,7 +697,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     for (let i = 1; i <= 4; i++) {
@@ -717,7 +717,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     clock.advanceBy(301_000);
@@ -733,7 +733,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
     await expect(
       otp.issue({
@@ -741,7 +741,7 @@ describe('OTP', () => {
         purpose: 'LOGIN',
         channel: 'SMS',
         templateCode: 'OTP_LOGIN',
-        isProduction: false,
+        exposeDevCode: true,
       }),
     ).rejects.toThrow(/Too many attempts/);
   });
@@ -753,7 +753,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     clock.advanceBy(61_000);
@@ -763,7 +763,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     await expect(otp.verify({ target, purpose: 'LOGIN', code: first.devCode! })).rejects.toThrow();
@@ -779,7 +779,7 @@ describe('OTP', () => {
       purpose: 'LOGIN',
       channel: 'SMS',
       templateCode: 'OTP_LOGIN',
-      isProduction: false,
+      exposeDevCode: true,
     });
 
     const row = await raw.otp_request.findFirstOrThrow({ where: { target } });

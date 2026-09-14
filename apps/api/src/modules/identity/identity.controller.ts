@@ -217,7 +217,7 @@ export interface ContactChangeResponse {
   expiresAt: string;
   /** True only once BOTH codes have landed and the account column has moved. */
   completed: boolean;
-  /** Non-production only, straight from `OtpService`. */
+  /** Only while `OTP_DEV_CODE_IN_RESPONSE` is on, straight from `OtpService`. */
   devCodes?: { old?: string; new?: string };
 }
 
@@ -240,7 +240,7 @@ export interface RegistrationOtpResponse {
   sentTo: string;
   expiresAt: string;
   resendAvailableAt: string;
-  /** Non-production only, straight from `OtpService`. */
+  /** Only while `OTP_DEV_CODE_IN_RESPONSE` is on, straight from `OtpService`. */
   devCode?: string;
 }
 
@@ -319,7 +319,7 @@ export class IdentityController {
       purpose: 'REGISTRATION',
       channel: body.channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
       templateCode: REGISTER_OTP_TEMPLATE,
-      isProduction: this.config.isProduction,
+      exposeDevCode: this.config.exposeOtpDevCode,
       deliver,
     });
 
@@ -623,7 +623,7 @@ export class IdentityController {
       templateCode: opts.templateCode,
       refType: deliver ? 'user_account' : undefined,
       refId: deliver ? account.userId : undefined,
-      isProduction: this.config.isProduction,
+      exposeDevCode: this.config.exposeOtpDevCode,
       deliver,
     });
 
@@ -826,7 +826,7 @@ export class IdentityController {
       templateCode: LOGIN_OTP_TEMPLATE,
       refType: 'user_account',
       refId: user.userId,
-      isProduction: this.config.isProduction,
+      exposeDevCode: this.config.exposeOtpDevCode,
       variables: { name: user.fullName },
     });
 

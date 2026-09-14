@@ -23,6 +23,11 @@ export class AppConfig {
   get isTest(): boolean {
     return this.env.NODE_ENV === 'test';
   }
+
+  /** `OTP_DEV_CODE_IN_RESPONSE`. Independent of NODE_ENV on purpose — see `OtpService.issue`. */
+  get exposeOtpDevCode(): boolean {
+    return this.env.OTP_DEV_CODE_IN_RESPONSE;
+  }
 }
 
 @Global()

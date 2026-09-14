@@ -64,6 +64,10 @@ if (testDb && !/^trugrade_(test|verify)/.test(testDb)) {
 // The app's own PrismaService reads DATABASE_URL, not DATABASE_URL_TEST. If a
 // test boots a Nest module while these disagree, half the run talks to one
 // database and half to another, and the failures make no sense in either.
+// The suites drive OTP flows by reading `devCode` off the response. It is an
+// explicit switch now (never implied by NODE_ENV), so the harness turns it on.
+process.env.OTP_DEV_CODE_IN_RESPONSE ??= 'true';
+
 if (process.env.DATABASE_URL_TEST && process.env.DATABASE_URL !== process.env.DATABASE_URL_TEST) {
   process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 }

@@ -188,7 +188,7 @@ export class ContactChangeService {
       templateCode: OTP_TEMPLATE_OLD,
       refType: 'contact_change_request',
       refId: row.id,
-      isProduction: this.config.isProduction,
+      exposeDevCode: this.config.exposeOtpDevCode,
       variables: { name: user.full_name, newValue: maskValue(newValue) },
     });
     const newCode = await this.otp.issue({
@@ -198,7 +198,7 @@ export class ContactChangeService {
       templateCode: OTP_TEMPLATE_NEW,
       refType: 'contact_change_request',
       refId: row.id,
-      isProduction: this.config.isProduction,
+      exposeDevCode: this.config.exposeOtpDevCode,
       variables: { name: user.full_name },
     });
 
@@ -453,7 +453,7 @@ export class ContactChangeService {
       status: row.status,
       expiresAt: this.expiryOf(row.created_at),
       completed: row.status === 'COMPLETED',
-      ...(devCodes && !this.config.isProduction ? { devCodes } : {}),
+      ...(devCodes && this.config.exposeOtpDevCode ? { devCodes } : {}),
     };
   }
 }
