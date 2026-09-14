@@ -34,7 +34,11 @@ interface Wait {
   seconds: number | null;
 }
 
-export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: string }): React.JSX.Element {
+export function ForgotPassword({
+  signInPath = '/sign-in',
+}: {
+  signInPath?: string;
+}): React.JSX.Element {
   const [stage, setStage] = React.useState<Stage>({ k: 'ask' });
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -66,7 +70,7 @@ export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: strin
     setStage({ k: 'code', sentTo: sent.data.sentTo });
   };
 
-  const commit = async (code: string): Promise<void> => {
+  const commit = async (code: string, sentTo: string): Promise<void> => {
     setBusy(true);
     setError(null);
     setFieldError(undefined);
@@ -80,6 +84,10 @@ export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: strin
         return;
       }
       refuse(result);
+      // Every other refusal is about the code, and the code is spent by then. The
+      // password panel has no way to ask for another, so go back to the one that
+      // does, carrying the server's sentence with it.
+      if (result.code !== 'RATE_LIMITED') setStage({ k: 'code', sentTo });
       return;
     }
     setBusy(false);
@@ -131,7 +139,7 @@ export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: strin
         className="flex flex-col gap-5"
         onSubmit={(e) => {
           e.preventDefault();
-          void commit(stage.code);
+          void commit(stage.code, stage.sentTo);
         }}
       >
         {notices}
@@ -158,6 +166,22 @@ export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: strin
         <Button type="submit" variant="primary" block loading={busy}>
           Set this password
         </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setError(null);
+              setFieldError(undefined);
+              setStage({ k: 'code', sentTo: stage.sentTo });
+            }}
+          >
+            Use a different code
+          </Button>
+          <a className="text-body-sm text-acc-ink underline underline-offset-4" href={signInPath}>
+            Back to sign in
+          </a>
+        </div>
       </form>
     );
   }
@@ -195,6 +219,12 @@ export function ForgotPassword({ signInPath = '/sign-in' }: { signInPath?: strin
           >
             Use a different address
           </Button>
+          <a
+            className="ml-3 text-body-sm text-acc-ink underline underline-offset-4"
+            href={signInPath}
+          >
+            Back to sign in
+          </a>
         </div>
       </div>
     );

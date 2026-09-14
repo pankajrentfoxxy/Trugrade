@@ -113,7 +113,8 @@ describe('the console sign-in answers no questions about who has an account', ()
     await screen.findByLabelText(/Work email/);
     const ticked = Array.from(container.querySelectorAll('input')).filter(
       (input) =>
-        (input.type === 'checkbox' || input.type === 'radio') && (input as HTMLInputElement).checked,
+        (input.type === 'checkbox' || input.type === 'radio') &&
+        (input as HTMLInputElement).checked,
     );
     expect(ticked).toHaveLength(0);
     expect(container.querySelectorAll('[checked]')).toHaveLength(0);
@@ -189,6 +190,74 @@ describe('a session that still owes a second factor is not a session', () => {
 
     expect(await screen.findByText('One more code before you are in')).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+});
+
+describe('a half-finished sign-in can be left', () => {
+  const ownerSignIn = async (): Promise<void> => {
+    replies['/api/auth/login'] = {
+      status: 200,
+      body: {
+        userId: 'u1',
+        orgId: 'o1',
+        orgType: 'VENDOR',
+        roles: ['VENDOR_OWNER'],
+        permissions: [],
+        mfaRequired: true,
+      },
+    };
+    replies['/api/auth/mfa/otp'] = {
+      status: 200,
+      body: {
+        sentTo: 'own****@no****.example',
+        expiresAt: '2026-08-27T07:00:00.000Z',
+        resendAvailableAt: '2026-08-27T06:56:00.000Z',
+      },
+    };
+    replies['/api/auth/logout'] = { status: 204 };
+    mount();
+    await screen.findByLabelText(/Work email/);
+    fireEvent.change(screen.getByLabelText(/Work email/), {
+      target: { value: 'owner@northgate.example' },
+    });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'Correct-Horse-9!' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    });
+    await screen.findByText('One more code before you are in');
+  };
+
+  it('ends the session that owes a factor and returns to the sign-in form', async () => {
+    await ownerSignIn();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Use a different account' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByText('One more code before you are in')).not.toBeInTheDocument();
+    const calls = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
+      String(c[0]),
+    );
+    expect(calls.some((url) => url.endsWith('/api/auth/logout'))).toBe(true);
+  });
+
+  it('goes back to sign-in with a reason when the session lapsed during the challenge', async () => {
+    await ownerSignIn();
+    replies['/api/auth/mfa/verify'] = refusal(
+      'UNAUTHENTICATED',
+      'Please sign in to continue.',
+      401,
+    );
+
+    const first = document.querySelector('[data-testid="otp-input"] input');
+    if (!first) throw new Error('No OTP input on screen.');
+    await act(async () => {
+      fireEvent.change(first, { target: { value: '482913' } });
+    });
+
+    expect(await screen.findByText(/timed out before the code was entered/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 });
 

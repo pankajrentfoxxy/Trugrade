@@ -79,7 +79,7 @@ function applicationCopy(): { title: string; lede: string } {
 }
 
 export function LoginRoute(): React.JSX.Element {
-  const { signIn, requestMfaCode, verifyMfa, principal } = useAuth();
+  const { signIn, requestMfaCode, verifyMfa, signOut, principal } = useAuth();
   const navigate = useNavigate();
   const [stage, setStage] = React.useState<Stage>({ k: 'password' });
   const [error, setError] = React.useState<string | null>(null);
@@ -138,6 +138,23 @@ export function LoginRoute(): React.JSX.Element {
     }
     setError(failure.message);
   };
+
+  /**
+   * Leave a half-finished sign-in. The session that still owes a factor is ended
+   * on the server, not just forgotten here — otherwise the next visit restores it
+   * and lands straight back on this challenge.
+   */
+  const startOver = async (message: string | null = null): Promise<void> => {
+    await signOut();
+    setBusy(false);
+    setWait(null);
+    setError(message);
+    setStage({ k: 'password' });
+  };
+
+  /** The access cookie outlived the challenge; the code cannot land on it now. */
+  const SESSION_LAPSED =
+    'Your sign-in timed out before the code was entered. Sign in again and we will send a new one.';
 
   const afterSignIn = async (session: Principal): Promise<void> => {
     if (session.orgType === 'PLATFORM') {
@@ -253,6 +270,10 @@ export function LoginRoute(): React.JSX.Element {
             onVerify={async (code) => {
               const result = await verifyMfa(code);
               if (isFailure(result)) {
+                if (result.status === 401) {
+                  await startOver(SESSION_LAPSED);
+                  return undefined;
+                }
                 if (result.code === 'RATE_LIMITED') {
                   refuse(result);
                   return undefined;
@@ -264,9 +285,18 @@ export function LoginRoute(): React.JSX.Element {
             }}
             onResend={async () => {
               const sent = await requestMfaCode();
+              if (isFailure(sent) && sent.status === 401) {
+                await startOver(SESSION_LAPSED);
+                return { error: SESSION_LAPSED };
+              }
               return isFailure(sent) ? { error: sent.message } : { sentTo: sent.sentTo };
             }}
           />
+          <div className="border-t border-rule-2 pt-3">
+            <Button type="button" variant="ghost" onClick={() => void startOver()}>
+              Use a different account
+            </Button>
+          </div>
         </div>
       ) : (
         <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
@@ -299,10 +329,7 @@ export function LoginRoute(): React.JSX.Element {
             </Link>
             <p className="text-body-sm text-ink-3">
               Applying to supply?{' '}
-              <a
-                className="text-acc-ink underline underline-offset-4"
-                href={sellRegisterPath}
-              >
+              <a className="text-acc-ink underline underline-offset-4" href={sellRegisterPath}>
                 Start an application
               </a>
               .
