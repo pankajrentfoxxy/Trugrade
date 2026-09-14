@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Global, Injectable, Module } from '@nestjs/common';
 import type { Permission, Role } from '@trugrade/contracts';
 import { ForbiddenError } from '../errors/domain-errors';
+import { PrismaModule, PrismaService } from './prisma.service';
 
 /**
  * The authenticated caller, carried per request.
@@ -143,9 +144,38 @@ export class OrgScope {
   }
 }
 
+/**
+ * Facility assignments for vendor warehouse staff.
+ *
+ * Empty rows in `identity.user_facility` means all facilities — the Owner,
+ * Operations and Finance roles typically carry no rows. Warehouse members with
+ * specific sites get one row per facility.
+ */
+@Injectable()
+export class FacilityScope {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ctx: RequestContextService,
+  ) {}
+
+  /** `null` = all facilities; otherwise the assigned subset. */
+  async assignedFacilityIds(): Promise<string[] | null> {
+    const principal = this.ctx.principal;
+    if (!principal?.orgId || principal.orgType !== 'VENDOR') return null;
+    const rows = await this.prisma.$queryRaw<Array<{ facility_id: string }>>`
+      SELECT facility_id::text AS facility_id
+        FROM identity.user_facility
+       WHERE user_id = ${principal.userId}::uuid
+         AND org_id = ${principal.orgId}::uuid`;
+    if (rows.length === 0) return null;
+    return rows.map((r) => r.facility_id);
+  }
+}
+
 @Global()
 @Module({
-  providers: [RequestContextService, OrgScope],
-  exports: [RequestContextService, OrgScope],
+  imports: [PrismaModule],
+  providers: [RequestContextService, OrgScope, FacilityScope],
+  exports: [RequestContextService, OrgScope, FacilityScope],
 })
 export class ContextModule {}

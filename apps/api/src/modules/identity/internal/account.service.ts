@@ -23,6 +23,7 @@ import {
 } from '../../../shared/errors/domain-errors';
 import { AuditService } from './audit.service';
 import { PasswordService } from './password.service';
+import { TeamInviteService, type TeamInviteView } from './team-invite.service';
 
 const PASSWORD_ROTATION_DAYS = 180;
 
@@ -135,6 +136,11 @@ export interface TeamMemberView {
   isYou: boolean;
   /** Why this row cannot be changed. Null when it can. */
   lockedReason: string | null;
+  /** Empty = all facilities. */
+  facilityIds: string[];
+  facilityLabels: string[];
+  /** Role mandates 2FA before privileged actions. */
+  mfaRequired: boolean;
 }
 
 export interface TeamView {
@@ -142,6 +148,8 @@ export interface TeamView {
   roles: TeamRoleView[];
   /** Live count of active owners. One is the floor, and the screen says so. */
   owners: number;
+  invites: TeamInviteView[];
+  facilities: Array<{ id: string; label: string }>;
 }
 
 export interface CreateAddressInput {
@@ -166,6 +174,8 @@ export interface UpdateMemberInput {
   /** Resolved to roles server-side — permissions are not stored on the user row. */
   permissions?: string[];
   status?: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+  /** Empty array = all facilities. Vendor warehouse scoping only. */
+  facilityIds?: string[];
 }
 
 export interface CreateMemberInput {
@@ -227,6 +237,7 @@ export class AccountService {
     private readonly audit: AuditService,
     private readonly config: AppConfig,
     private readonly passwords: PasswordService,
+    private readonly teamInvites: TeamInviteService,
   ) {}
 
   /* ----------------------------------------------------------------------
@@ -482,10 +493,23 @@ export class AccountService {
       (m) => m.status === 'ACTIVE' && m.roles.includes(ownerRole),
     ).length;
 
+    const facilityMap = await this.loadMemberFacilities(orgId, members.map((m) => m.id));
+    const invites = me.permissions.has('identity.team.manage')
+      ? await this.teamInvites.listInvites()
+      : [];
+    const facilities =
+      me.orgType === 'VENDOR' && me.permissions.has('identity.team.manage')
+        ? await this.teamInvites.listOrgFacilities()
+        : [];
+
     return {
-      members: members.map((m) => this.memberView(m, me.userId, owners, ownerRole)),
+      members: members.map((m) =>
+        this.memberView(m, me.userId, owners, ownerRole, facilityMap.get(m.id)),
+      ),
       roles: await this.roleOptions(),
       owners,
+      invites,
+      facilities,
     };
   }
 
@@ -499,6 +523,12 @@ export class AccountService {
   async updateMember(userId: string, input: UpdateMemberInput): Promise<TeamMemberView> {
     const orgId = this.orgId();
     const me = this.ctx.requirePrincipal();
+    if (me.orgType === 'VENDOR' && !me.permissions.has('identity.team.manage')) {
+      throw new ForbiddenError(
+        'Only the account owner may change team members.',
+        { reason: 'team_manage_required' },
+      );
+    }
 
     const { ownerRole } = this.orgRoleConfig();
 
@@ -584,6 +614,10 @@ export class AccountService {
         }
       }
 
+      if (input.facilityIds !== undefined) {
+        await this.teamInvites.replaceMemberFacilities(userId, orgId, input.facilityIds);
+      }
+
       await this.audit.record({
         action: 'account.member.updated',
         entityType: 'user_account',
@@ -593,11 +627,14 @@ export class AccountService {
       });
 
       const owners = await this.ownerCount(orgId, ownerRole);
+      const facilities = await this.teamInvites.memberFacilityIds(userId, orgId);
+      const labels = await this.facilityLabelsFor(orgId, facilities);
       return this.memberView(
         { ...target, roles: roles ?? target.roles, status: nextStatus },
         me.userId,
         owners,
         ownerRole,
+        { ids: facilities, labels: facilities.map((id) => labels.get(id) ?? id.slice(0, 8)) },
       );
     });
   }
@@ -665,7 +702,13 @@ export class AccountService {
       });
 
       const owners = await this.ownerCount(orgId, ownerRole);
-      return this.memberView({ ...row, roles }, me.userId, owners, ownerRole);
+      return this.memberView(
+        { ...row, roles },
+        me.userId,
+        owners,
+        ownerRole,
+        { ids: [], labels: [] },
+      );
     });
   }
 
@@ -777,7 +820,15 @@ export class AccountService {
 
     const { ownerRole } = this.orgRoleConfig();
     const owners = await this.ownerCount(orgId, ownerRole);
-    return this.memberView({ ...target, mfa_enabled: false }, me.userId, owners, ownerRole);
+    const facilities = await this.teamInvites.memberFacilityIds(userId, orgId);
+    const labels = await this.facilityLabelsFor(orgId, facilities);
+    return this.memberView(
+      { ...target, mfa_enabled: false },
+      me.userId,
+      owners,
+      ownerRole,
+      { ids: facilities, labels: facilities.map((id) => labels.get(id) ?? id.slice(0, 8)) },
+    );
   }
 
   /* ----------------------------------------------------------------------
@@ -1070,10 +1121,12 @@ export class AccountService {
     viewerId: string,
     owners: number,
     ownerRole: Role,
+    facilities?: { ids: string[]; labels: string[] },
   ): TeamMemberView {
     const isYou = row.id === viewerId;
     const lastOwner = row.status === 'ACTIVE' && row.roles.includes(ownerRole) && owners <= 1;
     const platformSelf = isYou && this.ctx.requirePrincipal().orgType === 'PLATFORM';
+    const primaryRole = row.roles[0] as Role | undefined;
     return {
       id: row.id,
       fullName: row.full_name,
@@ -1094,7 +1147,52 @@ export class AccountService {
           : lastOwner
             ? 'The only account owner. Make somebody else an owner before changing this one.'
             : null,
+      facilityIds: facilities?.ids ?? [],
+      facilityLabels: facilities?.labels ?? [],
+      mfaRequired: primaryRole ? MFA_REQUIRED_ROLES.includes(primaryRole) : false,
     };
+  }
+
+  private async loadMemberFacilities(
+    orgId: string,
+    userIds: string[],
+  ): Promise<Map<string, { ids: string[]; labels: string[] }>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ user_id: string; facility_id: string }>>`
+      SELECT user_id::text AS user_id, facility_id::text AS facility_id
+        FROM identity.user_facility
+       WHERE org_id = ${orgId}::uuid AND user_id = ANY(${userIds}::uuid[])`;
+    const byUser = new Map<string, string[]>();
+    for (const row of rows) {
+      const list = byUser.get(row.user_id) ?? [];
+      list.push(row.facility_id);
+      byUser.set(row.user_id, list);
+    }
+    const allFacilityIds = [...new Set(rows.map((r) => r.facility_id))];
+    const labels = await this.facilityLabelsFor(orgId, allFacilityIds);
+    const out = new Map<string, { ids: string[]; labels: string[] }>();
+    for (const userId of userIds) {
+      const ids = byUser.get(userId) ?? [];
+      out.set(userId, {
+        ids,
+        labels: ids.map((id) => labels.get(id) ?? id.slice(0, 8)),
+      });
+    }
+    return out;
+  }
+
+  private async facilityLabelsFor(
+    orgId: string,
+    facilityIds: readonly string[],
+  ): Promise<Map<string, string>> {
+    if (facilityIds.length === 0) return new Map();
+    const unique = [...new Set(facilityIds)];
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; label: string | null; city: string }>>`
+      SELECT f.id::text AS id, a.label, a.city
+        FROM vendor.vendor_facility f
+        JOIN identity.org_address a ON a.id = f.address_id
+       WHERE f.org_id = ${orgId}::uuid AND f.id = ANY(${unique}::uuid[])`;
+    return new Map(rows.map((r) => [r.id, r.label?.trim() || r.city]));
   }
 }
 

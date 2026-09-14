@@ -8,6 +8,7 @@ import { ConditionImageCoverageRoute } from './routes/ConditionImageCoverage';
 import { ForgotPasswordRoute } from './routes/ForgotPasswordRoute';
 import { LoginRoute } from './routes/Login';
 import { VendorRegisterRoute } from './routes/sell/VendorRegisterRoute';
+import { AcceptInviteRoute } from './routes/team/AcceptInvite';
 import { OpsOverviewRoute, RequirePlatform } from './routes/OpsOverview';
 import { ReviewQueueRoute } from './routes/ReviewQueue';
 import { PricingRulesRoute } from './routes/PricingRules';
@@ -74,6 +75,7 @@ export function App(): React.JSX.Element {
             /api/onboarding call stay on this origin so cookies remain first-party.
           */}
           <Route path="/sell/register" element={<VendorRegisterRoute />} />
+          <Route path="/team/accept" element={<AcceptInviteRoute />} />
           {/*
             T43. **<Shell> is OUTSIDE the guard, on every route.** It used to be
             inside, so a refused route rendered RequirePermission’s bare

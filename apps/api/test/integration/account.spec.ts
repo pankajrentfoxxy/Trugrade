@@ -35,10 +35,14 @@ import {
   type Principal,
 } from '../../src/shared/db/org-scope';
 import { AuthModule } from '../../src/shared/auth/auth.module';
+import { EventBusModule } from '../../src/shared/events/event-bus';
 import { RedisModule } from '../../src/shared/redis/redis.service';
 import { AccountService } from '../../src/modules/identity/internal/account.service';
+import { TeamInviteService } from '../../src/modules/identity/internal/team-invite.service';
+import { IdentityService } from '../../src/modules/identity/identity.service';
 import { AuditService } from '../../src/modules/identity/internal/audit.service';
 import { PasswordService } from '../../src/modules/identity/internal/password.service';
+import { AdaptersModule } from '../../src/shared/adapters/adapters.module';
 import {
   closeTestDb,
   migrateTestDatabase,
@@ -77,7 +81,7 @@ beforeAll(async () => {
   await seedTestReference(db);
 
   moduleRef = await Test.createTestingModule({
-    imports: [ConfigModule, ContextModule, RedisModule, AuthModule],
+    imports: [ConfigModule, ContextModule, RedisModule, EventBusModule, AuthModule, AdaptersModule],
     providers: [
       { provide: ClockPort, useValue: new FixedClock(NOW) },
       {
@@ -93,6 +97,8 @@ beforeAll(async () => {
       OrgScope,
       AuditService,
       PasswordService,
+      IdentityService,
+      TeamInviteService,
       AccountService,
     ],
   }).compile();

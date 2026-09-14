@@ -61,6 +61,7 @@ export const MFA_REQUIRED_ROLES: readonly Role[] = Object.freeze([
   'FINANCE',
   'DPO',
   'VENDOR_OWNER',
+  'VENDOR_FINANCE',
 ]);
 
 /**
@@ -72,6 +73,8 @@ export const PERMISSIONS = [
   'identity.user.read',
   'identity.user.write',
   'identity.role.assign',
+  /** Vendor owner-only team invites and member management. */
+  'identity.team.manage',
   'identity.audit.read',
   'kyc.application.read',
   'kyc.application.review',
@@ -313,6 +316,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'identity.user.read',
     'identity.user.write',
     'identity.role.assign',
+    'identity.team.manage',
     'procurement.po.read_own',
     'procurement.payable.read_own',
     'procurement.po.acknowledge',

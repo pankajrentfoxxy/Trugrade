@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { AppConfig } from '../../shared/config';
+import {
+  ACCESS_COOKIE_SKEW_SECONDS,
+  REFRESH_COOKIE_PATH,
+  cookieNamesFor,
+  cookieOptionsForAudience,
+  resolveSessionAudience,
+} from '../../shared/auth/session-cookies';
 import { z } from 'zod';
 import {
   addressLine1Schema,
@@ -10,7 +19,7 @@ import {
   pincodeSchema,
   uuidSchema,
 } from '@trugrade/contracts';
-import { RequirePermissions } from '../../shared/auth/guards';
+import { Public, RequirePermissions } from '../../shared/auth/guards';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
   AccountService,
@@ -21,6 +30,11 @@ import {
   type TeamMemberView,
   type TeamView,
 } from './internal/account.service';
+import {
+  TeamInviteService,
+  type InvitePreviewView,
+  type TeamInviteView,
+} from './internal/team-invite.service';
 
 /**
  * The buying organisation's own record of itself — `/api/account/*`, T25.
@@ -98,10 +112,18 @@ const updateMemberSchema = z
     roles: z.array(z.string().trim().min(1).max(40)).max(6).optional(),
     permissions: z.array(z.string().trim().min(1).max(80)).min(1).max(120).optional(),
     status: z.enum(['ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
+    facilityIds: z.array(uuidSchema).optional(),
   })
-  .refine((v) => v.roles !== undefined || v.permissions !== undefined || v.status !== undefined, {
-    message: 'Say what to change — roles, permissions, or whether the account is active.',
-  })
+  .refine(
+    (v) =>
+      v.roles !== undefined ||
+      v.permissions !== undefined ||
+      v.status !== undefined ||
+      v.facilityIds !== undefined,
+    {
+      message: 'Say what to change — roles, permissions, facilities, or whether the account is active.',
+    },
+  )
   .refine((v) => !(v.roles !== undefined && v.permissions !== undefined), {
     message: 'Send roles or permissions, not both.',
     path: ['permissions'],
@@ -125,15 +147,34 @@ const setMemberPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+const createInviteSchema = z.object({
+  email: emailSchema,
+  fullName: fullNameSchema,
+  mobile: mobileSchema,
+  role: z.enum(['VENDOR_ADMIN', 'VENDOR_FINANCE', 'VENDOR_VIEWER']),
+  facilityIds: z.array(uuidSchema).default([]),
+});
+
+const acceptInviteSchema = z.object({
+  token: z.string().trim().min(16),
+  password: passwordSchema,
+});
+
 type CreateAddressDto = z.infer<typeof createAddressSchema>;
 type UpdateAddressDto = z.infer<typeof updateAddressSchema>;
 type UpdateMemberDto = z.infer<typeof updateMemberSchema>;
 type CreateMemberDto = z.infer<typeof createMemberSchema>;
 type SetMemberPasswordDto = z.infer<typeof setMemberPasswordSchema>;
+type CreateInviteDto = z.infer<typeof createInviteSchema>;
+type AcceptInviteDto = z.infer<typeof acceptInviteSchema>;
 
 @Controller('account')
 export class AccountController {
-  constructor(private readonly account: AccountService) {}
+  constructor(
+    private readonly account: AccountService,
+    private readonly teamInvites: TeamInviteService,
+    private readonly config: AppConfig,
+  ) {}
 
   // -------------------------------------------------------------------------
   // Profile
@@ -229,6 +270,75 @@ export class AccountController {
    * halves of this route are the same power: a role change and a deactivation
    * both decide what a person can spend.
    */
+  @Post('team/invites')
+  @RequirePermissions('identity.team.manage')
+  createInvite(
+    @Body(new ZodValidationPipe(createInviteSchema)) body: CreateInviteDto,
+  ): Promise<{ invite: TeamInviteView; emailSent: boolean }> {
+    return this.teamInvites.createInvite(body);
+  }
+
+  @Post('team/invites/:inviteId/resend')
+  @RequirePermissions('identity.team.manage')
+  resendInvite(
+    @Param('inviteId', new ZodValidationPipe(uuidSchema)) inviteId: string,
+  ): Promise<TeamInviteView> {
+    return this.teamInvites.resendInvite(inviteId);
+  }
+
+  @Delete('team/invites/:inviteId')
+  @RequirePermissions('identity.team.manage')
+  revokeInvite(
+    @Param('inviteId', new ZodValidationPipe(uuidSchema)) inviteId: string,
+  ): Promise<{ ok: true }> {
+    return this.teamInvites.revokeInvite(inviteId).then(() => ({ ok: true as const }));
+  }
+
+  @Get('team/invites/preview')
+  @Public()
+  previewInvite(
+    @Req() req: Request,
+  ): Promise<InvitePreviewView> {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    return this.teamInvites.previewInvite(token);
+  }
+
+  @Post('team/invites/accept')
+  @Public()
+  async acceptInvite(
+    @Body(new ZodValidationPipe(acceptInviteSchema)) body: AcceptInviteDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ mfaRequired: boolean; orgType: string }> {
+    const result = await this.teamInvites.acceptInvite(body.token, body.password, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    const audience = resolveSessionAudience(
+      req,
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+    );
+    const names = cookieNamesFor(audience);
+    const baseOpts = cookieOptionsForAudience(
+      audience,
+      this.config.get('STOREFRONT_URL'),
+      this.config.get('CONSOLE_URL'),
+      this.config.isProduction,
+    );
+    const accessTtl = this.config.get('JWT_ACCESS_TTL_SECONDS');
+    res.cookie(names.access, result.tokens.accessToken, {
+      ...baseOpts,
+      maxAge: Math.max(1, accessTtl - ACCESS_COOKIE_SKEW_SECONDS) * 1000,
+    });
+    res.cookie(names.refresh, result.tokens.refreshToken, {
+      ...baseOpts,
+      path: REFRESH_COOKIE_PATH,
+      maxAge: this.config.get('JWT_REFRESH_TTL_SECONDS') * 1000,
+    });
+    return { mfaRequired: result.mfaRequired, orgType: result.user.orgType };
+  }
+
   @Patch('team/:userId')
   @RequirePermissions('identity.role.assign')
   updateMember(

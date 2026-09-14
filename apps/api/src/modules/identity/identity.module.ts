@@ -7,6 +7,7 @@ import { ConsoleController } from './console.controller';
 import { AuditController } from './audit.controller';
 import { FinanceController } from './finance.controller';
 import { AccountService } from './internal/account.service';
+import { TeamInviteService } from './internal/team-invite.service';
 import { PasswordService } from './internal/password.service';
 import { OtpService } from './internal/otp.service';
 import { AuditService } from './internal/audit.service';
@@ -48,6 +49,7 @@ import { OrgPromotionService } from './internal/promotion.service';
     ContactChangeService,
     OrgPromotionService,
     AccountService,
+    TeamInviteService,
   ],
   // AuditService and OtpService are exported because `kyc` legitimately needs
   // both — an onboarding step that cannot audit its own decisions is not a

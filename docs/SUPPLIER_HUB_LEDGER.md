@@ -14,8 +14,26 @@
 | 5 | Inspect | DONE | f15a886 | — | Visits + corrections restyled. Auto-apply job still unwired (see Open questions). |
 | 6 | Fulfil + reject/dispatch API | PARTIAL | f15a886 | — | Dispatch board reads existing POs. `POST …/reject` and `POST …/dispatch` not added. |
 | 7 | Money | DONE | f15a886 | — | Payables restyled. Payouts honest empty state. |
-| 8 | Team & access | PARTIAL | f15a886 | — | Members from `GET /api/account/team`. Invite send not wired (no invite API). |
+| 8 | Team & access | DONE | — | — | Superseded by plan §5 below; invite flow + facility scope landed in this stage. |
 | 9 | Close-out | TODO | — | — | Screenshots, word-count pass, `SUPPLIER_HUB_REVIEW.md`, CI green. |
+
+## Supplier team and access (plan §5)
+
+| Screen label | Constant | 2FA | Facility scope |
+|---|---|---|---|
+| Owner | `VENDOR_OWNER` | mandatory | all |
+| Operations Manager | `VENDOR_ADMIN` | — | all (◐ on price / some PO actions when assigned) |
+| Finance | `VENDOR_FINANCE` | mandatory | all |
+| Warehouse | `VENDOR_VIEWER` | — | assigned facilities only |
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `identity.team.manage` permission | DONE | `VENDOR_OWNER` only; invite + member PATCH enforced in service for vendors. |
+| Invite API + 72h token hash | DONE | `POST/DELETE /api/account/team/invites`, resend, accept sets session cookies. |
+| `/vendor/team` screen | DONE | Members table, pending invites, capability matrix, invite/manage dialog. |
+| `/team/accept` set-password | DONE | Archetype F, strength meter, auto sign-in. |
+| Facility scope on PO repo | DONE | `fulfillment_facility_id` + `identity.user_facility`; integration test. |
+| Screenshots `5-vendor-team-*` | TODO | 1900 / 1440 / 600 px. |
 
 ## Progressive supplier profile (plan §4)
 
@@ -80,7 +98,7 @@ None captured yet under Supplier Hub naming. Prior MANIFEST pass did not save re
 
 1. **Grade correction auto-apply** — `GradeCorrectionService.autoApplyDue()` has no scheduler. Copy must not promise automatic apply.
 2. **PO reject / dispatch writers** — schema columns exist; no vendor POST endpoints yet.
-3. **Team invites** — `POST /api/account/team/members` requires a password. Invite UI refuses to send rather than invent a credential.
+3. ~~**Team invites**~~ — Resolved in plan §5: invite link + set-password at `/team/accept`; no credential emailed.
 4. **Facility dispatch address** — vendor facility payload is `label / city / pincode` only. Dispatch column shows "—" in `--fail` until address field exists.
 5. **Accent** — MANIFEST `--acc` is viridian `#1D5C4A` on vendor surface only. Storefront keeps `#6BB1BE`.
 6. **Payout history** — `procurement.payout_run` never written. Screen is zeros + empty state.

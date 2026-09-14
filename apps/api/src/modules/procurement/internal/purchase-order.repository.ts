@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OrgScope } from '../../../shared/db/org-scope';
+import { FacilityScope, OrgScope } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ForbiddenError } from '../../../shared/errors/domain-errors';
 
@@ -81,6 +81,7 @@ export class PurchaseOrderRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scope: OrgScope,
+    private readonly facilities: FacilityScope,
   ) {}
 
   /**
@@ -110,6 +111,9 @@ export class PurchaseOrderRepository {
     const status = filter.status ?? null;
     const from = filter.from ?? null;
     const to = filter.to ?? null;
+    const scopedFacilities = await this.facilities.assignedFacilityIds();
+    const facilityFilter =
+      scopedFacilities && scopedFacilities.length > 0 ? scopedFacilities : null;
 
     const rows = await this.prisma.$queryRaw<PoHeaderRow[]>`
       SELECT po.id, po.po_number, po.order_id, po.status::text AS status,
@@ -124,6 +128,10 @@ export class PurchaseOrderRepository {
          AND (${status}::text IS NULL OR po.status::text = ${status}::text)
          AND (${from}::date IS NULL OR po.created_at >= ${from}::date)
          AND (${to}::date IS NULL OR po.created_at < ${to}::date + 1)
+         AND (
+           ${facilityFilter}::uuid[] IS NULL
+           OR po.fulfillment_facility_id = ANY(${facilityFilter}::uuid[])
+         )
        ORDER BY po.created_at DESC, po.po_number DESC
        LIMIT ${page.pageSize} OFFSET ${(page.page - 1) * page.pageSize}`;
 
@@ -133,7 +141,11 @@ export class PurchaseOrderRepository {
        WHERE po.vendor_org_id = ${orgId}::uuid
          AND (${status}::text IS NULL OR po.status::text = ${status}::text)
          AND (${from}::date IS NULL OR po.created_at >= ${from}::date)
-         AND (${to}::date IS NULL OR po.created_at < ${to}::date + 1)`;
+         AND (${to}::date IS NULL OR po.created_at < ${to}::date + 1)
+         AND (
+           ${facilityFilter}::uuid[] IS NULL
+           OR po.fulfillment_facility_id = ANY(${facilityFilter}::uuid[])
+         )`;
 
     return { rows, total: Number(count?.total ?? 0) };
   }
@@ -160,6 +172,9 @@ export class PurchaseOrderRepository {
    */
   async findOne(poId: string): Promise<PoHeaderRow | null> {
     const orgId = this.vendorOrgId();
+    const scopedFacilities = await this.facilities.assignedFacilityIds();
+    const facilityFilter =
+      scopedFacilities && scopedFacilities.length > 0 ? scopedFacilities : null;
     const [row] = await this.prisma.$queryRaw<PoHeaderRow[]>`
       SELECT po.id, po.po_number, po.order_id, po.status::text AS status,
              po.total_net::text AS total_net, po.tds_rate_pct::text AS tds_rate_pct,
@@ -169,7 +184,11 @@ export class PurchaseOrderRepository {
              (SELECT count(*) FROM procurement.purchase_order_line l
                WHERE l.po_id = po.id) AS line_count
         FROM procurement.purchase_order po
-       WHERE po.id = ${poId}::uuid AND po.vendor_org_id = ${orgId}::uuid`;
+       WHERE po.id = ${poId}::uuid AND po.vendor_org_id = ${orgId}::uuid
+         AND (
+           ${facilityFilter}::uuid[] IS NULL
+           OR po.fulfillment_facility_id = ANY(${facilityFilter}::uuid[])
+         )`;
     return row ?? null;
   }
 
