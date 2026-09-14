@@ -1,3 +1,11 @@
+import { assertLinkTargetsNotLocal } from '@trugrade/config/link-targets';
+
+// Evaluated by `next build` and `next start` alike, so a public storefront can
+// neither bake nor serve a supplier link to http://localhost:5173.
+assertLinkTargetsNotLocal('The storefront', process.env.STOREFRONT_URL, {
+  CONSOLE_URL: process.env.NEXT_PUBLIC_CONSOLE_URL ?? process.env.CONSOLE_URL,
+});
+
 /** @type {import('next').NextConfig} */
 export default {
   reactStrictMode: true,

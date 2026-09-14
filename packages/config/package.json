@@ -17,6 +17,12 @@
       "require": "./dist/brand.js",
       "default": "./dist/brand.js"
     },
+    "./link-targets": {
+      "types": "./dist/link-targets.d.ts",
+      "import": "./dist/esm/link-targets.js",
+      "require": "./dist/link-targets.js",
+      "default": "./dist/link-targets.js"
+    },
     "./eslint": "./eslint/index.js",
     "./eslint/plugin": "./eslint/plugin.js",
     "./tailwind": {
