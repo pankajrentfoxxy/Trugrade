@@ -33,9 +33,10 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   const port = config.get('API_PORT');
-  await app.listen(port);
+  const host = config.get('API_HOST');
+  await app.listen(port, host);
   new Logger('Bootstrap').log(
-    `${BRAND.name} API listening on :${port} (${config.get('NODE_ENV')})`,
+    `${BRAND.name} API listening on ${host}:${port} (${config.get('NODE_ENV')})`,
   );
 }
 

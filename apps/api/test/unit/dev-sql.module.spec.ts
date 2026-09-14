@@ -39,6 +39,18 @@ describe('DevSqlModule registers the raw-SQL console only on an explicit opt-in'
   });
 });
 
+describe('the API listens on loopback unless told otherwise', () => {
+  const dev = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db', REDIS_URL: 'redis://localhost:6379' };
+
+  it('defaults API_HOST to 127.0.0.1, so the bare port is not published past nginx', () => {
+    expect(loadEnv(env(dev)).API_HOST).toBe('127.0.0.1');
+  });
+
+  it('honours an explicit API_HOST', () => {
+    expect(loadEnv(env({ ...dev, API_HOST: '0.0.0.0' })).API_HOST).toBe('0.0.0.0');
+  });
+});
+
 describe('the env loader refuses DEV_SQL_CONSOLE in production', () => {
   const base = {
     DATABASE_URL: 'postgresql://u:p@localhost:5432/db',

@@ -29,6 +29,13 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+    /**
+     * Interface to listen on. Loopback by default: every deployment sits behind
+     * nginx, and listening on all interfaces published the API — and anything
+     * nginx refuses, such as the dev SQL console — on the bare port to the
+     * internet. Set 0.0.0.0 deliberately, e.g. for a device on the LAN in dev.
+     */
+    API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
     STOREFRONT_URL: z.string().url().default('http://localhost:3000'),
     CONSOLE_URL: z.string().url().default('http://localhost:5173'),
