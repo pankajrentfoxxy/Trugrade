@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { bankCommitRefusal, persistInOrder, type SaveResult } from './persist';
 
@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   lookupIfsc: vi.fn(),
   pennyDrop: vi.fn(),
   commitBankAccount: vi.fn(),
+  requestBankChangeCode: vi.fn(),
 }));
 vi.mock('../../../../../storefront/src/app/register/api', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -63,6 +64,78 @@ describe('bankCommitRefusal', () => {
   });
 });
 
+const PASSING_DROP = {
+  ok: true,
+  data: {
+    id: 'v1',
+    checkType: 'BANK',
+    outcome: 'PASS',
+    message: 'Matched',
+    resolved: { beneficiaryName: 'ALPHA SYSTEMS' },
+    attemptNo: 1,
+    attemptsRemaining: 4,
+    willRetryAutomatically: false,
+  },
+};
+
+/** Step 2 of the bank dialog: ask for the change code, enter it, save. */
+async function confirmWithCode(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  api.requestBankChangeCode.mockResolvedValue({
+    ok: true,
+    data: { sentTo: 'ad***@alpha.in', expiresAt: '', resendAvailableAt: '', devCode: '482913' },
+  });
+  await user.click(await screen.findByRole('button', { name: 'Send code' }));
+  await screen.findByText(/Enter the code we sent to ad\*\*\*@alpha.in/);
+  const first = document.querySelector('[data-testid="otp-input"] input');
+  if (!first) throw new Error('No OTP input on screen.');
+  fireEvent.change(first, { target: { value: '482913' } });
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+}
+
+describe('a payout account change needs a fresh code', () => {
+  it('sends the code with the change, and does not commit before one is entered', async () => {
+    const user = userEvent.setup();
+    api.lookupIfsc.mockResolvedValue({
+      ok: true,
+      data: { bank: 'HDFC Bank', branch: 'Sector 18', city: 'Noida' },
+    });
+    api.pennyDrop.mockResolvedValue(PASSING_DROP);
+    api.commitBankAccount.mockResolvedValue({
+      ok: true,
+      data: {
+        verification: { outcome: 'PASS', message: '' },
+        accountId: 'b1',
+        frozenUntil: null,
+        alertedVia: ['EMAIL'],
+      },
+    });
+    api.saveStep.mockResolvedValue({ ok: true, data: null });
+    render(
+      <BankSection
+        open
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        initial={{}}
+        legalName="Alpha Systems Pvt Ltd"
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/^IFSC/), 'HDFC0001234');
+    await user.type(screen.getByLabelText(/^Account number/), '123456789012');
+    await user.type(screen.getByLabelText(/^Re-enter account number/), '123456789012');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(api.commitBankAccount).not.toHaveBeenCalled();
+
+    await confirmWithCode(user);
+
+    await waitFor(() =>
+      expect(api.commitBankAccount).toHaveBeenCalledWith(
+        expect.objectContaining({ otpCode: '482913' }),
+      ),
+    );
+  });
+});
+
 describe('a profile section only reports saved when the server agreed', () => {
   it('keeps the agreement dialog open with the server’s message when completing the step fails', async () => {
     const user = userEvent.setup();
@@ -101,19 +174,7 @@ describe('a profile section only reports saved when the server agreed', () => {
       ok: true,
       data: { bank: 'HDFC Bank', branch: 'Sector 18', city: 'Noida' },
     });
-    api.pennyDrop.mockResolvedValue({
-      ok: true,
-      data: {
-        id: 'v1',
-        checkType: 'BANK',
-        outcome: 'PASS',
-        message: 'Matched',
-        resolved: { beneficiaryName: 'ALPHA SYSTEMS' },
-        attemptNo: 1,
-        attemptsRemaining: 4,
-        willRetryAutomatically: false,
-      },
-    });
+    api.pennyDrop.mockResolvedValue(PASSING_DROP);
     api.commitBankAccount.mockResolvedValue({
       ok: true,
       data: {
@@ -137,7 +198,7 @@ describe('a profile section only reports saved when the server agreed', () => {
     await user.type(screen.getByLabelText(/^Account number/), '123456789012');
     await user.type(screen.getByLabelText(/^Re-enter account number/), '123456789012');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(await screen.findByRole('button', { name: 'Save' }));
+    await confirmWithCode(user);
 
     expect(await screen.findByText('The account holder name does not match.')).toBeTruthy();
     await waitFor(() => expect(api.commitBankAccount).toHaveBeenCalled());

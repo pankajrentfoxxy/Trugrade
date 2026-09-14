@@ -493,8 +493,27 @@ export const commitBankAccount = (input: {
   ifsc: string;
   accountHolderName: string;
   accountType: 'CURRENT' | 'SAVINGS' | 'CC' | 'OD';
+  /**
+   * A code from `requestBankChangeCode`. The server refuses every change without
+   * one, for every role. Optional here only because the retired storefront vendor
+   * step still compiles against this client; it is unreachable and is refused.
+   */
+  otpCode?: string;
 }): Promise<ApiResult<BankAccountChangeResult>> =>
   post<BankAccountChangeResult>('/api/onboarding/bank-account', input);
+
+export interface BankChangeCodeSent {
+  /** Masked by the server. */
+  sentTo: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+  /** Only while the server's OTP_DEV_CODE_IN_RESPONSE is on. */
+  devCode?: string;
+}
+
+/** Ask for the code that confirms a payout account change, sent to the person asking. */
+export const requestBankChangeCode = (): Promise<ApiResult<BankChangeCodeSent>> =>
+  post<BankChangeCodeSent>('/api/onboarding/bank-account/otp');
 
 /** One row of this org's own attempt history, masked exactly as a reviewer sees it. */
 export interface VerificationAttempt {

@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { bankCommitRefusal, persistInOrder } from '../persist';
-import { Input, SectionDialog } from '@trugrade/ui';
+import { OTP_POLICY } from '@trugrade/contracts';
+import { Button, Input, OtpInput, SectionDialog } from '@trugrade/ui';
 import {
   commitBankAccount,
   lookupIfsc,
   pennyDrop,
+  requestBankChangeCode,
   saveStep,
   type VerificationOutcomeView,
 } from '../../../../../../storefront/src/app/register/api';
@@ -57,6 +59,18 @@ export function BankSection({
   });
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>();
+  // The fresh code every payout change needs, whatever the role. See the API's
+  // BankChangeService: the factor sits on the operation, not only on the seat.
+  const [code, setCode] = React.useState('');
+  const [codeSentTo, setCodeSentTo] = React.useState<string | null>(null);
+  const [devCode, setDevCode] = React.useState<string | null>(null);
+  const [cooldown, setCooldown] = React.useState(0);
+
+  React.useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setInterval(() => setCooldown((n) => (n <= 1 ? 0 : n - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
   const [focused, setFocused] = React.useState<string | null>(null);
   const [active, setActive] = React.useState<Partial<Record<string, boolean>>>({});
 
@@ -66,6 +80,9 @@ export function BankSection({
   React.useEffect(() => {
     if (open) {
       setStep(1);
+      setCode('');
+      setCodeSentTo(null);
+      setDevCode(null);
       setDraft({
         ifsc: String(initial.ifsc ?? ''),
         bank: String(initial.bankName ?? ''),
@@ -137,6 +154,14 @@ export function BankSection({
       setError('Complete the penny-drop before saving.');
       return;
     }
+    if (!codeSentTo) {
+      await sendCode();
+      return;
+    }
+    if (code.length !== 6) {
+      setError('Enter the six-digit code we sent you to confirm this change.');
+      return;
+    }
     setBusy(true);
     const beneficiary =
       (draft.verified.resolved?.beneficiaryName as string | undefined) ?? legalName;
@@ -145,12 +170,18 @@ export function BankSection({
       accountNumber: toAccountNumber(draft.account),
       accountHolderName: beneficiary,
       accountType: 'CURRENT',
+      otpCode: code,
     });
     if (!commit.ok) {
       setBusy(false);
-      setError(commit.message);
+      setCode('');
+      setError(commit.fields.otpCode ?? commit.message);
       return;
     }
+    // The code is spent once the server has read it, whatever the bank then says.
+    setCode('');
+    setCodeSentTo(null);
+    setDevCode(null);
     // 200 is not "saved": the server answers 200 with no account when its own
     // penny-drop did not pass. Nothing is marked committed unless one exists.
     const refused = bankCommitRefusal(commit.data);
@@ -181,6 +212,22 @@ export function BankSection({
     onSaved();
   };
 
+  async function sendCode(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    const sent = await requestBankChangeCode();
+    setBusy(false);
+    if (!sent.ok) {
+      setError(sent.message);
+      if (sent.retryAfterSeconds) setCooldown(sent.retryAfterSeconds);
+      return;
+    }
+    setCodeSentTo(sent.data.sentTo);
+    setDevCode(sent.data.devCode ?? null);
+    setCode('');
+    setCooldown(OTP_POLICY.resendCooldownSeconds);
+  }
+
   const holder = draft.verified?.resolved as
     | { beneficiaryName?: string; accountNumber?: string; bankName?: string; ifsc?: string }
     | undefined;
@@ -193,7 +240,7 @@ export function BankSection({
       subtitle={step === 1 ? 'Where we send payouts.' : '₹1 penny-drop confirmation.'}
       stepIndex={step}
       stepCount={2}
-      primaryLabel={step === 1 ? 'Continue' : 'Save'}
+      primaryLabel={step === 1 ? 'Continue' : codeSentTo ? 'Save' : 'Send code'}
       primaryLoading={busy}
       onPrimary={() => void save()}
       onBack={step === 2 ? () => setStep(1) : undefined}
@@ -279,6 +326,45 @@ export function BankSection({
           <p className="mt-2 font-mono text-body-sm tnum text-ink-2">
             ••••{draft.account.slice(-4)} · {draft.bank} · {toIfsc(draft.ifsc)}
           </p>
+          {codeSentTo ? (
+            <div className="mt-4 flex flex-col gap-2">
+              <OtpInput
+                label={`Enter the code we sent to ${codeSentTo}`}
+                value={code}
+                onChange={(next) => {
+                  setCode(next);
+                  setError(undefined);
+                }}
+                disabled={busy}
+              />
+              {devCode ? (
+                <p className="text-body-sm text-ink-3">
+                  Testing mode — your code is <span className="font-mono tnum">{devCode}</span>
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={cooldown > 0 || busy}
+                  onClick={() => void sendCode()}
+                >
+                  Resend code
+                </Button>
+                {cooldown > 0 ? (
+                  <span className="text-body-sm text-ink-3">
+                    You can ask for another in <span className="font-mono tnum">{cooldown}</span>{' '}
+                    seconds.
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-body-sm text-ink-2">
+              Changing where payouts go needs a code sent to you. Payouts to a new account are
+              paused for a while, and the account owner is told on every channel.
+            </p>
+          )}
           {error ? (
             <p className="mt-3 text-body-sm text-fail" role="alert">
               {error}

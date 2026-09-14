@@ -8,6 +8,7 @@ import { ConsentService } from './internal/consent.service';
 import { DocumentService } from './internal/document.service';
 import { StepPromotionService } from './internal/promotion.service';
 import { PincodeLookupService } from './internal/pincode-lookup.service';
+import { BankChangeService } from './internal/bank-change.service';
 import {
   KycReviewController,
   OnboardingController,
@@ -35,6 +36,7 @@ import {
     DocumentService,
     StepPromotionService,
     PincodeLookupService,
+    BankChangeService,
   ],
   exports: [KycService],
 })

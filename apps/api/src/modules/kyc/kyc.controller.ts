@@ -18,6 +18,7 @@ import {
   accountHolderNameSchema,
   bankAccountNumberSchema,
   ifscSchema,
+  otpCodeSchema,
   pincodeSchema,
   uuidSchema,
 } from '@trugrade/contracts';
@@ -51,6 +52,7 @@ import {
   type KycDocumentView,
 } from './internal/document.service';
 import { PincodeLookupService, type PincodeLookupView } from './internal/pincode-lookup.service';
+import { BankChangeService, type BankChangeCodeSent } from './internal/bank-change.service';
 import {
   consentPurposeSchema,
   createLeadBodySchema,
@@ -191,7 +193,9 @@ type VerificationCheckView = Awaited<ReturnType<KycService['verificationHistory'
  * client never sent would compare the bank's answer with something the applicant
  * never claimed.
  */
-const changeBankAccountBodySchema = z.object({
+export const changeBankAccountBodySchema = z.object({
+  /** A BANK_CHANGE code from `POST /onboarding/bank-account/otp`, for every role. */
+  otpCode: otpCodeSchema,
   accountNumber: bankAccountNumberSchema,
   ifsc: ifscSchema,
   accountHolderName: accountHolderNameSchema,
@@ -212,7 +216,9 @@ type ChangeBankAccountBodyDto = z.infer<typeof changeBankAccountBodySchema>;
 const reviewDocumentBodySchema = z
   .object({
     decision: z.enum(['VERIFIED', 'REJECTED']),
-    reasonCode: z.enum(DOCUMENT_REJECTION_REASONS.map((r) => r.code) as [string, ...string[]]).optional(),
+    reasonCode: z
+      .enum(DOCUMENT_REJECTION_REASONS.map((r) => r.code) as [string, ...string[]])
+      .optional(),
     specific: z.string().trim().min(10).max(500).optional(),
   })
   .refine((b) => b.decision === 'VERIFIED' || (b.reasonCode && b.specific), {
@@ -221,7 +227,6 @@ const reviewDocumentBodySchema = z
   });
 
 type ReviewDocumentBodyDto = z.infer<typeof reviewDocumentBodySchema>;
-
 
 /** The stepper plus what was typed into it, which is what "resume" needs. */
 export interface ResumableOnboarding extends OnboardingSummary {
@@ -458,6 +463,7 @@ export class OnboardingController {
     private readonly verification: VerificationService,
     private readonly documents: DocumentService,
     private readonly promotions: StepPromotionService,
+    private readonly bankChange: BankChangeService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -681,13 +687,24 @@ export class OnboardingController {
    * the meaningful answer is the outcome, and a penny-drop that came back
    * MISMATCH created nothing to point a `Location` at.
    */
+  /**
+   * Send the acting user a code that confirms a payout account change. Required
+   * for every role — see `BankChangeService` for why the factor sits on the
+   * operation and not only on the seat.
+   */
+  @Post('bank-account/otp')
+  @HttpCode(200)
+  requestBankChangeCode(@CurrentUser() user: Principal): Promise<BankChangeCodeSent> {
+    return this.bankChange.requestCode(ownOrgId(user), user.userId);
+  }
+
   @Post('bank-account')
   @HttpCode(200)
   changeBankAccount(
     @CurrentUser() user: Principal,
     @Body(new ZodValidationPipe(changeBankAccountBodySchema)) body: ChangeBankAccountBodyDto,
   ): Promise<BankAccountChangeResult> {
-    return this.verification.changeBankAccount({
+    return this.bankChange.changeWithCode({
       orgId: ownOrgId(user),
       // From the session, never the body. This lands on the `verification_check`
       // row as `triggered_by`, which is the record of who redirected the money —

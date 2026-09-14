@@ -78,6 +78,7 @@ const OTP_SUBJECTS: Record<string, string> = {
   AUTH_PASSWORD_RESET: 'Reset your Trugrade password',
   AUTH_CONTACT_CHANGE_OTP_OLD: 'Confirm a contact change on Trugrade',
   AUTH_CONTACT_CHANGE_OTP_NEW: 'Verify your new email on Trugrade',
+  KYC_BANK_CHANGE_OTP: 'Confirm a payout account change on Trugrade',
 };
 
 function renderEmail(req: NotificationRequest): { subject: string; text: string; html: string } {
