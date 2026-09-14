@@ -1,15 +1,18 @@
 import * as React from 'react';
 import {
   Button,
-  HubPageHeader,
+  DataBoard,
   EmptyState,
+  HubKpiRow,
+  HubPageHeader,
   Panel,
   PermissionGrid,
-  HubKpiRow,
   Skeleton,
   StatusPill,
+  type Column,
 } from '@trugrade/ui';
 import { useAuth } from '../../lib/auth';
+import { Board, NotMeasured } from '../../lib/controls';
 import {
   CAPABILITY_MATRIX,
   MFA_ROLES,
@@ -186,6 +189,123 @@ export function VendorTeamRoute(): React.JSX.Element {
     refresh();
   };
 
+  const notGiven = (what: string): React.JSX.Element => (
+    <NotMeasured label="Not given" why={`No ${what} on this account.`} />
+  );
+
+  const memberColumns: ReadonlyArray<Column<TeamMember>> = [
+    {
+      key: 'name',
+      header: 'Name',
+      cell: (m) => (
+        <span className="hub-who">
+          <span className="hub-who__mono">{initials(m.fullName)}</span>
+          <span className="hub-td-ink">{m.fullName}</span>
+          {m.isYou ? <span className="hub-who__you">you</span> : null}
+        </span>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      cell: (m) => (m.email ? <span className="font-mono">{m.email}</span> : notGiven('email')),
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      cell: (m) =>
+        m.mobile ? <span className="font-mono tnum">{m.mobile}</span> : notGiven('mobile'),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      cell: (m) => (
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {roleLabel(m.roles)}
+          {MFA_ROLES.has(m.roles[0] ?? '') ? <StatusPill tone="info" label="2FA" /> : null}
+        </span>
+      ),
+    },
+    {
+      key: 'facilities',
+      header: 'Facilities',
+      cell: (m) => (
+        <span className="inline-flex flex-wrap items-center gap-1">{facilitySummary(m)}</span>
+      ),
+    },
+    { key: 'mfa', header: '2FA', cell: (m) => (m.mfaEnabled ? 'On' : 'Off') },
+    { key: 'active', header: 'Last active', numeric: true, cell: (m) => lastActive(m.lastLoginAt) },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (m) => (
+        <StatusPill
+          tone={m.status === 'ACTIVE' ? 'neutral' : 'warn'}
+          label={
+            m.status === 'ACTIVE' ? 'Active' : m.status.charAt(0) + m.status.slice(1).toLowerCase()
+          }
+        />
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      headerHidden: true,
+      cell: (m) =>
+        canManage && !m.lockedReason && !m.isYou ? (
+          <Button variant="link" size="sm" onClick={() => setManageMember(m)}>
+            Manage
+          </Button>
+        ) : null,
+    },
+  ];
+
+  const inviteColumns: ReadonlyArray<Column<TeamInvite>> = [
+    {
+      key: 'email',
+      header: 'Email',
+      cell: (inv) =>
+        inv.email ? <span className="font-mono">{inv.email}</span> : notGiven('email'),
+    },
+    { key: 'role', header: 'Role', cell: (inv) => ROLE_LABEL[inv.role] ?? inv.role },
+    {
+      key: 'facilities',
+      header: 'Facilities',
+      cell: (inv) => (inv.facilityIds.length === 0 ? 'All' : inv.facilityLabels.join(', ')),
+    },
+    { key: 'sent', header: 'Sent', numeric: true, cell: (inv) => lastActive(inv.sentAt) },
+    {
+      key: 'expires',
+      header: 'Expires',
+      numeric: true,
+      cell: (inv) => formatCountdown(inv.expiresInSeconds),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      headerHidden: true,
+      cell: (inv) => (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => {
+              if (inv.email) window.location.href = `mailto:${inv.email}`;
+            }}
+          >
+            View email
+          </Button>
+          <Button variant="link" size="sm" onClick={() => void resendInvite(inv.id).then(refresh)}>
+            Resend
+          </Button>
+          <Button variant="link" size="sm" onClick={() => void revokeInvite(inv.id).then(refresh)}>
+            Revoke
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="hub-page">
       <HubPageHeader
@@ -211,135 +331,26 @@ export function VendorTeamRoute(): React.JSX.Element {
       />
 
       <Panel title="Members" count={members.length}>
-        <div className="hub-table-wrap">
-          <table className="hub-table min-w-[980px]">
-            <thead>
-              <tr>
-                {[
-                  'Name',
-                  'Email',
-                  'Phone',
-                  'Role',
-                  'Facilities',
-                  '2FA',
-                  'Last active',
-                  'Status',
-                  '',
-                ].map((h) => (
-                  <th key={h || 'actions'}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m) => {
-                const canManageRow = canManage && !m.lockedReason && !m.isYou;
-                return (
-                  <tr key={m.id} className={m.status !== 'ACTIVE' ? 'text-ink-3' : undefined}>
-                    <td>
-                      <span className="hub-who">
-                        <span className="hub-who__mono">{initials(m.fullName)}</span>
-                        <span className="hub-td-ink">{m.fullName}</span>
-                        {m.isYou ? <span className="hub-who__you">you</span> : null}
-                      </span>
-                    </td>
-                    <td className="font-mono text-[12px]">{m.email ?? '—'}</td>
-                    <td className="font-mono text-[12px] tnum">{m.mobile ?? '—'}</td>
-                    <td>
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        {roleLabel(m.roles)}
-                        {MFA_ROLES.has(m.roles[0] ?? '') ? (
-                          <StatusPill tone="info" label="2FA" />
-                        ) : null}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        {facilitySummary(m)}
-                      </span>
-                    </td>
-                    <td className="font-mono">{m.mfaEnabled ? 'ON' : '—'}</td>
-                    <td className="font-mono tabular-nums">{lastActive(m.lastLoginAt)}</td>
-                    <td className="font-mono text-[11px] uppercase">
-                      {m.status === 'SUSPENDED' ? (
-                        <span className="text-fail">Suspended</span>
-                      ) : (
-                        m.status
-                      )}
-                    </td>
-                    <td>
-                      {canManageRow ? (
-                        <Button variant="link" size="sm" onClick={() => setManageMember(m)}>
-                          Manage
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Board tableMinWidth={980}>
+          <DataBoard
+            caption={`${members.length} ${members.length === 1 ? 'member' : 'members'}.`}
+            columns={memberColumns}
+            rows={members}
+            rowKey={(m) => m.id}
+          />
+        </Board>
       </Panel>
 
       {invites.length > 0 ? (
         <Panel title="Pending invites" count={invites.length}>
-          <div className="hub-table-wrap">
-            <table className="hub-table min-w-[860px]">
-              <thead>
-                <tr>
-                  {['Email', 'Role', 'Facilities', 'Sent', 'Expires', ''].map((h) => (
-                    <th key={h || 'actions'}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {invites.map((inv: TeamInvite) => (
-                  <tr key={inv.id} className="bg-sheet-2 text-ink-3">
-                    <td className="font-mono text-[12px]">{inv.email ?? '—'}</td>
-                    <td>{ROLE_LABEL[inv.role] ?? inv.role}</td>
-                    <td>
-                      {inv.facilityIds.length === 0
-                        ? 'All'
-                        : inv.facilityLabels.join(', ')}
-                    </td>
-                    <td className="font-mono tabular-nums">{lastActive(inv.sentAt)}</td>
-                    <td className="font-mono tabular-nums">
-                      {formatCountdown(inv.expiresInSeconds)}
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => {
-                            if (inv.email) {
-                              window.location.href = `mailto:${inv.email}`;
-                            }
-                          }}
-                        >
-                          View email
-                        </Button>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => void resendInvite(inv.id).then(refresh)}
-                        >
-                          Resend
-                        </Button>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => void revokeInvite(inv.id).then(refresh)}
-                        >
-                          Revoke
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Board tableMinWidth={860}>
+            <DataBoard
+              caption={`${invites.length} pending ${invites.length === 1 ? 'invite' : 'invites'}.`}
+              columns={inviteColumns}
+              rows={invites}
+              rowKey={(inv) => inv.id}
+            />
+          </Board>
         </Panel>
       ) : null}
 

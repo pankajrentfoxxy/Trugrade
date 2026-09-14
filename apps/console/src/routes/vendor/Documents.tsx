@@ -1,6 +1,8 @@
 import * as React from 'react';
-import { HubPageHeader, EmptyState, Skeleton } from '@trugrade/ui';
+import { Link } from 'react-router';
+import { DataBoard, EmptyState, HubPageHeader, Skeleton, type Column } from '@trugrade/ui';
 import { daysUntil } from '../../lib/clock';
+import { Board, NotMeasured } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, onDate, type VendorDocument } from './api';
 
@@ -13,6 +15,37 @@ function expiryTone(expiresOn: string | null): 'neutral' | 'warn' | 'fail' {
   if (days <= 30) return 'warn';
   return 'neutral';
 }
+
+const COLUMNS: ReadonlyArray<Column<VendorDocument>> = [
+  { key: 'type', header: 'Type', cell: (d) => <span className="text-ink">{d.label}</span> },
+  {
+    key: 'file',
+    header: 'File',
+    cell: (d) =>
+      d.originalFilename ?? (
+        <NotMeasured label="No file name" why="The upload carried no file name." />
+      ),
+  },
+  { key: 'uploaded', header: 'Uploaded', numeric: true, cell: (d) => onDate(d.uploadedAt) },
+  {
+    key: 'expires',
+    header: 'Expires',
+    numeric: true,
+    cell: (d) => {
+      if (!d.expiresOn)
+        return <NotMeasured label="No expiry" why="This document type does not expire." />;
+      const tone = expiryTone(d.expiresOn);
+      return (
+        <span
+          className={tone === 'fail' ? 'text-fail' : tone === 'warn' ? 'text-warn' : 'text-ink-2'}
+        >
+          {onDate(d.expiresOn)}
+        </span>
+      );
+    },
+  },
+  { key: 'status', header: 'Status', cell: (d) => <span className="text-ink-2">{d.status}</span> },
+];
 
 export function VendorDocumentsRoute(): React.JSX.Element {
   const { data, error } = useResource<VendorDocument[]>(API.documents, 'Documents unavailable');
@@ -39,7 +72,15 @@ export function VendorDocumentsRoute(): React.JSX.Element {
     return (
       <div>
         <HubPageHeader title="Documents" />
-        <EmptyState title="No documents" body="Upload on profile." />
+        <EmptyState
+          title="No documents"
+          body="Documents are uploaded in your supplier profile."
+          action={
+            <Link className="text-acc-ink underline underline-offset-4" to="/vendor/profile">
+              Open profile
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -47,42 +88,14 @@ export function VendorDocumentsRoute(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <HubPageHeader title="Documents" />
-      <div className="overflow-x-auto border border-rule bg-sheet">
-        <table className="w-full min-w-[720px] border-collapse text-[13px]">
-          <thead>
-            <tr className="border-b-2 border-ink bg-sheet-2">
-              {['Type', 'File', 'Uploaded', 'Expires', 'Status'].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2 text-left font-mono text-[10px] uppercase tracking-[0.11em] text-ink-3"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((d) => {
-              const tone = expiryTone(d.expiresOn);
-              return (
-                <tr key={d.id} className="border-b border-rule-2 last:border-b-0">
-                  <td className="px-3 py-2 text-ink">{d.label}</td>
-                  <td className="px-3 py-2 text-ink-2">{d.originalFilename ?? '—'}</td>
-                  <td className="px-3 py-2 font-mono tabular-nums">{onDate(d.uploadedAt)}</td>
-                  <td
-                    className={`px-3 py-2 font-mono tabular-nums ${
-                      tone === 'fail' ? 'text-fail' : tone === 'warn' ? 'text-warn' : 'text-ink-2'
-                    }`}
-                  >
-                    {d.expiresOn ? onDate(d.expiresOn) : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-ink-2">{d.status}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Board tableMinWidth={720}>
+        <DataBoard
+          caption={`${data.length} ${data.length === 1 ? 'document' : 'documents'}.`}
+          columns={COLUMNS}
+          rows={data}
+          rowKey={(d) => d.id}
+        />
+      </Board>
     </div>
   );
 }

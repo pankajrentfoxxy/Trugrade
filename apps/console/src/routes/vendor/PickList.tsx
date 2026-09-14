@@ -1,10 +1,22 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router';
-import { Button, EmptyState, GradeBadge, SealChip, Skeleton, type SealStatus } from '@trugrade/ui';
+import {
+  Button,
+  Checkbox,
+  DataBoard,
+  EmptyState,
+  GradeBadge,
+  SealChip,
+  Skeleton,
+  type Column,
+  type SealStatus,
+} from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import { NotMeasured } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
 import { API, gradeLabel, onDate, type PickList, type PickListModelGroup } from './api';
+
+type PickMachine = PickListModelGroup['machines'][number];
 
 /**
  * ARCHETYPE F — Focus. One task, centred, no navigation.
@@ -64,6 +76,51 @@ function ModelGroupBlock({
   picked: Set<string>;
   onToggle: (unitId: string) => void;
 }): React.JSX.Element {
+  const columns: ReadonlyArray<Column<PickMachine>> = [
+    {
+      key: 'pick',
+      header: 'Picked',
+      headerHidden: true,
+      cell: (m) => (
+        <Checkbox
+          label={<span className="sr-only">Picked {m.serialNumber ?? m.unitId}</span>}
+          checked={picked.has(m.unitId)}
+          onChange={() => onToggle(m.unitId)}
+        />
+      ),
+    },
+    {
+      key: 'serial',
+      header: 'Serial',
+      cell: (m) =>
+        m.serialNumber ? (
+          <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
+            {m.serialNumber}
+          </span>
+        ) : (
+          <NotMeasured
+            why="This machine is no longer on your stock records"
+            label="Serial unavailable"
+          />
+        ),
+    },
+    {
+      key: 'seal',
+      header: 'Seal code',
+      cell: (m) =>
+        m.sealCode ? (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
+              {m.sealCode}
+            </span>
+            {m.sealStatus && <SealChip status={m.sealStatus as SealStatus} />}
+          </span>
+        ) : (
+          <NotMeasured why="No seal is recorded against this machine" label="No seal recorded" />
+        ),
+    },
+  ];
+
   return (
     <section className="mt-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule pb-2">
@@ -79,66 +136,13 @@ function ModelGroupBlock({
         </span>
       </header>
 
-      <table className="mt-2 w-full min-w-[620px] border-collapse text-left">
-        <caption className="sr-only">
-          {group.title ?? 'Machines'} — grade {gradeLabel(group.gradeAtPo)}
-        </caption>
-        <thead>
-          <tr className="border-b border-rule">
-            {['', 'Serial', 'Seal code'].map((h) => (
-              <th
-                key={h || 'pick'}
-                scope="col"
-                className="py-2 pr-4 font-mono text-label uppercase tracking-[0.13em] text-ink-3"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {group.machines.map((m) => (
-            <tr key={m.unitId} className="border-b border-rule-2 last:border-b-0">
-              <td className="py-4 pr-3 align-top">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-acc"
-                  checked={picked.has(m.unitId)}
-                  onChange={() => onToggle(m.unitId)}
-                  aria-label={`Picked ${m.serialNumber ?? m.unitId}`}
-                />
-              </td>
-              <td className="py-4 pr-4 align-top">
-                {m.serialNumber ? (
-                  <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
-                    {m.serialNumber}
-                  </span>
-                ) : (
-                  <NotMeasured
-                    why="This machine is no longer on your stock records"
-                    label="Serial unavailable"
-                  />
-                )}
-              </td>
-              <td className="py-4 pr-4 align-top">
-                {m.sealCode ? (
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono tnum text-data tracking-[0.08em] text-ink">
-                      {m.sealCode}
-                    </span>
-                    {m.sealStatus && <SealChip status={m.sealStatus as SealStatus} />}
-                  </span>
-                ) : (
-                  <NotMeasured
-                    why="No seal is recorded against this machine"
-                    label="No seal recorded"
-                  />
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataBoard
+        className="mt-2"
+        caption={`${group.title ?? 'Machines'}, grade ${gradeLabel(group.gradeAtPo)}: ${group.machines.length} to pick.`}
+        columns={columns}
+        rows={group.machines}
+        rowKey={(m) => m.unitId}
+      />
     </section>
   );
 }
@@ -225,9 +229,8 @@ export function VendorPickListRoute(): React.JSX.Element {
           <div>
             <h1 className="text-h2 text-ink">Pick list</h1>
             <p className="mt-1 text-body-sm text-ink-2">
-              Purchase order{' '}
-              <span className="font-mono tnum text-ink">{data.poNumber}</span>, raised{' '}
-              <span className="font-mono tnum">{onDate(data.raisedAt)}</span>.
+              Purchase order <span className="font-mono tnum text-ink">{data.poNumber}</span>,
+              raised <span className="font-mono tnum">{onDate(data.raisedAt)}</span>.
             </p>
           </div>
           <div className="text-right">

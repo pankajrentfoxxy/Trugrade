@@ -1,12 +1,45 @@
 import * as React from 'react';
 import { Link } from 'react-router';
-import { HubPageHeader, EmptyState, LedgerRow, HubKpiRow, Skeleton } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  HubKpiRow,
+  HubPageHeader,
+  LedgerRow,
+  Skeleton,
+  type Column,
+} from '@trugrade/ui';
+import { Board } from '../../lib/controls';
 import { daysSince } from '../../lib/clock';
 import { useResource } from '../../lib/useResource';
-import { API, onDate, rupees, type PayablesView } from './api';
+import { API, onDate, rupees, type PayableRow, type PayablesView } from './api';
 import { useProfileGateOrRender } from './ProfileLockGate';
 
 /** ARCHETYPE B — Open items + deduction stack + empty payout history. */
+
+/** The MSMED Act's outer limit for paying a registered micro or small supplier. */
+const MSME_DAYS = 45;
+
+const COLUMNS: ReadonlyArray<Column<PayableRow>> = [
+  { key: 'po', header: 'PO', cell: (r) => <span className="font-mono tnum">{r.poNumber}</span> },
+  { key: 'raised', header: 'Raised', numeric: true, cell: (r) => onDate(r.accruedAt) },
+  {
+    key: 'age',
+    header: 'Age',
+    numeric: true,
+    cell: (r) => {
+      const age = daysSince(r.accruedAt);
+      // Late is a warning to act on, not a failed check: amber, never red.
+      const late = r.overdue || age > MSME_DAYS;
+      return (
+        <span className={late ? 'text-warn' : 'text-ink-2'}>
+          {age} d{late ? ' · overdue' : ''}
+        </span>
+      );
+    },
+  },
+  { key: 'amount', header: 'Amount', numeric: true, cell: (r) => rupees(r.net) },
+];
 
 export function VendorPayoutsRoute(): React.JSX.Element {
   // Gated with Payables, not separately named on the rail: there is nothing
@@ -71,43 +104,14 @@ export function VendorPayoutsRoute(): React.JSX.Element {
         {rows.length === 0 ? (
           <EmptyState title="Nothing open" body="Payables appear after delivery." />
         ) : (
-          <div className="overflow-x-auto border border-rule bg-sheet">
-            <table className="w-full min-w-[720px] border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b border-ink bg-sheet-2">
-                  {['Reference', 'PO', 'Raised', 'Age', 'Amount'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-3 py-2 text-left font-mono text-[10px] uppercase text-ink-3"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const age = daysSince(r.accruedAt);
-                  return (
-                    <tr
-                      key={r.payableId}
-                      className={`border-b border-rule-2 last:border-b-0 ${r.overdue || age > 45 ? 'border-l-2 border-l-fail' : ''}`}
-                    >
-                      <td className="px-3 py-2 font-mono tnum">{r.payableId.slice(0, 8)}</td>
-                      <td className="px-3 py-2 font-mono tnum">{r.poNumber}</td>
-                      <td className="px-3 py-2 font-mono tnum">{onDate(r.accruedAt)}</td>
-                      <td
-                        className={`px-3 py-2 font-mono tnum ${age > 45 ? 'text-fail' : 'text-ink-2'}`}
-                      >
-                        {age} d
-                      </td>
-                      <td className="px-3 py-2 font-mono tnum">{rupees(r.net)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <Board tableMinWidth={640}>
+            <DataBoard
+              caption={`${rows.length} open ${rows.length === 1 ? 'item' : 'items'}.`}
+              columns={COLUMNS}
+              rows={rows}
+              rowKey={(r) => r.payableId}
+            />
+          </Board>
         )}
       </section>
 

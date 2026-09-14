@@ -1,14 +1,59 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { HubPageHeader, EmptyState, Skeleton, StatusPill } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  HubPageHeader,
+  Skeleton,
+  StatusPill,
+  type Column,
+} from '@trugrade/ui';
+import { Board, NotMeasured } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
-import { API, onDate, type Page, type PurchaseOrder } from './api';
+import { API, humanise, onDate, type Page, type PurchaseOrder } from './api';
 import { useProfileGateOrRender } from './ProfileLockGate';
 
 /**
  * ARCHETYPE B — Board. Acknowledged POs awaiting dispatch.
  * Manual recording only — there is no carrier integration and no dispatch writer.
  */
+
+const COLUMNS: ReadonlyArray<Column<PurchaseOrder>> = [
+  {
+    key: 'po',
+    header: 'PO',
+    cell: (po) => (
+      <Link to={`/vendor/orders/${po.poId}`} className="font-mono text-ink underline">
+        {po.poNumber}
+      </Link>
+    ),
+  },
+  { key: 'units', header: 'Units', numeric: true, cell: (po) => po.units },
+  {
+    key: 'city',
+    header: 'City',
+    cell: (po) =>
+      po.deliverTo?.city ?? (
+        <NotMeasured label="Not given" why="The order carries no delivery city." />
+      ),
+  },
+  {
+    key: 'ready',
+    header: 'Ready by',
+    numeric: true,
+    cell: (po) =>
+      po.expectedDispatchAt ? (
+        onDate(po.expectedDispatchAt)
+      ) : (
+        <NotMeasured label="Not set" why="No dispatch date on this order." />
+      ),
+  },
+  {
+    key: 'state',
+    header: 'State',
+    cell: (po) => <StatusPill tone="processing" label={humanise(po.status)} />,
+  },
+];
 
 export function VendorDispatchRoute(): React.JSX.Element {
   // Gated with Orders, not separately named on the rail: there is nothing to
@@ -46,9 +91,7 @@ export function VendorDispatchRoute(): React.JSX.Element {
 
   const rows = data.rows.filter(
     (po) =>
-      po.status === 'ACKNOWLEDGED' ||
-      po.status === 'PARTIAL' ||
-      po.status === 'DISPATCH_READY',
+      po.status === 'ACKNOWLEDGED' || po.status === 'PARTIAL' || po.status === 'DISPATCH_READY',
   );
 
   if (rows.length === 0) {
@@ -63,41 +106,14 @@ export function VendorDispatchRoute(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <HubPageHeader title="Dispatch" />
-      <div className="overflow-x-auto border border-rule bg-sheet">
-        <table className="w-full min-w-[800px] border-collapse text-[13px]">
-          <thead>
-            <tr className="border-b-2 border-ink bg-sheet-2">
-              {['PO', 'Units', 'City', 'Ready by', 'State'].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2 text-left font-mono text-[10px] uppercase tracking-[0.11em] text-ink-3"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((po) => (
-              <tr key={po.poId} className="border-b border-rule-2 last:border-b-0">
-                <td className="px-3 py-2">
-                  <Link to={`/vendor/orders/${po.poId}`} className="font-mono text-ink underline">
-                    {po.poNumber}
-                  </Link>
-                </td>
-                <td className="px-3 py-2 font-mono tabular-nums">{po.units}</td>
-                <td className="px-3 py-2 text-ink-2">{po.deliverTo?.city ?? '—'}</td>
-                <td className="px-3 py-2 font-mono tabular-nums text-ink-4">
-                  {po.expectedDispatchAt ? onDate(po.expectedDispatchAt) : '—'}
-                </td>
-                <td className="px-3 py-2">
-                  <StatusPill tone="processing" label={po.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Board tableMinWidth={800}>
+        <DataBoard
+          caption={`${rows.length} purchase ${rows.length === 1 ? 'order' : 'orders'} to dispatch.`}
+          columns={COLUMNS}
+          rows={rows}
+          rowKey={(po) => po.poId}
+        />
+      </Board>
     </div>
   );
 }

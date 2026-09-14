@@ -1,14 +1,18 @@
 import * as React from 'react';
 import {
   Button,
+  Chip,
+  DataBoard,
   EmptyState,
   GradeBadge,
   Modal,
   Skeleton,
   StatusPill,
+  type Column,
 } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import { useAuth } from '../../../lib/auth';
+import { Board, NotMeasured, Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
 import {
   API,
@@ -100,8 +104,81 @@ export function PoDetailDialog({
 
   const canAck = principal?.permissions.includes('procurement.po.acknowledge') ?? false;
   const canRespond = canAck && data?.status === 'RAISED';
-  const canAttach =
-    canAck && data != null && ['ACKNOWLEDGED', 'PARTIAL'].includes(data.status);
+
+  const setDraft = (key: string, draft: LineDraft): void =>
+    setDrafts((m) => new Map(m).set(key, draft));
+
+  const lineColumns: ReadonlyArray<Column<PoLineGroup>> = [
+    {
+      key: 'machine',
+      header: 'Machine',
+      cell: (g) => (
+        <>
+          <p className="text-ink">{g.title ?? g.skuCode ?? 'Unknown model'}</p>
+          <p className="text-label text-ink-3">{g.specSummary}</p>
+        </>
+      ),
+    },
+    { key: 'grade', header: 'Grade', cell: (g) => <GradeBadge grade={g.gradeAtPo as Grade} /> },
+    { key: 'qty', header: 'Qty', numeric: true, cell: (g) => g.qty },
+    { key: 'unit', header: 'Unit price', numeric: true, cell: (g) => rupees(g.unitPrice) },
+    { key: 'total', header: 'Line total', numeric: true, cell: (g) => rupees(g.lineTotal) },
+    {
+      key: 'serials',
+      header: 'Serials',
+      cell: (g) => (
+        <span className="font-mono tnum text-ink-2">
+          {g.attachedCount} of {g.qty} attached
+          {g.serials.map((sn) => (
+            <span key={sn.unitId} className="block text-ink">
+              {sn.serialNumber ?? (
+                <NotMeasured label="Not recorded" why="No serial on this unit yet." />
+              )}
+            </span>
+          ))}
+        </span>
+      ),
+    },
+    {
+      key: 'response',
+      header: 'Response',
+      cell: (g) => {
+        const key = g.lineIds[0]!;
+        const draft = drafts.get(key);
+        if (!(canRespond && draft)) {
+          return <span className="text-label text-ink-3">{humanise(g.lineStatus)}</span>;
+        }
+        return (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Chip
+                label="Accept"
+                selected={draft.accept}
+                onToggle={() => setDraft(key, { accept: true, reason: '' })}
+              />
+              <Chip
+                label="Reject"
+                selected={!draft.accept}
+                onToggle={() => setDraft(key, { accept: false, reason: draft.reason })}
+              />
+            </div>
+            {!draft.accept && (
+              <Select
+                label="Reason"
+                value={draft.reason}
+                onChange={(e) => setDraft(key, { accept: false, reason: e.target.value })}
+                options={[
+                  { value: '', label: 'Pick a reason…' },
+                  ...PO_LINE_REJECTION_REASONS.map((r) => ({ value: r.value, label: r.label })),
+                ]}
+              />
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+  const canAttach = canAck && data != null && ['ACKNOWLEDGED', 'PARTIAL'].includes(data.status);
   /** Empty when dispatch is allowed — it gates the button and names the block. */
   const dispatchBlockedReason =
     data && ['ACKNOWLEDGED', 'PARTIAL'].includes(data.status)
@@ -204,105 +281,19 @@ export function PoDetailDialog({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-body-sm">
-                <thead>
-                  <tr className="border-b border-rule text-left text-label text-ink-3">
-                    <th className="py-2 pr-3">Machine</th>
-                    <th className="py-2 pr-3">Grade</th>
-                    <th className="py-2 pr-3 text-right">Qty</th>
-                    <th className="py-2 pr-3 text-right">Unit price</th>
-                    <th className="py-2 pr-3 text-right">Line total</th>
-                    <th className="py-2 pr-3">Serials</th>
-                    <th className="py-2">Response</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.lineGroups.map((g) => {
-                    const key = g.lineIds[0]!;
-                    const draft = drafts.get(key);
-                    const rejected = g.lineStatus === 'REJECTED' || draft?.accept === false;
-                    return (
-                      <tr
-                        key={key}
-                        className={`border-b border-rule ${rejected ? 'bg-fail-wash' : ''}`}
-                      >
-                        <td className="py-3 pr-3">
-                          <p className="text-ink">{g.title ?? g.skuCode ?? 'Unknown model'}</p>
-                          <p className="text-label text-ink-3">{g.specSummary}</p>
-                        </td>
-                        <td className="py-3 pr-3">
-                          <GradeBadge grade={g.gradeAtPo as Grade} />
-                        </td>
-                        <td className="py-3 pr-3 text-right font-mono tnum">{g.qty}</td>
-                        <td className="py-3 pr-3 text-right font-mono tnum">{rupees(g.unitPrice)}</td>
-                        <td className="py-3 pr-3 text-right font-mono tnum">{rupees(g.lineTotal)}</td>
-                        <td className="py-3 pr-3 font-mono tnum text-ink-2">
-                          {g.attachedCount}/{g.qty}
-                          {g.serials.map((s) => (
-                            <span key={s.unitId} className="block text-ink">
-                              {s.serialNumber ?? '—'}
-                            </span>
-                          ))}
-                        </td>
-                        <td className="py-3">
-                          {canRespond && draft ? (
-                            <div className="flex flex-col gap-2">
-                              <div className="inline-flex overflow-hidden rounded border border-rule">
-                                <button
-                                  type="button"
-                                  className={`px-3 py-1 text-label ${draft.accept ? 'bg-acc-wash text-acc-ink' : 'text-ink-2'}`}
-                                  onClick={() =>
-                                    setDrafts((m) => new Map(m).set(key, { accept: true, reason: '' }))
-                                  }
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`px-3 py-1 text-label ${!draft.accept ? 'bg-fail-wash text-fail' : 'text-ink-2'}`}
-                                  onClick={() =>
-                                    setDrafts((m) =>
-                                      new Map(m).set(key, { accept: false, reason: draft.reason }),
-                                    )
-                                  }
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                              {!draft.accept && (
-                                <select
-                                  className="rounded border border-rule bg-sheet px-2 py-1 text-body-sm"
-                                  value={draft.reason}
-                                  onChange={(e) =>
-                                    setDrafts((m) =>
-                                      new Map(m).set(key, { accept: false, reason: e.target.value }),
-                                    )
-                                  }
-                                >
-                                  <option value="">Pick a reason…</option>
-                                  {PO_LINE_REJECTION_REASONS.map((r) => (
-                                    <option key={r.value} value={r.value}>
-                                      {r.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-label text-ink-3">{humanise(g.lineStatus)}</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <Board tableMinWidth={720}>
+              <DataBoard
+                caption={`${data.lineGroups.length} ${data.lineGroups.length === 1 ? 'line' : 'lines'} on ${data.poNumber}.`}
+                columns={lineColumns}
+                rows={data.lineGroups}
+                rowKey={(g) => g.lineIds.join(',')}
+              />
+            </Board>
 
             {!canAck && data.status === 'RAISED' && (
               <p className="text-body-sm text-ink-3">
-                Your role cannot accept purchase orders. Ask the account owner or operations manager.
+                Your role cannot accept purchase orders. Ask the account owner or operations
+                manager.
               </p>
             )}
 
@@ -511,7 +502,9 @@ function AttachPicker({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else if (next.size >= needed) {
-        setPickError(`This line needs exactly ${needed} machine${needed === 1 ? '' : 's'}. Deselect one first.`);
+        setPickError(
+          `This line needs exactly ${needed} machine${needed === 1 ? '' : 's'}. Deselect one first.`,
+        );
         return prev;
       } else next.add(id);
       setPickError(null);
@@ -559,7 +552,10 @@ function AttachPicker({
       ) : !data ? (
         <Skeleton lines={4} />
       ) : data.length === 0 ? (
-        <EmptyState title="No sealed machines match" body="List matching stock at this facility first." />
+        <EmptyState
+          title="No sealed machines match"
+          body="List matching stock at this facility first."
+        />
       ) : (
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-body-sm">
