@@ -25,6 +25,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../lib/auth';
 import { LoginRoute } from './Login';
 
+const navigate = vi.fn();
+vi.mock('react-router', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...(actual as object), useNavigate: () => navigate };
+});
+
 interface Reply {
   status: number;
   body?: unknown;
@@ -57,6 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  navigate.mockReset();
 });
 
 const mount = (): ReturnType<typeof render> =>
@@ -204,5 +211,89 @@ describe('a suspended organisation is told what happened, in the server’s word
     const panel = await screen.findByTestId('login-suspended');
     expect(panel).toHaveTextContent(SUSPENDED);
     expect(panel).not.toHaveTextContent(WRONG);
+  });
+});
+
+/**
+ * `afterSignIn` used to stop here for every status short of VERIFIED and
+ * offer exactly one button, which sent an already-registered vendor to
+ * `/sell/register` — the one-minute SIGNUP form, with no notion of an
+ * existing application to resume. `/vendor` already tells this story in
+ * full: Home's own gate names the sections still open, and the shell's
+ * banner tracks the same percentage. Only REJECTED still needs its own
+ * telling, because that is the one verdict `/vendor` never shows.
+ */
+describe('a signed-in account whose profile is not finished', () => {
+  const LOGIN_OK = {
+    status: 200,
+    body: {
+      userId: 'u1',
+      orgId: 'o1',
+      orgType: 'VENDOR',
+      roles: ['VENDOR_OWNER'],
+      permissions: [],
+      mfaRequired: false,
+    },
+  };
+
+  async function signInAs(email: string): Promise<void> {
+    mount();
+    await screen.findByLabelText(/Work email/);
+    fireEvent.change(screen.getByLabelText(/Work email/), { target: { value: email } });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'Correct-Horse-9!' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    });
+  }
+
+  it('goes straight to /vendor rather than the old application screen — REGISTERED', async () => {
+    replies['/api/auth/login'] = LOGIN_OK;
+    replies['/api/onboarding/steps'] = {
+      status: 200,
+      body: { status: 'REGISTERED', slaDueAt: null, slaBreached: false, decision: null },
+    };
+
+    await signInAs('owner@northgate.example');
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }));
+    expect(screen.queryByTestId('login-application')).not.toBeInTheDocument();
+  });
+
+  it('goes straight to /vendor for a status still with the review team — UNDER_REVIEW', async () => {
+    replies['/api/auth/login'] = LOGIN_OK;
+    replies['/api/onboarding/steps'] = {
+      status: 200,
+      body: { status: 'UNDER_REVIEW', slaDueAt: null, slaBreached: false, decision: null },
+    };
+
+    await signInAs('owner@northgate.example');
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }));
+  });
+
+  it('stops to show the reviewer’s own words for REJECTED, and does not navigate', async () => {
+    replies['/api/auth/login'] = LOGIN_OK;
+    replies['/api/onboarding/steps'] = {
+      status: 200,
+      body: {
+        status: 'REJECTED',
+        slaDueAt: null,
+        slaBreached: false,
+        decision: {
+          decision: 'REJECT',
+          notes: 'GSTIN could not be matched to the legal name on file.',
+          decidedAt: '2026-08-20T10:00:00.000Z',
+        },
+      },
+    };
+
+    await signInAs('owner@northgate.example');
+
+    const panel = await screen.findByTestId('login-application');
+    expect(panel).toHaveTextContent('GSTIN could not be matched to the legal name on file.');
+    expect(navigate).not.toHaveBeenCalled();
+    // The one thing this screen must never do again: point a signed-in,
+    // already-registered account back at the fresh signup form.
+    expect(screen.queryByText(/Open your application/)).not.toBeInTheDocument();
   });
 });

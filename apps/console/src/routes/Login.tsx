@@ -42,9 +42,6 @@ const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? 'http://localhost:
 
 const SIGN_IN_LEDE = `${BRAND.name} staff and suppliers. Buyers sign in on the shop.`;
 
-/** `org_status` values in which the application is with us rather than with them. */
-const WITH_US = ['KYC_SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED'];
-
 interface ApplicationState {
   status: string;
   slaDueAt: string | null;
@@ -55,7 +52,12 @@ interface ApplicationState {
 type Stage =
   | { k: 'password' }
   | { k: 'mfa'; sentTo: string }
-  /** Signed in, but the organisation is not open for business. */
+  /**
+   * Signed in, but rejected. The one `org_status` genuinely not told anywhere
+   * on `/vendor` — Home's gate names open sections, never a reviewer's
+   * verdict — so this is the only status that still stops here rather than
+   * going straight through.
+   */
   | { k: 'application'; state: ApplicationState }
   /** The server refused outright — suspended, deactivated, not active. */
   | { k: 'refused'; message: string };
@@ -69,22 +71,10 @@ const formatWhen = (iso: string): string =>
     minute: '2-digit',
   });
 
-function applicationCopy(state: ApplicationState): { title: string; lede: string } {
-  if (state.status === 'REJECTED') {
-    return {
-      title: 'This account was not approved',
-      lede: 'The reviewer’s reason is below, exactly as they wrote it.',
-    };
-  }
-  if (WITH_US.includes(state.status)) {
-    return {
-      title: 'You are signed in. Your application is still with our team.',
-      lede: 'Nothing more is needed from you right now.',
-    };
-  }
+function applicationCopy(): { title: string; lede: string } {
   return {
-    title: 'Your application is not finished',
-    lede: 'There are steps still to fill in. Nothing you have already typed has been lost.',
+    title: 'This account was not approved',
+    lede: 'The reviewer’s reason is below, exactly as they wrote it.',
   };
 }
 
@@ -161,7 +151,14 @@ export function LoginRoute(): React.JSX.Element {
       return;
     }
     const state = (await res.json()) as ApplicationState;
-    if (state.status === 'VERIFIED') {
+    if (state.status !== 'REJECTED') {
+      // Every status but REJECTED is told in full on /vendor itself — Home's
+      // gate names the sections still open, and the shell's banner tracks the
+      // same percentage — so stopping here to say it a second, narrower way
+      // is redundant at best. It used to be worse than redundant: the one
+      // button this screen offered sent an already-registered vendor to
+      // /sell/register, which is the one-minute SIGNUP form and has no notion
+      // of resuming an existing application.
       void navigate('/', { replace: true });
       return;
     }
@@ -217,7 +214,7 @@ export function LoginRoute(): React.JSX.Element {
           wide: false as const,
         }
       : stage.k === 'application'
-        ? { ...applicationCopy(stage.state), wide: true as const }
+        ? { ...applicationCopy(), wide: true as const }
         : { title: 'Sign in', lede: SIGN_IN_LEDE, wide: false as const };
 
   return (
@@ -317,24 +314,14 @@ export function LoginRoute(): React.JSX.Element {
   );
 }
 
+/** Reached only for REJECTED — `afterSignIn` sends every other status to /vendor. */
 function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Element {
-  const rejected = state.status === 'REJECTED';
-  const pending = WITH_US.includes(state.status);
-
   return (
     <div className="flex flex-col gap-3" data-testid="login-application">
-      <StatusPill
-        className="self-start"
-        tone={rejected ? 'fail' : pending ? 'info' : 'warn'}
-        label={state.status.replace(/_/g, ' ')}
-      />
+      <StatusPill className="self-start" tone="fail" label={state.status.replace(/_/g, ' ')} />
 
       <p className="text-body text-ink-2">
-        {rejected
-          ? 'If you believe it is wrong, reply to the email we sent and a person will look again.'
-          : pending
-            ? 'Listing, pricing and payouts open the moment it is approved.'
-            : 'Open your application here to continue where you left off.'}
+        If you believe it is wrong, reply to the email we sent and a person will look again.
       </p>
 
       {state.decision && state.decision.decision !== 'APPROVE' && (
@@ -356,40 +343,6 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
               {formatWhen(state.decision.decidedAt)}
             </dd>
           </dl>
-        </div>
-      )}
-
-      {pending && (
-        <dl className="flex flex-col gap-3 border-t border-rule-2 pt-4 sm:flex-row sm:gap-8">
-          <div className="flex flex-col gap-1">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Decision due by
-            </dt>
-            <dd className="font-mono text-data tnum text-ink">
-              {state.slaDueAt ? (
-                formatWhen(state.slaDueAt)
-              ) : (
-                <span className="text-ink-4">Not recorded</span>
-              )}
-            </dd>
-          </div>
-          {state.slaBreached && (
-            <p role="status" className="text-body-sm text-fail">
-              We are past the time we promised you a decision. That is on us.
-            </p>
-          )}
-        </dl>
-      )}
-
-      {!rejected && (
-        <div>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => window.location.assign(sellRegisterPath)}
-          >
-            Open your application
-          </Button>
         </div>
       )}
     </div>
