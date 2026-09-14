@@ -233,7 +233,7 @@ describe('step 6 — the penny-drop', () => {
     expect(onContinue).not.toHaveBeenCalled();
   });
 
-  it('keeps the first four IFSC characters as letters and will not take a letter after that', () => {
+  it('keeps the bank code letters and the fifth-place digit, and lets the branch code hold letters', () => {
     render(
       <StepDocumentsBank
         answers={{}}
@@ -246,9 +246,11 @@ describe('step 6 — the penny-drop', () => {
     );
 
     const field = screen.getByLabelText(/^IFSC/);
-    fireEvent.change(field, { target: { value: '1hdFC00ab1234' } });
-    // Leading digit dropped; letters after the bank code dropped.
-    expect(field).toHaveValue('HDFC001234');
+    fireEvent.change(field, { target: { value: '1hdFCa0RRDCGB' } });
+    // Leading digit and the letter in fifth place dropped. The branch code keeps
+    // its letters: SBIN0RRDCGB-style codes are real, and the old behaviour of
+    // dropping them made those branches impossible to enter.
+    expect(field).toHaveValue('HDFC0RRDCGB');
   });
 
   it('shows nothing that reads as verified before any check has run', () => {

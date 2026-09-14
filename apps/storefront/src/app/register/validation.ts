@@ -517,25 +517,33 @@ export const toAccountNumber = (value: string): string => value.replace(/[\s-]/g
 export const toIfsc = (value: string): string => value.trim().toUpperCase();
 
 /**
- * An IFSC as typed: first four characters are the bank code (letters only);
- * after that only digits can land. Letters in the tail are dropped rather than
- * kept and refused later — the field cannot hold a character it will not accept.
+ * The character an IFSC may hold at a position, per RBI's format and
+ * `IFSC_PATTERN`: a four-letter bank code, the digit zero, then a six-character
+ * branch code of letters or digits.
+ *
+ * The branch code used to be treated as digits only, so real codes such as
+ * SBIN0RRDCGB (Deccan Grameena Bank) and KKBK0RTGSMI (Kotak, RTGS head office)
+ * could not be typed at all — the pattern accepted them and the field would not.
+ */
+const ifscCharFits = (position: number, ch: string): boolean =>
+  position < 4 ? /^[A-Z]$/.test(ch) : position === 4 ? /^\d$/.test(ch) : /^[A-Z0-9]$/.test(ch);
+
+/**
+ * An IFSC as typed. A character that cannot sit where it lands is dropped rather
+ * than kept and refused later — the field cannot hold what it will not accept.
+ * A digit other than zero is kept in fifth place so the message can name it.
  */
 export function typeIfsc(value: string): string {
   const raw = toIfsc(value).replace(/[^A-Z0-9]/g, '');
   let out = '';
   for (const ch of raw) {
     if (out.length >= 11) break;
-    if (out.length < 4) {
-      if (/[A-Z]/.test(ch)) out += ch;
-    } else if (/\d/.test(ch)) {
-      out += ch;
-    }
+    if (ifscCharFits(out.length, ch)) out += ch;
   }
   return out;
 }
 
-/** Block a digit in the bank code, or a letter after it, at the keystroke. */
+/** Block, at the keystroke, a character that cannot sit at the caret's position. */
 export function blockIfscKey(e: {
   key: string;
   ctrlKey: boolean;
@@ -547,12 +555,9 @@ export function blockIfscKey(e: {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (DIGIT_NAV_KEYS.has(e.key)) return;
   const pos = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
-  if (pos < 4) {
-    if (/^[a-zA-Z]$/.test(e.key)) return;
+  if (pos >= 11 || e.key.length !== 1 || !ifscCharFits(pos, e.key.toUpperCase())) {
     e.preventDefault();
-    return;
   }
-  if (pos >= 11 || !/^\d$/.test(e.key)) e.preventDefault();
 }
 
 /** VR-023 — same pattern as `@trugrade/contracts`. */
@@ -581,8 +586,8 @@ export function validateIfsc(value: string): string | undefined {
   const bank = cleaned.slice(0, Math.min(4, cleaned.length));
   if (!/^[A-Z]+$/.test(bank) || (cleaned.length >= 4 && !/^[A-Z]{4}/.test(cleaned)))
     return 'The first four characters of an IFSC are letters — the bank code, for example HDFC.';
-  if (/[A-Z]/.test(cleaned.slice(4)))
-    return 'After the bank code an IFSC is digits only. The fifth character is the digit zero.';
+  if (cleaned.length > 4 && /[A-Z]/.test(cleaned[4]!))
+    return 'The fifth character of an IFSC is the digit zero, not the letter O.';
   if (cleaned.length !== 11)
     return `An IFSC is exactly 11 characters and this one is ${cleaned.length}.`;
   if (cleaned[4] !== '0')
