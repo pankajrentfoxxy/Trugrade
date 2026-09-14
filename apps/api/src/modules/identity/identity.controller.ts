@@ -968,7 +968,6 @@ export class IdentityController {
       audience,
       this.config.get('STOREFRONT_URL'),
       this.config.get('CONSOLE_URL'),
-      this.config.isProduction,
     );
 
     // localhost shares one host across ports; clear the other jar and any legacy
@@ -1002,7 +1001,6 @@ export class IdentityController {
       audience,
       this.config.get('STOREFRONT_URL'),
       this.config.get('CONSOLE_URL'),
-      this.config.isProduction,
     );
     res.clearCookie(names.access, baseOpts);
     res.clearCookie(names.refresh, { ...baseOpts, path: REFRESH_COOKIE_PATH });

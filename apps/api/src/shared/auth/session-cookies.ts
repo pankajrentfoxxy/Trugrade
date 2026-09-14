@@ -106,40 +106,36 @@ export function extractSessionAccessToken(
 }
 
 /**
- * Cookie domain is derived from the client URL in production so buyer and vendor
- * hosts never share a jar. In development the attribute is omitted entirely —
- * separation on localhost is by cookie *name*, not domain.
+ * Session cookie attributes. Two things are derived from the configured client
+ * URL rather than from NODE_ENV, and both used to be:
+ *
+ * **No `Domain` attribute, ever.** Host-only is already the narrowest jar, and
+ * buyer and vendor hosts differ, so a Domain adds no separation. It did add two
+ * failures: a browser keeps a host-only and a Domain cookie of the same name side
+ * by side and sends the stale one first, so a deploy that turned it on would sign
+ * existing sessions out every fifteen minutes until their refresh cookie aged
+ * out; and a Domain naming the hostname is rejected outright when the same app is
+ * reached by IP and port.
+ *
+ * **`Secure` follows the URL scheme.** It was `isProduction`, so a live HTTPS site
+ * running NODE_ENV=development sent session cookies without it.
  */
-export function cookieDomainForAudience(
-  audience: SessionAudience,
-  storefrontUrl: string,
-  consoleUrl: string,
-  isProduction: boolean,
-): string | undefined {
-  if (!isProduction) return undefined;
-  const url = audience === 'console' ? consoleUrl : storefrontUrl;
-  return new URL(url).hostname;
-}
-
 export function cookieOptionsForAudience(
   audience: SessionAudience,
   storefrontUrl: string,
   consoleUrl: string,
-  isProduction: boolean,
 ): CookieOptions {
-  const opts: CookieOptions = {
+  const url = audience === 'console' ? consoleUrl : storefrontUrl;
+  return {
     httpOnly: true,
     // Lax rather than Strict: Strict drops the cookie on a plain link into the
     // console from an email, which reads to the user as a random signed-out
     // state. Lax still withholds it from every cross-site POST, which is the
     // CSRF case that matters.
     sameSite: 'lax',
-    secure: isProduction,
+    secure: new URL(url).protocol === 'https:',
     path: '/',
   };
-  const domain = cookieDomainForAudience(audience, storefrontUrl, consoleUrl, isProduction);
-  if (domain) opts.domain = domain;
-  return opts;
 }
 
 /** Buyers use the storefront; vendors and platform staff use the console. */

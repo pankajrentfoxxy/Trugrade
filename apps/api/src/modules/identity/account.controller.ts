@@ -324,7 +324,6 @@ export class AccountController {
       audience,
       this.config.get('STOREFRONT_URL'),
       this.config.get('CONSOLE_URL'),
-      this.config.isProduction,
     );
     const accessTtl = this.config.get('JWT_ACCESS_TTL_SECONDS');
     res.cookie(names.access, result.tokens.accessToken, {
