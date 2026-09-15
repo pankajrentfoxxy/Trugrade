@@ -241,14 +241,22 @@ export function VendorReviewRoute(): React.JSX.Element {
   if (error) return <EmptyState title="Application did not load" body={error} />;
   if (!data) return <Skeleton lines={8} />;
 
-  // A reviewer cannot approve past a missing capture. Every one of the four is
-  // load-bearing in a later phase, and chasing it afterwards means chasing it
-  // across the vendor's whole catalogue.
-  const missing = [
-    !data.dispatchSameAsRegistered && !data.dispatchAddress && 'dispatch address',
-    data.defaultWarrantyMonths === null && 'warranty term',
-    data.pricingMode === null && 'pricing mode',
-  ].filter((x): x is string => typeof x === 'string');
+  // The commercial captures exist so a vendor's first listing can go live. A
+  // buyer never lists, so for a buyer none of them is a gap: holding a buyer
+  // application on "dispatch address" asks for something that has no form to be
+  // entered on, and the button stays disabled for ever.
+  const isVendor = data.orgType === 'VENDOR';
+
+  // A reviewer cannot approve a vendor past a missing capture. Every one of the
+  // four is load-bearing in a later phase, and chasing it afterwards means
+  // chasing it across the vendor's whole catalogue.
+  const missing = isVendor
+    ? [
+        !data.dispatchSameAsRegistered && !data.dispatchAddress && 'dispatch address',
+        data.defaultWarrantyMonths === null && 'warranty term',
+        data.pricingMode === null && 'pricing mode',
+      ].filter((x): x is string => typeof x === 'string')
+    : [];
 
   /**
    * Checks that need a human before this application can be approved.
@@ -340,6 +348,12 @@ export function VendorReviewRoute(): React.JSX.Element {
               : {})}
           />
 
+          {/*
+            Vendor-only. A buyer has no dispatch address, warranty or pricing
+            mode, and a section of three "Not captured" rows on a buyer's record
+            reads as three things the reviewer still has to chase.
+          */}
+          {isVendor && (
           <Section title="Commercial terms" subtitle="Every field says what happens if they edit it later.">
             <Field field="vendor_facility.dispatch_address_id" label="Dispatch address">
               {data.dispatchSameAsRegistered ? (
@@ -405,6 +419,7 @@ export function VendorReviewRoute(): React.JSX.Element {
               )}
             </Field>
           </Section>
+          )}
         </div>
 
         <SidePanel
@@ -413,7 +428,9 @@ export function VendorReviewRoute(): React.JSX.Element {
           footnote={
             missing.length > 0
               ? gapReason(missing)
-              : 'Approving lets this vendor list stock. Nothing else on this screen changes anything.'
+              : isVendor
+                ? 'Approving lets this vendor list stock. Nothing else on this screen changes anything.'
+                : 'Approving lets this buyer place orders. Nothing else on this screen changes anything.'
           }
         >
           {/*

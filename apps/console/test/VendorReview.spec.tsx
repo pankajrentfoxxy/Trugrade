@@ -141,6 +141,26 @@ describe('a missing capture blocks approval', () => {
     await screen.findByText('Alpha Systems Private Limited');
     expect(screen.getByRole('button', { name: /approve/i })).not.toHaveAttribute('aria-disabled');
   });
+
+  it('never holds a buyer on the vendor commercial captures', async () => {
+    // The bug this pins: a buyer application has no dispatch address, warranty
+    // or pricing mode to capture, so a vendor-shaped gate left Approve disabled
+    // for every buyer, with a reason about "their first listing".
+    renderWith({
+      ...COMPLETE,
+      orgType: 'BUYER',
+      legalName: 'V2 Retail Limited',
+      dispatchAddress: null,
+      dispatchSameAsRegistered: false,
+      defaultWarrantyMonths: null,
+      defaultWarrantyScope: null,
+      pricingMode: null,
+    });
+    await screen.findByText('V2 Retail Limited');
+    expect(screen.getByRole('button', { name: /approve/i })).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByText('Commercial terms')).not.toBeInTheDocument();
+    expect(screen.getByText(/lets this buyer place orders/)).toBeInTheDocument();
+  });
 });
 
 // ===========================================================================
