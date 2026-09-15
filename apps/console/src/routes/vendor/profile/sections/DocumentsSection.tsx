@@ -9,7 +9,13 @@ import {
   type KycDocument,
 } from '../../../../../../storefront/src/app/register/api';
 
-const REQUIRED = ['GST_CERTIFICATE', 'PAN_CARD', 'CANCELLED_CHEQUE'] as const;
+/**
+ * The three we ask for, none of them a gate. A supplier can save this card with
+ * any of them missing: the reviewer sees exactly what arrived, and asks for the
+ * rest through the review itself rather than a supplier being stopped here by a
+ * cheque they do not have to hand.
+ */
+const DOC_TYPES = ['GST_CERTIFICATE', 'PAN_CARD', 'CANCELLED_CHEQUE'] as const;
 
 export interface DocumentsSectionProps {
   open: boolean;
@@ -45,14 +51,14 @@ export function DocumentsSection({
   ]);
 
   const save = async (): Promise<void> => {
-    const missing = REQUIRED.filter((t) => !uploadedTypes.has(t));
-    if (missing.length > 0) {
-      setError(`Still needed: ${missing.join(', ').replace(/_/g, ' ').toLowerCase()}.`);
-      return;
-    }
     setBusy(true);
+    // The hub's summary counts what was actually uploaded. Without the list it
+    // could only say "three documents", which is a fabrication for a supplier
+    // who saved with one.
+    const uploadedDocTypes = DOC_TYPES.filter((t) => uploadedTypes.has(t));
     const failed = await persistInOrder([
-      () => saveStep('DOCUMENTS_BANK', { ...initial, documentsComplete: true }, 100),
+      () =>
+        saveStep('DOCUMENTS_BANK', { ...initial, documentsComplete: true, uploadedDocTypes }, 100),
       () => completeStep('DOCUMENTS_BANK'),
     ]);
     setBusy(false);
@@ -127,7 +133,7 @@ export function DocumentsSection({
       open={open}
       onClose={onClose}
       title="Documents"
-      subtitle="Checked by contents, not filename. Max 5 MB each."
+      subtitle="All optional — add what you have now. Checked by contents, not filename. Max 5 MB each."
       stepIndex={1}
       stepCount={1}
       primaryLabel="Save"
@@ -135,7 +141,7 @@ export function DocumentsSection({
       onPrimary={() => void save()}
     >
       <div className="flex flex-col gap-5">
-        {REQUIRED.map((docType) => {
+        {DOC_TYPES.map((docType) => {
           const existing = docs.find((d) => d.docType === docType);
           if (existing) {
             return (

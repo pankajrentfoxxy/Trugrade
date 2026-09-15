@@ -1,12 +1,6 @@
 import type { ResumableOnboarding } from '@trugrade/contracts';
 
-export type ProfileSectionId =
-  | 'business'
-  | 'pickup'
-  | 'bank'
-  | 'documents'
-  | 'agreement'
-  | 'stock';
+export type ProfileSectionId = 'business' | 'pickup' | 'bank' | 'documents' | 'agreement' | 'stock';
 
 export interface ProfileSectionDef {
   id: ProfileSectionId;
@@ -45,7 +39,7 @@ export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
   {
     id: 'documents',
     title: 'Documents',
-    blurb: 'GST certificate, PAN, cancelled cheque',
+    blurb: 'GST certificate, PAN, cancelled cheque — all optional',
     weight: 25,
     required: true,
     stepCodes: ['DOCUMENTS_BANK'],
@@ -126,7 +120,8 @@ export function sectionSummary(
     case 'business': {
       const gst = answers.STATUTORY?.primaryGstin;
       const constitution = onboarding?.progress.constitution;
-      if (typeof gst === 'string' && gst.length > 0) return `${constitution ?? 'Business'} · ${gst}`;
+      if (typeof gst === 'string' && gst.length > 0)
+        return `${constitution ?? 'Business'} · ${gst}`;
       return constitution ? String(constitution).replace(/_/g, ' ') : 'Not started';
     }
     case 'pickup': {
@@ -140,10 +135,17 @@ export function sectionSummary(
       return answers.DOCUMENTS_BANK?.bankCommitted === true
         ? 'Payout account verified'
         : 'Account not verified';
-    case 'documents':
-      return answers.DOCUMENTS_BANK?.documentsComplete === true
-        ? 'Three documents uploaded'
-        : 'Uploads pending';
+    case 'documents': {
+      if (answers.DOCUMENTS_BANK?.documentsComplete !== true) return 'Uploads pending';
+      // Counted, never assumed: the card can be saved with any number of the
+      // three, and a summary that said "three" for a supplier who sent one
+      // would be the first fabricated figure on their own profile.
+      const uploaded = answers.DOCUMENTS_BANK.uploadedDocTypes;
+      const count = Array.isArray(uploaded) ? uploaded.length : null;
+      if (count === null) return 'Saved';
+      if (count === 0) return 'No documents uploaded';
+      return `${count} of 3 documents uploaded`;
+    }
     case 'agreement':
       return answers.AGREEMENT?.acceptedName
         ? `Accepted by ${String(answers.AGREEMENT.acceptedName)}`
