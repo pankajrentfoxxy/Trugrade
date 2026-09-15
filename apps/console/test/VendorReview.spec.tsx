@@ -36,7 +36,8 @@ const COMPLETE: VendorReviewData = {
   agreedCommissionPct: null,
 };
 
-const ok = (body: unknown): Response => ({ ok: true, status: 200, json: async () => body }) as Response;
+const ok = (body: unknown): Response =>
+  ({ ok: true, status: 200, json: async () => body }) as Response;
 
 /**
  * Three calls now leave this screen, and one of them is allowed to be refused.
@@ -167,7 +168,9 @@ describe('a missing capture blocks approval', () => {
 // PROVIDER_ERROR is not FAIL
 // ===========================================================================
 
-const check = (patch: Partial<VerificationCheck> & { checkType: string; outcome: string }): VerificationCheck => ({
+const check = (
+  patch: Partial<VerificationCheck> & { checkType: string; outcome: string },
+): VerificationCheck => ({
   id: `${patch.checkType}-${patch.outcome}-${patch.checkedAt ?? '1'}`,
   maskedInput: '07AA****23C1Z5',
   provider: 'mock',

@@ -354,71 +354,76 @@ export function VendorReviewRoute(): React.JSX.Element {
             reads as three things the reviewer still has to chase.
           */}
           {isVendor && (
-          <Section title="Commercial terms" subtitle="Every field says what happens if they edit it later.">
-            <Field field="vendor_facility.dispatch_address_id" label="Dispatch address">
-              {data.dispatchSameAsRegistered ? (
-                <span className="text-ink-2">Same as the registered address</span>
-              ) : data.dispatchAddress ? (
-                <>
-                  {data.dispatchAddress.line1}, {data.dispatchAddress.city},{' '}
-                  {data.dispatchAddress.state}{' '}
-                  <span className="font-mono tnum">{data.dispatchAddress.pincode}</span>
-                  <p className="mt-1 text-body-sm text-ink-2">
-                    Becomes &ldquo;Dispatch From&rdquo; on the e-way bill for every unit they sell.
-                  </p>
-                </>
-              ) : (
-                <NotCaptured />
-              )}
-            </Field>
-
-            <Field field="vendor_capability.can_dropship" label="Direct dispatch to buyer">
-              {data.canDropship === null ? (
-                <NotCaptured />
-              ) : data.canDropship ? (
-                // A capability the vendor declared, not a verdict we reached.
-                <StatusPill tone="info" label="Can dropship" />
-              ) : (
-                <>
-                  <StatusPill tone="warn" label="Hub leg required" />
-                  {data.dropshipConstraint && (
-                    <p className="mt-2 text-body-sm text-ink-2">{data.dropshipConstraint}</p>
-                  )}
-                </>
-              )}
-            </Field>
-
-            <Field field="vendor_profile.default_warranty_months" label="Vendor warranty">
-              {data.defaultWarrantyMonths === null ? (
-                <NotCaptured />
-              ) : (
-                <>
-                  <span className="font-mono tnum">{data.defaultWarrantyMonths} months</span>
-                  {data.defaultWarrantyScope && (
+            <Section
+              title="Commercial terms"
+              subtitle="Every field says what happens if they edit it later."
+            >
+              <Field field="vendor_facility.dispatch_address_id" label="Dispatch address">
+                {data.dispatchSameAsRegistered ? (
+                  <span className="text-ink-2">Same as the registered address</span>
+                ) : data.dispatchAddress ? (
+                  <>
+                    {data.dispatchAddress.line1}, {data.dispatchAddress.city},{' '}
+                    {data.dispatchAddress.state}{' '}
+                    <span className="font-mono tnum">{data.dispatchAddress.pincode}</span>
                     <p className="mt-1 text-body-sm text-ink-2">
-                      Covers {data.defaultWarrantyScope.covers.join(', ').toLowerCase()}
-                      {data.defaultWarrantyScope.excludes.length > 0 &&
-                        ` · excludes ${data.defaultWarrantyScope.excludes.join(', ').toLowerCase()}`}{' '}
-                      · {data.defaultWarrantyScope.serviceMode.toLowerCase().replace('_', '-')}
+                      Becomes &ldquo;Dispatch From&rdquo; on the e-way bill for every unit they
+                      sell.
                     </p>
-                  )}
-                </>
-              )}
-            </Field>
+                  </>
+                ) : (
+                  <NotCaptured />
+                )}
+              </Field>
 
-            <Field field="vendor_payout_preference.pricing_mode" label="Pricing basis">
-              {data.pricingMode === null ? (
-                <NotCaptured />
-              ) : data.pricingMode === 'NET_PAYOUT' ? (
-                <span>Net payout — they name the amount they receive</span>
-              ) : (
-                <span>
-                  Commission at <span className="font-mono tnum">{data.agreedCommissionPct}%</span>{' '}
-                  of the selling price, frozen to a rupee amount per unit
-                </span>
-              )}
-            </Field>
-          </Section>
+              <Field field="vendor_capability.can_dropship" label="Direct dispatch to buyer">
+                {data.canDropship === null ? (
+                  <NotCaptured />
+                ) : data.canDropship ? (
+                  // A capability the vendor declared, not a verdict we reached.
+                  <StatusPill tone="info" label="Can dropship" />
+                ) : (
+                  <>
+                    <StatusPill tone="warn" label="Hub leg required" />
+                    {data.dropshipConstraint && (
+                      <p className="mt-2 text-body-sm text-ink-2">{data.dropshipConstraint}</p>
+                    )}
+                  </>
+                )}
+              </Field>
+
+              <Field field="vendor_profile.default_warranty_months" label="Vendor warranty">
+                {data.defaultWarrantyMonths === null ? (
+                  <NotCaptured />
+                ) : (
+                  <>
+                    <span className="font-mono tnum">{data.defaultWarrantyMonths} months</span>
+                    {data.defaultWarrantyScope && (
+                      <p className="mt-1 text-body-sm text-ink-2">
+                        Covers {data.defaultWarrantyScope.covers.join(', ').toLowerCase()}
+                        {data.defaultWarrantyScope.excludes.length > 0 &&
+                          ` · excludes ${data.defaultWarrantyScope.excludes.join(', ').toLowerCase()}`}{' '}
+                        · {data.defaultWarrantyScope.serviceMode.toLowerCase().replace('_', '-')}
+                      </p>
+                    )}
+                  </>
+                )}
+              </Field>
+
+              <Field field="vendor_payout_preference.pricing_mode" label="Pricing basis">
+                {data.pricingMode === null ? (
+                  <NotCaptured />
+                ) : data.pricingMode === 'NET_PAYOUT' ? (
+                  <span>Net payout — they name the amount they receive</span>
+                ) : (
+                  <span>
+                    Commission at{' '}
+                    <span className="font-mono tnum">{data.agreedCommissionPct}%</span> of the
+                    selling price, frozen to a rupee amount per unit
+                  </span>
+                )}
+              </Field>
+            </Section>
           )}
         </div>
 
@@ -568,9 +573,7 @@ function SlaBand({ data }: { data: VendorReviewData }): React.JSX.Element {
   const settled = data.status === 'VERIFIED' || data.status === 'REJECTED';
   if (data.slaDueAt === null) {
     return (
-      <p className="text-body-sm text-ink-4">
-        No review clock is running on this application.
-      </p>
+      <p className="text-body-sm text-ink-4">No review clock is running on this application.</p>
     );
   }
 
