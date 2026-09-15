@@ -61,7 +61,8 @@ export function BusinessGstSection({
 }: BusinessGstSectionProps): React.JSX.Element {
   const [step, setStep] = React.useState<1 | 2>(1);
   const [draft, setDraft] = React.useState<BusinessGstDraft>(() => ({
-    constitution: initialConstitution ?? String(initial.constitutionType ?? ''),
+    constitution:
+      initialConstitution ?? String(initial.constitution ?? initial.constitutionType ?? ''),
     gstin: String(initial.primaryGstin ?? ''),
     udyam: String((initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? ''),
     verified: null,
@@ -79,7 +80,8 @@ export function BusinessGstSection({
     if (!open) return;
     setStep(1);
     setDraft({
-      constitution: initialConstitution ?? String(initial.constitutionType ?? ''),
+      constitution:
+        initialConstitution ?? String(initial.constitution ?? initial.constitutionType ?? ''),
       gstin: String(initial.primaryGstin ?? ''),
       udyam: String(
         (initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? '',
@@ -136,7 +138,7 @@ export function BusinessGstSection({
       '';
     setBusy(true);
     const failed = await persistInOrder([
-      () => saveStep('BUSINESS_PROFILE', { constitutionType: draft.constitution }, 100),
+      () => saveStep('BUSINESS_PROFILE', { constitution: draft.constitution }, 100),
       () =>
         saveStep(
           'STATUTORY',
