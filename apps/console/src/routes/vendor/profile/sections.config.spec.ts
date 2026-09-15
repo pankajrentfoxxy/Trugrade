@@ -25,7 +25,8 @@ describe('profile sections config', () => {
         ],
       },
     } as never;
-    expect(sectionIsDone(PROFILE_SECTIONS[2]!, onboarding)).toBe(true);
+    const bank = PROFILE_SECTIONS.find((s) => s.id === 'bank')!;
+    expect(sectionIsDone(bank, onboarding)).toBe(true);
     expect(nextIncompleteSection('bank', onboarding)?.id).toBe('documents');
   });
 
@@ -39,6 +40,23 @@ describe('profile sections config', () => {
         ],
       },
     } as never;
-    expect(profileCompletionPct(onboarding)).toBe(25);
+    expect(profileCompletionPct(onboarding)).toBe(20);
+  });
+
+  it('has a card for every step the server requires of a vendor, and no optional card', () => {
+    // The server's onboarding_step_definition rows for VENDOR. A required step
+    // with no card here is how a supplier reached "100%" and could not submit.
+    const serverRequired = [
+      'ACCOUNT',
+      'STATUTORY',
+      'BUSINESS_PROFILE',
+      'CAPABILITY',
+      'FACILITY_CONTACTS',
+      'DOCUMENTS_BANK',
+      'AGREEMENT',
+    ];
+    const covered = new Set(PROFILE_SECTIONS.filter((s) => s.required).flatMap((s) => s.stepCodes));
+    for (const code of serverRequired) expect(covered.has(code)).toBe(true);
+    expect(PROFILE_SECTIONS.every((s) => s.required)).toBe(true);
   });
 });

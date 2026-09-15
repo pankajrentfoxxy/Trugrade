@@ -24,7 +24,7 @@ import { useOnboardingReload } from '../../../lib/vendorOnboarding';
 const CAN_SUBMIT = new Set(['VENDOR_OWNER', 'VENDOR_ADMIN']);
 const IN_REVIEW = new Set(['PROFILE_SUBMITTED', 'KYC_SUBMITTED', 'UNDER_REVIEW']);
 
-export type SubmitStage = 'hidden' | 'in-review' | 'ask-owner' | 'ready';
+export type SubmitStage = 'hidden' | 'outstanding' | 'in-review' | 'ask-owner' | 'ready';
 
 /** What this seat should be offered for this application, if anything. */
 export function submitStage(
@@ -33,10 +33,19 @@ export function submitStage(
 ): SubmitStage {
   const { status } = onboarding;
   if (IN_REVIEW.has(status)) return 'in-review';
-  if (status === 'VERIFIED' || status === 'REJECTED' || !onboarding.progress.isSubmittable) {
-    return 'hidden';
-  }
+  if (status === 'VERIFIED' || status === 'REJECTED') return 'hidden';
+  // Not submittable is a sentence, never silence. Rendering nothing here left a
+  // supplier at "100% complete" with no button and no idea that the server still
+  // counted two steps open — the application simply never arrived for review.
+  if (!onboarding.progress.isSubmittable) return 'outstanding';
   return roles.some((r) => CAN_SUBMIT.has(r)) ? 'ready' : 'ask-owner';
+}
+
+/** The server's own list of what is still open, by the titles it gave them. */
+export function outstandingSteps(onboarding: ResumableOnboarding): string[] {
+  return onboarding.progress.steps
+    .filter((s) => s.isRequired && s.status !== 'COMPLETE')
+    .map((s) => s.title);
 }
 
 /** A review deadline, in the supplier's own time zone. */
@@ -100,6 +109,22 @@ export function SubmitForReview({
   const resubmit = onboarding.status === 'INFO_REQUESTED';
 
   if (stage === 'hidden') return null;
+
+  if (stage === 'outstanding') {
+    const open = outstandingSteps(onboarding);
+    return (
+      <p className={cn('text-body-sm text-ink-2', className)} data-testid="submit-outstanding">
+        Not ready to submit yet.{' '}
+        {open.length > 0 ? (
+          <>
+            Still needed: <span className="text-ink">{open.join(', ')}</span>.
+          </>
+        ) : (
+          'The server still counts a required step as unfinished.'
+        )}
+      </p>
+    );
+  }
 
   if (stage === 'in-review') {
     return (

@@ -138,7 +138,10 @@ export function BusinessGstSection({
       '';
     setBusy(true);
     const failed = await persistInOrder([
-      () => saveStep('BUSINESS_PROFILE', { constitution: draft.constitution }, 100),
+      // legalName rides along because the API's BUSINESS_PROFILE promotion is
+      // what writes `organization.legal_name`; without it a supplier stayed
+      // "Pending company details" in the review queue after a verified GSTIN.
+      () => saveStep('BUSINESS_PROFILE', { constitution: draft.constitution, legalName }, 100),
       () =>
         saveStep(
           'STATUTORY',

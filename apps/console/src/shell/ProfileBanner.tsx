@@ -10,7 +10,7 @@ import { SubmitForReview, submitStage } from '../routes/vendor/profile/SubmitFor
 /**
  * Profile completion, on every screen rather than only on Home.
  *
- * The five required sections weigh exactly 100 between them, so "100%" means
+ * The seven required sections weigh exactly 100 between them, so "100%" means
  * one thing and one thing only: you can sell. A percentage that stopped at 90
  * with listing already open would be the screen disagreeing with the API.
  *
@@ -46,7 +46,9 @@ export function ProfileBanner({
   // Complete is not the same as verified. A finished profile that is waiting on
   // the supplier to submit it, or on us to review it, says so here — the bar used
   // to read "Listing is open" while every listing screen was still padlocked.
-  if (!verified && stage !== 'hidden') {
+  // 'outstanding' keeps the bar: "Next: Pickup address" is the better guide here,
+  // and the hub already spells out what the server still wants.
+  if (!verified && stage !== 'hidden' && stage !== 'outstanding') {
     return (
       <div className="hub-banner" data-testid="profile-banner">
         <span className="hub-banner__label">Profile completion</span>

@@ -65,27 +65,30 @@ describe('a locked board', () => {
 
     expect(await screen.findByText('Finish your profile to unlock listings')).toBeTruthy();
     expect(screen.getByText('We verify every supplier before machines go on sale.')).toBeTruthy();
+    // Every one of the server's seven required vendor steps has a card, and every
+    // card is in the checklist. "What you stock" used to be left out as
+    // recommended, which is how a supplier hit 100% with the server still waiting.
     for (const title of [
+      'Contact',
       'Business & GST',
       'Pickup address',
       'Bank account',
       'Documents',
+      'What you stock',
       'Supplier agreement',
     ]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
-    // Recommended and unweighted — "What you stock" is not one of the five
-    // that block listing, and does not belong in the checklist.
-    expect(screen.queryByText('What you stock')).toBeNull();
     expect(screen.queryByTestId('unlocked')).toBeNull();
   });
 
   it('names the first INCOMPLETE section on the button, not simply the first one', async () => {
     mockOnboarding({
       status: 'REGISTERED',
-      // Business is done; Pickup is the next thing actually blocking.
+      // Contact and Business are done; Pickup is the next thing actually blocking.
       progress: {
         steps: [
+          { stepCode: 'ACCOUNT', status: 'COMPLETE' },
           { stepCode: 'BUSINESS_PROFILE', status: 'COMPLETE' },
           { stepCode: 'STATUTORY', status: 'COMPLETE' },
         ],

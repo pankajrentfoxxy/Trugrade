@@ -105,11 +105,22 @@ describe('submitting a finished profile for review', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('offers nothing while the server still says the application is incomplete', () => {
+  it('names what the server still wants while the application is incomplete, with no button', () => {
+    // The failure this pins: the hub said 100% while the server counted two
+    // steps open, and this component rendered nothing — so the supplier had no
+    // button and no reason, and the application never reached the queue.
     const incomplete = application();
     incomplete.progress.isSubmittable = false;
+    incomplete.progress.steps = [
+      { stepCode: 'ACCOUNT', title: 'Contact', isRequired: true, status: 'NOT_STARTED' },
+      { stepCode: 'STATUTORY', title: 'Statutory', isRequired: true, status: 'COMPLETE' },
+      { stepCode: 'CAPABILITY', title: 'Capability', isRequired: true, status: 'IN_PROGRESS' },
+    ] as never;
     draw(<SubmitForReview onboarding={incomplete} roles={['VENDOR_OWNER']} />);
 
+    expect(screen.getByTestId('submit-outstanding').textContent).toBe(
+      'Not ready to submit yet. Still needed: Contact, Capability.',
+    );
     expect(screen.queryByRole('button')).toBeNull();
   });
 

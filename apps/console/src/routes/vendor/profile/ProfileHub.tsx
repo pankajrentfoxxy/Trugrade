@@ -15,6 +15,7 @@ import { useResource } from '../../../lib/useResource';
 import { useOnboardingReload } from '../../../lib/vendorOnboarding';
 import { SubmitForReview } from './SubmitForReview';
 import { API, type OrgProfile } from '../profile-api';
+import { ContactSection } from './sections/ContactSection';
 import { BusinessGstSection } from './sections/BusinessGstSection';
 import { PickupSection } from './sections/PickupSection';
 import { BankSection } from './sections/BankSection';
@@ -176,6 +177,17 @@ export function ProfileHub(): React.JSX.Element {
         })}
       </div>
 
+      <ContactSection
+        open={open === 'account'}
+        onClose={() => setOpen(null)}
+        onSaved={() => handleSaved('account')}
+        initial={onboarding?.answers.ACCOUNT ?? {}}
+        account={
+          profile
+            ? { fullName: profile.fullName, email: profile.email, mobile: profile.mobile }
+            : null
+        }
+      />
       <BusinessGstSection
         open={open === 'business'}
         onClose={() => setOpen(null)}

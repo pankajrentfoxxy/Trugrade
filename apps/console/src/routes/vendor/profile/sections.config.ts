@@ -1,6 +1,13 @@
 import type { ResumableOnboarding } from '@trugrade/contracts';
 
-export type ProfileSectionId = 'business' | 'pickup' | 'bank' | 'documents' | 'agreement' | 'stock';
+export type ProfileSectionId =
+  | 'account'
+  | 'business'
+  | 'pickup'
+  | 'bank'
+  | 'documents'
+  | 'agreement'
+  | 'stock';
 
 export interface ProfileSectionDef {
   id: ProfileSectionId;
@@ -11,12 +18,30 @@ export interface ProfileSectionDef {
   stepCodes: readonly string[];
 }
 
+/**
+ * One card per required server step, and no required server step without a card.
+ *
+ * The server decides `isSubmittable` from its own `onboarding_step_definition`
+ * rows — for a vendor, seven required steps including ACCOUNT and CAPABILITY.
+ * This list used to cover five and call "What you stock" recommended, so a
+ * supplier reached "100% complete" with two server steps still open, the submit
+ * button stayed hidden, and the application never reached the review queue.
+ * The weights sum to 100 across the required cards so "100%" means submittable.
+ */
 export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
+  {
+    id: 'account',
+    title: 'Contact',
+    blurb: 'The person we reach about this account',
+    weight: 10,
+    required: true,
+    stepCodes: ['ACCOUNT'],
+  },
   {
     id: 'business',
     title: 'Business & GST',
     blurb: 'Constitution and primary GSTIN',
-    weight: 25,
+    weight: 20,
     required: true,
     stepCodes: ['BUSINESS_PROFILE', 'STATUTORY'],
   },
@@ -24,7 +49,7 @@ export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
     id: 'pickup',
     title: 'Pickup address',
     blurb: 'Where we collect machines',
-    weight: 20,
+    weight: 15,
     required: true,
     stepCodes: ['FACILITY_CONTACTS'],
   },
@@ -32,7 +57,7 @@ export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
     id: 'bank',
     title: 'Bank account',
     blurb: 'Payout account with penny-drop',
-    weight: 20,
+    weight: 15,
     required: true,
     stepCodes: ['DOCUMENTS_BANK'],
   },
@@ -40,9 +65,17 @@ export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
     id: 'documents',
     title: 'Documents',
     blurb: 'GST certificate, PAN, cancelled cheque — all optional',
-    weight: 25,
+    weight: 15,
     required: true,
     stepCodes: ['DOCUMENTS_BANK'],
+  },
+  {
+    id: 'stock',
+    title: 'What you stock',
+    blurb: 'Brands, volume and grades — routes enquiries to you',
+    weight: 15,
+    required: true,
+    stepCodes: ['CAPABILITY'],
   },
   {
     id: 'agreement',
@@ -51,14 +84,6 @@ export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
     weight: 10,
     required: true,
     stepCodes: ['AGREEMENT'],
-  },
-  {
-    id: 'stock',
-    title: 'What you stock',
-    blurb: 'Brands, volume and grades',
-    weight: 0,
-    required: false,
-    stepCodes: ['CAPABILITY'],
   },
 ] as const;
 
@@ -117,6 +142,14 @@ export function sectionSummary(
 ): string {
   const answers = onboarding?.answers ?? {};
   switch (section.id) {
+    case 'account': {
+      if (!stepDone(onboarding, 'ACCOUNT')) return 'Not confirmed yet';
+      const a = answers.ACCOUNT ?? {};
+      const name = typeof a.fullName === 'string' && a.fullName ? a.fullName : null;
+      const mobile = typeof a.mobile === 'string' && a.mobile ? a.mobile : null;
+      if (!name) return 'Confirmed';
+      return mobile ? `${name} · ${mobile}` : name;
+    }
     case 'business': {
       const gst = answers.STATUTORY?.primaryGstin;
       const constitution = onboarding?.progress.constitution;
@@ -155,7 +188,7 @@ export function sectionSummary(
       if (Array.isArray(brands) && brands.length > 0) {
         return `${brands.length} brand${brands.length === 1 ? '' : 's'} selected`;
       }
-      return 'Optional — helps us route enquiries';
+      return 'Brands and volume not given yet';
     }
     default:
       return '';
