@@ -197,6 +197,50 @@ describe('vendor team rules', () => {
     ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED', detail: { reason: 'last_owner' } });
   });
 
+  it('names the mobile, not the email, when the mobile is the one already on an account', async () => {
+    const buyerOrg = await makeOrganization({ org_type: 'BUYER', legal_name: 'Elsewhere' }, db);
+    const taken = await makeUser(buyerOrg, { email: 'someone@elsewhere.in' }, db);
+    await db.$executeRaw`UPDATE identity.user_account SET mobile = '+919535312310' WHERE id = ${taken}::uuid`;
+
+    await expect(
+      asOwner(() =>
+        invites.createInvite({
+          email: 'brand.new@alpha.in',
+          fullName: 'Raj Shukla',
+          mobile: '+919535312310',
+          role: 'VENDOR_VIEWER',
+          facilityIds: [],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(
+        /This mobile number is already on a Trugrade account/,
+      ) as unknown,
+      code: 'VALIDATION_FAILED',
+      fields: { mobile: 'This mobile number is already registered.' },
+    });
+  });
+
+  it('still names the email when the email is the one already on an account', async () => {
+    const buyerOrg = await makeOrganization({ org_type: 'BUYER', legal_name: 'Elsewhere' }, db);
+    await makeUser(buyerOrg, { email: 'taken@elsewhere.in' }, db);
+
+    await expect(
+      asOwner(() =>
+        invites.createInvite({
+          email: 'taken@elsewhere.in',
+          fullName: 'Raj Shukla',
+          mobile: '+919812345670',
+          role: 'VENDOR_VIEWER',
+          facilityIds: [],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+      fields: { email: 'This email is already registered.' },
+    });
+  });
+
   it('REFUSES a facility id from another org', async () => {
     const otherOrg = await makeOrganization({ org_type: 'VENDOR', legal_name: 'Other' }, db);
     const otherAddr = await makeAddress(otherOrg, {}, db);

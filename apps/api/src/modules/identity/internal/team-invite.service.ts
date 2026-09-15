@@ -90,10 +90,9 @@ export class TeamInviteService {
   private assertTeamManage(): void {
     const me = this.ctx.requirePrincipal();
     if (!me.permissions.has('identity.team.manage')) {
-      throw new ForbiddenError(
-        'Only the account owner may invite or change team members.',
-        { reason: 'team_manage_required' },
-      );
+      throw new ForbiddenError('Only the account owner may invite or change team members.', {
+        reason: 'team_manage_required',
+      });
     }
   }
 
@@ -123,7 +122,10 @@ export class TeamInviteService {
          AND i.status = 'PENDING'
        ORDER BY i.created_at DESC`;
 
-    const labels = await this.facilityLabels(orgId, rows.flatMap((r) => r.facility_ids ?? []));
+    const labels = await this.facilityLabels(
+      orgId,
+      rows.flatMap((r) => r.facility_ids ?? []),
+    );
     return rows.map((row) => ({
       id: row.id,
       email: row.email,
@@ -171,15 +173,26 @@ export class TeamInviteService {
 
     await this.assertFacilitiesOwned(orgId, input.facilityIds);
 
-    const [existingUser] = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM identity.user_account
+    const clashes = await this.prisma.$queryRaw<
+      Array<{ email: string | null; mobile: string | null }>
+    >`
+      SELECT email::text AS email, mobile FROM identity.user_account
        WHERE (lower(email::text) = lower(${email}) OR mobile = ${mobile})
          AND status <> 'DEACTIVATED'
-       LIMIT 1`;
-    if (existingUser) {
+       LIMIT 2`;
+    // Name the value that collided. Email and mobile are each unique across every
+    // account, and a refusal that always blamed the email sent an owner retyping
+    // a perfectly good address while the mobile was the one already in use.
+    if (clashes.some((c) => c.email?.toLowerCase() === email.toLowerCase())) {
       throw new ValidationError(
-        `${email} is already on an account. They may belong to another organisation.`,
+        `${email} is already on a Trugrade account, possibly with another organisation. Invite them with a different email.`,
         { email: 'This email is already registered.' },
+      );
+    }
+    if (clashes.some((c) => c.mobile === mobile)) {
+      throw new ValidationError(
+        'This mobile number is already on a Trugrade account, possibly with another organisation. Invite them with a different mobile number.',
+        { mobile: 'This mobile number is already registered.' },
       );
     }
 
@@ -225,8 +238,8 @@ export class TeamInviteService {
         orgName: org?.legal_name ?? 'your supplier account',
         roleLabel: ROLE_LABEL[input.role] ?? input.role,
         mfaNote: (MFA_REQUIRED_ROLES as readonly string[]).includes(input.role)
-            ? 'Two-factor authentication is required for this role before you can manage money or team access.'
-            : '',
+          ? 'Two-factor authentication is required for this role before you can manage money or team access.'
+          : '',
         acceptUrl,
         expiresHours: String(INVITE_TTL_HOURS),
       },
@@ -450,9 +463,7 @@ export class TeamInviteService {
         email,
         mobile,
         fullName: invite.full_name,
-        rotationDays: MFA_REQUIRED_ROLES.includes(invite.role_code as Role)
-          ? 180
-          : null,
+        rotationDays: MFA_REQUIRED_ROLES.includes(invite.role_code as Role) ? 180 : null,
       });
 
       await this.prisma.$executeRaw`
@@ -487,10 +498,9 @@ export class TeamInviteService {
       SELECT id::text AS id FROM vendor.vendor_facility
        WHERE org_id = ${orgId}::uuid AND id = ANY(${unique}::uuid[])`;
     if (rows.length !== unique.length) {
-      throw new ForbiddenError(
-        'One or more facilities do not belong to your organisation.',
-        { reason: 'cross_org_facility' },
-      );
+      throw new ForbiddenError('One or more facilities do not belong to your organisation.', {
+        reason: 'cross_org_facility',
+      });
     }
   }
 
@@ -524,7 +534,9 @@ export class TeamInviteService {
   ): Promise<Map<string, string>> {
     if (facilityIds.length === 0) return new Map();
     const unique = [...new Set(facilityIds)];
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; label: string | null; city: string }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; label: string | null; city: string }>
+    >`
       SELECT f.id::text AS id, a.label, a.city
         FROM vendor.vendor_facility f
         JOIN identity.org_address a ON a.id = f.address_id
@@ -534,7 +546,9 @@ export class TeamInviteService {
 
   async listOrgFacilities(): Promise<Array<{ id: string; label: string }>> {
     const orgId = this.orgId();
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; label: string | null; city: string }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; label: string | null; city: string }>
+    >`
       SELECT f.id::text AS id, a.label, a.city
         FROM vendor.vendor_facility f
         JOIN identity.org_address a ON a.id = f.address_id
