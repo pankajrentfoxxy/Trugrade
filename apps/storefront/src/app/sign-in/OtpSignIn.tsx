@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Input, OtpInput, RateLimitNotice } from '@trugrade/ui';
+import { Button, Input, OtpInput, RateLimitNotice, Tabs } from '@trugrade/ui';
 import { OTP_POLICY, normaliseMobile } from '@trugrade/contracts';
 import {
+  login,
   sendBuyerCode,
   startOnboarding,
   verifyBuyerCode,
@@ -18,9 +19,10 @@ import { AuthShell } from '../AuthShell';
  * The buyer's one way in, for both a first visit and every visit after it.
  *
  * A mobile number and a code creates the account and signs it in; a mobile or
- * a work email and a code signs an existing buyer in. There is no password on
- * the buyer side at all — the name and the work email are collected later, on
- * the profile page, once there is an account to hang them on.
+ * a work email and a code signs an existing buyer in. A buyer who has a password
+ * — chosen at registration or set through "Forgotten your password?" — can sign
+ * in with it instead, on the second tab. The name and the work email are
+ * collected later, on the profile page, once there is an account to hang them on.
  *
  * Three things this screen exists to get right.
  *
@@ -142,6 +144,7 @@ export function OtpSignIn({
   const [busy, setBusy] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
   const [touched, setTouched] = React.useState(false);
+  const [method, setMethod] = React.useState<'code' | 'password'>('code');
   /**
    * True once a character has been typed. From then on the field says what is
    * wrong with it as it is being typed — "7 digits so far" beside a number that
@@ -156,10 +159,7 @@ export function OtpSignIn({
   }, [cooldown]);
 
   /** The string the code is asked for and redeemed against. Identical on both calls. */
-  const target =
-    mode === 'register'
-      ? `+91${mobileDigits}`
-      : classify(identifier).value;
+  const target = mode === 'register' ? `+91${mobileDigits}` : classify(identifier).value;
 
   /**
    * What is wrong with the identifier, in the words of the rule it breaks.
@@ -262,7 +262,7 @@ export function OtpSignIn({
   const lede =
     mode === 'register'
       ? 'Your mobile number and a code. Your name, work email and company details come later, from your account.'
-      : 'A code to your mobile number or work email. There is no password.';
+      : 'A code to your mobile number or work email, or your password.';
 
   // The frame is chosen around an already-built element, never as a component
   // declared inside this render: a component type minted on every render is a
@@ -376,8 +376,7 @@ export function OtpSignIn({
           />
           {stage.devCode ? (
             <p className="text-body-sm text-ink-3" data-testid="prototype-code">
-              Prototype: your code is{' '}
-              <span className="font-mono tnum">{stage.devCode}</span>.
+              Prototype: your code is <span className="font-mono tnum">{stage.devCode}</span>.
             </p>
           ) : null}
 
@@ -422,11 +421,155 @@ export function OtpSignIn({
     </>
   );
 
+  const body =
+    mode === 'sign-in' ? (
+      <Tabs
+        label="How to sign in"
+        value={method}
+        onChange={(key) => setMethod(key === 'password' ? 'password' : 'code')}
+        items={[
+          { key: 'code', label: 'Mobile or email OTP', panel: content },
+          {
+            key: 'password',
+            label: 'Password',
+            // Mounted only while chosen: both panels ask for the same identifier,
+            // and two fields with one label is one field too many.
+            panel:
+              method === 'password' ? (
+                <PasswordSignIn
+                  onSignedIn={() => onSignedIn(safeNext() ?? '/home', { created: false })}
+                  register={switchTo('register', 'Create a buyer account')}
+                />
+              ) : null,
+          },
+        ]}
+      />
+    ) : (
+      content
+    );
+
   return frame === 'page' ? (
     <AuthShell title={title} lede={lede}>
-      {content}
+      {body}
     </AuthShell>
   ) : (
-    <div className="authform">{content}</div>
+    <div className="authform">{body}</div>
+  );
+}
+
+/**
+ * Mobile number or work email, and a password.
+ *
+ * The refusal is rendered as the server words it and never inspected: a wrong
+ * password and an address we have never seen get the identical 401 sentence,
+ * and branching on it here would rebuild the oracle the server closed.
+ */
+function PasswordSignIn({
+  onSignedIn,
+  register,
+}: {
+  onSignedIn: () => void;
+  register: React.ReactNode;
+}): React.JSX.Element {
+  const [identifier, setIdentifier] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [errors, setErrors] = React.useState<{ identifier?: string; password?: string }>({});
+  const [refusal, setRefusal] = React.useState<string | null>(null);
+  const [wait, setWait] = React.useState<Wait | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  const submit = async (): Promise<void> => {
+    const typed = identifier.trim();
+    const missing = {
+      identifier: typed ? undefined : 'Enter the mobile number or work email on your account.',
+      password: password ? undefined : 'Enter your password.',
+    };
+    setErrors(missing);
+    if (missing.identifier || missing.password) return;
+
+    setRefusal(null);
+    setWait(null);
+    setBusy(true);
+    const result = await login(classify(typed).value, password);
+    if (result.ok) {
+      onSignedIn();
+      return;
+    }
+    setBusy(false);
+    if (result.status === 429) {
+      setWait({ message: result.message, seconds: result.retryAfterSeconds });
+      return;
+    }
+    setPassword('');
+    setRefusal(result.message);
+  };
+
+  return (
+    <form
+      className="flex flex-col gap-5"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <Input
+        label="Mobile number or work email"
+        required
+        autoComplete="username"
+        placeholder="9876543210 or you@company.in"
+        value={identifier}
+        onChange={(e) => {
+          setIdentifier(e.target.value);
+          setErrors((prev) => ({ ...prev, identifier: undefined }));
+        }}
+        error={errors.identifier}
+      />
+      <Input
+        label="Password"
+        type="password"
+        required
+        autoComplete="current-password"
+        value={password}
+        onChange={(e) => {
+          setPassword(e.target.value);
+          setErrors((prev) => ({ ...prev, password: undefined }));
+        }}
+        error={errors.password}
+      />
+
+      {refusal ? (
+        <p role="alert" className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-ink">
+          {refusal}
+        </p>
+      ) : null}
+      {wait ? (
+        <RateLimitNotice
+          message={wait.message}
+          retryAfterSeconds={wait.seconds}
+          onExpire={() => setWait(null)}
+        />
+      ) : null}
+
+      <div>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={busy}
+          {...(wait ? { disabledReason: 'Wait for the timer, then try again.' } : {})}
+        >
+          Sign in
+        </Button>
+      </div>
+
+      <p className="text-body-sm text-ink-3">
+        <a className="hub-link" href="/forgot-password">
+          Forgotten your password?
+        </a>{' '}
+        Signed up with just your mobile? You have no password yet — use the OTP tab, or set one from
+        here once your account has a work email.
+      </p>
+      <p className="text-body-sm text-ink-3">New to Trugrade? {register}.</p>
+    </form>
   );
 }

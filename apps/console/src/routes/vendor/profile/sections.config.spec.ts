@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PROFILE_SECTIONS,
+  bankSummary,
   nextIncompleteSection,
   profileCompletionPct,
   sectionIsDone,
@@ -15,6 +16,13 @@ describe('profile sections config', () => {
   it('returns the next incomplete required section in order', () => {
     const onboarding = {
       answers: { DOCUMENTS_BANK: { bankCommitted: true } },
+      payoutAccount: {
+        last4: '7455',
+        bankName: 'HDFC Bank',
+        ifsc: 'HDFC0000489',
+        pennyDropStatus: 'SUCCESS',
+        frozenUntil: null,
+      },
       progress: {
         steps: [
           { stepCode: 'BUSINESS_PROFILE', status: 'COMPLETE' },
@@ -28,6 +36,28 @@ describe('profile sections config', () => {
     const bank = PROFILE_SECTIONS.find((s) => s.id === 'bank')!;
     expect(sectionIsDone(bank, onboarding)).toBe(true);
     expect(nextIncompleteSection('bank', onboarding)?.id).toBe('documents');
+  });
+
+  it('never calls the bank card done or verified without a verified account on file', () => {
+    const bank = PROFILE_SECTIONS.find((s) => s.id === 'bank')!;
+    // A stale draft flag and a COMPLETE step, but no account: exactly the state
+    // saving the documents card used to leave behind.
+    const noAccount = {
+      answers: { DOCUMENTS_BANK: { bankCommitted: true } },
+      payoutAccount: null,
+      progress: { steps: [{ stepCode: 'DOCUMENTS_BANK', status: 'COMPLETE' }] },
+    } as never;
+    expect(sectionIsDone(bank, noAccount)).toBe(false);
+    expect(bankSummary(null)).toBe('Account number not added yet');
+    expect(
+      bankSummary({
+        last4: '7455',
+        bankName: null,
+        ifsc: 'HDFC0000489',
+        pennyDropStatus: 'PENDING',
+        frozenUntil: null,
+      }),
+    ).toBe('••••7455 — verification pending');
   });
 
   it('computes completion from section weights', () => {

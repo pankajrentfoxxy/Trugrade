@@ -102,7 +102,10 @@ function ProfileGate({
   return (
     <>
       <div className="rounded border border-warn bg-warn-wash px-4 py-3 text-body-sm text-ink">
-        Profile {pct}% complete — listing stays locked until verified.
+        Profile {pct}% complete —{' '}
+        {onboarding.editable
+          ? 'listing stays locked until verified.'
+          : 'submitted, so it cannot be edited while our team reviews it. Listing unlocks once it is approved.'}
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {PROFILE_SECTIONS.map((section) => {
@@ -118,13 +121,15 @@ function ProfileGate({
                 )}
               </div>
               <p className="mt-2 text-body-sm text-ink-3">{sectionSummary(section, onboarding)}</p>
-              <Button
-                variant={done ? 'secondary' : 'primary'}
-                className="mt-3"
-                onClick={() => onOpen(section.id)}
-              >
-                {done ? 'Edit' : 'Fill'}
-              </Button>
+              {onboarding.editable ? (
+                <Button
+                  variant={done ? 'secondary' : 'primary'}
+                  className="mt-3"
+                  onClick={() => onOpen(section.id)}
+                >
+                  {done ? 'Edit' : 'Fill'}
+                </Button>
+              ) : null}
             </article>
           );
         })}

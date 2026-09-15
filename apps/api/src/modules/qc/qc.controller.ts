@@ -33,7 +33,7 @@ import {
   type QcVisitUnitRow,
 } from './internal/qc.repository';
 import { SchedulingService } from './internal/scheduling.service';
-import { VisitClosingService } from './internal/visit-closing.service';
+import { VisitClosingService, type SignoffSummary } from './internal/visit-closing.service';
 import { SealingService } from './internal/sealing.service';
 import { AuditRecheckService } from './internal/audit-recheck.service';
 import { GradeCorrectionService } from './internal/grade-correction.service';
@@ -1341,9 +1341,15 @@ export class QcConsoleService {
    * with a seal on it but no pointer is a machine we cannot sell.
    */
   private async pointUnitAtSeal(unitId: string, sealId: string): Promise<void> {
+    // QC_SEALED as well as the pointer, exactly as `SealingService` does it.
+    // Closing a visit only lists a unit that is QC_SEALED, so a unit sealed on
+    // this path used to pass its inspection and then block the close for ever.
     await this.prisma.$executeRaw`
       UPDATE listing.unit
-         SET seal_id = ${sealId}::uuid, sealed_at = ${this.clock.now()}
+         SET seal_id   = ${sealId}::uuid,
+             sealed_at = ${this.clock.now()},
+             status    = CASE WHEN status = 'QC_PASSED'::public.unit_status
+                              THEN 'QC_SEALED'::public.unit_status ELSE status END
        WHERE id = ${unitId}::uuid`;
   }
 
@@ -1563,6 +1569,34 @@ export class QcController {
     return this.scheduling
       .checkIn(visitId, { latitude: body.latitude, longitude: body.longitude })
       .then((r) => ({ geoVarianceMetres: r.geoVarianceMetres, alerted: r.alerted }));
+  }
+
+  /**
+   * Send the site contact the code they sign off with.
+   *
+   * `VisitClosingService.requestSignoff` has always existed and nothing could
+   * reach it, so the code the sign-off route checks was never issued and no
+   * visit could be closed. The summary comes back with it because the person
+   * reading the code out is signing for those numbers.
+   */
+  @Post('visits/:visitId/signoff/otp')
+  @HttpCode(200)
+  @RequirePermissions('qc.visit.execute')
+  async requestSignoffCode(
+    @Param('visitId', new ZodValidationPipe(uuidSchema)) visitId: string,
+  ): Promise<{
+    sentTo: string;
+    expiresAt: string | null;
+    summary: SignoffSummary;
+    devCode?: string;
+  }> {
+    const issued = await this.closing.requestSignoff(visitId);
+    return {
+      sentTo: issued.sentTo,
+      expiresAt: iso(issued.expiresAt),
+      summary: issued.summary,
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
   }
 
   /** The vendor's OTP sign-off on the summary. Cannot complete offline. */

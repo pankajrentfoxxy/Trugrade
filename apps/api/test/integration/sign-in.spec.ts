@@ -74,7 +74,10 @@ const PASSWORD = 'Vermilion-Ledger-88!';
 const fakeRequest = (origin = 'http://localhost:3000'): Request =>
   ({ headers: { origin }, cookies: {} }) as unknown as Request;
 
-const fakeConsoleRequest = (): Request => fakeRequest('http://localhost:5173');
+// Read from config rather than hard-coded: the origin only counts as the console
+// when it is the CONSOLE_URL the controller compares against.
+const fakeConsoleRequest = (): Request =>
+  fakeRequest(new URL(moduleRef.get(AppConfig).get('CONSOLE_URL')).origin);
 
 const fakeResponse = (): Response =>
   ({ cookie: () => undefined, clearCookie: () => undefined }) as unknown as Response;
@@ -515,5 +518,77 @@ describe('the public sign-in-code routes cannot reach a live second-factor code'
     await expect(
       moduleRef.get(OtpService).verify({ target: KNOWN, purpose: 'MFA', code: mfa.devCode }),
     ).resolves.toMatchObject({ refId: userId });
+  });
+});
+
+describe('the console signs a supplier in by mobile and a WhatsApp code', () => {
+  const VENDOR_MOBILE = '+919812345670';
+  const VENDOR_EMAIL = 'owner@northwind.example';
+
+  const makeVendor = async (email: string | null): Promise<string> => {
+    const vendorOrg = await makeOrganization(
+      { legal_name: 'Northwind Refurb Pvt Ltd', org_type: 'VENDOR' },
+      raw,
+    );
+    const vendorUser = await makeUser(vendorOrg, { email: VENDOR_EMAIL }, raw);
+    await raw.$executeRaw`
+      UPDATE identity.user_account SET mobile = ${VENDOR_MOBILE}, email = ${email}
+      WHERE id = ${vendorUser}::uuid`;
+    await identity.assignRole(vendorUser, 'VENDOR_OWNER');
+    await raw.$executeRaw`
+      UPDATE identity.organization SET status = 'VERIFIED' WHERE id = ${vendorOrg}::uuid`;
+    return vendorUser;
+  };
+
+  it('sends the code to the mobile, signs in, and still owes the email second factor', async () => {
+    const vendorUser = await makeVendor(VENDOR_EMAIL);
+    outbox.clear();
+
+    const sent = await inRequest(() => controller.sendConsoleMobileCode({ mobile: '98123 45670' }));
+    expect(outbox.all()).toHaveLength(1);
+    expect(outbox.all()[0]?.to).toBe(VENDOR_MOBILE);
+    if (!sent.devCode) throw new Error('no devCode — is the config production?');
+
+    const session = await inRequest(() =>
+      controller.verifyConsoleMobileCode(
+        { mobile: '9812345670', code: sent.devCode as string },
+        fakeConsoleRequest(),
+        fakeResponse(),
+      ),
+    );
+    expect(session.userId).toBe(vendorUser);
+    expect(session.mfaRequired).toBe(true);
+  });
+
+  it('answers a buyer, an unknown number and a known supplier identically, and sends only to the supplier', async () => {
+    await makeVendor(VENDOR_EMAIL);
+    await raw.$executeRaw`
+      UPDATE identity.user_account SET mobile = '+919876500001' WHERE id = ${userId}::uuid`;
+    outbox.clear();
+
+    const known = await inRequest(() =>
+      controller.sendConsoleMobileCode({ mobile: VENDOR_MOBILE }),
+    );
+    const buyer = await inRequest(() =>
+      controller.sendConsoleMobileCode({ mobile: '+919876500001' }),
+    );
+    const unknown = await inRequest(() =>
+      controller.sendConsoleMobileCode({ mobile: '+919876500002' }),
+    );
+
+    expect(outbox.all()).toHaveLength(1);
+    for (const other of [buyer, unknown]) {
+      expect(Object.keys(observable(other)).sort()).toEqual(Object.keys(observable(known)).sort());
+      expect(other.expiresAt).toBe(known.expiresAt);
+      expect(other.devCode).toBeUndefined();
+    }
+  });
+
+  it('sends nothing to an owner with no email, whose second factor would land on the same phone', async () => {
+    await makeVendor(null);
+    outbox.clear();
+
+    await inRequest(() => controller.sendConsoleMobileCode({ mobile: VENDOR_MOBILE }));
+    expect(outbox.all()).toHaveLength(0);
   });
 });

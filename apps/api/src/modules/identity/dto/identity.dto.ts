@@ -121,6 +121,19 @@ export const loginOtpVerifySchema = z.object({
 export type LoginOtpVerifyDto = z.infer<typeof loginOtpVerifySchema>;
 
 /**
+ * The console's mobile sign-in. Loose for the same reason as `identifierSchema`:
+ * a 422 on one number and a 200 on another is a supplier directory.
+ */
+export const consoleMobileOtpSchema = z.object({ mobile: identifierSchema });
+export type ConsoleMobileOtpDto = z.infer<typeof consoleMobileOtpSchema>;
+
+export const consoleMobileOtpVerifySchema = z.object({
+  mobile: identifierSchema,
+  code: otpCodeSchema,
+});
+export type ConsoleMobileOtpVerifyDto = z.infer<typeof consoleMobileOtpVerifySchema>;
+
+/**
  * Choose a new password against a code.
  *
  * `passwordSchema` applies here and deliberately does not at sign-in: this is

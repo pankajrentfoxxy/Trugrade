@@ -46,6 +46,8 @@ html[data-t="light"],
 }
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+/* The reset above is unlayered, so it beats the shared Tabs' border utility. */
+[role="tab"][aria-selected="true"]{border-bottom:2px solid var(--acc-dk)}
 input,select{font-family:inherit}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 /* T45 — WHY THIS RULE IS REPEATED AT HIGHER SPECIFICITY.

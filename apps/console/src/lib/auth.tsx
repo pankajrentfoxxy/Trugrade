@@ -45,6 +45,12 @@ interface AuthState {
   loading: boolean;
   /** Resolves to the failure, or to the principal. Never throws. */
   signIn: (email: string, password: string) => Promise<Principal | AuthFailure>;
+  /** Sends a WhatsApp sign-in code. Answers the same whether the number is known or not. */
+  requestMobileCode: (
+    mobile: string,
+  ) => Promise<{ sentTo: string; devCode?: string } | AuthFailure>;
+  /** Redeems it. Like `signIn`, a session that still owes a factor is not published. */
+  signInWithMobileCode: (mobile: string, code: string) => Promise<Principal | AuthFailure>;
   /** Requests a second-factor code for the half-finished session. */
   requestMfaCode: () => Promise<{ sentTo: string } | AuthFailure>;
   verifyMfa: (code: string) => Promise<Principal | AuthFailure>;
@@ -187,6 +193,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         // chrome is concerned: publishing it would draw a rail of sections that
         // every guard is about to refuse. The login screen holds it instead
         // until `verifyMfa` returns a session that opens doors.
+        if (!next.mfaRequired) setPrincipal(next);
+        return next;
+      },
+      requestMobileCode: async (mobile) => {
+        const result = await call('/api/auth/login/mobile/otp', {
+          method: 'POST',
+          body: JSON.stringify({ mobile }),
+        });
+        if (result && 'code' in (result as object)) return result as AuthFailure;
+        return result as { sentTo: string; devCode?: string };
+      },
+      signInWithMobileCode: async (mobile, code) => {
+        const result = await call('/api/auth/login/mobile/otp/verify', {
+          method: 'POST',
+          body: JSON.stringify({ mobile, code }),
+        });
+        if (result && 'code' in (result as object)) return result as AuthFailure;
+        const next = result as Principal;
         if (!next.mfaRequired) setPrincipal(next);
         return next;
       },

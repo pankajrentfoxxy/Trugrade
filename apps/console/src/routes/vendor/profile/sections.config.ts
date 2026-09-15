@@ -99,8 +99,10 @@ export function sectionIsDone(
 ): boolean {
   if (extras?.[section.id]) return true;
   if (section.id === 'bank') {
-    const answers = onboarding?.answers.DOCUMENTS_BANK ?? {};
-    return Boolean(answers.bankCommitted === true) || stepDone(onboarding, 'DOCUMENTS_BANK');
+    // The real account, not the step: DOCUMENTS_BANK is shared with the
+    // documents card, so saving documents used to mark the bank card done with
+    // no account on file.
+    return onboarding?.payoutAccount?.pennyDropStatus === 'SUCCESS';
   }
   if (section.id === 'documents') {
     const answers = onboarding?.answers.DOCUMENTS_BANK ?? {};
@@ -165,9 +167,7 @@ export function sectionSummary(
       return 'Pickup site not set';
     }
     case 'bank':
-      return answers.DOCUMENTS_BANK?.bankCommitted === true
-        ? 'Payout account verified'
-        : 'Account not verified';
+      return bankSummary(onboarding?.payoutAccount ?? null);
     case 'documents': {
       if (answers.DOCUMENTS_BANK?.documentsComplete !== true) return 'Uploads pending';
       // Counted, never assumed: the card can be saved with any number of the
@@ -193,4 +193,30 @@ export function sectionSummary(
     default:
       return '';
   }
+}
+
+const BANK_REFUSED: Readonly<Record<string, string>> = {
+  PENDING: 'verification pending',
+  NAME_MISMATCH: 'name on the account does not match your business',
+  FAILED: 'verification failed — add the account again',
+};
+
+/** What the payout account on file actually is. A missing account never reads as verified. */
+export function bankSummary(account: ResumableOnboarding['payoutAccount']): string {
+  if (!account) return 'Account number not added yet';
+  const label = `••••${account.last4}${account.bankName ? ` · ${account.bankName}` : ''}`;
+  if (account.pennyDropStatus !== 'SUCCESS') {
+    return `${label} — ${BANK_REFUSED[account.pennyDropStatus] ?? 'not verified'}`;
+  }
+  if (account.frozenUntil) {
+    const until = new Date(account.frozenUntil).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    return `${label} — verified, payouts on hold until ${until}`;
+  }
+  return `${label} — verified`;
 }

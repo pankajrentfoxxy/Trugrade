@@ -63,20 +63,31 @@ const GEO_VARIANCE_KEY = 'qc.geo_variance_alert_metres';
  * exits on purpose: a cancelled visit is re-run as a new visit, so the
  * `reschedule_count` on the original stays true.
  */
-export const VISIT_TRANSITIONS: Readonly<Record<QcVisitStatus, readonly QcVisitStatus[]>> = Object.freeze({
-  REQUESTED: ['QUOTED', 'SCHEDULED', 'CANCELLED'],
-  QUOTED: ['SCHEDULED', 'CANCELLED'],
-  SCHEDULED: ['TECH_ASSIGNED', 'RESCHEDULED', 'CANCELLED', 'NO_SHOW_VENDOR'],
-  TECH_ASSIGNED: ['EN_ROUTE', 'RESCHEDULED', 'CANCELLED', 'NO_SHOW_VENDOR', 'NO_SHOW_TECH'],
-  EN_ROUTE: ['IN_PROGRESS', 'NO_SHOW_VENDOR', 'CANCELLED'],
-  IN_PROGRESS: ['COMPLETED', 'PARTIALLY_COMPLETED'],
-  RESCHEDULED: ['SCHEDULED', 'TECH_ASSIGNED', 'CANCELLED'],
-  COMPLETED: [],
-  PARTIALLY_COMPLETED: [],
-  CANCELLED: [],
-  NO_SHOW_VENDOR: [],
-  NO_SHOW_TECH: [],
-});
+export const VISIT_TRANSITIONS: Readonly<Record<QcVisitStatus, readonly QcVisitStatus[]>> =
+  Object.freeze({
+    REQUESTED: ['QUOTED', 'SCHEDULED', 'CANCELLED'],
+    QUOTED: ['SCHEDULED', 'CANCELLED'],
+    SCHEDULED: ['TECH_ASSIGNED', 'RESCHEDULED', 'CANCELLED', 'NO_SHOW_VENDOR'],
+    // IN_PROGRESS directly as well as through EN_ROUTE: nothing sets EN_ROUTE
+    // today (the app that would has no sign-in), so without this a booked visit
+    // could never be checked in to and no inspection could ever start.
+    TECH_ASSIGNED: [
+      'EN_ROUTE',
+      'IN_PROGRESS',
+      'RESCHEDULED',
+      'CANCELLED',
+      'NO_SHOW_VENDOR',
+      'NO_SHOW_TECH',
+    ],
+    EN_ROUTE: ['IN_PROGRESS', 'NO_SHOW_VENDOR', 'CANCELLED'],
+    IN_PROGRESS: ['COMPLETED', 'PARTIALLY_COMPLETED'],
+    RESCHEDULED: ['SCHEDULED', 'TECH_ASSIGNED', 'CANCELLED'],
+    COMPLETED: [],
+    PARTIALLY_COMPLETED: [],
+    CANCELLED: [],
+    NO_SHOW_VENDOR: [],
+    NO_SHOW_TECH: [],
+  });
 
 /** The statuses a date and a technician may still be (re)written on. */
 const SCHEDULABLE_FROM: readonly QcVisitStatus[] = [

@@ -68,13 +68,16 @@ export function VendorListingsRoute(): React.JSX.Element {
       {
         key: 'id',
         header: 'Listing',
+        // The row opens the listing. Without this the record — its serials, the
+        // inspection request, the QC result — was reachable only by being
+        // redirected to it immediately after creating one.
         cell: (l) => (
-          <>
+          <Link className="text-ink underline underline-offset-4" to={`/vendor/listings/${l.id}`}>
             <span className="font-mono tnum text-ink">{l.id.slice(0, 8)}</span>
             <span className="mt-1 block font-mono text-body-sm text-ink-3">
               {l.sku?.skuCode ?? '—'}
             </span>
-          </>
+          </Link>
         ),
       },
       {
@@ -125,7 +128,10 @@ export function VendorListingsRoute(): React.JSX.Element {
         key: 'status',
         header: 'Status',
         cell: (l) => (
-          <StatusPill tone={STATUS_TONE[l.status] ?? 'neutral'} label={l.status.replaceAll('_', ' ')} />
+          <StatusPill
+            tone={STATUS_TONE[l.status] ?? 'neutral'}
+            label={l.status.replaceAll('_', ' ')}
+          />
         ),
       },
       {
@@ -133,7 +139,10 @@ export function VendorListingsRoute(): React.JSX.Element {
         header: '',
         headerHidden: true,
         cell: (l) => (
-          <Link className="text-ink underline underline-offset-4" to={`/vendor/listings/${l.id}/reprice`}>
+          <Link
+            className="text-ink underline underline-offset-4"
+            to={`/vendor/listings/${l.id}/reprice`}
+          >
             Reprice
           </Link>
         ),
@@ -231,7 +240,12 @@ export function VendorListingsRoute(): React.JSX.Element {
       </Board>
 
       {data && pageCount > 1 && (
-        <Pagination page={page} pageCount={pageCount} onPage={(p) => setFilter('page', String(p))} label="Pages" />
+        <Pagination
+          page={page}
+          pageCount={pageCount}
+          onPage={(p) => setFilter('page', String(p))}
+          label="Pages"
+        />
       )}
 
       <CreateListingDialog open={createOpen} onClose={() => setCreateOpen(false)} />

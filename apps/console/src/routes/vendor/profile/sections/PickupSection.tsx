@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { persistInOrder } from '../persist';
+import { stateNameFromCode } from '@trugrade/contracts';
 import { Chip, Input, SectionDialog } from '@trugrade/ui';
 import {
   completeStep,
@@ -229,7 +230,8 @@ export function PickupSection({
             label="State"
             readOnly
             className="profile-hub-readonly"
-            value={draft.stateCode || '—'}
+            // Stored as the GST state code ('06'); shown as its name ('Haryana').
+            value={draft.stateCode ? (stateNameFromCode(draft.stateCode) ?? draft.stateCode) : '—'}
           />
           <Input
             label="Building and street"

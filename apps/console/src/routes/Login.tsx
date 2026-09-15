@@ -1,7 +1,16 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import { BRAND } from '@trugrade/config/brand';
-import { Button, Input, MfaChallenge, RateLimitNotice, StatusPill } from '@trugrade/ui';
+import { OTP_POLICY, normaliseMobile } from '@trugrade/contracts';
+import {
+  Button,
+  Input,
+  MfaChallenge,
+  OtpInput,
+  RateLimitNotice,
+  StatusPill,
+  Tabs,
+} from '@trugrade/ui';
 import { AuthShell } from '../AuthShell';
 import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/auth';
 
@@ -22,10 +31,9 @@ import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/aut
  * the address on the account, and `MfaChallenge` says exactly that rather than
  * borrowing the word "authenticator".
  *
- * **No code option here, unlike the customer door.** `POST /auth/login/otp`
- * refuses to send a sign-in code to an account whose role needs a second factor,
- * because that second factor is a code to the same mailbox — one code cannot be
- * both, and asking twice is one factor pretending to be two.
+ * **A mobile code is the other way in.** `POST /auth/login/mobile/otp` sends a
+ * WhatsApp code to the account's mobile. The second factor still follows it for
+ * an owner account, and goes to the email — two channels, not one asked twice.
  *
  * **A wrong password and an address we have never seen are the same event.** The
  * server makes them identical on purpose and this screen renders whatever it
@@ -79,12 +87,21 @@ function applicationCopy(): { title: string; lede: string } {
 }
 
 export function LoginRoute(): React.JSX.Element {
-  const { signIn, requestMfaCode, verifyMfa, signOut, principal } = useAuth();
+  const {
+    signIn,
+    signInWithMobileCode,
+    requestMobileCode,
+    requestMfaCode,
+    verifyMfa,
+    signOut,
+    principal,
+  } = useAuth();
   const navigate = useNavigate();
   const [stage, setStage] = React.useState<Stage>({ k: 'password' });
   const [error, setError] = React.useState<string | null>(null);
   const [wait, setWait] = React.useState<AuthFailure | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [method, setMethod] = React.useState<'password' | 'mobile'>('password');
 
   /**
    * A restored session that still owes a factor lands here from `RequirePermission`.
@@ -169,12 +186,8 @@ export function LoginRoute(): React.JSX.Element {
     setStage({ k: 'application', state });
   };
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    const form = new FormData(e.currentTarget);
-    const result = await signIn(String(form.get('email')), String(form.get('password')));
+  /** Both doors land here once the first factor is in hand. */
+  const afterFirstFactor = async (result: Principal | AuthFailure): Promise<void> => {
     if (isFailure(result)) {
       refuse(result);
       return;
@@ -190,6 +203,14 @@ export function LoginRoute(): React.JSX.Element {
       return;
     }
     await afterSignIn(result);
+  };
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    const form = new FormData(e.currentTarget);
+    await afterFirstFactor(await signIn(String(form.get('email')), String(form.get('password'))));
   }
 
   const notices = (
@@ -285,45 +306,260 @@ export function LoginRoute(): React.JSX.Element {
           </div>
         </div>
       ) : (
-        <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
-          {notices}
-          <Input label="Work email" name="email" type="email" required autoComplete="username" />
-          <Input
-            label="Password"
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            block
-            loading={busy}
-            {...(wait
-              ? { disabledReason: 'Too many attempts. The wait above has to run out first.' }
-              : {})}
-          >
-            Sign in
-          </Button>
-          <div className="flex flex-col gap-1 border-t border-rule-2 pt-3">
-            <Link
-              className="text-body-sm text-acc-ink underline underline-offset-4"
-              to="/forgot-password"
-            >
-              Forgotten your password?
-            </Link>
-            <p className="text-body-sm text-ink-3">
-              Applying to supply?{' '}
-              <a className="text-acc-ink underline underline-offset-4" href={sellRegisterPath}>
-                Start an application
-              </a>
-              .
-            </p>
-          </div>
-        </form>
+        <Tabs
+          label="How to sign in"
+          value={method}
+          onChange={(key) => {
+            setMethod(key === 'mobile' ? 'mobile' : 'password');
+            setError(null);
+          }}
+          items={[
+            {
+              key: 'password',
+              label: 'Email & password',
+              panel: (
+                <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+                  {method === 'password' ? notices : null}
+                  <Input
+                    label="Work email or mobile"
+                    name="email"
+                    required
+                    autoComplete="username"
+                  />
+                  <Input
+                    label="Password"
+                    name="password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                  />
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    block
+                    loading={busy}
+                    {...(wait
+                      ? {
+                          disabledReason: 'Too many attempts. The wait above has to run out first.',
+                        }
+                      : {})}
+                  >
+                    Sign in
+                  </Button>
+                  <div className="flex flex-col gap-1 border-t border-rule-2 pt-3">
+                    <Link
+                      className="text-body-sm text-acc-ink underline underline-offset-4"
+                      to="/forgot-password"
+                    >
+                      Forgotten your password?
+                    </Link>
+                    <p className="text-body-sm text-ink-3">
+                      Applying to supply?{' '}
+                      <a
+                        className="text-acc-ink underline underline-offset-4"
+                        href={sellRegisterPath}
+                      >
+                        Start an application
+                      </a>
+                      .
+                    </p>
+                  </div>
+                </form>
+              ),
+            },
+            {
+              key: 'mobile',
+              label: 'Mobile & OTP',
+              panel: (
+                <MobileCodeForm
+                  notices={method === 'mobile' ? notices : null}
+                  blocked={wait !== null}
+                  requestCode={requestMobileCode}
+                  onFailure={refuse}
+                  onCode={async (mobile, code) => {
+                    setError(null);
+                    setBusy(true);
+                    const result = await signInWithMobileCode(mobile, code);
+                    if (isFailure(result) && result.status === 422) {
+                      setBusy(false);
+                      return result.message;
+                    }
+                    await afterFirstFactor(result);
+                    return undefined;
+                  }}
+                />
+              ),
+            },
+          ]}
+        />
       )}
     </AuthShell>
+  );
+}
+
+interface MobileCodeFormProps {
+  notices: React.ReactNode;
+  /** A rate-limit wait is running; nothing can be sent until it ends. */
+  blocked: boolean;
+  requestCode: (mobile: string) => Promise<{ sentTo: string; devCode?: string } | AuthFailure>;
+  onFailure: (failure: AuthFailure) => void;
+  /** Resolves to the code's own refusal to show under the boxes, or undefined. */
+  onCode: (mobile: string, code: string) => Promise<string | undefined>;
+}
+
+/**
+ * The mobile half of the sign-in. Like the password form, it never says whether
+ * a number is on an account: every number gets the same "if it is" sentence.
+ */
+function MobileCodeForm({
+  notices,
+  blocked,
+  requestCode,
+  onFailure,
+  onCode,
+}: MobileCodeFormProps): React.JSX.Element {
+  const [digits, setDigits] = React.useState('');
+  const [fieldError, setFieldError] = React.useState<string | undefined>();
+  const [sent, setSent] = React.useState<{ sentTo: string; devCode: string | null } | null>(null);
+  const [code, setCode] = React.useState('');
+  const [codeError, setCodeError] = React.useState<string | undefined>();
+  const [busy, setBusy] = React.useState(false);
+  const [cooldown, setCooldown] = React.useState(0);
+
+  React.useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setInterval(() => setCooldown((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const mobile = normaliseMobile(digits);
+
+  const send = async (): Promise<void> => {
+    if (!mobile) {
+      setFieldError(
+        digits.length === 10
+          ? 'Indian mobile numbers start with 6, 7, 8 or 9. Check the first digit.'
+          : `Enter the 10-digit mobile number on your account — ${digits.length} digits so far.`,
+      );
+      return;
+    }
+    setFieldError(undefined);
+    setBusy(true);
+    const result = await requestCode(mobile);
+    setBusy(false);
+    if (isFailure(result)) {
+      onFailure(result);
+      return;
+    }
+    setCode('');
+    setCodeError(undefined);
+    setCooldown(OTP_POLICY.resendCooldownSeconds);
+    setSent({ sentTo: result.sentTo, devCode: result.devCode ?? null });
+  };
+
+  if (!sent) {
+    return (
+      <form
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        {notices}
+        <Input
+          label="Mobile number"
+          required
+          mono
+          inputMode="numeric"
+          autoComplete="tel-national"
+          maxLength={10}
+          placeholder="9876543210"
+          hint="The number on your supplier account. We add +91 and send a six-digit code on WhatsApp."
+          value={digits}
+          onChange={(e) => {
+            setDigits(e.target.value.replace(/\D/g, '').slice(0, 10));
+            setFieldError(undefined);
+          }}
+          error={fieldError}
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          block
+          loading={busy}
+          {...(blocked
+            ? { disabledReason: 'Too many attempts. The wait above has to run out first.' }
+            : {})}
+        >
+          Send code
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {notices}
+      <p className="text-body text-ink-2">
+        If <span className="font-mono tnum">{sent.sentTo}</span> is on a supplier or staff account,
+        a six-digit code is on its way on WhatsApp. It is good for five minutes.
+      </p>
+      <OtpInput
+        label="Six-digit code"
+        value={code}
+        onChange={setCode}
+        onComplete={(entered) => {
+          if (!mobile) return;
+          setBusy(true);
+          void onCode(mobile, entered).then((refusal) => {
+            setBusy(false);
+            if (refusal) {
+              setCode('');
+              setCodeError(refusal);
+            }
+          });
+        }}
+        error={codeError}
+        disabled={busy || blocked}
+      />
+      {sent.devCode ? (
+        <p className="text-body-sm text-ink-3" data-testid="prototype-code">
+          Prototype: your code is <span className="font-mono tnum">{sent.devCode}</span>.
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-3 border-t border-rule-2 pt-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={cooldown > 0 || busy || blocked}
+          onClick={() => void send()}
+        >
+          Resend code
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            setSent(null);
+            setCode('');
+            setCodeError(undefined);
+          }}
+        >
+          Change number
+        </Button>
+        {cooldown > 0 ? (
+          <span className="text-body-sm text-ink-3" aria-live="polite">
+            Another code in <span className="font-mono tnum">{cooldown}</span>{' '}
+            {cooldown === 1 ? 'second' : 'seconds'}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

@@ -11,13 +11,7 @@ import {
   type ContactPromotion,
 } from '../../identity';
 import { VendorPromotionService } from '../../vendor';
-import {
-  nested,
-  objects,
-  str,
-  timeOfDay,
-  type Draft,
-} from '../../../shared/onboarding/draft';
+import { nested, objects, str, timeOfDay, type Draft } from '../../../shared/onboarding/draft';
 
 /**
  * Step promotion: where a completed step's answers actually go.
@@ -220,13 +214,12 @@ export class StepPromotionService {
     const rows = objects(draft, 'gstins');
     let primary = str(draft, 'primaryGstin').toUpperCase();
     if (!primary) {
-      const flagged = rows.find(
-        (row) => row.isPrimary === true && str(row, 'gstin').length === 15,
-      );
+      const flagged = rows.find((row) => row.isPrimary === true && str(row, 'gstin').length === 15);
       if (flagged) primary = str(flagged, 'gstin').toUpperCase();
       else if (rows.length === 1 && rows[0]) primary = str(rows[0], 'gstin').toUpperCase();
     }
     let promoted = 0;
+    let primaryLegalName = '';
 
     for (const row of rows) {
       const gstin = str(row, 'gstin').toUpperCase();
@@ -268,6 +261,7 @@ export class StepPromotionService {
         },
       });
       promoted += 1;
+      if (gstin === primary) primaryLegalName = taxpayer.data.legalName ?? str(draft, 'legalName');
     }
 
     // One primary registration decides the billing entity and the tax split on
@@ -278,6 +272,14 @@ export class StepPromotionService {
         where: { org_id: orgId, gstin: { not: primary } },
         data: { is_primary: false },
       });
+    }
+
+    // The organisation's own name comes from the primary GST registration. The
+    // console collects the legal name on this step, not BUSINESS_PROFILE, so
+    // without this the org kept its "Pending company details" placeholder — and
+    // reviewers approving from the queue could not tell which applicant was which.
+    if (primaryLegalName) {
+      await this.orgs.updateOrgProfile(orgId, { legalName: primaryLegalName });
     }
 
     await this.promotePan(orgId, draft);
@@ -453,10 +455,6 @@ function receivingWindow(delivery: Draft): string {
   const opens = timeOfDay(str(delivery, 'opensAt')) ? str(delivery, 'opensAt') : null;
   const closes = timeOfDay(str(delivery, 'closesAt')) ? str(delivery, 'closesAt') : null;
   const window =
-    days && opens && closes
-      ? `${days}, ${opens} to ${closes}.`
-      : days
-        ? `${days}.`
-        : '';
+    days && opens && closes ? `${days}, ${opens} to ${closes}.` : days ? `${days}.` : '';
   return [window, str(delivery, 'gateInstructions')].filter(Boolean).join(' ').trim();
 }

@@ -107,6 +107,17 @@ export function ProfileHub(): React.JSX.Element {
 
       <SubmitForReview className="mt-2" />
 
+      {!onboarding.editable ? (
+        <p
+          className="mt-4 rounded border border-rule bg-sheet-2 px-4 py-3 text-body-sm text-ink-2"
+          data-testid="profile-locked"
+        >
+          {onboarding.status === 'VERIFIED'
+            ? 'Your profile is approved, so these details are locked. To change anything, contact support.'
+            : 'Your profile is with our review team, so it cannot be changed until they decide. If something needs correcting, contact support.'}
+        </p>
+      ) : null}
+
       {fromCheckout && pct < 100 ? (
         <p className="mt-4 text-body text-ink" role="status" data-testid="checkout-reason">
           Checkout needs a finished profile: we invoice a registered business and deliver to a
@@ -141,9 +152,14 @@ export function ProfileHub(): React.JSX.Element {
               <p className="profile-hub-summary">
                 {sentBack ?? sectionSummary(section, onboarding, session)}
               </p>
-              <Button variant={done ? 'secondary' : 'primary'} onClick={() => setOpen(section.id)}>
-                {done ? 'Edit' : 'Fill now'}
-              </Button>
+              {onboarding.editable ? (
+                <Button
+                  variant={done ? 'secondary' : 'primary'}
+                  onClick={() => setOpen(section.id)}
+                >
+                  {done ? 'Edit' : 'Fill now'}
+                </Button>
+              ) : null}
             </article>
           );
         })}

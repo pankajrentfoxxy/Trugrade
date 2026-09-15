@@ -20,6 +20,8 @@ const application = (over: Partial<ResumableOnboarding> = {}): ResumableOnboardi
   slaDueAt: null,
   slaBreached: false,
   decision: null,
+  editable: true,
+  payoutAccount: null,
   progress: {
     constitution: 'PRIVATE_LIMITED',
     steps: [],

@@ -32,6 +32,16 @@ function onboarding(completeCodes: string[]): ResumableOnboarding {
     slaDueAt: null,
     slaBreached: false,
     decision: null,
+    editable: true,
+    payoutAccount: completeCodes.includes('DOCUMENTS_BANK')
+      ? {
+          last4: '7455',
+          bankName: 'HDFC Bank',
+          ifsc: 'HDFC0000489',
+          pennyDropStatus: 'SUCCESS',
+          frozenUntil: null,
+        }
+      : null,
     progress: {
       constitution: 'PRIVATE_LIMITED',
       steps: completeCodes.map((stepCode) => ({

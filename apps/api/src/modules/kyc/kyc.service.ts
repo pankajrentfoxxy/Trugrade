@@ -56,7 +56,27 @@ export interface OnboardingSummary {
   slaBreached: boolean;
   /** The latest decision, or null while the application is still with us. */
   decision: ReviewDecision | null;
+  /** Whether the applicant may still change their own profile. See `assertProfileEditable`. */
+  editable: boolean;
+  /** The payout account payouts would go to today, read from `bank_account`, never a draft flag. */
+  payoutAccount: PayoutAccountView | null;
 }
+
+export interface PayoutAccountView {
+  last4: string;
+  bankName: string | null;
+  ifsc: string;
+  pennyDropStatus: string;
+  /** Set only while payouts to a newly added account are still on hold. */
+  frozenUntil: Date | null;
+}
+
+/**
+ * The statuses in which an applicant may change their own profile: still filling
+ * it in, or sent back by a reviewer. Once submitted, what the reviewer is looking
+ * at must not move under them, and once decided it is the record.
+ */
+const PROFILE_EDITABLE_STATUSES = new Set(['REGISTERED', 'INFO_REQUESTED']);
 
 export interface ReviewQueueItem {
   orgId: string;
@@ -325,13 +345,24 @@ export class KycService implements IKycService {
   }
 
   async getOnboarding(orgId: string): Promise<OnboardingSummary> {
-    const [org, progress, consents, review] = await Promise.all([
+    const [org, progress, consents, review, bank] = await Promise.all([
       this.prisma.db.organization.findUnique({ where: { id: orgId } }),
       this.onboarding.getProgress(orgId),
       this.consent.currentState(orgId),
       this.prisma.db.kyc_review.findFirst({
         where: { org_id: orgId },
         orderBy: { decided_at: 'desc' },
+      }),
+      this.prisma.db.bank_account.findFirst({
+        where: { org_id: orgId, purpose: 'PAYOUT' },
+        orderBy: [{ is_default: 'desc' }, { created_at: 'desc' }],
+        select: {
+          account_number_last4: true,
+          bank_name: true,
+          ifsc: true,
+          penny_drop_status: true,
+          frozen_until: true,
+        },
       }),
     ]);
     if (!org) throw new NotFoundError('organisation');
@@ -355,7 +386,47 @@ export class KycService implements IKycService {
           org.review_sla_due_at.getTime() < this.clock.nowMs() &&
           ['KYC_SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED'].includes(org.status),
       ),
+      editable: PROFILE_EDITABLE_STATUSES.has(org.status),
+      payoutAccount: bank
+        ? {
+            last4: bank.account_number_last4,
+            bankName: bank.bank_name,
+            ifsc: bank.ifsc,
+            pennyDropStatus: bank.penny_drop_status,
+            // Only while the hold is still running, so a client never compares clocks.
+            frozenUntil:
+              bank.frozen_until && bank.frozen_until.getTime() > this.clock.nowMs()
+                ? bank.frozen_until
+                : null,
+          }
+        : null,
     };
+  }
+
+  /**
+   * Refuse a self-service change to the profile unless it is still editable.
+   *
+   * Enforced here, not only by hiding buttons: a submitted application is a
+   * declaration the reviewer decides on, and one that can be edited by a curl
+   * while under review is not the application they approved.
+   */
+  async assertProfileEditable(orgId: string): Promise<void> {
+    const org = await this.prisma.db.organization.findUnique({
+      where: { id: orgId },
+      select: { status: true },
+    });
+    if (!org) throw new NotFoundError('organisation');
+    if (PROFILE_EDITABLE_STATUSES.has(org.status)) return;
+
+    const inReview = ['PROFILE_SUBMITTED', 'KYC_SUBMITTED', 'UNDER_REVIEW'].includes(org.status);
+    throw new ConflictError(
+      inReview
+        ? 'Your profile is with our review team, so it cannot be changed until they decide. If something needs correcting, contact support and we will send it back to you.'
+        : org.status === 'VERIFIED'
+          ? 'Your profile has been approved, so these details are locked. To change them, contact support.'
+          : 'This profile cannot be changed in its current state. Contact support if something needs correcting.',
+      { reason: 'profile_locked', status: org.status },
+    );
   }
 
   async isOnboardingComplete(orgId: string): Promise<boolean> {

@@ -33,7 +33,7 @@ import {
 import { AppConfig } from '../../shared/config';
 import { ClockPort } from '../../shared/clock';
 import { RateLimiter, type RateLimitRule } from '../../shared/redis/redis.service';
-import { IdentityService, type OrgType } from './identity.service';
+import { IdentityService, type AuthenticatedUser, type OrgType } from './identity.service';
 import { OtpService } from './internal/otp.service';
 import { AuditService, maskValue } from './internal/audit.service';
 import {
@@ -49,6 +49,8 @@ import {
   contactChangeCancelSchema,
   contactChangeRequestSchema,
   contactChangeVerifySchema,
+  consoleMobileOtpSchema,
+  consoleMobileOtpVerifySchema,
   loginOtpVerifySchema,
   loginSchema,
   mfaVerifySchema,
@@ -65,6 +67,8 @@ import {
   type ContactChangeCancelDto,
   type ContactChangeRequestDto,
   type ContactChangeVerifyDto,
+  type ConsoleMobileOtpDto,
+  type ConsoleMobileOtpVerifyDto,
   type LoginDto,
   type LoginOtpVerifyDto,
   type MfaVerifyDto,
@@ -548,6 +552,102 @@ export class IdentityController {
       accessToken: tokens.accessToken,
       ...userSessionFields(user),
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // The console's sign-in by mobile number and a WhatsApp code
+  // -------------------------------------------------------------------------
+  //
+  // Suppliers and staff only; buyers have `buyer/otp`. Unlike `login/otp`, an
+  // account whose role needs a second factor IS allowed through here — because
+  // this code goes to the mobile and the second factor (`mfaTarget`) goes to the
+  // email, which is two channels rather than one asked twice. An MFA account
+  // with no email would get both codes on the same phone, so it is sent nothing
+  // and signs in with its password instead. As everywhere pre-session, the
+  // response never depends on what the lookup found.
+
+  @Post('login/mobile/otp')
+  @Public()
+  @HttpCode(200)
+  async sendConsoleMobileCode(
+    @Body(new ZodValidationPipe(consoleMobileOtpSchema)) body: ConsoleMobileOtpDto,
+  ): Promise<RegistrationOtpResponse> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(ACCOUNT_OTP_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const target = normaliseMobile(body.mobile) ?? body.mobile.trim();
+    const user = await this.consoleMobileAccount(target);
+
+    const issued = await this.otp.issue({
+      target,
+      purpose: 'LOGIN',
+      channel: 'WHATSAPP',
+      templateCode: LOGIN_OTP_TEMPLATE,
+      refType: user ? 'user_account' : undefined,
+      refId: user?.userId,
+      exposeDevCode: this.config.exposeOtpDevCode,
+      deliver: user !== null,
+    });
+
+    return {
+      channel: 'MOBILE',
+      sentTo: maskValue(target),
+      expiresAt: issued.expiresAt.toISOString(),
+      resendAvailableAt: issued.resendAvailableAt.toISOString(),
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
+  }
+
+  @Post('login/mobile/otp/verify')
+  @Public()
+  @HttpCode(200)
+  async verifyConsoleMobileCode(
+    @Body(new ZodValidationPipe(consoleMobileOtpVerifySchema)) body: ConsoleMobileOtpVerifyDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<SessionResponse> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(ACCOUNT_OTP_VERIFY_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const target = normaliseMobile(body.mobile) ?? body.mobile.trim();
+    try {
+      await this.otp.verify({ target, purpose: 'LOGIN', code: body.code });
+    } catch (e) {
+      if (e instanceof RateLimitedError) throw e;
+      throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+    }
+
+    // Re-checked after the code: a buyer's code from `buyer/otp` has the same
+    // (target, purpose) pair, and it must not open the console.
+    const user = await this.consoleMobileAccount(target);
+    if (!user) throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+
+    const { tokens, user: signedIn, mfaRequired } = await this.identity.loginWithVerifiedCode({
+      userId: user.userId,
+      identifier: target,
+      ip: ctx?.ip,
+      userAgent: ctx?.userAgent,
+    });
+
+    this.assertPortalAccess(req, signedIn.orgType);
+    this.setSessionCookies(req, res, tokens);
+    return {
+      ...principalOf(signedIn),
+      mfaRequired,
+      accessToken: tokens.accessToken,
+      ...userSessionFields(signedIn),
+    };
+  }
+
+  /** The console account a mobile code may be sent to, or null. */
+  private async consoleMobileAccount(target: string): Promise<AuthenticatedUser | null> {
+    if (!normaliseMobile(target)) return null;
+    const account = await this.identity.findByIdentifier(target);
+    if (!account || account.status !== 'ACTIVE') return null;
+    const user = await this.identity.getUser(account.userId);
+    if (user.orgType === 'BUYER' || user.mobile !== target) return null;
+    if (user.mfaRequired && !user.email) return null;
+    return user;
   }
 
   // -------------------------------------------------------------------------

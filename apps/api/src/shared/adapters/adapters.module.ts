@@ -17,12 +17,12 @@ import {
 } from './ports';
 import { ObjectUrlSigner } from './object-url';
 import {
-  FakeBankVerification,
   // FakeGstinVerification,
   FakePanVerification,
 } from './fakes/kyc.fakes';
 import { ZohoGstinVerification } from './live/gstin.zoho';
 import { PostalPincodeLookup } from './live/pincode.postalpincode';
+import { RazorpayIfscBankVerification } from './live/ifsc.razorpay';
 import { InteraktNotification } from './live/interakt.notification';
 import { SmtpNotification } from './live/smtp.notification';
 import {
@@ -67,8 +67,7 @@ const fakeProviders: Provider[] = [
   {
     provide: GstinVerificationPort,
     inject: [AppConfig],
-    useFactory: (config: AppConfig): GstinVerificationPort =>
-      new ZohoGstinVerification(config),
+    useFactory: (config: AppConfig): GstinVerificationPort => new ZohoGstinVerification(config),
     // FakeGstinVerification — off for now so /register Verify hits Zoho.
     // config.get('GST_VERIFY_API_URL')
     //   ? new ZohoGstinVerification(config)
@@ -79,7 +78,7 @@ const fakeProviders: Provider[] = [
     useClass: PostalPincodeLookup,
   },
   { provide: PanVerificationPort, useClass: FakePanVerification },
-  { provide: BankVerificationPort, useClass: FakeBankVerification },
+  { provide: BankVerificationPort, useClass: RazorpayIfscBankVerification },
   {
     provide: NotificationPort,
     inject: [AppConfig, NotificationOutbox],
@@ -134,12 +133,9 @@ const fakeProviders: Provider[] = [
       useFactory: (config: AppConfig): string => {
         const mode = config.get('INTEGRATION_MODE');
         const gst = 'zoho-books';
-        const mail =
-          config.get('SMTP_USER') && config.get('NODE_ENV') !== 'test' ? 'smtp' : 'fake';
+        const mail = config.get('SMTP_USER') && config.get('NODE_ENV') !== 'test' ? 'smtp' : 'fake';
         const whatsapp =
-          config.get('INTERAKT_API_KEY') && config.get('NODE_ENV') !== 'test'
-            ? 'interakt'
-            : 'fake';
+          config.get('INTERAKT_API_KEY') && config.get('NODE_ENV') !== 'test' ? 'interakt' : 'fake';
         new Logger('Adapters').log(
           `INTEGRATION_MODE=${mode}${mode === 'mock' ? ' — most external calls are fakes' : ''} · GSTIN=${gst} · PINCODE=postalpincode.in · EMAIL=${mail} · WHATSAPP_OTP=${whatsapp}`,
         );

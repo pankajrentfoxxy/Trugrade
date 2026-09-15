@@ -19,6 +19,8 @@ import { ContextModule, OrgScope, RequestContextService } from '../../src/shared
 import { EventBus } from '../../src/shared/events/event-bus';
 import { StockMovementService } from '../../src/modules/listing/internal/stock-movement.service';
 import { ListingRepository } from '../../src/modules/listing/internal/listing.repository';
+import { PricingService } from '../../src/modules/listing/internal/pricing.service';
+import { MarginRuleRepository } from '../../src/modules/listing/internal/margin-rule.repository';
 import {
   LocalQcVisitPort,
   QcVisitPort,
@@ -61,7 +63,8 @@ function vendor(): Principal {
     orgType: 'VENDOR',
     roles,
     permissions: permissionsFor(roles),
-    sessionId: 'sess-1', mfaSatisfied: true,
+    sessionId: 'sess-1',
+    mfaSatisfied: true,
   };
 }
 
@@ -88,6 +91,10 @@ beforeAll(async () => {
       OrgScope,
       StockMovementService,
       SubmitService,
+      // Submit prices the listing once the visit is raised, so the storefront
+      // has a price to show when the units pass.
+      PricingService,
+      MarginRuleRepository,
       ListingRepository,
       { provide: QcVisitPort, useClass: LocalQcVisitPort },
     ],
@@ -177,6 +184,27 @@ describe('submit requests an inspection instead of going live', () => {
     expect(Number(units!.n)).toBe(30);
     expect(Number(units!.sellable)).toBe(0);
     expect(Number(units!.visits)).toBe(1);
+
+    // The manifest, and the price. Without the first the technician's screen is
+    // empty and closing publishes nothing (the listing id lives on these rows);
+    // without the second a passed machine is invisible to every buyer, because
+    // the storefront only shows a unit that carries a retail price.
+    const [manifest] = await raw.$queryRaw<
+      Array<{ n: bigint; with_listing: bigint; serials: bigint }>
+    >`
+      SELECT count(*)::bigint AS n,
+             count(*) FILTER (WHERE vu.listing_id = ${listingId}::uuid)::bigint AS with_listing,
+             count(DISTINCT vu.serial_number)::bigint AS serials
+        FROM qc.qc_visit_unit vu
+       WHERE vu.visit_id = ${result.qcVisitId}::uuid`;
+    expect(Number(manifest!.n)).toBe(30);
+    expect(Number(manifest!.with_listing)).toBe(30);
+    expect(Number(manifest!.serials)).toBe(30);
+
+    const [priced] = await raw.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM listing.unit
+       WHERE listing_id = ${listingId}::uuid AND retail_price IS NOT NULL`;
+    expect(Number(priced!.n)).toBe(30);
 
     const [visit] = await raw.$queryRaw<
       Array<{ status: string; units_requested: number; visit_fee: unknown; fee_bearer: string }>
@@ -283,7 +311,8 @@ describe('submit requests an inspection instead of going live', () => {
           orgType: 'VENDOR',
           roles,
           permissions: permissionsFor(roles),
-          sessionId: 's2', mfaSatisfied: true,
+          sessionId: 's2',
+          mfaSatisfied: true,
         },
         () => submit.submit(listingId),
       ),

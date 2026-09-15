@@ -13,7 +13,11 @@ import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
 import { ObjectStorePort } from '../../../shared/adapters/ports';
 import { AuditService } from '../../identity';
-import { ConflictError, NotFoundError, ValidationError } from '../../../shared/errors/domain-errors';
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../../../shared/errors/domain-errors';
 
 /**
  * KYC document upload. VR-061 to VR-072.
@@ -133,6 +137,9 @@ export const DOCUMENT_REJECTION_REASONS = [
 export type DocumentRejectionReason = (typeof DOCUMENT_REJECTION_REASONS)[number]['code'];
 
 const SETTLED_STATUSES = ['VERIFIED', 'UNDER_REVIEW'];
+
+/** Dated documents whose date may be left out. See `acceptAge`. */
+const OPTIONAL_DATE_DOC_TYPES = new Set(['ADDRESS_PROOF', 'CANCELLED_CHEQUE']);
 
 @Injectable()
 export class DocumentService {
@@ -425,9 +432,11 @@ export class DocumentService {
     documentDate: Date | null,
     rule: { doc_type: string; label: string; max_age_days: number | null },
   ): void {
-    // Address proof still has a 90-day window when a date is given; the date
-    // itself is optional, so a missing one is not a refusal.
-    if (documentDate === null && rule.doc_type === 'ADDRESS_PROOF') return;
+    // Address proof and a cancelled cheque keep their 90-day window when a date
+    // is given, but the date itself is optional. A cancelled cheque leaf is
+    // blank — there is no issue date printed on it to give — so demanding one
+    // refused every cheque the upload screen sent.
+    if (documentDate === null && OPTIONAL_DATE_DOC_TYPES.has(rule.doc_type)) return;
     const age = checkDocumentAge({
       documentDate,
       maxAgeDays: rule.max_age_days,

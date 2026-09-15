@@ -289,4 +289,16 @@ export interface ResumableOnboarding {
     isSubmittable: boolean;
   };
   answers: Record<string, Record<string, unknown>>;
+  /** False once submitted or decided: the profile is read-only until a reviewer sends it back. */
+  editable: boolean;
+  /** The real payout account on file, or null when none has been added. */
+  payoutAccount: {
+    last4: string;
+    bankName: string | null;
+    ifsc: string;
+    /** PENDING | SUCCESS | NAME_MISMATCH | FAILED */
+    pennyDropStatus: string;
+    /** Payouts to a newly added account are held until this instant. */
+    frozenUntil: string | null;
+  } | null;
 }

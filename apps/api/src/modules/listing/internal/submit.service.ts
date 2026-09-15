@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { money, type Money } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
@@ -13,6 +13,7 @@ import {
   ValidationError,
 } from '../../../shared/errors/domain-errors';
 import { StockMovementService } from './stock-movement.service';
+import { PricingService } from './pricing.service';
 
 /**
  * Submit. The pivot of the whole model: **the listing does not go live.**
@@ -75,6 +76,17 @@ export interface QcVisitRequest {
   unitsRequested: number;
   visitFee: Money;
   feeBearer: FeeBearer;
+  /**
+   * The machines to inspect, in the order the technician meets them.
+   *
+   * The visit used to be raised with a count alone, so every vendor-raised
+   * visit arrived with an empty manifest: the technician's screen had no
+   * machines to inspect, and closing published nothing because the listing id
+   * lives on the manifest row. The serial is read here, from the listing's own
+   * table, and never taken from a client — it is what a scan is compared
+   * against.
+   */
+  units: ReadonlyArray<{ unitId: string; serialNumber: string; listingId: string }>;
 }
 
 export interface QcVisitRef {
@@ -130,7 +142,20 @@ export class LocalQcVisitPort extends QcVisitPort {
          ${input.unitsRequested}, 'REQUESTED', ${input.visitFee.toString()}::numeric,
          ${input.feeBearer})
       RETURNING id, visit_number`;
-    return { id: rows[0]!.id, visitNumber: rows[0]!.visit_number };
+    const visit = { id: rows[0]!.id, visitNumber: rows[0]!.visit_number };
+
+    // The manifest, in the same transaction as the visit. A visit row without
+    // its units is a technician's screen with nothing on it and a close that
+    // publishes no listing, because `listing_id` lives on these rows.
+    for (const [i, unit] of input.units.entries()) {
+      await this.prisma.$executeRaw`
+        INSERT INTO qc.qc_visit_unit (visit_id, unit_id, serial_number, listing_id, sequence_no)
+        VALUES (${visit.id}::uuid, ${unit.unitId}::uuid, ${unit.serialNumber},
+                ${unit.listingId}::uuid, ${i + 1})
+        ON CONFLICT (visit_id, unit_id) DO NOTHING`;
+    }
+
+    return visit;
   }
 
   /**
@@ -169,6 +194,8 @@ interface VisitEconomics {
 
 @Injectable()
 export class SubmitService {
+  private readonly logger = new Logger(SubmitService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: ClockPort,
@@ -177,6 +204,7 @@ export class SubmitService {
     private readonly movements: StockMovementService,
     private readonly qcVisits: QcVisitPort,
     private readonly bus: EventBus,
+    private readonly pricing: PricingService,
   ) {}
 
   /**
@@ -189,7 +217,7 @@ export class SubmitService {
   async submit(listingId: string, choice?: SubmitChoice): Promise<SubmitResult> {
     const economics = await this.economics();
 
-    return this.prisma.runInTransaction(async () => {
+    const result = await this.prisma.runInTransaction(async () => {
       // FOR UPDATE before anything is read off it: two tabs pressing submit on
       // the same listing must not each raise a visit for the same machines.
       const [listing] = await this.prisma.$queryRaw<
@@ -208,10 +236,10 @@ export class SubmitService {
         throw new IllegalStateTransitionError('listing', listing.status, 'AWAITING_QC');
       }
 
-      const unitIds = (
-        await this.prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT id FROM listing.unit WHERE listing_id = ${listingId}::uuid ORDER BY id`
-      ).map((r) => r.id);
+      const units = await this.prisma.$queryRaw<Array<{ id: string; serial_number: string }>>`
+        SELECT id, serial_number FROM listing.unit
+         WHERE listing_id = ${listingId}::uuid ORDER BY id`;
+      const unitIds = units.map((r) => r.id);
 
       if (unitIds.length === 0) {
         throw new ValidationError('Add at least one serial number before submitting.', {
@@ -250,23 +278,48 @@ export class SubmitService {
             options: ['HOLD', 'ACCEPT_FEE'] as const,
           };
         }
-        return this.request(listing, unitIds, visitFee, visitFee.isZero() ? 'WAIVED' : 'VENDOR');
+        return this.request(listing, units, visitFee, visitFee.isZero() ? 'WAIVED' : 'VENDOR');
       }
 
       // At or above the minimum the visit pays for itself, so we carry it.
-      return this.request(listing, unitIds, money(0), 'TRUETECH');
+      return this.request(listing, units, money(0), 'TRUETECH');
     });
+
+    // Priced once the inspection is on its way, and outside the transaction
+    // above so a pricing problem cannot roll a booked visit back.
+    //
+    // Nothing else prices a new listing: `PricingService` was reachable only
+    // from the vendor's own Reprice screen, and the storefront only shows a unit
+    // that carries a `retail_price`. So a batch could pass its inspection, be
+    // sealed and listed, and still be invisible to every buyer until the vendor
+    // happened to open Reprice. A failure here leaves the listing unpriced and
+    // says so in the log rather than failing a submit that has already happened.
+    if (result.outcome === 'SUBMITTED') {
+      try {
+        await this.pricing.priceListing(listingId, {
+          reason: 'Priced when the inspection was requested.',
+          changeSource: 'MARGIN_RULE',
+        });
+      } catch (err) {
+        this.logger.error(
+          `Listing ${listingId} was submitted but could not be priced: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return result;
   }
 
   /** Everything after the fee question is settled. Runs inside the transaction. */
   private async request(
     listing: { id: string; vendor_org_id: string; pickup_location_id: string },
-    unitIds: readonly string[],
+    units: ReadonlyArray<{ id: string; serial_number: string }>,
     visitFee: Money,
     feeBearer: FeeBearer,
   ): Promise<SubmitAccepted> {
     const facilityId = await this.facilityAt(listing.pickup_location_id, listing.vendor_org_id);
     const now = this.clock.now();
+    const unitIds = units.map((u) => u.id);
 
     const visit = await this.qcVisits.request({
       vendorOrgId: listing.vendor_org_id,
@@ -276,6 +329,11 @@ export class SubmitService {
       unitsRequested: unitIds.length,
       visitFee,
       feeBearer,
+      units: units.map((u) => ({
+        unitId: u.id,
+        serialNumber: u.serial_number,
+        listingId: listing.id,
+      })),
     });
 
     // Every unit moves through the one function that records movements, so the

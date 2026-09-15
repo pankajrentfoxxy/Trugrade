@@ -17,6 +17,8 @@ import {
 } from '@trugrade/ui';
 import { Datum, NotMeasured, Section } from '../../lib/controls';
 import { useResource } from '../../lib/useResource';
+import { VisitActions } from './VisitActions';
+import { usePrincipal } from '../../lib/auth';
 import type { ManifestUnit, SealRow, ToolRunRow, UnitOutcome, VisitDetail } from './types';
 
 /**
@@ -148,7 +150,8 @@ function ToolRunCard({ run }: { run: ToolRunRow }): React.JSX.Element {
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 text-body-sm">
         <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">Run id</dt>
         <dd className="font-mono text-data text-ink-2">
-          {run.toolRunId ?? 'none — this provider sends no run id, so its submissions are not idempotent'}
+          {run.toolRunId ??
+            'none — this provider sends no run id, so its submissions are not idempotent'}
         </dd>
         <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">SHA-256</dt>
         <dd className="break-all font-mono text-data text-ink-2">{run.rawReportHash}</dd>
@@ -213,9 +216,13 @@ function SealCard({ seal }: { seal: SealRow }): React.JSX.Element {
 export function VisitDetailRoute(): React.JSX.Element {
   const { visitId = '' } = useParams<{ visitId: string }>();
   const navigate = useNavigate();
+  const [reloadToken, setReloadToken] = React.useState(0);
+  const principal = usePrincipal();
+  const canInspect = principal?.permissions.includes('qc.visit.execute') ?? false;
   const { data, error } = useResource<VisitDetail>(
     `/api/qc/visits/${visitId}`,
     'This visit is unavailable',
+    reloadToken,
   );
 
   if (error) {
@@ -253,14 +260,21 @@ export function VisitDetailRoute(): React.JSX.Element {
         // button that navigates. Reported as a packages/ui gap rather than
         // re-implementing the amber fill on a <Link> here — a second copy of the
         // primary style is how the primary style drifts.
-        action={
-          <Button
-            variant="primary"
-            onClick={() => void navigate(`/qc/visits/${visitId}/inspect`)}
-          >
-            Record an inspection by hand
-          </Button>
-        }
+        // Drawn only for a seat that may actually inspect: the screen behind it
+        // is guarded on `qc.visit.execute`, which an OPS_MANAGER does not hold,
+        // so for them this was a primary button that led straight to a refusal.
+        {...(canInspect
+          ? {
+              action: (
+                <Button
+                  variant="primary"
+                  onClick={() => void navigate(`/qc/visits/${visitId}/inspect`)}
+                >
+                  Record an inspection by hand
+                </Button>
+              ),
+            }
+          : {})}
       />
 
       {overVariance && (
@@ -276,6 +290,8 @@ export function VisitDetailRoute(): React.JSX.Element {
         </div>
       )}
 
+      <VisitActions visit={data} onChanged={() => setReloadToken((n) => n + 1)} />
+
       <Section title="The visit">
         <div className="grid gap-x-6 md:grid-cols-3">
           <Datum label="Status">{data.status.replace(/_/g, ' ')}</Datum>
@@ -286,7 +302,9 @@ export function VisitDetailRoute(): React.JSX.Element {
           </Datum>
           <Datum label="Requested">{data.requestedAt}</Datum>
           <Datum label="Arrived">
-            {data.arrivedAt ?? <NotMeasured why="The technician has not arrived" label="Not arrived" />}
+            {data.arrivedAt ?? (
+              <NotMeasured why="The technician has not arrived" label="Not arrived" />
+            )}
           </Datum>
           <Datum label="Started">
             {data.startedAt ?? <NotMeasured why="The visit has not started" label="Not started" />}

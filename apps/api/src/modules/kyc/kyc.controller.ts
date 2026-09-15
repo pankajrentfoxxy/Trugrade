@@ -506,11 +506,12 @@ export class OnboardingController {
   /** Save-and-finish-later. Validates shape only; a half-filled form is normal. */
   @Put('steps/:stepKey')
   @HttpCode(204)
-  saveStep(
+  async saveStep(
     @CurrentUser() user: Principal,
     @Param('stepKey', new ZodValidationPipe(stepCodeSchema)) stepKey: string,
     @Body(new ZodValidationPipe(saveStepBodySchema)) body: SaveStepBodyDto,
   ): Promise<void> {
+    await this.kyc.assertProfileEditable(ownOrgId(user));
     return this.kyc.saveStepDraft(ownOrgId(user), stepKey, body.answers, body.completionPct);
   }
 
@@ -531,11 +532,12 @@ export class OnboardingController {
    */
   @Post('steps/:stepKey/complete')
   @HttpCode(204)
-  completeStep(
+  async completeStep(
     @CurrentUser() user: Principal,
     @Param('stepKey', new ZodValidationPipe(stepCodeSchema)) stepKey: string,
   ): Promise<void> {
     const orgId = ownOrgId(user);
+    await this.kyc.assertProfileEditable(orgId);
     return this.kyc.completeStep(orgId, stepKey, (answers) =>
       this.promotions.promote({ orgId, userId: user.userId, stepCode: stepKey, answers }),
     );
@@ -694,16 +696,18 @@ export class OnboardingController {
    */
   @Post('bank-account/otp')
   @HttpCode(200)
-  requestBankChangeCode(@CurrentUser() user: Principal): Promise<BankChangeCodeSent> {
+  async requestBankChangeCode(@CurrentUser() user: Principal): Promise<BankChangeCodeSent> {
+    await this.kyc.assertProfileEditable(ownOrgId(user));
     return this.bankChange.requestCode(ownOrgId(user), user.userId);
   }
 
   @Post('bank-account')
   @HttpCode(200)
-  changeBankAccount(
+  async changeBankAccount(
     @CurrentUser() user: Principal,
     @Body(new ZodValidationPipe(changeBankAccountBodySchema)) body: ChangeBankAccountBodyDto,
   ): Promise<BankAccountChangeResult> {
+    await this.kyc.assertProfileEditable(ownOrgId(user));
     return this.bankChange.changeWithCode({
       orgId: ownOrgId(user),
       // From the session, never the body. This lands on the `verification_check`
@@ -747,11 +751,12 @@ export class OnboardingController {
   @Post('documents')
   @HttpCode(201)
   @UseInterceptors(FileInterceptor('file'))
-  uploadDocument(
+  async uploadDocument(
     @CurrentUser() user: Principal,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body(new ZodValidationPipe(uploadDocumentBodySchema)) body: UploadDocumentBodyDto,
   ): Promise<KycDocumentView> {
+    await this.kyc.assertProfileEditable(ownOrgId(user));
     return this.documents.upload({
       orgId: ownOrgId(user),
       uploadedBy: user.userId,
@@ -769,12 +774,13 @@ export class OnboardingController {
    * would silently break the reference while looking like it worked.
    */
   @Put('documents/:documentId')
-  replaceDocument(
+  async replaceDocument(
     @CurrentUser() user: Principal,
     @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body(new ZodValidationPipe(replaceDocumentBodySchema)) body: ReplaceDocumentBodyDto,
   ): Promise<KycDocumentView> {
+    await this.kyc.assertProfileEditable(ownOrgId(user));
     return this.documents.replace({
       orgId: ownOrgId(user),
       uploadedBy: user.userId,
@@ -786,10 +792,11 @@ export class OnboardingController {
 
   @Delete('documents/:documentId')
   @HttpCode(204)
-  removeDocument(
+  async removeDocument(
     @CurrentUser() user: Principal,
     @Param('documentId', new ZodValidationPipe(uuidSchema)) documentId: string,
   ): Promise<void> {
+    await this.kyc.assertProfileEditable(ownOrgId(user));
     return this.documents.remove(ownOrgId(user), documentId, user.userId);
   }
 
