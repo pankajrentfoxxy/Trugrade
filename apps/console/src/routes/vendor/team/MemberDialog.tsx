@@ -1,12 +1,5 @@
 import * as React from 'react';
-import {
-  Button,
-  Chip,
-  Input,
-  Modal,
-  PermissionGrid,
-  StatusPill,
-} from '@trugrade/ui';
+import { Button, Chip, Input, Modal, PermissionGrid, StatusPill } from '@trugrade/ui';
 import {
   mobileSubscriberDigits,
   validateEmail,
@@ -37,6 +30,8 @@ export interface MemberDialogProps {
   facilities: TeamFacility[];
   busy: boolean;
   error: string | null;
+  /** The server's refusal per field, e.g. `{ mobile: 'This mobile number is already registered.' }`. */
+  fieldErrors?: Partial<Record<'fullName' | 'email' | 'mobile', string>>;
   onClose: () => void;
   onSubmit: (draft: MemberDialogDraft) => void;
   onSuspend?: () => void;
@@ -50,11 +45,19 @@ export function MemberDialog({
   facilities,
   busy,
   error,
+  fieldErrors,
   onClose,
   onSubmit,
   onSuspend,
   onReactivate,
 }: MemberDialogProps): React.JSX.Element {
+  // A server refusal stays under its field until that field is edited.
+  const [edited, setEdited] = React.useState<ReadonlySet<string>>(new Set());
+  React.useEffect(() => setEdited(new Set()), [fieldErrors]);
+  const serverError = (field: 'fullName' | 'email' | 'mobile'): string | undefined =>
+    edited.has(field) ? undefined : fieldErrors?.[field];
+  const markEdited = (field: string): void => setEdited((prev) => new Set(prev).add(field));
+
   const [draft, setDraft] = React.useState<MemberDialogDraft>({
     role: 'VENDOR_ADMIN',
     fullName: '',
@@ -191,8 +194,15 @@ export function MemberDialog({
           required
           value={draft.fullName}
           readOnly={mode === 'manage'}
-          onChange={(e) => setDraft((d) => ({ ...d, fullName: e.target.value }))}
-          error={mode === 'invite' ? validateFullName(draft.fullName) : undefined}
+          onChange={(e) => {
+            markEdited('fullName');
+            setDraft((d) => ({ ...d, fullName: e.target.value }));
+          }}
+          error={
+            mode === 'invite'
+              ? (validateFullName(draft.fullName) ?? serverError('fullName'))
+              : undefined
+          }
         />
         <Input
           label="Email ID"
@@ -200,8 +210,13 @@ export function MemberDialog({
           type="email"
           value={draft.email}
           readOnly={mode === 'manage'}
-          onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-          error={mode === 'invite' ? validateEmail(draft.email) : undefined}
+          onChange={(e) => {
+            markEdited('email');
+            setDraft((d) => ({ ...d, email: e.target.value }));
+          }}
+          error={
+            mode === 'invite' ? (validateEmail(draft.email) ?? serverError('email')) : undefined
+          }
         />
         <Input
           label="Phone"
@@ -211,10 +226,13 @@ export function MemberDialog({
           maxLength={10}
           value={draft.mobile}
           readOnly={mode === 'manage'}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, mobile: mobileSubscriberDigits(e.target.value) }))
+          onChange={(e) => {
+            markEdited('mobile');
+            setDraft((d) => ({ ...d, mobile: mobileSubscriberDigits(e.target.value) }));
+          }}
+          error={
+            mode === 'invite' ? (validateMobile(mobileDisplay) ?? serverError('mobile')) : undefined
           }
-          error={mode === 'invite' ? validateMobile(mobileDisplay) : undefined}
         />
 
         <div>

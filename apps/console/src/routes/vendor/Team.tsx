@@ -92,6 +92,9 @@ export function VendorTeamRoute(): React.JSX.Element {
   const [manageMember, setManageMember] = React.useState<TeamMember | null>(null);
   const [dialogBusy, setDialogBusy] = React.useState(false);
   const [dialogError, setDialogError] = React.useState<string | null>(null);
+  const [dialogFieldErrors, setDialogFieldErrors] = React.useState<
+    Partial<Record<'fullName' | 'email' | 'mobile', string>>
+  >({});
 
   const load = React.useCallback(async (): Promise<void> => {
     const result = await getTeam();
@@ -145,6 +148,7 @@ export function VendorTeamRoute(): React.JSX.Element {
   const handleInvite = async (draft: MemberDialogDraft): Promise<void> => {
     setDialogBusy(true);
     setDialogError(null);
+    setDialogFieldErrors({});
     const result = await createInvite({
       email: draft.email.trim(),
       fullName: draft.fullName.trim(),
@@ -155,6 +159,7 @@ export function VendorTeamRoute(): React.JSX.Element {
     setDialogBusy(false);
     if (!result.ok) {
       setDialogError(result.message);
+      setDialogFieldErrors(result.fields);
       return;
     }
     setInviteOpen(false);
@@ -374,6 +379,7 @@ export function VendorTeamRoute(): React.JSX.Element {
         facilities={facilities}
         busy={dialogBusy}
         error={dialogError}
+        fieldErrors={dialogFieldErrors}
         onClose={() => setInviteOpen(false)}
         onSubmit={(draft) => void handleInvite(draft)}
       />

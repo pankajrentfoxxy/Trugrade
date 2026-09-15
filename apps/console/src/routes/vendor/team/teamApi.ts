@@ -59,15 +59,25 @@ async function call<T>(url: string, init?: RequestInit): Promise<ApiResult<T>> {
     }
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
+      // The API's refusals arrive as `{ error: { code, message, fields } }`. Reading
+      // `body.message` found nothing, so every refusal — "this mobile number is
+      // already registered", an expired invite, a weak password — read
+      // "Request failed (422)".
+      const envelope =
+        body.error && typeof body.error === 'object'
+          ? (body.error as Record<string, unknown>)
+          : body;
       const fields =
-        body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)
-          ? (body.fields as Record<string, string>)
+        envelope.fields && typeof envelope.fields === 'object' && !Array.isArray(envelope.fields)
+          ? (envelope.fields as Record<string, string>)
           : {};
       return {
         ok: false,
         status: res.status,
         message:
-          typeof body.message === 'string' ? body.message : `Request failed (${res.status})`,
+          typeof envelope.message === 'string'
+            ? envelope.message
+            : `That did not go through (${res.status}). Nothing was changed — try again.`,
         fields,
       };
     }
