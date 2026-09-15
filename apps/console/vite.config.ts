@@ -11,19 +11,30 @@ import { assertLinkTargetsNotLocal } from '@trugrade/config/link-targets';
  * caching on an admin data grid under deadline.
  */
 export default defineConfig(({ command, mode }) => {
+  // The wordmark on /login and /forgot-password links to the storefront, and that
+  // URL is baked in at build time. The storefront derives its console link from
+  // the repo-root CONSOLE_URL the API reads; this is the mirror image, so the one
+  // root .env a server already has configures both halves. A deploy that set
+  // CONSOLE_URL and STOREFRONT_URL there and nothing else failed this build.
+  // VITE_STOREFRONT_URL still wins when set, for a console built against a
+  // storefront the root .env does not describe.
+  const consoleEnv = loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), '');
+  const rootEnv = loadEnv(mode, fileURLToPath(new URL('../..', import.meta.url)), '');
+  const storefrontUrl =
+    process.env.VITE_STOREFRONT_URL ?? consoleEnv.VITE_STOREFRONT_URL ?? rootEnv.STOREFRONT_URL;
   if (command === 'build') {
-    // The wordmark on /login and /forgot-password links to VITE_STOREFRONT_URL,
-    // which is baked in here. A public console built without it shipped a link to
-    // http://localhost:3000. CONSOLE_URL comes from the repo-root .env the API
-    // reads, so a production build knows it is one.
-    const consoleEnv = loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), '');
-    const rootEnv = loadEnv(mode, fileURLToPath(new URL('../..', import.meta.url)), '');
+    // A public console built without a storefront URL shipped a link to
+    // http://localhost:3000. CONSOLE_URL is how a production build knows it is one.
     assertLinkTargetsNotLocal('The console', process.env.CONSOLE_URL ?? rootEnv.CONSOLE_URL, {
-      VITE_STOREFRONT_URL: process.env.VITE_STOREFRONT_URL ?? consoleEnv.VITE_STOREFRONT_URL,
+      STOREFRONT_URL: storefrontUrl,
     });
   }
   return {
     plugins: [react()],
+    // Only defined once known, so a bare dev checkout keeps the source fallback.
+    define: storefrontUrl
+      ? { 'import.meta.env.VITE_STOREFRONT_URL': JSON.stringify(storefrontUrl) }
+      : {},
     server: {
       port: 5173,
       // The API is same-origin in production behind the edge; proxying in dev
