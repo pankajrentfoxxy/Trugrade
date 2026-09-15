@@ -50,9 +50,23 @@ export interface OtpSignInProps {
   /**
    * Where a signed-in buyer is sent. Defaults to replacing the location so the
    * server-rendered header re-reads the cookie and back never returns here;
-   * a test hands in a spy, because jsdom cannot navigate.
+   * a test hands in a spy, because jsdom cannot navigate. `created` says
+   * whether this code made the organisation, so a caller that keeps a
+   * returning buyer on the page they were on can still send a new one home.
    */
-  onSignedIn?: (url: string) => void;
+  onSignedIn?: (url: string, outcome: { created: boolean }) => void;
+  /**
+   * `page` draws the Focus frame — brand, heading, lede, side panel — for the
+   * `/sign-in` and `/register` routes. `bare` is the form alone, for a dialog
+   * that supplies its own heading and art.
+   */
+  frame?: 'page' | 'bare';
+  /**
+   * When set, the "Sign in" and "Create a buyer account" links flip the form in
+   * place instead of navigating to the other route. A dialog passes this; the
+   * pages do not, so a bookmark to either still lands on a page.
+   */
+  onModeChange?: (mode: 'register' | 'sign-in') => void;
 }
 
 /* ==========================================================================
@@ -116,6 +130,8 @@ export function OtpSignIn({
   mode,
   sellerRegisterUrl,
   onSignedIn = leave,
+  frame = 'page',
+  onModeChange,
 }: OtpSignInProps): React.JSX.Element {
   const [stage, setStage] = React.useState<Stage>({ k: 'identifier' });
   const [mobileDigits, setMobileDigits] = React.useState('');
@@ -126,6 +142,12 @@ export function OtpSignIn({
   const [busy, setBusy] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
   const [touched, setTouched] = React.useState(false);
+  /**
+   * True once a character has been typed. From then on the field says what is
+   * wrong with it as it is being typed — "7 digits so far" beside a number that
+   * is not yet ten — rather than waiting for the button to be pressed.
+   */
+  const [dirty, setDirty] = React.useState(false);
 
   React.useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -139,13 +161,30 @@ export function OtpSignIn({
       ? `+91${mobileDigits}`
       : classify(identifier).value;
 
+  /**
+   * What is wrong with the identifier, in the words of the rule it breaks.
+   *
+   * On sign-in the box takes either a mobile or an email, so the string is
+   * read as whichever it is turning into: digits, spaces, a plus or a dash are
+   * a number being typed and get the mobile rule ("7 digits so far"); anything
+   * else gets the email rule. A generic "number or email" message would tell
+   * somebody with nine digits typed nothing about what to do next.
+   */
   const identifierError = (): string | undefined => {
     if (mode === 'register') return validateMobile(`+91 ${mobileDigits}`);
     const typed = identifier.trim();
     if (!typed) return 'Enter your mobile number or work email.';
-    if (classify(typed).kind === 'mobile') return undefined;
-    return validateEmail(typed) ? 'Enter a 10-digit mobile number or a work email.' : undefined;
+    if (/^[\d\s+\-()]+$/.test(typed)) {
+      return classify(typed).kind === 'mobile'
+        ? undefined
+        : validateMobile(`+91 ${mobileSubscriberDigits(typed.replace(/^\+?91/, ''))}`);
+    }
+    return validateEmail(typed);
   };
+
+  /** Shown while typing once anything has been typed, and after a submit regardless. */
+  const shownError = (): string | undefined =>
+    error ?? (dirty || touched ? identifierError() : undefined);
 
   const refuse = (failure: ApiFailure): void => {
     if (failure.status === 429) {
@@ -194,8 +233,30 @@ export function OtpSignIn({
     // A brand-new organisation gets its onboarding rows now, so the profile
     // page has steps to show the moment it opens. Idempotent server-side.
     if (result.data.created) await startOnboarding();
-    onSignedIn(safeNext() ?? '/home');
+    onSignedIn(safeNext() ?? '/home', { created: result.data.created });
   };
+
+  /** A flip between the two forms, in place when a dialog asks for it. */
+  const switchTo = (next: 'register' | 'sign-in', label: string): React.ReactNode =>
+    onModeChange ? (
+      <button
+        type="button"
+        className="hub-link"
+        onClick={() => {
+          onModeChange(next);
+          setStage({ k: 'identifier' });
+          setError(undefined);
+          setTouched(false);
+          setDirty(false);
+        }}
+      >
+        {label}
+      </button>
+    ) : (
+      <a className="hub-link" href={next === 'register' ? '/register' : '/sign-in'}>
+        {label}
+      </a>
+    );
 
   const title = mode === 'register' ? 'Create a buyer account' : 'Sign in';
   const lede =
@@ -203,8 +264,13 @@ export function OtpSignIn({
       ? 'Your mobile number and a code. Your name, work email and company details come later, from your account.'
       : 'A code to your mobile number or work email. There is no password.';
 
-  return (
-    <AuthShell title={title} lede={lede}>
+  // The frame is chosen around an already-built element, never as a component
+  // declared inside this render: a component type minted on every render is a
+  // new type to React each time, so it unmounts and remounts everything under
+  // it on every keystroke — which is how the code boxes lost focus after the
+  // first digit.
+  const content = (
+    <>
       {stage.k === 'refused' ? (
         <div className="flex flex-col gap-4">
           <p role="alert" className="text-body text-ink">
@@ -236,9 +302,10 @@ export function OtpSignIn({
               value={mobileDigits}
               onChange={(e) => {
                 setMobileDigits(mobileSubscriberDigits(e.target.value));
+                setDirty(true);
                 setError(undefined);
               }}
-              error={touched ? (error ?? identifierError()) : undefined}
+              error={shownError()}
             />
           ) : (
             <Input
@@ -249,9 +316,10 @@ export function OtpSignIn({
               value={identifier}
               onChange={(e) => {
                 setIdentifier(e.target.value);
+                setDirty(true);
                 setError(undefined);
               }}
-              error={touched ? (error ?? identifierError()) : undefined}
+              error={shownError()}
             />
           )}
 
@@ -276,20 +344,11 @@ export function OtpSignIn({
 
           <p className="text-body-sm text-ink-3">
             {mode === 'register' ? (
-              <>
-                Already with us?{' '}
-                <a className="hub-link" href="/sign-in">
-                  Sign in
-                </a>
-                .
-              </>
+              <>Already with us? {switchTo('sign-in', 'Sign in')}.</>
             ) : (
               <>
-                New to Trugrade?{' '}
-                <a className="hub-link" href="/register">
-                  Create a buyer account
-                </a>{' '}
-                with your mobile number.
+                New to Trugrade? {switchTo('register', 'Create a buyer account')} with your mobile
+                number.
               </>
             )}
           </p>
@@ -360,6 +419,14 @@ export function OtpSignIn({
           </div>
         </div>
       )}
+    </>
+  );
+
+  return frame === 'page' ? (
+    <AuthShell title={title} lede={lede}>
+      {content}
     </AuthShell>
+  ) : (
+    <div className="authform">{content}</div>
   );
 }

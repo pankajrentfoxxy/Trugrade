@@ -47,6 +47,7 @@ async function currentUser(): Promise<{ orgType: string; fullName?: string } | n
 
 import { SearchBar } from './SearchBar';
 import { AccountMenu } from './AccountMenu';
+import { AuthButtons } from './auth/AuthButtons';
 import { CartNavLink } from './CartNavLink';
 
 /**
@@ -182,18 +183,7 @@ export async function SiteHeader({
                 <AccountMenu fullName={user.fullName} />
               </>
             ) : (
-              <>
-                <a className="hbtn" href="/sign-in">
-                  <span>
-                    <small>Returning?</small>
-                    <strong>Sign in</strong>
-                  </span>
-                </a>
-                <a className="hbtn solid" href="/register">
-                  <span className="hbtn-long">Create account</span>
-                  <span className="hbtn-short">Register</span>
-                </a>
-              </>
+              <AuthButtons />
             )}
           </div>
         </div>

@@ -215,17 +215,17 @@ export const RECEIVING_DAYS: readonly Option[] = [
 export const BUYER_DOCUMENTS = [
   {
     docType: 'GST_CERTIFICATE',
-    required: true,
+    required: false,
     purpose: 'The registration certificate for the GSTIN we invoice.',
   },
   {
     docType: 'PAN_CARD',
-    required: true,
+    required: false,
     purpose: 'The PAN of the entity, not of a director.',
   },
   {
     docType: 'SIGNATORY_ID',
-    required: true,
+    required: false,
     purpose:
       'Photo ID of the person authorised to purchase on this account. Aadhaar, passport or driving licence.',
   },

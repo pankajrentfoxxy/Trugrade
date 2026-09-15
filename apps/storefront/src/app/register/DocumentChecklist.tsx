@@ -143,6 +143,8 @@ export interface DocumentChecklistProps {
   whyTerm: string;
   /** Shorter upload hints — vendor step 6. */
   compactHints?: boolean;
+  /** No upload hints at all — the buyer profile, where the label is the whole ask. */
+  noHints?: boolean;
 }
 
 export function DocumentChecklist({
@@ -155,6 +157,7 @@ export function DocumentChecklist({
   onFieldFocus,
   whyTerm,
   compactHints = false,
+  noHints = false,
 }: DocumentChecklistProps): React.JSX.Element {
   const [rules, setRules] = React.useState<DocumentTypeRule[] | null>(null);
   const [docs, setDocs] = React.useState<KycDocument[]>([]);
@@ -339,7 +342,7 @@ export function DocumentChecklist({
               label={rule.label}
               required={w.required}
               hint={
-                compactHints ? (
+                noHints ? undefined : compactHints ? (
                   <>
                     {w.purpose} PDF or photo, up to{' '}
                     <span className="font-mono tnum">{rule.maxFiles}</span> files, max{' '}

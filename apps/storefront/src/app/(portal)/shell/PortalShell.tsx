@@ -56,8 +56,10 @@ function Masthead(): React.JSX.Element {
     setSigningOut(true);
     void (async () => {
       await logout();
-      router.push('/');
-      router.refresh();
+      // A full navigation, not a client transition: the shop's header reads
+      // the cookie on the server, and the portal must not get a chance to
+      // notice the missing session and bounce to sign-in on the way out.
+      window.location.assign('/');
     })();
   };
 

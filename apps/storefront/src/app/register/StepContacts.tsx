@@ -11,6 +11,7 @@ import {
   stateName,
   stateNameForGstin,
 } from './picklists';
+import { liveErrors } from './live-errors';
 import { PincodeLocalityFields } from './PincodeLocalityFields';
 import { mergeBillingGstPrefill, prefillBillingFromVerifiedGst } from './gst-billing-prefill';
 import {
@@ -121,7 +122,7 @@ export interface ContactsValues {
   delivery: DeliveryAddress[];
 }
 
-const emptyPerson = (): Person => ({
+export const emptyPerson = (): Person => ({
   useAccountDetails: false,
   fullName: '',
   designation: '',
@@ -137,10 +138,10 @@ const accountContactFields = (
   mobile: typeMobile(account.mobile),
 });
 
-const resolvedContact = (contact: Person, account: AccountHolderDetails): Person =>
+export const resolvedContact = (contact: Person, account: AccountHolderDetails): Person =>
   contact.useAccountDetails ? { ...contact, ...accountContactFields(account) } : contact;
 
-const emptyPostal = (gstin = ''): BillingAddress => ({
+export const emptyPostal = (gstin = ''): BillingAddress => ({
   gstin,
   line1: '',
   line2: '',
@@ -158,7 +159,7 @@ const nextKey = (): string => {
 const DEFAULT_OPENS_AT = '10:00';
 const DEFAULT_CLOSES_AT = '19:00';
 
-const emptyDelivery = (): DeliveryAddress => ({
+export const emptyDelivery = (): DeliveryAddress => ({
   ...emptyPostal(),
   key: nextKey(),
   label: '',
@@ -231,7 +232,7 @@ export function readContactsDraft(
 }
 
 /** Only what the API should keep. The React key is regenerated on read. */
-const toDraft = (
+export const toDraft = (
   values: ContactsValues,
   accountHolder: AccountHolderDetails,
 ): Record<string, unknown> => ({
@@ -429,11 +430,44 @@ export function StepContacts({
    */
   const settled = (typed: string): string => toE164(typed) || typed;
 
-  const setPerson = (role: string, patch: Partial<Person>): void =>
-    setValues((v) => ({
-      ...v,
-      contacts: { ...v.contacts, [role]: { ...v.contacts[role]!, ...patch } },
-    }));
+  /**
+   * Whether the field an error key names already holds something. The keys
+   * are the ones `check` writes — `PROCUREMENT.email`, `billing.0.pincode`,
+   * `delivery.<key>.contactMobile` — so this is the one place that reads them
+   * back. Receiving hours count as filled once either end is chosen.
+   */
+  const filled = (v: ContactsValues, key: string): boolean => {
+    const [head, second, third] = key.split('.');
+    if (head === 'billing') {
+      const address = v.billing[Number(second)];
+      return Boolean(address && String(address[third as keyof BillingAddress] ?? '').trim());
+    }
+    if (head === 'delivery') {
+      const address = v.delivery.find((d) => d.key === second);
+      if (!address) return false;
+      if (third === 'hours') return Boolean(address.opensAt || address.closesAt);
+      return Boolean(String(address[third as keyof DeliveryAddress] ?? '').trim());
+    }
+    const person = v.contacts[head ?? ''];
+    if (!person || !second) return false;
+    if (second === 'mobile') return !isMobileBlank(person.mobile);
+    return Boolean(String(person[second as keyof Person] ?? '').trim());
+  };
+
+  /** Re-judge what has been typed so far. Empty fields wait for Continue. */
+  const revalidate = (next: ContactsValues): void => {
+    if (skipValidation) return;
+    setErrors(liveErrors(check(next), (key) => filled(next, key)));
+  };
+
+  const setPerson = (role: string, patch: Partial<Person>): void => {
+    const next = {
+      ...values,
+      contacts: { ...values.contacts, [role]: { ...values.contacts[role]!, ...patch } },
+    };
+    setValues(next);
+    revalidate(next);
+  };
 
   const setPersonAndSave = (role: string, patch: Partial<Person>): void => {
     const next = {
@@ -441,20 +475,27 @@ export function StepContacts({
       contacts: { ...values.contacts, [role]: { ...values.contacts[role]!, ...patch } },
     };
     setValues(next);
+    revalidate(next);
     persist(next);
   };
 
-  const setBilling = (index: number, patch: Partial<BillingAddress>): void =>
-    setValues((v) => ({
-      ...v,
-      billing: v.billing.map((b, i) => (i === index ? { ...b, ...patch } : b)),
-    }));
+  const setBilling = (index: number, patch: Partial<BillingAddress>): void => {
+    const next = {
+      ...values,
+      billing: values.billing.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+    };
+    setValues(next);
+    revalidate(next);
+  };
 
-  const setDelivery = (key: string, patch: Partial<DeliveryAddress>): void =>
-    setValues((v) => ({
-      ...v,
-      delivery: v.delivery.map((d) => (d.key === key ? { ...d, ...patch } : d)),
-    }));
+  const setDelivery = (key: string, patch: Partial<DeliveryAddress>): void => {
+    const next = {
+      ...values,
+      delivery: values.delivery.map((d) => (d.key === key ? { ...d, ...patch } : d)),
+    };
+    setValues(next);
+    revalidate(next);
+  };
 
   const addDelivery = (): void =>
     setValues((v) => ({ ...v, delivery: [...v.delivery, emptyDelivery()] }));

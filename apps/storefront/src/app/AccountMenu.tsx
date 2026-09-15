@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { logout } from './register/api';
 
 function initials(fullName: string | null | undefined): string {
@@ -18,7 +17,6 @@ export function AccountMenu({
 }: {
   fullName?: string | null;
 }): React.JSX.Element {
-  const router = useRouter();
   const [signingOut, setSigningOut] = React.useState(false);
   const label = initials(fullName);
   const accountName = fullName?.trim() || 'Your account';
@@ -28,8 +26,7 @@ export function AccountMenu({
     setSigningOut(true);
     void (async () => {
       await logout();
-      router.push('/');
-      router.refresh();
+      window.location.assign('/');
     })();
   };
 

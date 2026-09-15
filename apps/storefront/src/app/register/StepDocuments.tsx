@@ -158,6 +158,7 @@ export function StepDocuments({
         onDocsChange={setDocs}
         onFieldFocus={onFieldFocus}
         whyTerm="Documents"
+        compactHints
       />
 
       {/* ------------------------------------------------------ preferences */}

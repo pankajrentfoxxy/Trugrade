@@ -14,6 +14,7 @@ import {
   mergeCompanyGstPrefill,
   prefillCompanyFromVerifiedGst,
 } from './gst-company-prefill';
+import { liveErrors } from './live-errors';
 import { validateCompanyName, validateYearEstablished } from './validation';
 
 /**
@@ -147,10 +148,22 @@ export function StepCompany({
     [currentYear],
   );
 
+  /**
+   * Every change re-judges the fields that hold something, so a name that is
+   * one character long says so as it is typed rather than on Continue. Fields
+   * still empty are left alone until the button runs the full check.
+   */
   const set = <K extends keyof CompanyValues>(key: K, value: CompanyValues[K]): void => {
     if (locked.has(key as string)) return;
-    setValues((v) => ({ ...v, [key]: value }));
-    setErrors(({ [key as string]: _dropped, ...rest }) => rest);
+    const next = { ...values, [key]: value };
+    setValues(next);
+    setErrors(
+      skipValidation
+        ? {}
+        : liveErrors(check(next), (k) =>
+            String(next[k as keyof CompanyValues] ?? '').trim().length > 0,
+          ),
+    );
   };
 
   /** Blur, not keystroke: one row per pause, not one per character. */

@@ -106,7 +106,7 @@ describe('step 5 preferences', () => {
     expect(screen.queryByLabelText(/Date on the gst registration certificate/i)).toBeNull();
     expect(screen.getByLabelText(/Date on the authorised signatory id/i)).toBeInTheDocument();
     // The rule's own number, rendered in the date field's hint only.
-    expect(screen.getByText(/We can only accept one issued in the last/i)).toHaveTextContent('90');
+    expect(screen.getByText(/Issued in the last/i)).toHaveTextContent('90');
     expect(screen.getAllByText(/issued in the last/i)).toHaveLength(1);
   });
 });

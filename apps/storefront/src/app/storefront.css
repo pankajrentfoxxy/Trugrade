@@ -2405,3 +2405,16 @@ html[data-t="light"] footer .pays span{
   border-color:var(--storefront-chrome-line-2);
   color:var(--storefront-on-chrome-2);
 }
+
+/* ==========================================================================
+ * Auth dialog — the header's sign-in and sign-up, over the page
+ * ======================================================================== */
+.authmodal{max-width:860px}
+.authmodal__grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s6);align-items:stretch}
+.authart{display:flex;flex-direction:column;justify-content:flex-end;gap:var(--s3);padding:var(--s5);border-radius:var(--r-lg);background:var(--chrome);color:var(--on-chrome);min-height:360px}
+.authart__svg{width:100%;height:auto;max-height:220px;margin-bottom:auto}
+.authart__claim{margin:0;font-size:20px;line-height:1.2;color:var(--on-chrome);max-width:16ch}
+.authart__body{margin:0;font-size:13px;line-height:1.5;color:var(--on-chrome-2);max-width:36ch}
+.authform{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.authmodal .authform .hub-link,.authcard .hub-link{background:none;border:0;padding:0;font:inherit;color:var(--acc-ink);cursor:pointer;text-decoration:underline}
+@media (max-width:760px){.authmodal__grid{grid-template-columns:1fr}.authart{display:none}}

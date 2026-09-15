@@ -8,6 +8,7 @@ import {
   StatusPill,
 } from '@trugrade/ui';
 import { CartSkeleton } from './CartSkeleton';
+import { CheckoutGate } from './CheckoutGate';
 import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../register/api';
 import {
@@ -585,9 +586,7 @@ function CartOrderPanel({
 
       {cart && cart.itemCount > 0 && !cart.needsAttention && (
         <>
-          <a className="pill acc cartgo" href={`/checkout?cart=${cart.id}`}>
-            Continue to checkout
-          </a>
+          <CheckoutGate cartId={cart.id} />
           <a className="pill wire cartmore" href="/search">
             Browse more laptops
           </a>

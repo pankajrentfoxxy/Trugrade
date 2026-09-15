@@ -299,11 +299,57 @@ describe('a new organisation is set up before it lands', () => {
     });
 
     await waitFor(() => expect(calls).toContain('/api/onboarding/start'));
-    await waitFor(() => expect(onSignedIn).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledWith('/home', { created: true }));
     // Every call carried the identical normalised number the code was sent to.
     const sent = (global.fetch as jest.Mock).mock.calls
       .filter(([path]) => String(path).startsWith('/api/auth/buyer/otp'))
       .map(([, init]) => JSON.parse((init as RequestInit).body as string).identifier);
     expect(new Set(sent).size).toBe(1);
+  });
+});
+
+describe('typing a code keeps the code box focused', () => {
+  it('does not remount the inputs between digits', async () => {
+    replies['/api/auth/buyer/otp'] = SENT;
+    render(<OtpSignIn mode="register" sellerRegisterUrl={SELLER} />);
+    fireEvent.change(screen.getByLabelText(/Mobile number/), { target: { value: '9876543210' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+    });
+    await screen.findByLabelText(/Six-digit code/);
+    const first = screen.getAllByRole('textbox')[0]!;
+    first.focus();
+    await act(async () => {
+      fireEvent.change(first, { target: { value: '1' } });
+    });
+    // The same element is still in the document and the second box has focus:
+    // a remount would have replaced both and left focus on the body.
+    expect(document.body.contains(first)).toBe(true);
+    expect(document.activeElement).toBe(screen.getAllByRole('textbox')[1]);
+  });
+});
+
+describe('the identifier says what is wrong with it while it is being typed', () => {
+  it('counts digits on the sign-up mobile before the button is pressed', () => {
+    render(<OtpSignIn mode="register" sellerRegisterUrl={SELLER} />);
+    const box = screen.getByLabelText(/Mobile number/);
+    box.focus();
+    fireEvent.change(box, { target: { value: '98765' } });
+    expect(screen.getByText(/5 so far/)).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: '9876543210' } });
+    expect(screen.queryByText(/so far/)).not.toBeInTheDocument();
+  });
+
+  it('applies the mobile rule to digits and the email rule to anything else on sign-in', () => {
+    render(<OtpSignIn mode="sign-in" sellerRegisterUrl={SELLER} />);
+    const box = screen.getByLabelText(/Mobile number or work email/);
+    box.focus();
+    fireEvent.change(box, { target: { value: '9876' } });
+    expect(screen.getByText(/4 so far/)).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: 'priya@acme' } });
+    expect(screen.queryByText(/so far/)).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    fireEvent.change(box, { target: { value: 'priya@acme.example' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

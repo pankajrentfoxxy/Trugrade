@@ -658,9 +658,12 @@ export function StepStatutory({
     }));
 
   const editGstin = (key: string, raw: string): void => {
-    setError(key, undefined);
+    // Judged as it is typed: a number that cannot be a GSTIN says so before
+    // anyone presses Verify. An empty box waits for Continue.
+    const typed = raw.toUpperCase();
+    setError(key, typed.trim() && !skipValidation ? validateGstin(typed) : undefined);
     // Editing the number throws away the answer that belonged to the old one.
-    setRow(key, { gstin: raw.toUpperCase(), outcome: null, confirmed: false, deferred: false });
+    setRow(key, { gstin: typed, outcome: null, confirmed: false, deferred: false });
     retry.clear(key);
   };
 
@@ -810,11 +813,13 @@ export function StepStatutory({
           onFocus={() => onFieldFocus('PAN')}
           onBlur={() => saveOnBlur()}
           onChange={(e) => {
-            setError('pan', undefined);
+            const typed = e.target.value.toUpperCase();
+            // Judged as it is typed; an empty box waits for Continue.
+            setError('pan', typed.trim() && !skipValidation ? validatePan(typed) : undefined);
             retry.clear('pan');
             setValues((v) => ({
               ...v,
-              pan: e.target.value.toUpperCase(),
+              pan: typed,
               panOutcome: null,
               panDeferred: false,
             }));
@@ -1059,7 +1064,13 @@ export function StepStatutory({
             onFocus={() => onFieldFocus('Registry numbers')}
             onBlur={saveOnBlur}
             onChange={(fieldCode, value) => {
-              setError(fieldCode, undefined);
+              const field = fields.find((f) => f.fieldCode === fieldCode);
+              setError(
+                fieldCode,
+                field && value.trim() && !skipValidation
+                  ? capturedError(field, value, today)
+                  : undefined,
+              );
               setValues((v) => ({ ...v, captured: { ...v.captured, [fieldCode]: value } }));
             }}
           />
