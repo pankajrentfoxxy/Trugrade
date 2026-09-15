@@ -121,7 +121,7 @@ export async function SiteHeader({
             <a href="/qc/verify" className="hide-md">
               Verify a certificate
             </a>
-            <a href="/account/orders" className="hide-md">
+            <a href="/orders" className="hide-md">
               Track order
             </a>
             <a href="/legal/grievance" className="hide-md">

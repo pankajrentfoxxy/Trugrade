@@ -491,7 +491,7 @@ function BillingStep({
         title="No GSTIN on your account yet"
         body="We invoice a registered business, so we need the GSTIN this order should be billed to. Add one in Account → Tax details and come straight back — the hold is still running."
         action={
-          <a className="pill acc" href="/account/tax">
+          <a className="pill acc" href="/profile">
             Add a GSTIN
           </a>
         }
@@ -587,7 +587,7 @@ function DeliveryStep({
         title="No delivery site on your account yet"
         body="Add the site these machines should be delivered to, with the person who will receive them. A B2B delivery that arrives at a closed loading dock is a failed delivery, so the contact and the gate note matter."
         action={
-          <a className="pill acc" href="/account/addresses">
+          <a className="pill acc" href="/addresses">
             Add a delivery site
           </a>
         }
@@ -1165,7 +1165,7 @@ function Failed({ message }: { message: string }): React.JSX.Element {
 }
 
 /**
- * The order exists at `/account/orders/{orderNumber}` (T17). This screen is the
+ * The order exists at `/orders/{orderNumber}` (T17). This screen is the
  * thank-you terminal — one headline, the order number, and a path to the record.
  * The full break-up and serial list live on the order screen only; repeating them
  * here is two places for the same figures to disagree.
@@ -1209,7 +1209,7 @@ function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
           </div>
         </dl>
         <div className="chdone-actions">
-          <a className="pill acc" href={`/account/orders/${order.orderNumber}`}>
+          <a className="pill acc" href={`/orders/${order.orderNumber}`}>
             View your order
           </a>
           <a className="pill wire chdonewire" href="/">

@@ -304,6 +304,49 @@ export const verifyMfa = (code: string): Promise<ApiResult<SessionView>> =>
   post<SessionView>('/api/auth/mfa/verify', { code });
 
 /* ==========================================================================
+ * The buyer's sign-in — POST /api/auth/buyer/*
+ * ======================================================================== */
+
+/**
+ * Ask for the buyer's code. `identifier` is a mobile number or a work email,
+ * and the answer is the same shape whether or not anything is behind it — a
+ * mask of what was typed, never of anything we hold.
+ */
+export const sendBuyerCode = (identifier: string): Promise<ApiResult<OtpSent>> =>
+  post<OtpSent>('/api/auth/buyer/otp', { identifier });
+
+/** The session, plus whether this code created the organisation. */
+export interface BuyerSession extends SessionView {
+  created: boolean;
+}
+
+export const verifyBuyerCode = (
+  identifier: string,
+  code: string,
+): Promise<ApiResult<BuyerSession>> =>
+  post<BuyerSession>('/api/auth/buyer/otp/verify', { identifier, code });
+
+/* ==========================================================================
+ * Filling in the account — PATCH /api/auth/me, POST /api/auth/contact/*
+ * ======================================================================== */
+
+export const updateMe = (fullName: string): Promise<ApiResult<SessionView>> =>
+  call<SessionView>('/api/auth/me', { method: 'PATCH', body: JSON.stringify({ fullName }) });
+
+/** A code to a FIRST email or mobile on the signed-in account. */
+export const sendContactAddCode = (
+  field: OtpChannel,
+  value: string,
+): Promise<ApiResult<OtpSent>> => post<OtpSent>('/api/auth/contact/otp', { field, value });
+
+export const verifyContactAddCode = (
+  field: OtpChannel,
+  value: string,
+  code: string,
+): Promise<ApiResult<SessionView>> =>
+  post<SessionView>('/api/auth/contact/verify', { field, value, code });
+
+/* ==========================================================================
  * Onboarding — the stepper
  * ======================================================================== */
 

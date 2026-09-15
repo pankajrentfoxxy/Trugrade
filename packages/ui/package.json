@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./globals.css": "./src/globals.css",
-    "./tailwind": "./tailwind.config.ts"
+    "./tailwind": "./tailwind.config.ts",
+    "./hub.css": "./src/hub.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit",

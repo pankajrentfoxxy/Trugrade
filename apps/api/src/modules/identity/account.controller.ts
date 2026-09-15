@@ -147,17 +147,32 @@ const setMemberPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+/**
+ * Both sides' invitable roles. Which side a caller is on is the service's
+ * business — it reads the organisation, not the body — so a buyer asking for a
+ * vendor role is refused there with the roles they may actually pick.
+ */
 const createInviteSchema = z.object({
   email: emailSchema,
   fullName: fullNameSchema,
   mobile: mobileSchema,
-  role: z.enum(['VENDOR_ADMIN', 'VENDOR_FINANCE', 'VENDOR_VIEWER']),
+  role: z.enum([
+    'VENDOR_ADMIN',
+    'VENDOR_FINANCE',
+    'VENDOR_VIEWER',
+    'CUSTOMER_ADMIN',
+    'CUSTOMER_BUYER',
+    'CUSTOMER_APPROVER',
+    'CUSTOMER_FINANCE',
+    'CUSTOMER_VIEWER',
+  ]),
   facilityIds: z.array(uuidSchema).default([]),
 });
 
+/** Optional only for a buyer's invitee, who signs in with a code. The service enforces that. */
 const acceptInviteSchema = z.object({
   token: z.string().trim().min(16),
-  password: passwordSchema,
+  password: passwordSchema.optional(),
 });
 
 type CreateAddressDto = z.infer<typeof createAddressSchema>;

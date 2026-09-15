@@ -33,4 +33,15 @@ export default {
     const api = process.env.API_ORIGIN ?? 'http://localhost:4000';
     return [{ source: '/api/:path*', destination: `${api}/api/:path*` }];
   },
+
+  /**
+   * The customer portal moved from `/account/*` to the top level — `/home`,
+   * `/orders`, `/team` and so on. Old links in emails and bookmarks still land.
+   */
+  async redirects() {
+    return [
+      { source: '/account', destination: '/home', permanent: true },
+      { source: '/account/:path*', destination: '/:path*', permanent: true },
+    ];
+  },
 };

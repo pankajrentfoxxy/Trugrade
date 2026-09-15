@@ -76,6 +76,43 @@ const identifierSchema = z.string().trim().min(3).max(320);
 export const accountOtpSchema = z.object({ email: identifierSchema });
 export type AccountOtpDto = z.infer<typeof accountOtpSchema>;
 
+/**
+ * The buyer's one way in: a mobile number or a work email, and a code.
+ *
+ * `identifier` is loose for the reason `accountOtpSchema.email` is loose — a
+ * 422 that says "that is not an email" on one string and a 200 on another is
+ * an oracle. The server normalises it as a mobile first and an email second.
+ */
+export const buyerOtpSchema = z.object({ identifier: identifierSchema });
+export type BuyerOtpDto = z.infer<typeof buyerOtpSchema>;
+
+export const buyerOtpVerifySchema = z.object({
+  identifier: identifierSchema,
+  code: otpCodeSchema,
+});
+export type BuyerOtpVerifyDto = z.infer<typeof buyerOtpVerifySchema>;
+
+/**
+ * Adding a FIRST email or mobile to a signed-in account that has none. Strict
+ * schemas here, unlike sign-in: the caller is already known, so a refusal that
+ * names the rule leaks nothing.
+ */
+export const contactAddSchema = z.discriminatedUnion('field', [
+  z.object({ field: z.literal('EMAIL'), value: emailSchema }),
+  z.object({ field: z.literal('MOBILE'), value: mobileSchema }),
+]);
+export type ContactAddDto = z.infer<typeof contactAddSchema>;
+
+export const contactAddVerifySchema = z.discriminatedUnion('field', [
+  z.object({ field: z.literal('EMAIL'), value: emailSchema, code: otpCodeSchema }),
+  z.object({ field: z.literal('MOBILE'), value: mobileSchema, code: otpCodeSchema }),
+]);
+export type ContactAddVerifyDto = z.infer<typeof contactAddVerifySchema>;
+
+/** The signed-in person's own name. The only field on the account they edit freely. */
+export const updateMeSchema = z.object({ fullName: fullNameSchema });
+export type UpdateMeDto = z.infer<typeof updateMeSchema>;
+
 /** Redeem a sign-in code. */
 export const loginOtpVerifySchema = z.object({
   email: identifierSchema,

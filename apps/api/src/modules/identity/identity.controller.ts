@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req, Res } from '@nestjs/common';
 import type { CookieOptions, Request, Response } from 'express';
 import {
   normaliseEmail,
@@ -42,6 +42,10 @@ import {
 } from './internal/contact-change.service';
 import {
   accountOtpSchema,
+  buyerOtpSchema,
+  buyerOtpVerifySchema,
+  contactAddSchema,
+  contactAddVerifySchema,
   contactChangeCancelSchema,
   contactChangeRequestSchema,
   contactChangeVerifySchema,
@@ -52,7 +56,12 @@ import {
   registerSchema,
   registrationOtpSchema,
   registrationOtpVerifySchema,
+  updateMeSchema,
   type AccountOtpDto,
+  type BuyerOtpDto,
+  type BuyerOtpVerifyDto,
+  type ContactAddDto,
+  type ContactAddVerifyDto,
   type ContactChangeCancelDto,
   type ContactChangeRequestDto,
   type ContactChangeVerifyDto,
@@ -63,6 +72,7 @@ import {
   type RegisterDto,
   type RegistrationOtpDto,
   type RegistrationOtpVerifyDto,
+  type UpdateMeDto,
 } from './dto/identity.dto';
 
 /** Ten new organisations a day from one address is already generous. */
@@ -540,6 +550,141 @@ export class IdentityController {
     };
   }
 
+  // -------------------------------------------------------------------------
+  // The buyer's sign-in: a mobile number or a work email, and a code
+  // -------------------------------------------------------------------------
+  //
+  // One screen on the storefront does both jobs. A mobile number nobody has
+  // registered creates a buyer organisation and signs its owner in; a mobile or
+  // email that is already on a buyer account simply signs that person in. There
+  // is no password anywhere in it, and the name and work email are collected
+  // later, on the profile page, once there is an account to hang them on.
+  //
+  // The two routes answer the same whether the identifier is known or not —
+  // the same shape, the same mask of what was typed, the same wait. Which code
+  // was actually issued (a registration code, a sign-in code, or none at all)
+  // is decided here and never disclosed.
+
+  /**
+   * Send the buyer's code.
+   *
+   * A known, active buyer account gets a sign-in code on the channel they typed.
+   * An unknown mobile gets a registration code, because that is the sign-up.
+   * An unknown email gets nothing — sign-up is by mobile only, and a code to an
+   * address with no account behind it would be a registration we do not offer.
+   * Vendor and staff accounts get nothing here either: they sign in on the
+   * console, and this route cannot tell a caller that they exist.
+   */
+  @Post('buyer/otp')
+  @Public()
+  @HttpCode(200)
+  async sendBuyerCode(
+    @Body(new ZodValidationPipe(buyerOtpSchema)) body: BuyerOtpDto,
+  ): Promise<RegistrationOtpResponse> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(ACCOUNT_OTP_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const target = buyerTarget(body.identifier);
+    const account = await this.identity.findByIdentifier(target.value);
+    const orgType = account ? (await this.identity.getUser(account.userId)).orgType : null;
+
+    const signIn =
+      account !== null &&
+      account.status === 'ACTIVE' &&
+      orgType === 'BUYER' &&
+      !account.mfaRequired;
+    const signUp = account === null && target.channel === 'MOBILE';
+
+    const issued = await this.otp.issue({
+      target: target.value,
+      purpose: account ? 'LOGIN' : 'REGISTRATION',
+      channel: target.channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
+      templateCode: account ? LOGIN_OTP_TEMPLATE : REGISTER_OTP_TEMPLATE,
+      refType: signIn ? 'user_account' : undefined,
+      refId: signIn ? account.userId : undefined,
+      exposeDevCode: this.config.exposeOtpDevCode,
+      deliver: signIn || signUp,
+    });
+
+    return {
+      channel: target.channel,
+      sentTo: maskValue(target.value),
+      expiresAt: issued.expiresAt.toISOString(),
+      resendAvailableAt: issued.resendAvailableAt.toISOString(),
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
+  }
+
+  /**
+   * Redeem the buyer's code: sign in, or create the organisation and sign in.
+   *
+   * Which purpose the code was issued under is re-derived from the account
+   * table rather than trusted from the client, so a caller cannot present a
+   * registration code against an existing account or the reverse. `created`
+   * tells the storefront whether to start onboarding for a brand-new buyer.
+   */
+  @Post('buyer/otp/verify')
+  @Public()
+  @HttpCode(200)
+  async verifyBuyerCode(
+    @Body(new ZodValidationPipe(buyerOtpVerifySchema)) body: BuyerOtpVerifyDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<SessionResponse & { created: boolean }> {
+    const ctx = this.ctx.get();
+    await this.limiter.consume(ACCOUNT_OTP_VERIFY_IP_LIMIT, ctx?.ip ?? 'unknown');
+
+    const target = buyerTarget(body.identifier);
+    const account = await this.identity.findByIdentifier(target.value);
+
+    try {
+      await this.otp.verify({
+        target: target.value,
+        purpose: account ? 'LOGIN' : 'REGISTRATION',
+        code: body.code,
+      });
+    } catch (e) {
+      if (e instanceof RateLimitedError) throw e;
+      throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+    }
+
+    let userId: string;
+    let created = false;
+    if (account) {
+      userId = account.userId;
+    } else {
+      // Unreachable for an email — no registration code is ever issued to one —
+      // and it says the code's own refusal rather than a distinctive one.
+      if (target.channel !== 'MOBILE') throw new ValidationError(CODE_REFUSED, { code: CODE_REFUSED });
+      this.assertPortalAccess(req, 'BUYER');
+      const made = await this.identity.createOrganizationWithOwner({
+        orgType: 'BUYER',
+        // Not asked for yet. The profile page's Account card collects it.
+        fullName: '',
+        mobile: target.value,
+      });
+      userId = made.userId;
+      created = true;
+    }
+
+    const { tokens, user, mfaRequired } = await this.identity.loginWithVerifiedCode({
+      userId,
+      identifier: target.value,
+      ip: ctx?.ip,
+      userAgent: ctx?.userAgent,
+    });
+
+    this.assertPortalAccess(req, user.orgType);
+    this.setSessionCookies(req, res, tokens);
+    return {
+      ...principalOf(user),
+      mfaRequired,
+      accessToken: tokens.accessToken,
+      ...userSessionFields(user),
+      created,
+    };
+  }
+
   /**
    * Send a password-reset code.
    *
@@ -936,6 +1081,66 @@ export class IdentityController {
   }
 
   // -------------------------------------------------------------------------
+  // Filling in what the mobile-only sign-up did not ask for
+  // -------------------------------------------------------------------------
+  //
+  // Same posture as the contact change above: a full session, the user id from
+  // the context, nothing from the body that names an account. These exist for
+  // one person — the buyer who signed up with a mobile number and is now on
+  // their profile page adding a name and a work email.
+
+  /** Send a code to a first email or mobile. Refused if the field is already set. */
+  @Post('contact/otp')
+  @HttpCode(200)
+  async sendContactAddCode(
+    @Body(new ZodValidationPipe(contactAddSchema)) body: ContactAddDto,
+  ): Promise<RegistrationOtpResponse> {
+    const issued = await this.contactChange.requestAdd(this.requirePrincipal().userId, body);
+    return {
+      channel: body.field,
+      sentTo: issued.sentTo,
+      expiresAt: issued.expiresAt.toISOString(),
+      resendAvailableAt: issued.resendAvailableAt.toISOString(),
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
+  }
+
+  /** Redeem it, and answer with the session as it now stands. */
+  @Post('contact/verify')
+  @HttpCode(200)
+  async verifyContactAddCode(
+    @Body(new ZodValidationPipe(contactAddVerifySchema)) body: ContactAddVerifyDto,
+  ): Promise<SessionResponse> {
+    const principal = this.requirePrincipal();
+    await this.contactChange.verifyAdd(principal.userId, body);
+    return this.ownSession(principal.userId);
+  }
+
+  /** The signed-in person's own name. */
+  @Patch('me')
+  @HttpCode(200)
+  async updateMe(
+    @Body(new ZodValidationPipe(updateMeSchema)) body: UpdateMeDto,
+  ): Promise<SessionResponse> {
+    const principal = this.requirePrincipal();
+    await this.identity.setOwnFullName(principal.userId, body.fullName);
+    return this.ownSession(principal.userId);
+  }
+
+  /**
+   * The session as `GET /auth/session` would describe it, read fresh after an
+   * own-account write so the screen can repaint from the response alone.
+   */
+  private async ownSession(userId: string): Promise<SessionResponse> {
+    const user = await this.identity.getUser(userId);
+    return {
+      ...principalOf(user),
+      mfaRequired: user.mfaRequired && !(this.ctx.principal?.mfaSatisfied ?? false),
+      ...userSessionFields(user),
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // Cookies
   // -------------------------------------------------------------------------
 
@@ -1102,6 +1307,22 @@ function userSessionFields(user: {
     ...(user.email ? { email: user.email } : {}),
     ...(user.mobile ? { mobile: user.mobile } : {}),
   };
+}
+
+/**
+ * What a buyer typed into the one sign-in box, as the address a code goes to.
+ *
+ * A mobile first — ten digits, with or without +91 — and an email otherwise. An
+ * unparseable string is still an "email" here so that the send route answers
+ * it exactly as it answers an address with no account: nothing is delivered
+ * and nothing is said. Both routes call this, so a code is verified against
+ * the identical string it was issued to.
+ */
+function buyerTarget(identifier: string): { channel: 'EMAIL' | 'MOBILE'; value: string } {
+  const mobile = normaliseMobile(identifier);
+  if (mobile) return { channel: 'MOBILE', value: mobile };
+  const email = normaliseEmail(identifier);
+  return { channel: 'EMAIL', value: (email ?? identifier.trim()).toLowerCase() };
 }
 
 /**

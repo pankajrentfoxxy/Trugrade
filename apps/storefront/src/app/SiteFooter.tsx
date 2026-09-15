@@ -43,7 +43,7 @@ const BUY = [
   ['All laptops', '/search'],
   ['Bulk requirement', '/bulk'],
   ['Verify a certificate', '/qc/verify'],
-  ['Your orders', '/account/orders'],
+  ['Your orders', '/orders'],
 ] as const;
 
 const SELL = [

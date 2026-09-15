@@ -73,7 +73,7 @@ export const PERMISSIONS = [
   'identity.user.read',
   'identity.user.write',
   'identity.role.assign',
-  /** Vendor owner-only team invites and member management. */
+  /** Owner-only team invites and member management, on both sides of the marketplace. */
   'identity.team.manage',
   'identity.audit.read',
   'kyc.application.read',
@@ -363,6 +363,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'identity.user.read',
     'identity.user.write',
     'identity.role.assign',
+    // The buyer portal's team screen invites colleagues by email, exactly as the
+    // supplier hub does, and the invite routes are gated on this one permission.
+    'identity.team.manage',
     'payment.invoice.read_own',
     'platform.ticket.read',
     'platform.ticket.write',

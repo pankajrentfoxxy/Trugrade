@@ -181,14 +181,18 @@ export class IdentityService implements IIdentityService {
     /** Omitted at self-service registration — step 2 supplies the real name. */
     legalName?: string;
     fullName: string;
-    email: string;
+    /**
+     * Omitted by the buyer's mobile-only sign-up, which collects and verifies
+     * the work email later on the profile page. Every other caller supplies it.
+     */
+    email?: string;
     mobile: string;
     password?: string;
     leadId?: string | null;
   }): Promise<{ orgId: string; userId: string }> {
-    const email = normaliseEmail(input.email);
+    const email = input.email === undefined ? null : normaliseEmail(input.email);
     const mobile = normaliseMobile(input.mobile);
-    if (!email || !mobile) {
+    if ((input.email !== undefined && !email) || !mobile) {
       throw new ValidationError(
         'We need a valid work email and mobile number to create the account.',
       );
@@ -213,8 +217,8 @@ export class IdentityService implements IIdentityService {
           full_name: input.fullName,
           email,
           mobile,
-          // Contact verification is what got them here, so both are verified.
-          email_verified_at: this.clock.now(),
+          // Contact verification is what got them here, so what was given is verified.
+          email_verified_at: email ? this.clock.now() : null,
           mobile_verified_at: this.clock.now(),
           is_org_owner: true,
           status: 'ACTIVE',
@@ -223,7 +227,7 @@ export class IdentityService implements IIdentityService {
 
       await this.assignRole(user.id, ownerRole);
 
-      if (input.password) {
+      if (input.password && email) {
         await this.passwords.setPassword(user.id, input.password, {
           email,
           mobile,
@@ -320,12 +324,12 @@ export class IdentityService implements IIdentityService {
     );
   }
 
-  private async assertContactAvailable(email: string, mobile: string): Promise<void> {
+  private async assertContactAvailable(email: string | null, mobile: string): Promise<void> {
     const clash = await this.prisma.$queryRaw<
       Array<{ email: string | null; mobile: string | null }>
     >`
       SELECT email::text AS email, mobile FROM identity.user_account
-      WHERE (lower(email::text) = lower(${email}) OR mobile = ${mobile})
+      WHERE (lower(email::text) = lower(${email ?? ''}) OR mobile = ${mobile})
         AND status <> 'DEACTIVATED'
       LIMIT 1`;
 
@@ -334,13 +338,41 @@ export class IdentityService implements IIdentityService {
 
     // Name the one that actually collided. "Already registered" against the wrong
     // field sends people to support.
-    if (found.email && found.email.toLowerCase() === email.toLowerCase()) {
+    if (email && found.email && found.email.toLowerCase() === email.toLowerCase()) {
       throw new ValidationError(IdentityService.EMAIL_REGISTERED, {
         email: IdentityService.EMAIL_REGISTERED,
       });
     }
     throw new ValidationError(IdentityService.MOBILE_REGISTERED, {
       mobile: IdentityService.MOBILE_REGISTERED,
+    });
+  }
+
+  /**
+   * The signed-in person's own display name.
+   *
+   * Registration used to be the only place a name was written, and the
+   * mobile-only buyer sign-up creates the owner with no name at all — the
+   * profile page's Account card is where it is filled in.
+   */
+  async setOwnFullName(userId: string, fullName: string): Promise<void> {
+    const before = await this.prisma.db.user_account.findUnique({
+      where: { id: userId },
+      select: { full_name: true, org_id: true },
+    });
+    if (!before) throw new UnauthenticatedError();
+    await this.prisma.db.user_account.update({
+      where: { id: userId },
+      data: { full_name: fullName },
+    });
+    await this.audit.record({
+      action: 'identity.user.renamed',
+      entityType: 'user_account',
+      entityId: userId,
+      before: { fullName: before.full_name },
+      after: { fullName },
+      actorUserId: userId,
+      actorOrgId: before.org_id,
     });
   }
 

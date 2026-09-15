@@ -1,42 +1,29 @@
 import type { Metadata } from 'next';
-import { getStats, getStepDefinitions } from '../../lib/api';
-import { SiteHeader } from '../SiteHeader';
-import { BuyerRegistration } from './BuyerRegistration';
+import { headers } from 'next/headers';
+
+import { resolveConsoleBaseUrl } from '../../lib/console-url';
+import { OtpSignIn } from '../sign-in/OtpSignIn';
 
 /**
- * **Archetype D — Flow.** Step rail, one step, "why we ask" rail.
+ * **ARCHETYPE F — Focus.** One task, centred, no navigation.
  *
- * The five buyer steps are seeded rows in `kyc.onboarding_step_definition`, so
- * this page fetches them rather than listing them: the rail, the titles, the
- * purpose notes and the durations are all the API's, and a step added there
- * appears here without a release.
- *
- * The page is a server component so the rail renders in the HTML on first
- * paint; everything that needs a session, a code or a draft is in
- * `RegisterFlow`, which is the client half.
+ * Creating a buyer account: a mobile number and a code, and the buyer is
+ * signed in and on their portal. Everything the five-step wizard used to ask
+ * before letting anyone in — name, work email, GSTIN, company, delivery sites,
+ * documents — is now filled in from `/profile`, one card at a time, whenever
+ * suits. Ordering opens once that profile is verified.
  */
 
 export const metadata: Metadata = {
   title: 'Create a buyer account',
   description:
-    'Open a Trugrade buyer account: verify your work email and mobile, tell us who you are, and finish the KYC steps whenever suits you.',
+    'Open a Trugrade buyer account with your mobile number and a code. Finish your company profile from your account whenever suits.',
+  robots: { index: false, follow: false },
 };
 
-/** The definitions change with a policy decision, not with stock. */
-export const revalidate = 300;
-
 export default async function Page(): Promise<React.JSX.Element> {
-  const [stats, definitions] = await Promise.all([getStats(), getStepDefinitions('BUYER')]);
+  const h = await headers();
+  const consoleBase = resolveConsoleBaseUrl(h.get('host'), h.get('x-forwarded-proto') ?? undefined);
 
-  return (
-    <>
-      <SiteHeader inspected={stats ? stats.unitsInspected : null} />
-
-      <div className="body">
-        <div className="wrap">
-          <BuyerRegistration definitions={definitions} />
-        </div>
-      </div>
-    </>
-  );
+  return <OtpSignIn mode="register" sellerRegisterUrl={`${consoleBase}/sell/register`} />;
 }

@@ -59,7 +59,7 @@ export function AccountMenu({
       </button>
       <div className="usermenu-pop" role="menu" aria-label="Account">
         <div className="usermenu-panel">
-          <Link className="usermenu-item" href="/account" role="menuitem">
+          <Link className="usermenu-item" href="/home" role="menuitem">
             Account
           </Link>
           <button

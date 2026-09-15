@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  CUSTOMER_ROLES,
   MFA_REQUIRED_ROLES,
   VENDOR_ROLES,
   normaliseEmail,
@@ -61,7 +62,67 @@ const ROLE_LABEL: Record<string, string> = {
   VENDOR_ADMIN: 'Operations Manager',
   VENDOR_FINANCE: 'Finance',
   VENDOR_VIEWER: 'Warehouse',
+  CUSTOMER_OWNER: 'Owner',
+  CUSTOMER_ADMIN: 'Admin',
+  CUSTOMER_BUYER: 'Buyer',
+  CUSTOMER_APPROVER: 'Approver',
+  CUSTOMER_FINANCE: 'Finance',
+  CUSTOMER_VIEWER: 'Viewer',
 };
+
+/** The database's spelling of an organisation's kind, as the invite reads it. */
+type InviteOrgType = 'VENDOR' | 'BUYER' | 'INTERNAL';
+
+/**
+ * Which roles an organisation of this kind may hand out, and the one it may
+ * not: an owner is promoted, never invited, on either side.
+ */
+function invitableRoles(orgType: InviteOrgType): {
+  allowed: readonly string[];
+  owner: string;
+  refusal: string;
+  noun: string;
+} {
+  if (orgType === 'BUYER') {
+    return {
+      allowed: CUSTOMER_ROLES,
+      owner: 'CUSTOMER_OWNER',
+      refusal: 'Pick Admin, Buyer, Approver, Finance or Viewer.',
+      noun: 'buyer',
+    };
+  }
+  return {
+    allowed: VENDOR_ROLES,
+    owner: 'VENDOR_OWNER',
+    refusal: 'Pick Owner, Operations, Finance or Warehouse.',
+    noun: 'vendor',
+  };
+}
+
+/**
+ * Where the emailed link lands. A buyer's team lives on the storefront and a
+ * supplier's on the console; a buyer sent to the console would be refused at
+ * the door as the wrong kind of account.
+ */
+function inviteDestination(
+  orgType: InviteOrgType,
+  urls: { storefront: string; console: string },
+): { path: string; base: string; templateCode: string; orgFallback: string } {
+  if (orgType === 'BUYER') {
+    return {
+      base: urls.storefront,
+      path: '/invite/accept',
+      templateCode: 'BUYER_TEAM_INVITE',
+      orgFallback: 'your buyer account',
+    };
+  }
+  return {
+    base: urls.console,
+    path: '/team/accept',
+    templateCode: 'VENDOR_TEAM_INVITE',
+    orgFallback: 'your supplier account',
+  };
+}
 
 @Injectable()
 export class TeamInviteService {
@@ -159,12 +220,20 @@ export class TeamInviteService {
       if (!mobile) fields.mobile = 'Enter a valid 10-digit mobile number.';
       throw new ValidationError('Enter a valid email and a 10-digit mobile number.', fields);
     }
-    if (!(VENDOR_ROLES as readonly string[]).includes(input.role)) {
-      throw new ValidationError(`${input.role} is not a vendor role.`, {
-        role: 'Pick Owner, Operations, Finance or Warehouse.',
+    const [org] = await this.prisma.$queryRaw<
+      Array<{ legal_name: string; org_type: InviteOrgType }>
+    >`
+      SELECT legal_name, org_type::text AS org_type
+        FROM identity.organization WHERE id = ${orgId}::uuid`;
+    const orgType: InviteOrgType = org?.org_type ?? 'VENDOR';
+    const roles = invitableRoles(orgType);
+
+    if (!roles.allowed.includes(input.role)) {
+      throw new ValidationError(`${input.role} is not a ${roles.noun} role.`, {
+        role: roles.refusal,
       });
     }
-    if (input.role === 'VENDOR_OWNER') {
+    if (input.role === roles.owner) {
       throw new ValidationError(
         'Invite another role first, then promote them to Owner if needed.',
         { role: 'New invites cannot be Owners directly.' },
@@ -212,8 +281,6 @@ export class TeamInviteService {
     const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(this.clock.nowMs() + INVITE_TTL_HOURS * 60 * 60 * 1000);
 
-    const [org] = await this.prisma.$queryRaw<Array<{ legal_name: string }>>`
-      SELECT legal_name FROM identity.organization WHERE id = ${orgId}::uuid`;
     const [inviter] = await this.prisma.$queryRaw<Array<{ full_name: string }>>`
       SELECT full_name FROM identity.user_account WHERE id = ${me.userId}::uuid`;
 
@@ -226,16 +293,17 @@ export class TeamInviteService {
       RETURNING id, created_at`;
     if (!row) throw new PreconditionFailedError('That invite could not be created.');
 
-    const acceptUrl = `${this.config.get('CONSOLE_URL')}/team/accept?token=${encodeURIComponent(rawToken)}`;
+    const destination = this.destinationFor(orgType);
+    const acceptUrl = `${destination.base}${destination.path}?token=${encodeURIComponent(rawToken)}`;
     const receipt = await this.notifications.send({
       channel: 'EMAIL',
       to: email,
-      templateCode: 'VENDOR_TEAM_INVITE',
+      templateCode: destination.templateCode,
       locale: 'en',
       isTransactional: true,
       variables: {
         inviterName: inviter?.full_name ?? 'Your administrator',
-        orgName: org?.legal_name ?? 'your supplier account',
+        orgName: org?.legal_name ?? destination.orgFallback,
         roleLabel: ROLE_LABEL[input.role] ?? input.role,
         mfaNote: (MFA_REQUIRED_ROLES as readonly string[]).includes(input.role)
           ? 'Two-factor authentication is required for this role before you can manage money or team access.'
@@ -297,18 +365,22 @@ export class TeamInviteService {
     if (!row) throw new NotFoundError('invite', { reason: 'not_pending' });
 
     if (row.email) {
-      const [org] = await this.prisma.$queryRaw<Array<{ legal_name: string }>>`
-        SELECT legal_name FROM identity.organization WHERE id = ${orgId}::uuid`;
-      const acceptUrl = `${this.config.get('CONSOLE_URL')}/team/accept?token=${encodeURIComponent(rawToken)}`;
+      const [org] = await this.prisma.$queryRaw<
+        Array<{ legal_name: string; org_type: InviteOrgType }>
+      >`
+        SELECT legal_name, org_type::text AS org_type
+          FROM identity.organization WHERE id = ${orgId}::uuid`;
+      const destination = this.destinationFor(org?.org_type ?? 'VENDOR');
+      const acceptUrl = `${destination.base}${destination.path}?token=${encodeURIComponent(rawToken)}`;
       await this.notifications.send({
         channel: 'EMAIL',
         to: row.email,
-        templateCode: 'VENDOR_TEAM_INVITE',
+        templateCode: destination.templateCode,
         locale: 'en',
         isTransactional: true,
         variables: {
           inviterName: 'Your administrator',
-          orgName: org?.legal_name ?? 'your supplier account',
+          orgName: org?.legal_name ?? destination.orgFallback,
           roleLabel: ROLE_LABEL[row.role_code] ?? row.role_code,
           mfaNote: '',
           acceptUrl,
@@ -392,9 +464,17 @@ export class TeamInviteService {
     };
   }
 
+  /**
+   * Take up an invite.
+   *
+   * `password` is what a supplier's invitee chooses to sign in with. A buyer's
+   * invitee chooses nothing: buyers sign in with a code to the email or mobile
+   * on the invite, so the buyer accept page never asks, and a vendor invite
+   * that arrives without one is refused rather than left passwordless.
+   */
   async acceptInvite(
     token: string,
-    password: string,
+    password: string | undefined,
     input: { ip?: string; userAgent?: string },
   ): Promise<Awaited<ReturnType<IdentityService['loginWithVerifiedCode']>>> {
     const tokenHash = hashToken(token);
@@ -404,6 +484,7 @@ export class TeamInviteService {
       Array<{
         id: string;
         org_id: string;
+        org_type: InviteOrgType;
         email: string | null;
         mobile: string | null;
         full_name: string;
@@ -414,14 +495,20 @@ export class TeamInviteService {
         expires_at: Date;
       }>
     >`
-      SELECT i.id, i.org_id, i.email::text AS email, i.mobile, i.full_name,
-             i.role_id, r.code AS role_code, i.facility_ids, i.status, i.expires_at
+      SELECT i.id, i.org_id, o.org_type::text AS org_type, i.email::text AS email, i.mobile,
+             i.full_name, i.role_id, r.code AS role_code, i.facility_ids, i.status, i.expires_at
         FROM identity.user_invitation i
         JOIN identity.role r ON r.id = i.role_id
+        JOIN identity.organization o ON o.id = i.org_id
        WHERE i.token_hash = ${tokenHash}
        LIMIT 1`;
     if (!invite || invite.status !== 'PENDING') {
       throw new NotFoundError('invite', { reason: 'invalid_or_used' });
+    }
+    if (password === undefined && invite.org_type !== 'BUYER') {
+      throw new ValidationError('Choose a password to finish joining.', {
+        password: 'A password is required for this account.',
+      });
     }
     if (invite.expires_at.getTime() <= now.getTime()) {
       await this.prisma.$executeRaw`
@@ -438,12 +525,16 @@ export class TeamInviteService {
       throw new PreconditionFailedError('This invite is missing contact details.');
     }
 
+    // A passwordless invitee has just proved the mailbox by opening the link in
+    // it, and that email is one of the two things they will sign in with.
+    const emailVerifiedAt = password === undefined ? now : null;
+
     const userId = await this.prisma.runInTransaction(async () => {
       const [user] = await this.prisma.$queryRaw<Array<{ id: string }>>`
         INSERT INTO identity.user_account
-          (org_id, full_name, email, mobile, status, is_org_owner)
+          (org_id, full_name, email, mobile, status, is_org_owner, email_verified_at)
         VALUES (${invite.org_id}::uuid, ${invite.full_name}, ${email}, ${mobile},
-                'ACTIVE', ${invite.role_code === 'VENDOR_OWNER'})
+                'ACTIVE', ${invite.role_code === 'VENDOR_OWNER'}, ${emailVerifiedAt})
         RETURNING id`;
       if (!user) throw new PreconditionFailedError('Your account could not be created.');
 
@@ -459,12 +550,14 @@ export class TeamInviteService {
         }
       }
 
-      await this.passwords.setPassword(user.id, password, {
-        email,
-        mobile,
-        fullName: invite.full_name,
-        rotationDays: MFA_REQUIRED_ROLES.includes(invite.role_code as Role) ? 180 : null,
-      });
+      if (password !== undefined) {
+        await this.passwords.setPassword(user.id, password, {
+          email,
+          mobile,
+          fullName: invite.full_name,
+          rotationDays: MFA_REQUIRED_ROLES.includes(invite.role_code as Role) ? 180 : null,
+        });
+      }
 
       await this.prisma.$executeRaw`
         UPDATE identity.user_invitation
@@ -488,6 +581,13 @@ export class TeamInviteService {
       identifier: email,
       ip: input.ip,
       userAgent: input.userAgent,
+    });
+  }
+
+  private destinationFor(orgType: InviteOrgType): ReturnType<typeof inviteDestination> {
+    return inviteDestination(orgType, {
+      storefront: this.config.get('STOREFRONT_URL'),
+      console: this.config.get('CONSOLE_URL'),
     });
   }
 

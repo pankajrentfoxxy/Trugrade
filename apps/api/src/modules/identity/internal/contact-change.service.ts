@@ -216,6 +216,112 @@ export class ContactChangeService {
   }
 
   /**
+   * Add a FIRST email or mobile to an account that has none — the buyer who
+   * signed up with a mobile number alone and is now giving us a work email.
+   *
+   * Not `request()` with the old-address half skipped: that flow exists to stop
+   * a takeover, and there is no old address here for anyone to take over. One
+   * code to the new address proves the new address, which is all this is for.
+   * An account that already holds a value in the field is sent to the
+   * dual-OTP change instead, so this can never be used to *replace* anything.
+   */
+  async requestAdd(
+    userId: string,
+    input: { field: ContactField; value: string },
+  ): Promise<{ sentTo: string; expiresAt: Date; resendAvailableAt: Date; devCode?: string }> {
+    const user = await this.prisma.db.user_account.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundError('user');
+
+    const { field } = input;
+    const current = field === 'EMAIL' ? user.email : user.mobile;
+    if (current) {
+      throw new PreconditionFailedError(
+        field === 'EMAIL'
+          ? 'This account already has an email address. Changing it needs a code to the old address as well as the new one.'
+          : 'This account already has a mobile number. Changing it needs a code to the old number as well as the new one.',
+      );
+    }
+
+    const value = field === 'EMAIL' ? normaliseEmail(input.value) : normaliseMobile(input.value);
+    if (!value) {
+      throw new ValidationError(
+        field === 'EMAIL'
+          ? 'That does not look like an email address we can send to.'
+          : 'That does not look like a mobile number we can send to.',
+      );
+    }
+    await this.assertNotTaken(field, value);
+
+    const issued = await this.otp.issue({
+      target: value,
+      purpose: 'CONTACT_CHANGE_NEW',
+      channel: field === 'EMAIL' ? 'EMAIL' : 'WHATSAPP',
+      templateCode: OTP_TEMPLATE_NEW,
+      refType: 'user_account',
+      refId: userId,
+      exposeDevCode: this.config.exposeOtpDevCode,
+      variables: { name: user.full_name },
+    });
+
+    return {
+      sentTo: maskValue(value),
+      expiresAt: issued.expiresAt,
+      resendAvailableAt: issued.resendAvailableAt,
+      ...(issued.devCode ? { devCode: issued.devCode } : {}),
+    };
+  }
+
+  /** The other half of `requestAdd`: the code lands, the column is written. */
+  async verifyAdd(
+    userId: string,
+    input: { field: ContactField; value: string; code: string },
+  ): Promise<void> {
+    const user = await this.prisma.db.user_account.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundError('user');
+
+    const { field } = input;
+    const value = field === 'EMAIL' ? normaliseEmail(input.value) : normaliseMobile(input.value);
+    if (!value) {
+      throw new ValidationError(
+        field === 'EMAIL'
+          ? 'That does not look like an email address we can send to.'
+          : 'That does not look like a mobile number we can send to.',
+      );
+    }
+    const current = field === 'EMAIL' ? user.email : user.mobile;
+    if (current) {
+      throw new PreconditionFailedError(
+        'This account already has that contact detail on file. Changing it needs a code to the old address as well as the new one.',
+      );
+    }
+
+    // The code is bound to the address it was sent to, so a code for one
+    // address cannot verify another; `verify` also burns it on a wrong guess.
+    await this.otp.verify({ target: value, purpose: 'CONTACT_CHANGE_NEW', code: input.code });
+    // Re-checked after the code: the address may have been claimed while it sat
+    // in the inbox, and the unique index would otherwise say so less clearly.
+    await this.assertNotTaken(field, value);
+
+    const now = this.clock.now();
+    await this.prisma.db.user_account.update({
+      where: { id: userId },
+      data:
+        field === 'EMAIL'
+          ? { email: value, email_verified_at: now }
+          : { mobile: value, mobile_verified_at: now },
+    });
+
+    await this.audit.record({
+      action: 'identity.contact.added',
+      entityType: 'user_account',
+      entityId: userId,
+      after: { field, value: maskValue(value) },
+      actorUserId: userId,
+      actorOrgId: user.org_id,
+    });
+  }
+
+  /**
    * Verify one half. The change commits only once both halves are stamped —
    * either code presented alone leaves the account exactly as it was.
    */

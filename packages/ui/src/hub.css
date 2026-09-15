@@ -1,0 +1,1080 @@
+/**
+ * The hub frame — masthead, icon rail, completion banner and page primitives —
+ * as the buyer portal on the storefront draws it.
+ *
+ * The same chrome as the supplier hub, which keeps its own copy in
+ * `apps/console/src/shell/vendor-hub.css` under `.vendor-hub`. The buyer portal
+ * imports this file and mounts `data-surface="hub"` on the root element so the
+ * token overrides in `globals.css` apply. Tokens only; no hex.
+ *
+ * Every `.hub-*` class below is also what the hub components in this package
+ * (`HubPageHeader`, `Panel`, `HubKpiRow`, `LedgerRow`, `PermissionGrid`) emit.
+ */
+
+.hub-frame {
+  --hub-mast-h: 62px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  color: var(--ink-2);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Masthead                                                                    */
+/* -------------------------------------------------------------------------- */
+
+.hub-mast {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 560px) minmax(200px, 1fr);
+  align-items: center;
+  gap: 24px;
+  height: var(--hub-mast-h);
+  padding: 0 24px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--rule);
+}
+
+.hub-mast__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.hub-mast__tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: var(--r-lg);
+  background: var(--acc);
+  color: var(--acc-on);
+  font-family: var(--font-mono);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hub-mast__names {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.hub-mast__wordmark {
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.hub-mast__wordmark em {
+  font-style: normal;
+  color: var(--brand-tint);
+}
+
+.hub-mast__portal {
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--ink-3);
+}
+
+.hub-mast__search {
+  position: relative;
+  min-width: 0;
+}
+
+.hub-mast__search svg {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ink-3);
+}
+
+.hub-mast__search input {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: 21px;
+  background: var(--acc-wash);
+  padding: 0 18px 0 42px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--ink);
+}
+.hub-mast__search input::placeholder {
+  color: var(--ink-3);
+}
+.hub-mast__search input:focus {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+
+.hub-mast__account {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hub-mast__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 50%;
+  background: var(--acc-wash);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--acc-ink);
+}
+
+.hub-mast__who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.hub-mast__name {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-mast__role {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--ink-3);
+}
+
+.hub-mast__out {
+  margin-left: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.hub-mast__out:hover:not(:disabled) {
+  background: var(--sheet-2);
+  color: var(--ink);
+}
+.hub-mast__out:disabled {
+  cursor: default;
+  color: var(--ink-4);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Profile completion banner                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Warn, never fail. An incomplete profile is work outstanding, not a rejection,
+ * and --fail on this surface is reserved for PASS/FAIL.
+ */
+.hub-banner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 13px 26px;
+  background: var(--warn-wash);
+  border-bottom: 1px solid var(--warn-line);
+}
+
+.hub-banner__label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.hub-banner__pill {
+  padding: 4px 14px;
+  border-radius: 14px;
+  background: var(--warn);
+  color: var(--acc-on);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.hub-banner__track {
+  display: block;
+  width: 220px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--warn-track);
+  overflow: hidden;
+}
+
+.hub-banner__fill {
+  display: block;
+  height: 100%;
+  background: var(--warn);
+  transition: width 0.35s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hub-banner__next {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.hub-banner__cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r);
+  background: var(--acc);
+  color: var(--acc-on);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.hub-banner__cta:hover {
+  background: var(--acc-dk);
+}
+
+.hub-banner--done {
+  background: var(--pass-wash);
+  border-bottom-color: var(--pass-line);
+}
+
+.hub-banner--done .hub-banner__pill,
+.hub-banner--done .hub-banner__fill {
+  background: var(--pass);
+}
+
+.hub-banner--done .hub-banner__track {
+  background: var(--pass-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-banner__fill {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .hub-banner {
+    padding: 12px 18px;
+    gap: 12px;
+  }
+  .hub-banner__track {
+    width: 100%;
+    order: 5;
+  }
+  .hub-banner__cta {
+    margin-left: 0;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Body / rail / main                                                          */
+/* -------------------------------------------------------------------------- */
+
+.hub-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.hub-rail-toggle {
+  display: none;
+  margin: 12px 16px 0;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hub-rail {
+  width: 96px;
+  flex: 0 0 96px;
+  position: sticky;
+  top: var(--hub-mast-h);
+  align-self: flex-start;
+  height: calc(100dvh - var(--hub-mast-h));
+  overflow-y: auto;
+  padding: 12px 0 32px;
+  border-right: 1px solid var(--rule);
+  background: var(--chrome);
+}
+
+.hub-rail__group {
+  margin: 14px 6px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-4);
+}
+
+.hub-rail__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 8px;
+  padding: 8px 2px 9px;
+  border-radius: var(--r-lg);
+  color: var(--ink-2);
+  text-decoration: none;
+  text-align: center;
+}
+.hub-rail__item:hover {
+  background: var(--sheet-2);
+  color: var(--ink);
+}
+
+.hub-rail__tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-lg);
+  background: var(--sheet-2);
+  color: var(--ink-2);
+}
+
+.hub-rail__label {
+  font-size: 11.5px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.hub-rail__item[aria-current='page'] {
+  color: var(--acc-ink);
+  font-weight: 600;
+}
+.hub-rail__item[aria-current='page'] .hub-rail__tile {
+  background: var(--acc-wash);
+  color: var(--acc-ink);
+}
+
+/* Work waiting. A count, not a dot — "3 POs" and "some POs" are different facts. */
+.hub-rail__count {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--sheet-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.hub-rail__count--work {
+  background: var(--fail);
+  color: var(--acc-on);
+}
+
+.hub-rail__lock {
+  position: absolute;
+  top: 5px;
+  right: 12px;
+  color: var(--ink-4);
+}
+
+/**
+ * The page container, on the shell rather than on each route, so all 22 vendor
+ * screens get it and not just the two that remembered to ask.
+ *
+ * `margin: 0 auto` is the fix for the dead right gutter: the old cap
+ * left-aligned the content and stacked every spare pixel on the right of a wide
+ * screen.
+ */
+.hub-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  /**
+   * `min()`, not `var(--maxw)` alone.
+   *
+   * Under 900px `.hub-body` turns into a column, and in a column flex container
+   * `min-width: 0` does nothing for the cross axis — a stretched item whose
+   * min-content width is larger simply overflows its container. A wide board
+   * then pushed the whole page sideways instead of scrolling inside its own
+   * `overflow-x` wrapper, which is the one thing the responsive audit forbids.
+   */
+  max-width: min(var(--maxw), 100%);
+  margin: 0 auto;
+  padding: 26px 32px 70px;
+}
+
+.hub-page {
+  display: flex;
+  flex-direction: column;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page primitives (also used by packages/ui hub components)                   */
+/* -------------------------------------------------------------------------- */
+
+.hub-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 20px;
+}
+
+.hub-heading__titles {
+  min-width: 0;
+}
+
+.hub-heading__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.hub-heading__sub {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+.hub-heading__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* KPI strip                                                                   */
+/* -------------------------------------------------------------------------- */
+
+.hub-strip {
+  display: grid;
+  grid-template-columns: repeat(var(--hub-cols, 4), minmax(0, 1fr));
+  margin: 0 0 24px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  overflow: hidden;
+}
+
+.hub-strip__cell {
+  padding: 16px 20px 18px;
+  min-width: 0;
+}
+.hub-strip__cell + .hub-strip__cell {
+  border-left: 1px solid var(--rule-2);
+}
+
+.hub-strip__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.hub-strip__value {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+/* Sans, smaller and dimmer, so an absent figure cannot be skimmed as a real one. */
+.hub-strip__value--none {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-4);
+}
+
+.hub-strip__sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-3);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Panel                                                                       */
+/* -------------------------------------------------------------------------- */
+
+.hub-panel {
+  margin-bottom: 24px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  overflow: hidden;
+}
+
+.hub-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.hub-panel__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+}
+
+.hub-panel__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.hub-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.hub-panel__actions a {
+  color: var(--acc-ink);
+  text-decoration: none;
+}
+.hub-panel__actions a:hover {
+  text-decoration: underline;
+}
+
+/**
+ * The body is flush. A table and a stack of ledger rows carry their own
+ * padding, and those are most panels; prose content asks for `px-5 py-4` at the
+ * call site rather than every table fighting a padding it did not want.
+ */
+.hub-panel__body > .hub-row:first-child,
+.hub-panel__body > .hub-money > .hub-row:first-child {
+  border-top: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ledger rows                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.hub-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--rule-2);
+  font-size: 14.5px;
+}
+.hub-row--total {
+  border-top: 1px solid var(--rule);
+  background: var(--sheet-2);
+}
+.hub-row__label {
+  color: var(--ink-3);
+}
+.hub-row--total .hub-row__label {
+  color: var(--ink);
+  font-weight: 600;
+}
+.hub-row__value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.hub-row--total .hub-row__value {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.hub-money {
+  max-width: 680px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tables                                                                      */
+/* -------------------------------------------------------------------------- */
+
+.hub-table-wrap {
+  overflow-x: auto;
+}
+
+.hub-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+.hub-table thead tr {
+  background: var(--sheet-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.hub-table th {
+  height: 40px;
+  padding: 0 20px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.hub-table td {
+  height: var(--d-row-h, 48px);
+  padding: 0 20px;
+  border-bottom: 1px solid var(--rule-2);
+  font-size: 14.5px;
+  color: var(--ink-2);
+  vertical-align: middle;
+}
+
+.hub-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.hub-table td.hub-td-ink {
+  color: var(--ink);
+}
+
+.hub-table tbody tr:hover td {
+  background: var(--sheet-2);
+}
+
+/* The permission grid sits inside a panel, so it brings no border of its own. */
+.hub-grid {
+  border: 0;
+}
+
+.hub-sev {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  vertical-align: middle;
+}
+.hub-sev--fail {
+  background: var(--fail);
+}
+.hub-sev--warn {
+  background: var(--warn);
+}
+.hub-sev--ok {
+  background: var(--pass);
+}
+
+.hub-link {
+  color: var(--acc-ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+.hub-link:hover {
+  text-decoration: underline;
+}
+
+.hub-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background: var(--sheet-3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Who                                                                         */
+/* -------------------------------------------------------------------------- */
+
+.hub-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+.hub-who__mono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--acc-wash);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--acc-ink);
+}
+.hub-who__you {
+  font-size: 12px;
+  color: var(--ink-4);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Record split                                                                */
+/* -------------------------------------------------------------------------- */
+
+.hub-split {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.hub-split__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hub-dock {
+  flex: 0 0 360px;
+  width: 360px;
+  position: sticky;
+  top: calc(var(--hub-mast-h) + 24px);
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow);
+}
+
+.hub-dock__title {
+  margin: 0 0 16px;
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+}
+
+.hub-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.hub-field input,
+.hub-field select {
+  height: 40px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet);
+  padding: 0 12px;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.hub-field input:focus,
+.hub-field select:focus {
+  outline: 2px solid var(--acc);
+  outline-offset: -1px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* InfoPopover                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.hub-info__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--sheet-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.hub-info__btn:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+.hub-info__panel {
+  position: absolute;
+  left: 0;
+  top: 22px;
+  z-index: 40;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Footer                                                                      */
+/* -------------------------------------------------------------------------- */
+
+.hub-frame footer {
+  margin-top: auto;
+  background: var(--chrome);
+  border-top: 1px solid var(--rule);
+  color: var(--ink-3);
+}
+
+/* Boards that wrap a DataTable keep the hub rhythm. */
+.hub-frame .tg-stack {
+  gap: 24px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Breakpoints                                                                 */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .hub-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .hub-strip__cell:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-2);
+  }
+  .hub-strip__cell:nth-child(odd) {
+    border-left: 0;
+  }
+  .hub-dock {
+    flex-basis: 300px;
+    width: 300px;
+  }
+}
+
+@media (max-width: 899px) {
+  .hub-mast {
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    padding: 0 16px;
+  }
+  .hub-mast__search {
+    display: none;
+  }
+  .hub-mast__who {
+    display: none;
+  }
+  .hub-rail-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Behind the Menu button until asked for. Desktop ignores the attribute. */
+  .hub-rail[data-open='false'] {
+    display: none;
+  }
+  .hub-body {
+    flex-direction: column;
+  }
+  .hub-rail {
+    width: 100%;
+    flex-basis: auto;
+    height: auto;
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    padding: 8px;
+  }
+  .hub-rail__group {
+    width: 100%;
+    text-align: left;
+    margin: 10px 8px 4px;
+  }
+  .hub-rail__item {
+    width: 88px;
+  }
+  .hub-main {
+    padding: 20px 16px 56px;
+  }
+  .hub-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .hub-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .hub-split {
+    flex-direction: column;
+  }
+  .hub-dock {
+    width: 100%;
+    flex-basis: auto;
+    position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .hub-strip {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .hub-strip__cell + .hub-strip__cell {
+    border-left: 0;
+    border-top: 1px solid var(--rule-2);
+  }
+}
+.profile-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.profile-hub-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow);
+}
+
+.profile-hub-card[data-done='true'] {
+  border-color: var(--pass-line);
+  background: var(--pass-wash);
+}
+
+.profile-hub-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-hub-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--acc-wash);
+  color: var(--acc-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile-hub-card[data-done='true'] .profile-hub-icon {
+  background: var(--pass);
+  color: var(--acc-on);
+}
+
+.profile-hub-summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.profile-hub-weight {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.profile-hub-readonly {
+  border: 1px dashed var(--rule);
+  background: var(--sheet-2);
+  color: var(--ink-2);
+}
+
+.profile-hub-found {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pass);
+}
+
+.profile-hub-pass-block {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--pass-line);
+  background: var(--pass-wash);
+}
+
+.profile-hub-clauses {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet-2);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.profile-hub-clauses ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.profile-hub-clauses li + li {
+  margin-top: 10px;
+}
