@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import { VendorReviewRoute, type VendorReviewData } from '../src/routes/VendorReview';
 import type { VerificationCheck } from '../src/routes/ReviewEvidence';
@@ -36,7 +36,8 @@ const COMPLETE: VendorReviewData = {
   agreedCommissionPct: null,
 };
 
-const ok = (body: unknown): Response => ({ ok: true, status: 200, json: async () => body }) as Response;
+const ok = (body: unknown): Response =>
+  ({ ok: true, status: 200, json: async () => body }) as Response;
 
 /**
  * Three calls now leave this screen, and one of them is allowed to be refused.
@@ -104,21 +105,25 @@ describe('the four Change 4 captures are on the review screen', () => {
   });
 });
 
-describe('a missing capture blocks approval', () => {
+describe('a missing capture is shown, and never blocks approval', () => {
   it.each([
-    ['dispatch address', { dispatchAddress: null, dispatchSameAsRegistered: false }],
-    ['warranty term', { defaultWarrantyMonths: null }],
-    ['pricing mode', { pricingMode: null }],
-  ])('%s missing — Approve is disabled and says why', async (label, patch) => {
+    {
+      label: 'dispatch address',
+      patch: { dispatchAddress: null, dispatchSameAsRegistered: false },
+    },
+    { label: 'warranty term', patch: { defaultWarrantyMonths: null } },
+    { label: 'pricing mode', patch: { pricingMode: null } },
+  ])('$label missing — Approve stays live and the gap reads "Not captured"', async ({ patch }) => {
     renderWith({ ...COMPLETE, ...(patch as Partial<VendorReviewData>) });
     await screen.findByText('Alpha Systems Private Limited');
 
+    // The judgement is the reviewer's. The gap is on the screen so it is seen;
+    // a button locked behind it left whole applications un-approvable with no
+    // way through.
     const approve = screen.getByRole('button', { name: /approve/i });
-    // aria-disabled, not the `disabled` attribute: a reason-disabled button
-    // stays focusable so a screen reader can reach it and hear why. A disabled
-    // button with no reachable explanation is a support ticket.
-    await waitFor(() => expect(approve).toHaveAttribute('aria-disabled', 'true'));
-    expect(approve).toHaveAccessibleDescription(new RegExp(label));
+    expect(approve).not.toHaveAttribute('aria-disabled');
+    expect(approve).not.toBeDisabled();
+    expect(screen.getAllByText('Not captured').length).toBeGreaterThan(0);
   });
 
   it('renders "Not captured", never a silent no', async () => {
@@ -141,13 +146,36 @@ describe('a missing capture blocks approval', () => {
     await screen.findByText('Alpha Systems Private Limited');
     expect(screen.getByRole('button', { name: /approve/i })).not.toHaveAttribute('aria-disabled');
   });
+
+  it('shows a buyer no commercial captures at all, and lets them be approved', async () => {
+    // A buyer never lists, so dispatch address, warranty and pricing mode have
+    // no form to be entered on. Showing them as gaps here once left every buyer
+    // application looking incomplete.
+    renderWith({
+      ...COMPLETE,
+      orgType: 'BUYER',
+      legalName: 'V2 Retail Limited',
+      dispatchAddress: null,
+      dispatchSameAsRegistered: false,
+      defaultWarrantyMonths: null,
+      defaultWarrantyScope: null,
+      pricingMode: null,
+    });
+    await screen.findByText('V2 Retail Limited');
+    expect(screen.getByRole('button', { name: /approve/i })).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByText('Commercial terms')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not captured')).not.toBeInTheDocument();
+    expect(screen.getByText(/lets this buyer place orders/)).toBeInTheDocument();
+  });
 });
 
 // ===========================================================================
 // PROVIDER_ERROR is not FAIL
 // ===========================================================================
 
-const check = (patch: Partial<VerificationCheck> & { checkType: string; outcome: string }): VerificationCheck => ({
+const check = (
+  patch: Partial<VerificationCheck> & { checkType: string; outcome: string },
+): VerificationCheck => ({
   id: `${patch.checkType}-${patch.outcome}-${patch.checkedAt ?? '1'}`,
   maskedInput: '07AA****23C1Z5',
   provider: 'mock',

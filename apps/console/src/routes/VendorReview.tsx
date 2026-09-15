@@ -241,14 +241,12 @@ export function VendorReviewRoute(): React.JSX.Element {
   if (error) return <EmptyState title="Application did not load" body={error} />;
   if (!data) return <Skeleton lines={8} />;
 
-  // A reviewer cannot approve past a missing capture. Every one of the four is
-  // load-bearing in a later phase, and chasing it afterwards means chasing it
-  // across the vendor's whole catalogue.
-  const missing = [
-    !data.dispatchSameAsRegistered && !data.dispatchAddress && 'dispatch address',
-    data.defaultWarrantyMonths === null && 'warranty term',
-    data.pricingMode === null && 'pricing mode',
-  ].filter((x): x is string => typeof x === 'string');
+  // Approval is the reviewer's call, and nothing on this screen gates it. The
+  // commercial captures below are shown so a gap is visible before a first
+  // listing, never as a lock on the button: a reviewer who can read "Not
+  // captured" and still approves has decided that, and the audit log says so.
+  // The captures are vendor-only; a buyer has none to show.
+  const isVendor = data.orgType === 'VENDOR';
 
   /**
    * Checks that need a human before this application can be approved.
@@ -340,80 +338,87 @@ export function VendorReviewRoute(): React.JSX.Element {
               : {})}
           />
 
-          <Section title="Commercial terms" subtitle="Every field says what happens if they edit it later.">
-            <Field field="vendor_facility.dispatch_address_id" label="Dispatch address">
-              {data.dispatchSameAsRegistered ? (
-                <span className="text-ink-2">Same as the registered address</span>
-              ) : data.dispatchAddress ? (
-                <>
-                  {data.dispatchAddress.line1}, {data.dispatchAddress.city},{' '}
-                  {data.dispatchAddress.state}{' '}
-                  <span className="font-mono tnum">{data.dispatchAddress.pincode}</span>
-                  <p className="mt-1 text-body-sm text-ink-2">
-                    Becomes &ldquo;Dispatch From&rdquo; on the e-way bill for every unit they sell.
-                  </p>
-                </>
-              ) : (
-                <NotCaptured />
-              )}
-            </Field>
-
-            <Field field="vendor_capability.can_dropship" label="Direct dispatch to buyer">
-              {data.canDropship === null ? (
-                <NotCaptured />
-              ) : data.canDropship ? (
-                // A capability the vendor declared, not a verdict we reached.
-                <StatusPill tone="info" label="Can dropship" />
-              ) : (
-                <>
-                  <StatusPill tone="warn" label="Hub leg required" />
-                  {data.dropshipConstraint && (
-                    <p className="mt-2 text-body-sm text-ink-2">{data.dropshipConstraint}</p>
-                  )}
-                </>
-              )}
-            </Field>
-
-            <Field field="vendor_profile.default_warranty_months" label="Vendor warranty">
-              {data.defaultWarrantyMonths === null ? (
-                <NotCaptured />
-              ) : (
-                <>
-                  <span className="font-mono tnum">{data.defaultWarrantyMonths} months</span>
-                  {data.defaultWarrantyScope && (
+          {isVendor && (
+            <Section
+              title="Commercial terms"
+              subtitle="Every field says what happens if they edit it later."
+            >
+              <Field field="vendor_facility.dispatch_address_id" label="Dispatch address">
+                {data.dispatchSameAsRegistered ? (
+                  <span className="text-ink-2">Same as the registered address</span>
+                ) : data.dispatchAddress ? (
+                  <>
+                    {data.dispatchAddress.line1}, {data.dispatchAddress.city},{' '}
+                    {data.dispatchAddress.state}{' '}
+                    <span className="font-mono tnum">{data.dispatchAddress.pincode}</span>
                     <p className="mt-1 text-body-sm text-ink-2">
-                      Covers {data.defaultWarrantyScope.covers.join(', ').toLowerCase()}
-                      {data.defaultWarrantyScope.excludes.length > 0 &&
-                        ` · excludes ${data.defaultWarrantyScope.excludes.join(', ').toLowerCase()}`}{' '}
-                      · {data.defaultWarrantyScope.serviceMode.toLowerCase().replace('_', '-')}
+                      Becomes &ldquo;Dispatch From&rdquo; on the e-way bill for every unit they
+                      sell.
                     </p>
-                  )}
-                </>
-              )}
-            </Field>
+                  </>
+                ) : (
+                  <NotCaptured />
+                )}
+              </Field>
 
-            <Field field="vendor_payout_preference.pricing_mode" label="Pricing basis">
-              {data.pricingMode === null ? (
-                <NotCaptured />
-              ) : data.pricingMode === 'NET_PAYOUT' ? (
-                <span>Net payout — they name the amount they receive</span>
-              ) : (
-                <span>
-                  Commission at <span className="font-mono tnum">{data.agreedCommissionPct}%</span>{' '}
-                  of the selling price, frozen to a rupee amount per unit
-                </span>
-              )}
-            </Field>
-          </Section>
+              <Field field="vendor_capability.can_dropship" label="Direct dispatch to buyer">
+                {data.canDropship === null ? (
+                  <NotCaptured />
+                ) : data.canDropship ? (
+                  // A capability the vendor declared, not a verdict we reached.
+                  <StatusPill tone="info" label="Can dropship" />
+                ) : (
+                  <>
+                    <StatusPill tone="warn" label="Hub leg required" />
+                    {data.dropshipConstraint && (
+                      <p className="mt-2 text-body-sm text-ink-2">{data.dropshipConstraint}</p>
+                    )}
+                  </>
+                )}
+              </Field>
+
+              <Field field="vendor_profile.default_warranty_months" label="Vendor warranty">
+                {data.defaultWarrantyMonths === null ? (
+                  <NotCaptured />
+                ) : (
+                  <>
+                    <span className="font-mono tnum">{data.defaultWarrantyMonths} months</span>
+                    {data.defaultWarrantyScope && (
+                      <p className="mt-1 text-body-sm text-ink-2">
+                        Covers {data.defaultWarrantyScope.covers.join(', ').toLowerCase()}
+                        {data.defaultWarrantyScope.excludes.length > 0 &&
+                          ` · excludes ${data.defaultWarrantyScope.excludes.join(', ').toLowerCase()}`}{' '}
+                        · {data.defaultWarrantyScope.serviceMode.toLowerCase().replace('_', '-')}
+                      </p>
+                    )}
+                  </>
+                )}
+              </Field>
+
+              <Field field="vendor_payout_preference.pricing_mode" label="Pricing basis">
+                {data.pricingMode === null ? (
+                  <NotCaptured />
+                ) : data.pricingMode === 'NET_PAYOUT' ? (
+                  <span>Net payout — they name the amount they receive</span>
+                ) : (
+                  <span>
+                    Commission at{' '}
+                    <span className="font-mono tnum">{data.agreedCommissionPct}%</span> of the
+                    selling price, frozen to a rupee amount per unit
+                  </span>
+                )}
+              </Field>
+            </Section>
+          )}
         </div>
 
         <SidePanel
           title="Decision"
           description="The applicant reads whatever you write here."
           footnote={
-            missing.length > 0
-              ? gapReason(missing)
-              : 'Approving lets this vendor list stock. Nothing else on this screen changes anything.'
+            isVendor
+              ? 'Approving lets this vendor list stock. Nothing else on this screen changes anything.'
+              : 'Approving lets this buyer place orders. Nothing else on this screen changes anything.'
           }
         >
           {/*
@@ -452,21 +457,14 @@ export function VendorReviewRoute(): React.JSX.Element {
             </div>
           )}
           {/*
-            A reason-disabled button is `aria-disabled`, not `disabled` — it stays
-            focusable so the reason can be read, which also means it still fires a
-            click. The gap check belongs on the handler as well as the attribute.
-
             While a note panel is open the approval steps down to secondary: one
             amber control per screen, and the confirm button is the live one.
           */}
           <Button
             variant={pending === null ? 'primary' : 'secondary'}
             block
-            disabledReason={missing.length > 0 ? gapReason(missing) : ''}
             loading={submitting && pending === null}
-            onClick={() => {
-              if (missing.length === 0) void decide('APPROVED');
-            }}
+            onClick={() => void decide('APPROVED')}
           >
             Approve
           </Button>
@@ -535,10 +533,6 @@ export function VendorReviewRoute(): React.JSX.Element {
   );
 }
 
-function gapReason(missing: string[]): string {
-  return `Ask for the ${missing.join(', ')} before approving — every one of these is needed before their first listing can go live.`;
-}
-
 /**
  * Our own promise, on the record screen as well as the board.
  *
@@ -551,9 +545,7 @@ function SlaBand({ data }: { data: VendorReviewData }): React.JSX.Element {
   const settled = data.status === 'VERIFIED' || data.status === 'REJECTED';
   if (data.slaDueAt === null) {
     return (
-      <p className="text-body-sm text-ink-4">
-        No review clock is running on this application.
-      </p>
+      <p className="text-body-sm text-ink-4">No review clock is running on this application.</p>
     );
   }
 
