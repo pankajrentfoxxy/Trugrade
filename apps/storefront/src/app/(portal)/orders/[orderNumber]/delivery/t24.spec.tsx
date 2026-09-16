@@ -31,6 +31,7 @@ import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { DeliveryCheck } from './DeliveryCheck';
+import { PortalContext, type PortalState } from '../../../shell/PortalContext';
 import type { DeliveryConsignment, DeliveryMachine, DeliveryView } from './api';
 
 jest.mock('./api', () => ({
@@ -41,6 +42,38 @@ jest.mock('./api', () => ({
 }));
 
 import { checkSeal, getDelivery } from './api';
+
+/**
+ * The screen reads `session.permissions` to decide whether to offer the seal
+ * box and the receipt button at all — both are `platform.ticket.write` on the
+ * server, and they used to render for an approver and a viewer and be refused
+ * on submit. These cases are about what the screen SAYS about a check, so they
+ * run as a seat that may record one.
+ */
+const portalState = (permissions: string[] = ['platform.ticket.write']): PortalState =>
+  ({
+    session: {
+      userId: 'u1',
+      orgId: 'o1',
+      orgType: 'BUYER',
+      roles: ['CUSTOMER_OWNER'],
+      permissions,
+      mfaRequired: false,
+    },
+    profile: null,
+    onboarding: null,
+    readiness: null,
+    approvalsWaiting: 0,
+    reload: () => undefined,
+    setSession: () => undefined,
+  }) as unknown as PortalState;
+
+const draw = (permissions?: string[]): ReturnType<typeof render> =>
+  render(
+    <PortalContext.Provider value={portalState(permissions)}>
+      <DeliveryCheck orderNumber="TT-26-00004" />
+    </PortalContext.Provider>,
+  );
 
 const mockGet = getDelivery as jest.MockedFunction<typeof getDelivery>;
 const mockCheck = checkSeal as jest.MockedFunction<typeof checkSeal>;
@@ -109,7 +142,7 @@ describe('a check that did not happen', () => {
       }),
     );
 
-    render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    draw();
 
     // The whole point. "Every seal checked" on this order would be a missing
     // value drawn as a passing one, on the screen whose entire subject is that
@@ -135,7 +168,7 @@ describe('a check that did not happen', () => {
       }),
     );
 
-    render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    draw();
     expect(await screen.findByText('Every seal checked')).toBeInTheDocument();
   });
 });
@@ -157,7 +190,7 @@ describe('a machine with no seal on record', () => {
       }),
     );
 
-    render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    draw();
 
     expect(await screen.findByText('No seal recorded')).toBeInTheDocument();
     // Not "Sealed", not "Seal intact" — the absence of a seal is not a state of
@@ -190,7 +223,7 @@ describe('one primary action', () => {
       }),
     );
 
-    const { container } = render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    const { container } = draw();
     await screen.findByText('Delivery 1 of 1 · Supply Point A · Gurugram');
 
     // Three scan boxes, one accent. `09_FRONTEND_LOCKED.md` allows one amber
@@ -214,7 +247,7 @@ describe('a code that is not on this delivery', () => {
       retryAfterSeconds: null,
     });
 
-    render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    draw();
     const input = await screen.findByLabelText(/seal code on the machine/i);
     // `fireEvent` rather than `user-event`: the latter is not a declared
     // dependency of this app, and one assertion is not worth adding one.
@@ -244,11 +277,9 @@ describe('the window', () => {
       }),
     );
 
-    render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    draw();
 
-    await waitFor(() =>
-      expect(screen.getByText(/inspection window closed/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/inspection window closed/i)).toBeInTheDocument());
     // The scan box is gone, and the way forward is the warranty route.
     expect(screen.queryByLabelText(/seal code on the machine/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /warranty claim/i })[0]).toHaveAttribute(
@@ -265,11 +296,29 @@ describe('the window', () => {
       }),
     );
 
-    render(<DeliveryCheck orderNumber="TT-26-00004" />);
+    draw();
 
     // Not 48, not zero. A deadline we cannot name is one we must not draw.
     expect(
       await screen.findByText(/cannot state the inspection window right now/i),
     ).toBeInTheDocument();
+  });
+});
+
+/* ==========================================================================
+ * A seat that may read the delivery and may not record one
+ * ======================================================================== */
+
+describe('an approver or a viewer', () => {
+  it('is told why, rather than offered a control that would be refused', async () => {
+    mockGet.mockResolvedValue({ ok: true, data: view() } as never);
+    // `ordering.own.read` and nothing else: they can open the screen.
+    draw(['ordering.own.read']);
+
+    await waitFor(() => expect(screen.getByText(/cannot record a seal check/i)).toBeTruthy());
+    // Neither write control is on the page at all.
+    expect(screen.queryByRole('button', { name: /Confirm receipt/i })).toBeNull();
+    expect(screen.queryByLabelText(/Seal code/i)).toBeNull();
+    expect(screen.getByText(/cannot sign for a delivery/i)).toBeTruthy();
   });
 });

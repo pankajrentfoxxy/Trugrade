@@ -185,9 +185,21 @@ export function ReturnRecord({ returnNumber }: { returnNumber: string }): React.
           }
           className="crside"
         >
-          <a className="pill acc crside-a" href="/legal/grievance">
-            {r.open ? 'Add something to this return' : 'Dispute this outcome'}
-          </a>
+          {/*
+            The amber action that invited a comment is gone.
+
+            It was the one amber action on this screen and it went to
+            /legal/grievance — a policy page outside the portal frame. The words
+            promise a comment box this product does not have, and a primary
+            action that is a legal document teaches a buyer that the primary
+            action is not worth pressing. A settled case still has a real
+            escalation route, as a secondary link where it belongs.
+          */}
+          {!r.open && (
+            <a className="pill wire crside-a" href="/legal/grievance">
+              Dispute this outcome
+            </a>
+          )}
           {r.passportPath && (
             <a className="pill wire crside-a" href={r.passportPath}>
               Open the machine&rsquo;s passport

@@ -135,6 +135,7 @@ const STATE: PortalState = {
     mobile: '+919876543210',
   },
   profile: null,
+  approvalsWaiting: 4,
   readiness: {
     orgStatus: 'REGISTERED',
     suspended: false,

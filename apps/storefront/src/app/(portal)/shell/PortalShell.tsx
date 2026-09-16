@@ -9,7 +9,7 @@ import { Skeleton, ToastProvider } from '@trugrade/ui';
 import { logout } from '../../register/api';
 import { PortalProvider, usePortal } from './PortalContext';
 import { ProfileBanner } from './ProfileBanner';
-import { activePortalEntry, portalGroups, type PortalNavEntry } from './nav';
+import { activePortalEntry, mayOpen, portalGroups, type PortalNavEntry } from './nav';
 import { RailIcon, SearchIcon } from './rail-icons';
 
 /**
@@ -111,12 +111,7 @@ function Masthead(): React.JSX.Element {
           </span>
           {role ? <span className="hub-mast__role">{role}</span> : null}
         </span>
-        <button
-          type="button"
-          className="hub-mast__out"
-          onClick={signOut}
-          disabled={signingOut}
-        >
+        <button type="button" className="hub-mast__out" onClick={signOut} disabled={signingOut}>
           {signingOut ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
@@ -124,8 +119,29 @@ function Masthead(): React.JSX.Element {
   );
 }
 
-function Rail({ active }: { active: PortalNavEntry | undefined }): React.JSX.Element {
+/**
+ * The rail, which now tells the truth about what this seat can open.
+ *
+ * It used to render all eight entries for all six customer roles, so a viewer
+ * clicked Team and met a 403 and an approver clicked Returns and met a control
+ * that refused on submit. An entry a seat cannot open is **dimmed with a lock**
+ * rather than hidden: somebody who cannot find a screen files a ticket, and
+ * somebody who can see it exists and is not theirs does not.
+ *
+ * `hub-rail__lock` and `hub-rail__count` were designed and styled in
+ * `packages/ui/hub.css` and emitted by nobody on this side; the vendor shell
+ * has used both for months.
+ */
+function Rail({
+  active,
+  counts,
+}: {
+  active: PortalNavEntry | undefined;
+  /** Work waiting, by route. Absent means nothing to say — never a zero badge. */
+  counts: Readonly<Record<string, number>>;
+}): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
+  const { session } = usePortal();
   const groups = portalGroups();
 
   return (
@@ -148,24 +164,59 @@ function Rail({ active }: { active: PortalNavEntry | undefined }): React.JSX.Ele
         {groups.map(([group, entries]) => (
           <div key={group} className="contents">
             <div className="hub-rail__group">{group}</div>
-            {entries.map((n) => (
-              <Link
-                key={n.to}
-                href={n.to as Route}
-                aria-current={n === active ? 'page' : undefined}
-                className="hub-rail__item"
-                onClick={() => setOpen(false)}
-              >
-                <span className="hub-rail__tile">
-                  <RailIcon to={n.to} />
-                </span>
-                <span className="hub-rail__label">{n.label}</span>
-              </Link>
-            ))}
+            {entries.map((n) => {
+              const allowed = mayOpen(n, session.permissions);
+              const waiting = counts[n.to];
+              const label = allowed
+                ? n.label
+                : `${n.label} — needs ${n.permission ?? 'a permission'}`;
+              return (
+                <Link
+                  key={n.to}
+                  href={n.to as Route}
+                  aria-current={n === active ? 'page' : undefined}
+                  aria-disabled={allowed ? undefined : true}
+                  title={allowed ? undefined : label}
+                  className="hub-rail__item"
+                  data-locked={allowed ? undefined : 'true'}
+                  onClick={(e) => {
+                    if (!allowed) {
+                      e.preventDefault();
+                      return;
+                    }
+                    setOpen(false);
+                  }}
+                >
+                  <span className="hub-rail__tile">
+                    <RailIcon to={n.to} />
+                  </span>
+                  <span className="hub-rail__label">{n.label}</span>
+                  {!allowed ? (
+                    <span className="hub-rail__lock" aria-hidden="true">
+                      <LockIcon />
+                    </span>
+                  ) : waiting ? (
+                    // A count, never a dot: "3 waiting" and "some waiting" are
+                    // different facts. Absent at zero rather than a badge of 0.
+                    <span className="hub-rail__count hub-rail__count--work">{waiting}</span>
+                  ) : null}
+                </Link>
+              );
+            })}
           </div>
         ))}
       </aside>
     </>
+  );
+}
+
+/** The padlock on an entry this seat may not open. */
+function LockIcon(): React.JSX.Element {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
 
@@ -240,6 +291,7 @@ function Checking(): React.JSX.Element {
 function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
   const pathname = usePathname();
   const active = activePortalEntry(pathname);
+  const { approvalsWaiting } = usePortal();
   return (
     <div className="hub-frame">
       <a
@@ -251,7 +303,7 @@ function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
       <Masthead />
       <ProfileBanner />
       <div className="hub-body">
-        <Rail active={active} />
+        <Rail active={active} counts={{ '/approvals': approvalsWaiting }} />
         <main id="main" className="hub-main">
           {children}
         </main>

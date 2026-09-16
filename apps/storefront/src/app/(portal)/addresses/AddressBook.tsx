@@ -14,6 +14,7 @@ import {
 import { normaliseMobile, normalisePincode } from '@trugrade/contracts';
 import { MOBILE_PREFIX, typeMobile } from '../../register/validation';
 import type { ApiFailure } from '../../register/api';
+import { usePortal } from '../shell/PortalContext';
 import {
   addAddress,
   getAddresses,
@@ -80,12 +81,17 @@ export function AddressBook(): React.JSX.Element {
   return <Record book={phase.book} onChanged={load} />;
 }
 
-function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void> }): React.JSX.Element {
+function Record({
+  book,
+  onChanged,
+}: {
+  book: Book;
+  onChanged: () => Promise<void>;
+}): React.JSX.Element {
   const active = book.delivery.filter((a) => a.isActive);
   const retired = book.delivery.filter((a) => !a.isActive);
   const [editingId, setEditingId] = React.useState<string | null>(null);
-  const editing =
-    book.delivery.find((a) => a.id === editingId && a.isActive) ?? null;
+  const editing = book.delivery.find((a) => a.id === editingId && a.isActive) ?? null;
 
   const startEdit = (id: string): void => {
     setEditingId(id);
@@ -145,9 +151,9 @@ function Record({ book, onChanged }: { book: Book; onChanged: () => Promise<void
               <div className="empty">
                 <h3>No delivery site yet</h3>
                 <p>
-                  Checkout needs somewhere to send machines to. Open{' '}
-                  <b>Add a delivery site</b> above — the contact and the gate instruction go
-                  straight to the driver, so the more exact they are, the fewer failed deliveries.
+                  Checkout needs somewhere to send machines to. Open <b>Add a delivery site</b>{' '}
+                  above — the contact and the gate instruction go straight to the driver, so the
+                  more exact they are, the fewer failed deliveries.
                 </p>
               </div>
             ) : (
@@ -240,6 +246,16 @@ function SiteCard({
   onEdit: () => void;
   editing: boolean;
 }): React.JSX.Element {
+  /**
+   * PATCH /account/addresses/:id checks `identity.user.write`, which only an
+   * owner and an admin hold — while POST checks `ordering.order.create`, which
+   * a buyer holds too. The split is deliberate and matches 03_UX_SPEC §3A: a
+   * procurer may add a delivery site and may not change one. It was invisible,
+   * so a buyer added a site and then pressed Edit on the one they had just made
+   * and got a 403. Now the control is absent and the reason is in words.
+   */
+  const { session } = usePortal();
+  const canEdit = session.permissions.includes('identity.user.write');
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
 
@@ -253,7 +269,10 @@ function SiteCard({
   };
 
   return (
-    <div className={address.isActive ? 'adrcard' : 'adrcard off'} data-editing={editing || undefined}>
+    <div
+      className={address.isActive ? 'adrcard' : 'adrcard off'}
+      data-editing={editing || undefined}
+    >
       <AddressCard
         className="adrcard-panel"
         address={asAddress(address)}
@@ -268,9 +287,11 @@ function SiteCard({
         actions={
           address.isActive ? (
             <>
-              <Button variant="secondary" size="sm" disabled={busy} onClick={onEdit}>
-                Edit
-              </Button>
+              {canEdit ? (
+                <Button variant="secondary" size="sm" disabled={busy} onClick={onEdit}>
+                  Edit
+                </Button>
+              ) : null}
               {!address.isDefault && (
                 <Button
                   variant="secondary"
@@ -302,7 +323,12 @@ function SiteCard({
               </Button>
             </>
           ) : (
-            <Button variant="secondary" size="sm" loading={busy} onClick={() => void patch({ isActive: true })}>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={busy}
+              onClick={() => void patch({ isActive: true })}
+            >
               Put it back in use
             </Button>
           )
@@ -505,7 +531,13 @@ function AddSite({
   first: boolean;
   blocked: boolean;
   onOpen: () => void;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  // POST /account/addresses checks `ordering.order.create` — an ordering
+  // permission by design, because the spec names a procurer who holds no
+  // identity permission at all. An approver, a finance seat and a viewer hold
+  // none of it and used to open this form and be refused on save.
+  const { session } = usePortal();
+  if (!session.permissions.includes('ordering.order.create')) return null;
   const [open, setOpen] = React.useState(first);
   const [form, setForm] = React.useState<NewAddress>(BLANK);
   const [busy, setBusy] = React.useState(false);

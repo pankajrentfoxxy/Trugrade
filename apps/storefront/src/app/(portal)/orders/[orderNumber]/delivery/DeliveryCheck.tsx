@@ -12,6 +12,7 @@ import {
   type StatusPillProps,
 } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
+import { usePortal } from '../../../shell/PortalContext';
 import {
   checkSeal,
   confirmReceipt,
@@ -117,6 +118,10 @@ const when = (iso: string): string => IST.format(new Date(iso));
  * ======================================================================== */
 
 export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.JSX.Element {
+  // Both writes on this screen — the seal check and the receipt — are
+  // `platform.ticket.write` on the server. An approver and a viewer hold none.
+  const { session } = usePortal();
+  const canRecord = session.permissions.includes('platform.ticket.write');
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   /** The server's refusal from the last action, rendered verbatim. */
   const [refusal, setRefusal] = React.useState<ApiFailure | null>(null);
@@ -310,6 +315,13 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
                 <span className="l">Delivery {c.index} signed for</span>
                 <span className="mono">{when(c.receiptConfirmedAt)}</span>
               </p>
+            ) : !canRecord ? (
+              // POST .../receipt checks `platform.ticket.write`. An approver and
+              // a viewer hold none, and used to press this and be refused.
+              <p key={c.index} className="dvcannot">
+                <span className="l">Delivery {c.index}</span>
+                <span className="d">Your seat cannot sign for a delivery.</span>
+              </p>
             ) : c.blockedReason === null ? (
               <button
                 key={c.index}
@@ -372,6 +384,9 @@ function Consignment({
   primary: boolean;
   onCheck: (sealCode: string, outcome: SealOutcome) => Promise<void>;
 }): React.JSX.Element {
+  // The same permission the receipt button reads, for the same endpoint family.
+  const { session } = usePortal();
+  const canRecord = session.permissions.includes('platform.ticket.write');
   const [code, setCode] = React.useState('');
   const c = consignment;
   const open = c.window?.open === true;
@@ -395,10 +410,13 @@ function Consignment({
         <p className="dvnote">
           You signed for this delivery on <span className="mono">{when(c.receiptConfirmedAt)}</span>
           . If something turns up now, it is still inside the inspection window —{' '}
-          <a href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}>
-            report a discrepancy
-          </a>{' '}
+          <a href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}>report a discrepancy</a>{' '}
           and we will collect the machine.
+        </p>
+      ) : !canRecord ? (
+        <p className="dvnote">
+          Your seat can read this delivery and cannot record a seal check. Anyone on your team who
+          can raise a return or a claim can do it.
         </p>
       ) : open ? (
         <ScanBox
@@ -700,8 +718,8 @@ function Recorded({
       {returnNumber && (
         <p className="dvret">
           We have opened return <span className="mono">{returnNumber}</span> for you —{' '}
-          <a href={`/returns/${encodeURIComponent(returnNumber)}`}>track it here</a>. You do
-          not need to call anybody.
+          <a href={`/returns/${encodeURIComponent(returnNumber)}`}>track it here</a>. You do not
+          need to call anybody.
         </p>
       )}
     </div>

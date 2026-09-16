@@ -12,6 +12,7 @@ import {
   type SortDirection,
 } from '@trugrade/ui';
 import type { ApiFailure } from '../../register/api';
+import { usePortal } from '../shell/PortalContext';
 import {
   CLAIM_STATUS,
   getClaims,
@@ -111,6 +112,9 @@ const problem = (failure: ApiFailure): string =>
 
 export function WarrantyBoard({ query }: { query: string }): React.JSX.Element {
   const router = useRouter();
+  // The permission POST /buyer/returns and /buyer/warranty/claims both check.
+  const { session } = usePortal();
+  const canRaise = session.permissions.includes('platform.ticket.write');
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const params = React.useMemo(() => new URLSearchParams(query), [query]);
 
@@ -220,9 +224,14 @@ export function WarrantyBoard({ query }: { query: string }): React.JSX.Element {
           })}
         </div>
 
-        <a className="pill acc wtclaim" href="/warranty/claims/new">
-          Start a claim
-        </a>
+        {/* POST /buyer/warranty/claims checks `platform.ticket.write`. */}
+        {canRaise ? (
+          <a className="pill acc wtclaim" href="/warranty/claims/new">
+            Start a claim
+          </a>
+        ) : (
+          <span className="fnote off">Your seat cannot start a claim.</span>
+        )}
       </div>
 
       <div className="tbl wttable">

@@ -8,7 +8,13 @@ import {
   type ResumableOnboarding,
   type SessionView,
 } from '../../register/api';
-import { getOrderReadiness, getProfile, type OrderReadiness, type OrgProfile } from '../api';
+import {
+  getApprovals,
+  getOrderReadiness,
+  getProfile,
+  type OrderReadiness,
+  type OrgProfile,
+} from '../api';
 
 /**
  * What every portal screen needs to know about who is here.
@@ -38,6 +44,14 @@ export interface PortalState {
    * from the profile cards.
    */
   readiness: OrderReadiness | null;
+  /**
+   * Orders waiting on this person's signature, for the rail's badge.
+   *
+   * Zero when there is nothing and when the seat may not read approvals — the
+   * rail renders no badge either way, because a badge of 0 is a thing to check
+   * that turns out to be nothing.
+   */
+  approvalsWaiting: number;
   /** Re-read everything. Called after a profile section saves. */
   reload: () => void;
   /** Replace the session in place, e.g. after the buyer adds their name. */
@@ -73,6 +87,7 @@ export function PortalProvider({
   const [profile, setProfile] = React.useState<OrgProfile | null>(null);
   const [onboarding, setOnboarding] = React.useState<ResumableOnboarding | null>(null);
   const [readiness, setReadiness] = React.useState<OrderReadiness | null>(null);
+  const [approvalsWaiting, setApprovalsWaiting] = React.useState(0);
   const [token, setToken] = React.useState(0);
 
   React.useEffect(() => {
@@ -104,11 +119,17 @@ export function PortalProvider({
     if (gate.k !== 'ready') return;
     let live = true;
     void (async () => {
-      const [p, o, r] = await Promise.all([getProfile(), getOnboarding(), getOrderReadiness()]);
+      const [p, o, r, a] = await Promise.all([
+        getProfile(),
+        getOnboarding(),
+        getOrderReadiness(),
+        getApprovals('status=waiting&per=1'),
+      ]);
       if (!live) return;
       setProfile(p.ok ? p.data : null);
       setOnboarding(o.ok ? o.data : null);
       setReadiness(r.ok ? r.data : null);
+      setApprovalsWaiting(a.ok ? a.data.waitingOnYou : 0);
     })();
     return () => {
       live = false;
@@ -128,9 +149,17 @@ export function PortalProvider({
   const value = React.useMemo<PortalState | null>(
     () =>
       gate.k === 'ready'
-        ? { session: gate.session, profile, onboarding, readiness, reload, setSession }
+        ? {
+            session: gate.session,
+            profile,
+            onboarding,
+            readiness,
+            approvalsWaiting,
+            reload,
+            setSession,
+          }
         : null,
-    [gate, profile, onboarding, readiness, reload, setSession],
+    [gate, profile, onboarding, readiness, approvalsWaiting, reload, setSession],
   );
 
   if (gate.k === 'wrong-portal') {

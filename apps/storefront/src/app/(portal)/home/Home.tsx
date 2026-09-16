@@ -402,7 +402,20 @@ function ProfilePanel(): React.JSX.Element {
 }
 
 function TeamPanel({ team }: { team: Team | null }): React.JSX.Element | null {
-  if (!team) return null;
+  // A panel that simply disappears reads as a bug. A seat without
+  // `identity.user.read` is told what it is missing and why, in one line.
+  if (!team) {
+    return (
+      <section className="mb-6" aria-labelledby="home-team">
+        <h2 id="home-team" className="hub-dock__title">
+          Your team
+        </h2>
+        <p className="text-body-sm text-ink-2">
+          The team list is not on this seat. An account owner or admin can see who has access.
+        </p>
+      </section>
+    );
+  }
   const shown = team.members.slice(0, 5);
   return (
     <section aria-labelledby="home-team">

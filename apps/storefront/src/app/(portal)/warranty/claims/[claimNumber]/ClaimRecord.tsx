@@ -11,7 +11,13 @@ import {
   type TimelineEvent,
 } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
-import { CLAIM_STATUS, FAULT_AREA_LABEL, getClaim, type ClaimView, type FaultArea } from '../../api';
+import {
+  CLAIM_STATUS,
+  FAULT_AREA_LABEL,
+  getClaim,
+  type ClaimView,
+  type FaultArea,
+} from '../../api';
 
 /**
  * One claim. See `page.tsx` for the archetype and the rules.
@@ -164,18 +170,14 @@ export function ClaimRecord({ claimNumber }: { claimNumber: string }): React.JSX
                   ) : (
                     <>
                       <span className="mono">{c.evidenceCount}</span>{' '}
-                      <span className="denom">
-                        {c.evidenceCount === 1 ? 'file' : 'files'}
-                      </span>
+                      <span className="denom">{c.evidenceCount === 1 ? 'file' : 'files'}</span>
                     </>
                   )}
                 </dd>
               </div>
               <div>
                 <dt>Resolution</dt>
-                <dd>
-                  {c.resolution ?? <span className="notmeasured">Not decided yet</span>}
-                </dd>
+                <dd>{c.resolution ?? <span className="notmeasured">Not decided yet</span>}</dd>
               </div>
             </dl>
           </section>
@@ -205,9 +207,13 @@ export function ClaimRecord({ claimNumber }: { claimNumber: string }): React.JSX
           }
           className="crside"
         >
-          <a className="pill acc crside-a" href="/legal/grievance">
-            {TERMINAL.has(c.status) ? 'Dispute this outcome' : 'Add something to this claim'}
-          </a>
+          {/* Same as the return record: the escalation is real and is not the
+              primary action, and the comment box it implied does not exist. */}
+          {TERMINAL.has(c.status) && (
+            <a className="pill wire crside-a" href="/legal/grievance">
+              Dispute this outcome
+            </a>
+          )}
           {c.passportPath && (
             <a className="pill wire crside-a" href={c.passportPath}>
               Open the machine&rsquo;s passport
@@ -297,7 +303,9 @@ function Failed({ message }: { message: string }): React.JSX.Element {
       <div className="empty err" role="alert">
         <h3>We could not read this claim</h3>
         <p>{message}</p>
-        <p>The claim is unaffected — this is a screen that could not load, not a record that changed.</p>
+        <p>
+          The claim is unaffected — this is a screen that could not load, not a record that changed.
+        </p>
         <p className="retry">
           <button type="button" className="pill acc" onClick={() => window.location.reload()}>
             Try again

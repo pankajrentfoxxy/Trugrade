@@ -12,6 +12,7 @@ import {
   type SortDirection,
 } from '@trugrade/ui';
 import type { ApiFailure } from '../../register/api';
+import { usePortal } from '../shell/PortalContext';
 import { getReturns, RETURN_STATUS, type ReturnView } from './api';
 
 /**
@@ -57,6 +58,9 @@ const problem = (failure: ApiFailure): string =>
 
 export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
   const router = useRouter();
+  // The permission POST /buyer/returns and /buyer/warranty/claims both check.
+  const { session } = usePortal();
+  const canRaise = session.permissions.includes('platform.ticket.write');
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const params = React.useMemo(() => new URLSearchParams(query), [query]);
 
@@ -171,13 +175,21 @@ export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
 
         {/* The one amber control. A board a buyer opens to check on a return is
             also the board they open when something has just gone wrong, and a
-            list with no way to start one is a list with a dead end at the top. */}
-        <a
-          className="pill acc rtnew"
-          href={order ? `/returns/new?order=${encodeURIComponent(order)}` : '/returns/new'}
-        >
-          Send a machine back
-        </a>
+            list with no way to start one is a list with a dead end at the top.
+
+            Gated on the permission POST /buyer/returns actually checks. An
+            approver and a viewer hold no `platform.ticket.write`, and used to
+            get this far and be refused on submit. */}
+        {canRaise ? (
+          <a
+            className="pill acc rtnew"
+            href={order ? `/returns/new?order=${encodeURIComponent(order)}` : '/returns/new'}
+          >
+            Send a machine back
+          </a>
+        ) : (
+          <span className="fnote off">Your seat cannot start a return.</span>
+        )}
       </div>
 
       {/* **The empty state is rendered INSTEAD of the board, not inside it.**

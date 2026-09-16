@@ -583,7 +583,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     // supplier hub does, and the invite routes are gated on this one permission.
     'identity.team.manage',
     'payment.invoice.read_own',
-    'platform.ticket.read',
+    // No `platform.ticket.read`. It opened nothing: no route in the API guards
+    // on it, there is no support screen under the buyer portal, and the one
+    // place it is read at all is the platform ops dashboard, which a customer
+    // cannot reach. A granted permission that opens nothing is a promise the
+    // product does not keep — when a support thread is built, it comes back.
     'platform.ticket.write',
   ),
   CUSTOMER_ADMIN: P(
@@ -594,7 +598,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = O
     'identity.user.read',
     'identity.user.write',
     'payment.invoice.read_own',
-    'platform.ticket.read',
+    // Removed with CUSTOMER_OWNER's, and for the same reason.
     'platform.ticket.write',
   ),
   CUSTOMER_BUYER: P(
