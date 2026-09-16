@@ -1854,6 +1854,46 @@ and demands the neighbour's rows are absent.
   is precisely what this task was told not to do. It matters for `/vendor/settings` and for the
   admin payout run, not here.
 
+## Reported by the buyer revamp — recorded, deliberately not changed
+
+Each of these is correct for an internal-testing branch and wrong for a public one.
+None was touched.
+
+- **`devCode` is returned in the sign-in and registration responses and printed on
+  screen.** `AppConfig.exposeOtpDevCode` gates it and `main.ts` announces it at boot. It
+  is the only reason a buyer can be signed in without a handset, and the two browser
+  suites depend on it. It must be off before anything is public, and the check that it is
+  off belongs in the pre-launch checklist rather than in a test that would then never run.
+- **`trust proxy` is unset on the Nest app.** Every rate limit therefore counts against
+  the proxy's address rather than the caller's, so behind a load balancer one visitor can
+  spend everybody's budget and a real attacker is never isolated. Left alone because
+  setting it wrongly is worse than leaving it unset — a trusted-proxy list has to match
+  the deployment, and this branch has no deployment to match.
+- **The grievance officer is the literal string `'To be appointed before launch'`** in
+  `packages/config/src/brand.ts`, and `LEGAL_DISCLOSURE.cin` is still null. Both are
+  rendered on `/legal`. These are appointments and filings, not code.
+
+### Two findings from the same pass that ARE defects, and are not fixed either
+
+- **`html,body{overflow-x:clip}` makes horizontal overflow invisible to measurement.**
+  `storefront.css:75`, matched by `globals.css:793`. A page whose content runs past the
+  right edge is silently cut off rather than given a scrollbar, so
+  `documentElement.scrollWidth` never exceeds its `clientWidth` and any check written
+  against it passes everywhere. The first version of `apps/storefront/test/overflow.spec.ts`
+  did exactly that and reported zero overflow on nineteen routes at four widths; a
+  deliberately 2000px-wide element failed to move the number, which is the only reason it
+  was caught. The suite now measures `body.scrollWidth`, and carries a test that injects
+  that element and fails if the detector does not notice. **Every overflow check written
+  against `documentElement` in this repo is worthless.** Whether the `clip` should stay is
+  a design decision: it hides real breakage, and removing it turns every hidden breakage
+  into a visible sideways scroll on the day it is removed.
+- **The approvals board excludes expired requests under every filter, including
+  "Everything".** Both seeded rows in `ordering.order_approval` expired in early
+  September, so an owner signing in today sees "Nothing held for approval" while two
+  orders sit in `AWAITING_APPROVAL` and cannot progress. Whatever the right answer is —
+  show them as lapsed, re-open them, or cancel the orders — silently counting zero is not
+  it. Not changed: it is the approvals module, not the buyer portal.
+
 ## Prerequisites built outside the numbered backlog
 
 | What | Commit | Why it could not wait |
@@ -1902,6 +1942,29 @@ and demands the neighbour's rows are absent.
 - **Date-pinned tests are time bombs.** Two suites passed only while the real date matched
   a literal in the file. If a test needs a fixed instant, fix the TIME and let the DATE
   track today, or seed and assert from the same clock.
+- **A browser test that signs up a buyer sends a real WhatsApp message.** `NODE_ENV` is
+  `development` here, not `test`, and `INTERAKT_API_KEY` and `SMTP_USER` are both set, so
+  `adapters.module.ts` resolves `NotificationPort` to the live adapters. An early draft of
+  `apps/storefront/test/first-order.spec.ts` minted a random ten-digit mobile per run to
+  guarantee a fresh sign-up — which means messaging whoever owns that number. It now runs
+  the sign-up half only when `E2E_MOBILE` names a number the operator controls, and does
+  everything else as the seeded buyers under `acme.example`, a domain RFC 2606 reserves so
+  that delivery is impossible. **There is no flag that suppresses delivery**; the only
+  lever is unsetting those two credentials, which means restarting the API.
+- **`acme.example` sign-ins intermittently answer 500,** because the live SMTP adapter
+  really tries to deliver to a domain that by definition has no MX record. The code was
+  still issued — only the send failed — so the browser helper retries rather than failing.
+  A bare 500 here is not a bug in the route.
+- **The per-IP OTP budget binds long before the per-account one.**
+  `ACCOUNT_OTP_IP_LIMIT` is twenty sends an hour across every account, so about ten runs
+  of a two-file browser suite exhausts it while no single account is anywhere near its
+  five. The screen says "Too many attempts" either way, which reads like an account
+  problem and is not. `redis-cli GET rl:auth-account-otp-ip:127.0.0.1` is the one to look
+  at first. (Clearing those dev keys is a local-environment action; no code or config
+  changed.)
+- **Re-running a suite to read its output spends the budget again.** Three of the stalls
+  above were self-inflicted by piping the same `pnpm test:e2e` through a different `grep`.
+  Redirect once to a file and read the file.
 
 ## Notes carried forward
 

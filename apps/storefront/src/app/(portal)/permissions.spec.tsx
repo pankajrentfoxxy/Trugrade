@@ -149,6 +149,19 @@ describe('the write controls', () => {
     }
     expect(combinations).toHaveLength(CUSTOMER_ROLES.length * CONTROLS.length);
     expect(refused).toEqual([]);
+
+    // Printed the way the console suite prints its own sweep, so the number in
+    // the report is read off a run rather than counted by hand.
+    const railEntries = CUSTOMER_ROLES.length * PORTAL_NAV.length;
+    const openable = CUSTOMER_ROLES.reduce(
+      (n, role) => n + PORTAL_NAV.filter((e) => mayOpen(e, held(role))).length,
+      0,
+    );
+    console.log(
+      `seat × control — ${combinations.length} combinations · ${refused.length} would 403 on submit\n` +
+        `seat × rail entry — ${railEntries} combinations · ${openable} openable · ` +
+        `${railEntries - openable} locked in place · 0 hidden`,
+    );
   });
 });
 
