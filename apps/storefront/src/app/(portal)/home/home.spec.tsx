@@ -236,10 +236,16 @@ describe('every figure on the KPI strip came from the response', () => {
 
 it('says how many sections the profile percentage is out of', async () => {
   const body = await show(REAL);
-  // 10 + 25 of 100, two of five sections. Both halves of the fact, together.
+  // Account alone, of the three cards that gate ordering: 30 of 100.
+  //
+  // The fixture has STATUTORY complete and BUSINESS_PROFILE not, and the Tax
+  // card is responsible for both — so it is not done, and the percentage says
+  // so. The denominator is three because Preferences is weight 0 and gates
+  // nothing; counting it would put a card in the denominator that can never
+  // move the number.
   const text = body.textContent ?? '';
-  expect(text).toContain('35%');
-  expect(text).toContain('2 of 5 sections');
+  expect(text).toContain('30%');
+  expect(text).toContain('1 of 3 sections');
 });
 
 /* ==========================================================================

@@ -15,14 +15,23 @@ import {
 import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { Deadline, inIst } from '../../../lib/deadline';
-import { getDashboard, getTeam, type OrderDashboard, type PendingApproval, type Team } from '../api';
+import {
+  getDashboard,
+  getTeam,
+  updateCommercialProfile,
+  type OrderDashboard,
+  type PendingApproval,
+  type Team,
+} from '../api';
 import { usePortal } from '../shell/PortalContext';
 import {
-  PROFILE_SECTIONS,
+  GATING_SECTIONS,
   nextIncompleteSection,
   profileCompletionPct,
   sectionIsDone,
 } from '../profile/sections.config';
+import { ANNUAL_VOLUMES, EMPLOYEE_BANDS } from '../../register/picklists';
+import { Select } from '../../../lib/controls';
 
 /**
  * The buyer's home. See `page.tsx` for the archetype and the rules.
@@ -156,6 +165,7 @@ function Workspace({ data, team }: { data: OrderDashboard; team: Team | null }):
         </div>
 
         <aside className="hub-dock" aria-label="Your account">
+          <PricingPanel orders={data.orders} />
           <ProfilePanel />
           <TeamPanel team={team} />
         </aside>
@@ -212,9 +222,15 @@ function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): Re
   return (
     <ul className="divide-y divide-rule-2" data-testid="held-orders">
       {approvals.map((a) => (
-        <li key={a.orderNumber} className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+        <li
+          key={a.orderNumber}
+          className="flex flex-wrap items-start justify-between gap-4 px-5 py-4"
+        >
           <div className="min-w-0">
-            <Link className="hub-link font-mono" href={`/orders/${encodeURIComponent(a.orderNumber)}`}>
+            <Link
+              className="hub-link font-mono"
+              href={`/orders/${encodeURIComponent(a.orderNumber)}`}
+            >
               {a.orderNumber}
             </Link>
             <p className="mt-1 text-body-sm text-ink-2">
@@ -246,11 +262,112 @@ function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): Re
  * The dock — profile completion and the people on the account
  * ======================================================================== */
 
+/**
+ * The two pricing-desk questions, asked once and only after a first order.
+ *
+ * They used to be required on the profile before a buyer could order at all,
+ * which had the pricing desk gating the first sale on facts that only matter
+ * from the second. Dismissable, because a question a buyer has decided not to
+ * answer is not a task — the dismissal is per-browser on purpose: it is a
+ * preference about this screen, not a fact about the organisation.
+ */
+function PricingPanel({ orders }: { orders: number }): React.JSX.Element | null {
+  const { session, profile, reload } = usePortal();
+  const [dismissed, setDismissed] = React.useState(true);
+  const [employees, setEmployees] = React.useState('');
+  const [volume, setVolume] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [failed, setFailed] = React.useState<string | null>(null);
+
+  const answered = Boolean(profile?.employeeCountBand && profile?.annualTurnoverBand);
+  const mayWrite = session.permissions.includes('identity.user.write');
+
+  React.useEffect(() => {
+    try {
+      setDismissed(window.localStorage.getItem('tg-pricing-card') === 'dismissed');
+    } catch {
+      setDismissed(false);
+    }
+  }, []);
+
+  if (orders === 0 || answered || dismissed || !mayWrite) return null;
+
+  const close = (): void => {
+    setDismissed(true);
+    try {
+      window.localStorage.setItem('tg-pricing-card', 'dismissed');
+    } catch {
+      // A browser that refuses storage still gets to dismiss it for this visit.
+    }
+  };
+
+  const save = async (): Promise<void> => {
+    if (!employees && !volume) return;
+    setBusy(true);
+    setFailed(null);
+    const result = await updateCommercialProfile({
+      ...(employees ? { employeeCountBand: employees } : {}),
+      ...(volume ? { annualTurnoverBand: volume } : {}),
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setFailed(result.message);
+      return;
+    }
+    close();
+    reload();
+  };
+
+  return (
+    <section className="mb-6" aria-labelledby="home-pricing">
+      <h2 id="home-pricing" className="hub-dock__title">
+        Help us price for you
+      </h2>
+      <p className="text-body-sm text-ink-2">
+        Two questions. They change nothing about this order.
+      </p>
+      <div className="mt-3 flex flex-col gap-3">
+        <Select
+          label="Employees"
+          options={EMPLOYEE_BANDS}
+          value={employees}
+          onChange={(e) => setEmployees(e.target.value)}
+        />
+        <Select
+          label="Laptops bought in a year"
+          options={ANNUAL_VOLUMES}
+          value={volume}
+          onChange={(e) => setVolume(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={busy}
+            disabled={!employees && !volume}
+            onClick={() => void save()}
+          >
+            Save
+          </Button>
+          <Button variant="ghost" size="sm" onClick={close}>
+            Not now
+          </Button>
+        </div>
+        {failed ? (
+          <p role="alert" className="text-body-sm text-fail">
+            {failed}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function ProfilePanel(): React.JSX.Element {
   const { session, onboarding } = usePortal();
   const verified = onboarding?.status === 'VERIFIED';
   const pct = profileCompletionPct(onboarding, session);
-  const done = PROFILE_SECTIONS.filter((s) => sectionIsDone(s, onboarding, session)).length;
+  const done = GATING_SECTIONS.filter((s) => sectionIsDone(s, onboarding, session)).length;
   const next = nextIncompleteSection(null, onboarding, session);
 
   return (
@@ -272,7 +389,7 @@ function ProfilePanel(): React.JSX.Element {
           <p className="text-body">
             <span className="font-mono tnum text-ink">{pct}%</span>{' '}
             <span className="text-ink-3">
-              · {done} of {PROFILE_SECTIONS.length} sections done
+              · {done} of {GATING_SECTIONS.length} sections done
             </span>
           </p>
           <p className="mt-2 text-body-sm text-ink-2">

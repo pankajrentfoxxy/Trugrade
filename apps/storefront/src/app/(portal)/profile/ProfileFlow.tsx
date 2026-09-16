@@ -5,22 +5,26 @@ import { SectionDialog } from '@trugrade/ui';
 import { accountHolderFromSession } from '../../register/api';
 import { usePortal } from '../shell/PortalContext';
 import { AccountBody } from './sections/AccountBody';
-import { CompanyBody } from './sections/CompanyBody';
-import { ContactsBody } from './sections/ContactsBody';
-import { DocumentsBody } from './sections/DocumentsBody';
-import { StatutoryBody } from './sections/StatutoryBody';
+import { DeliveryBody } from './sections/DeliveryBody';
+import { PreferencesBody } from './sections/PreferencesBody';
+import { TaxBody } from './sections/TaxBody';
 import type { StepFrame } from './sections/step-body';
-import { PROFILE_SECTIONS, type ProfileSectionId } from './sections.config';
+import { PROFILE_SECTIONS, sectionBlockingReason, type ProfileSectionId } from './sections.config';
 
 /**
  * The profile cards, each opening a stepped dialog — the supplier hub's shape.
  *
- * Each card has steps of its own: Account has two, Contacts and delivery
- * five, the others one. The dialog draws the card's step strip and its one
- * primary button; the card's body says which step it is on and what the
- * button should read. Every step writes as it goes, so a card left half way
- * reopens where it was. When a card's last step saves, the flow moves to the
- * next card; after the last card it closes.
+ * Account has two steps, Tax and billing two, the rest one. The dialog draws
+ * the card's step strip and its one primary button; the card's body says which
+ * step it is on and what the button should read. Every step writes as it goes,
+ * so a card left half way reopens where it was. When a card's last step saves,
+ * the flow moves to the next card; after the last card it closes.
+ *
+ * **No card depends on another being opened first.** The Company card used to
+ * refuse to save until the GSTIN was verified elsewhere, while the hub rendered
+ * the cards as an unordered grid — a reachable dead end with a message in it.
+ * The company details now arrive with the GSTIN on the Tax card, so the
+ * dependency is gone rather than disabled.
  */
 
 export interface ProfileFlowProps {
@@ -31,15 +35,6 @@ export interface ProfileFlowProps {
   onStepSaved: (id: ProfileSectionId) => void;
   /** The last card was saved. */
   onFinished: () => void;
-}
-
-/** The GSTINs the statutory step verified, for the billing step. */
-function savedGstins(answers: Record<string, Record<string, unknown>>): string[] {
-  const rows = answers.STATUTORY?.gstins;
-  if (!Array.isArray(rows)) return [];
-  return rows
-    .map((row) => (row as { gstin?: unknown }).gstin)
-    .filter((g): g is string => typeof g === 'string' && g.length === 15);
 }
 
 export function ProfileFlow({
@@ -70,7 +65,6 @@ export function ProfileFlow({
   const section = PROFILE_SECTIONS[index]!;
   const lastCard = index === PROFILE_SECTIONS.length - 1;
   const answers = onboarding.answers;
-  const step = (code: string) => onboarding.progress.steps.find((s) => s.stepCode === code);
 
   const saved = (): void => {
     onStepSaved(section.id);
@@ -83,44 +77,36 @@ export function ProfileFlow({
   };
 
   const shared = { registerSubmit, onBusy: setBusy, onFrame, onSaved: saved };
+  const sentBack = sectionBlockingReason(section, onboarding);
   const body = ((): React.ReactNode => {
     switch (section.id) {
       case 'account':
         return <AccountBody {...shared} session={session} onSession={setSession} />;
-      case 'statutory':
+      case 'tax':
         return (
-          <StatutoryBody
+          <TaxBody
             {...shared}
             initial={answers.STATUTORY ?? {}}
-            blockingReason={step('STATUTORY')?.blockingReason}
+            contacts={answers.CONTACTS_ADDRESSES ?? {}}
+            accountHolder={accountHolderFromSession(session)}
+            blockingReason={sentBack}
           />
         );
-      case 'company':
+      case 'delivery':
         return (
-          <CompanyBody
-            {...shared}
-            initial={answers.BUSINESS_PROFILE ?? {}}
-            statutory={answers.STATUTORY}
-            blockingReason={step('BUSINESS_PROFILE')?.blockingReason}
-          />
-        );
-      case 'contacts':
-        return (
-          <ContactsBody
+          <DeliveryBody
             {...shared}
             initial={answers.CONTACTS_ADDRESSES ?? {}}
-            gstins={savedGstins(answers)}
-            statutory={answers.STATUTORY}
             accountHolder={accountHolderFromSession(session)}
-            blockingReason={step('CONTACTS_ADDRESSES')?.blockingReason}
+            blockingReason={sentBack}
           />
         );
-      case 'documents':
+      case 'preferences':
         return (
-          <DocumentsBody
+          <PreferencesBody
             {...shared}
             initial={answers.DOCUMENTS ?? {}}
-            blockingReason={step('DOCUMENTS')?.blockingReason}
+            blockingReason={sentBack}
           />
         );
       default:

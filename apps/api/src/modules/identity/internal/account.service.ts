@@ -359,6 +359,44 @@ export class AccountService {
     };
   }
 
+  /**
+   * The two pricing-desk facts, and nothing else.
+   *
+   * Headcount and yearly laptop volume used to be required on the Company card
+   * before a buyer could place a first order, which is precisely backwards: they
+   * change nothing about whether we can invoice or deliver, and they are only
+   * worth asking once there is a buying pattern to price. They are asked on the
+   * portal home instead, after the first order, and land here.
+   *
+   * Deliberately narrow. This is not a general org-profile write: legal name,
+   * GSTIN and constitution are promoted from verified evidence and must not be
+   * settable from a form.
+   */
+  async updateCommercialProfile(input: {
+    employeeCountBand?: string;
+    annualTurnoverBand?: string;
+  }): Promise<OrgProfileView> {
+    const orgId = this.orgId();
+    const me = this.ctx.requirePrincipal();
+    const employees = input.employeeCountBand?.trim() || null;
+    const volume = input.annualTurnoverBand?.trim() || null;
+    await this.prisma.$executeRaw`
+      UPDATE identity.organization
+         SET employee_count_band  = COALESCE(${employees}, employee_count_band),
+             annual_turnover_band = COALESCE(${volume}, annual_turnover_band),
+             updated_at = now(),
+             updated_by = ${me.userId}::uuid
+       WHERE id = ${orgId}::uuid`;
+    await this.audit.record({
+      action: 'identity.organization.commercial_profile_updated',
+      entityType: 'organization',
+      entityId: orgId,
+      after: { employeeCountBand: employees, annualTurnoverBand: volume },
+      actorOrgId: orgId,
+    });
+    return this.profile();
+  }
+
   /* ----------------------------------------------------------------------
    * Addresses
    * ------------------------------------------------------------------- */
@@ -421,7 +459,8 @@ export class AccountService {
   async updateAddress(id: string, input: UpdateAddressInput): Promise<OrgAddressView> {
     const orgId = this.orgId();
     const current = await this.requireAddress(id, orgId);
-    if (current.type !== 'SHIPPING') throw new ForbiddenError(BILLING_LOCKED, { reason: 'billing_address_locked' });
+    if (current.type !== 'SHIPPING')
+      throw new ForbiddenError(BILLING_LOCKED, { reason: 'billing_address_locked' });
 
     return this.prisma.runInTransaction(async () => {
       if (input.isActive === false) await this.guardLastDeliverySite(orgId, id);
@@ -457,7 +496,8 @@ export class AccountService {
       if (!row) throw new NotFoundError('address');
 
       await this.audit.record({
-        action: input.isActive === false ? 'account.address.deactivated' : 'account.address.updated',
+        action:
+          input.isActive === false ? 'account.address.deactivated' : 'account.address.updated',
         entityType: 'org_address',
         entityId: id,
         before: { isDefault: current.is_default, isActive: current.is_active },
@@ -498,7 +538,10 @@ export class AccountService {
       (m) => m.status === 'ACTIVE' && m.roles.includes(ownerRole),
     ).length;
 
-    const facilityMap = await this.loadMemberFacilities(orgId, members.map((m) => m.id));
+    const facilityMap = await this.loadMemberFacilities(
+      orgId,
+      members.map((m) => m.id),
+    );
     const invites = me.permissions.has('identity.team.manage')
       ? await this.teamInvites.listInvites()
       : [];
@@ -529,10 +572,9 @@ export class AccountService {
     const orgId = this.orgId();
     const me = this.ctx.requirePrincipal();
     if (me.orgType === 'VENDOR' && !me.permissions.has('identity.team.manage')) {
-      throw new ForbiddenError(
-        'Only the account owner may change team members.',
-        { reason: 'team_manage_required' },
-      );
+      throw new ForbiddenError('Only the account owner may change team members.', {
+        reason: 'team_manage_required',
+      });
     }
 
     const { ownerRole } = this.orgRoleConfig();
@@ -709,13 +751,10 @@ export class AccountService {
       });
 
       const owners = await this.ownerCount(orgId, ownerRole);
-      return this.memberView(
-        { ...row, roles },
-        me.userId,
-        owners,
-        ownerRole,
-        { ids: [], labels: [] },
-      );
+      return this.memberView({ ...row, roles }, me.userId, owners, ownerRole, {
+        ids: [],
+        labels: [],
+      });
     });
   }
 
@@ -831,13 +870,10 @@ export class AccountService {
     const owners = await this.ownerCount(orgId, ownerRole);
     const facilities = await this.teamInvites.memberFacilityIds(userId, orgId);
     const labels = await this.facilityLabelsFor(orgId, facilities);
-    return this.memberView(
-      { ...target, mfa_enabled: false },
-      me.userId,
-      owners,
-      ownerRole,
-      { ids: facilities, labels: facilities.map((id) => labels.get(id) ?? id.slice(0, 8)) },
-    );
+    return this.memberView({ ...target, mfa_enabled: false }, me.userId, owners, ownerRole, {
+      ids: facilities,
+      labels: facilities.map((id) => labels.get(id) ?? id.slice(0, 8)),
+    });
   }
 
   /* ----------------------------------------------------------------------
@@ -874,9 +910,12 @@ export class AccountService {
   private orgId(): string {
     const orgId = this.scope.currentOrgId;
     if (!orgId) {
-      throw new ForbiddenError('This screen is about one organisation, so one has to be signed in.', {
-        reason: 'account_route_without_org',
-      });
+      throw new ForbiddenError(
+        'This screen is about one organisation, so one has to be signed in.',
+        {
+          reason: 'account_route_without_org',
+        },
+      );
     }
     return orgId;
   }
@@ -923,10 +962,7 @@ export class AccountService {
     }
   }
 
-  private async assertContactAvailable(
-    email: string | null,
-    mobile: string | null,
-  ): Promise<void> {
+  private async assertContactAvailable(email: string | null, mobile: string | null): Promise<void> {
     if (email) {
       const [found] = await this.prisma.$queryRaw<Array<{ email: string | null }>>`
         SELECT email::text AS email FROM identity.user_account
@@ -1060,7 +1096,7 @@ export class AccountService {
 
     if (!best) {
       throw new ValidationError(
-        'These permissions cannot be held together through your organisation\'s roles alone. Add or remove permissions, or use Change roles instead.',
+        "These permissions cannot be held together through your organisation's roles alone. Add or remove permissions, or use Change roles instead.",
         {
           permissions:
             'No role combination grants exactly this set. Roles are fixed bundles — some permission mixes only exist as a larger role.',
@@ -1196,7 +1232,9 @@ export class AccountService {
   ): Promise<Map<string, string>> {
     if (facilityIds.length === 0) return new Map();
     const unique = [...new Set(facilityIds)];
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; label: string | null; city: string }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; label: string | null; city: string }>
+    >`
       SELECT f.id::text AS id, a.label, a.city
         FROM vendor.vendor_facility f
         JOIN identity.org_address a ON a.id = f.address_id

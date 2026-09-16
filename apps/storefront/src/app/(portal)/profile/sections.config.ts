@@ -4,26 +4,39 @@ import type { SessionView } from '../../register/api';
 /**
  * The buyer profile, as cards.
  *
- * Each card is one of the seeded BUYER onboarding steps — the same five the
- * old `/register` wizard walked through, now filled in whenever suits from the
- * portal. The weights sum to exactly 100 across the required cards, so "100%"
- * means one thing: every step is complete and the profile can be submitted.
+ * **Four cards, and only three of them are ever a gate.** The five seeded BUYER
+ * steps are still what the server counts, but they no longer map one-to-one
+ * onto screens: a buyer should be asked for a thing at the moment it is needed,
+ * not at the moment it is convenient to collect.
  *
- * `account` is the one card that does not read its state off a step: the
+ * - `account` — who you are. One step.
+ * - `tax` — the GSTIN, and the billing address the portal returns for it.
+ *   Completes STATUTORY and BUSINESS_PROFILE: the legal name, trade name,
+ *   constitution and year all arrive with the verified GSTIN, so there is
+ *   nothing left on a Company card worth asking for. Headcount and annual
+ *   volume are pricing-desk inputs and are asked once, after the first order.
+ * - `delivery` — one site, and who signs for it. Completes CONTACTS_ADDRESSES.
+ * - `preferences` — **weight 0, never a gate.** Every buyer document is
+ *   optional (`BUYER_DOCUMENTS`), so a fifth of the old score measured one
+ *   button press.
+ *
+ * The weights sum to 100 across the gating cards, so "100%" means one thing:
+ * this buyer can be invoiced and delivered to.
+ *
+ * `account` is the one card that does not read its state off a step alone: the
  * mobile-only sign-up creates the owner with no name and no email, and those
- * live on the user, not in a step draft. It is done when both are on the
- * session, and the ACCOUNT step is completed at the same moment so the
- * server's `isSubmittable` agrees with the screen.
+ * live on the user, not in a step draft.
  */
 
-export type ProfileSectionId = 'account' | 'statutory' | 'company' | 'contacts' | 'documents';
+export type ProfileSectionId = 'account' | 'tax' | 'delivery' | 'preferences';
 
 export interface ProfileSectionDef {
   id: ProfileSectionId;
   title: string;
   blurb: string;
   weight: number;
-  stepCode: string;
+  /** Every server step this card is responsible for completing. */
+  stepCodes: readonly string[];
 }
 
 export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
@@ -31,38 +44,34 @@ export const PROFILE_SECTIONS: readonly ProfileSectionDef[] = [
     id: 'account',
     title: 'Account',
     blurb: 'Your name and a verified work email',
-    weight: 10,
-    stepCode: 'ACCOUNT',
+    weight: 30,
+    stepCodes: ['ACCOUNT'],
   },
   {
-    id: 'statutory',
-    title: 'Statutory',
-    blurb: 'GSTIN and PAN, verified with the portal',
-    weight: 25,
-    stepCode: 'STATUTORY',
+    id: 'tax',
+    title: 'Tax and billing',
+    blurb: 'Your GSTIN, and the address it bills',
+    weight: 30,
+    stepCodes: ['STATUTORY', 'BUSINESS_PROFILE'],
   },
   {
-    id: 'company',
-    title: 'Company',
-    blurb: 'Legal name as it appears on the invoice',
-    weight: 20,
-    stepCode: 'BUSINESS_PROFILE',
+    id: 'delivery',
+    title: 'Delivery',
+    blurb: 'Where machines go, and who signs',
+    weight: 40,
+    stepCodes: ['CONTACTS_ADDRESSES'],
   },
   {
-    id: 'contacts',
-    title: 'Contacts and delivery',
-    blurb: 'Who signs for machines, and where',
-    weight: 25,
-    stepCode: 'CONTACTS_ADDRESSES',
-  },
-  {
-    id: 'documents',
-    title: 'Documents and preferences',
-    blurb: 'GST certificate, PAN, and how we reach you',
-    weight: 20,
-    stepCode: 'DOCUMENTS',
+    id: 'preferences',
+    title: 'Preferences',
+    blurb: 'Documents, purchase orders, how we reach you',
+    weight: 0,
+    stepCodes: ['DOCUMENTS'],
   },
 ] as const;
+
+/** The cards that decide the percentage. Preferences is not one of them. */
+export const GATING_SECTIONS = PROFILE_SECTIONS.filter((s) => s.weight > 0);
 
 const stepDone = (onboarding: ResumableOnboarding | null, code: string): boolean =>
   onboarding?.progress.steps.find((s) => s.stepCode === code)?.status === 'COMPLETE';
@@ -76,17 +85,16 @@ export function sectionIsDone(
   onboarding: ResumableOnboarding | null,
   session: SessionView | null,
 ): boolean {
-  if (section.id === 'account') {
-    return accountIsFilled(session) && stepDone(onboarding, section.stepCode);
-  }
-  return stepDone(onboarding, section.stepCode);
+  const everyStep = section.stepCodes.every((code) => stepDone(onboarding, code));
+  if (section.id === 'account') return accountIsFilled(session) && everyStep;
+  return everyStep;
 }
 
 export function profileCompletionPct(
   onboarding: ResumableOnboarding | null,
   session: SessionView | null,
 ): number {
-  const earned = PROFILE_SECTIONS.reduce(
+  const earned = GATING_SECTIONS.reduce(
     (sum, section) => (sectionIsDone(section, onboarding, session) ? sum + section.weight : sum),
     0,
   );
@@ -106,13 +114,16 @@ export function nextIncompleteSection(
   return null;
 }
 
-/** The reviewer's note when a step was sent back, verbatim. */
+/** The reviewer's note when any of a card's steps was sent back, verbatim. */
 export function sectionBlockingReason(
   section: ProfileSectionDef,
   onboarding: ResumableOnboarding | null,
 ): string | null {
-  const step = onboarding?.progress.steps.find((s) => s.stepCode === section.stepCode);
-  return step?.status === 'NEEDS_FIX' ? (step.blockingReason ?? null) : null;
+  for (const code of section.stepCodes) {
+    const step = onboarding?.progress.steps.find((s) => s.stepCode === code);
+    if (step?.status === 'NEEDS_FIX') return step.blockingReason ?? null;
+  }
+  return null;
 }
 
 /**
@@ -135,28 +146,34 @@ export function sectionSummary(
       if (email) return `${email} · name not given yet`;
       return 'Name and work email not given yet';
     }
-    case 'statutory': {
+    case 'tax': {
       const rows = answers.STATUTORY?.gstins;
       const first = Array.isArray(rows)
         ? (rows[0] as { gstin?: unknown } | undefined)?.gstin
         : undefined;
-      if (typeof first === 'string' && first.length === 15) return `GSTIN ${first}`;
+      if (typeof first === 'string' && first.length === 15) {
+        const legal = answers.BUSINESS_PROFILE?.legalName;
+        return typeof legal === 'string' && legal.trim() ? `${legal} · ${first}` : `GSTIN ${first}`;
+      }
       return done ? 'Verified' : 'GSTIN not verified yet';
     }
-    case 'company': {
-      const legal = answers.BUSINESS_PROFILE?.legalName;
-      if (typeof legal === 'string' && legal.trim()) return legal;
-      return done ? 'Saved' : 'Company details not given yet';
-    }
-    case 'contacts': {
+    case 'delivery': {
       const delivery = answers.CONTACTS_ADDRESSES?.delivery;
-      if (Array.isArray(delivery) && delivery.length > 0) {
-        return `${delivery.length} delivery ${delivery.length === 1 ? 'site' : 'sites'}`;
+      const first = Array.isArray(delivery)
+        ? (delivery[0] as { label?: unknown; city?: unknown } | undefined)
+        : undefined;
+      if (first && typeof first.label === 'string' && first.label.trim()) {
+        return typeof first.city === 'string' && first.city.trim()
+          ? `${first.label} · ${first.city}`
+          : first.label;
       }
       return done ? 'Saved' : 'No delivery site yet';
     }
-    case 'documents':
-      return done ? 'Uploaded' : 'GST certificate and PAN not uploaded yet';
+    case 'preferences': {
+      if (!done) return 'Optional — nothing here blocks an order';
+      const po = answers.DOCUMENTS?.poRequired === true;
+      return po ? 'Purchase order number required on orders' : 'No purchase order number needed';
+    }
     default:
       return '';
   }

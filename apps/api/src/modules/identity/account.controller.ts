@@ -77,6 +77,28 @@ import {
  * table has nowhere to put it, and a field that silently discards what somebody
  * typed is worse than one that is not offered.
  */
+/**
+ * Headcount and yearly laptop volume, the two pricing-desk facts.
+ *
+ * Both optional and both closed sets: a free string here would reach the
+ * pricing desk as a value nothing can group by. The lists mirror
+ * `EMPLOYEE_BANDS` and `ANNUAL_VOLUMES` on the storefront's picklists, which
+ * is where they are rendered. Reported as a gap there too — they belong in
+ * `platform_config` rather than in two places.
+ */
+const commercialProfileSchema = z
+  .object({
+    employeeCountBand: z
+      .enum(['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'])
+      .optional(),
+    annualTurnoverBand: z.enum(['1-10', '11-50', '51-200', '201-500', '500+']).optional(),
+  })
+  .refine((v) => v.employeeCountBand !== undefined || v.annualTurnoverBand !== undefined, {
+    message: 'Give at least one of the headcount or the yearly volume.',
+  });
+
+type CommercialProfileDto = z.infer<typeof commercialProfileSchema>;
+
 const createAddressSchema = z.object({
   label: z.string().trim().min(1, 'Give this site a name your team will recognise.').max(60),
   line1: addressLine1Schema,
@@ -121,7 +143,8 @@ const updateMemberSchema = z
       v.status !== undefined ||
       v.facilityIds !== undefined,
     {
-      message: 'Say what to change — roles, permissions, facilities, or whether the account is active.',
+      message:
+        'Say what to change — roles, permissions, facilities, or whether the account is active.',
     },
   )
   .refine((v) => !(v.roles !== undefined && v.permissions !== undefined), {
@@ -136,7 +159,7 @@ const createMemberSchema = z.object({
   jobTitle: z
     .string()
     .trim()
-    .min(1, 'Enter this person\'s job title.')
+    .min(1, "Enter this person's job title.")
     .max(80, 'Job title must be 80 characters or fewer.'),
   department: z.string().trim().max(80).nullish(),
   roles: z.array(z.string().trim().min(1).max(40)).min(1).max(6),
@@ -205,6 +228,24 @@ export class AccountController {
   @Get('profile')
   profile(): Promise<OrgProfileView> {
     return this.account.profile();
+  }
+
+  /**
+   * The two pricing-desk facts, asked on the portal home after a first order.
+   *
+   * Narrow on purpose: headcount and yearly volume and nothing else. Legal name,
+   * GSTIN and constitution are promoted from verified evidence, so they are not
+   * settable from a form and are absent from this body.
+   *
+   * Gated on `identity.user.write` — the same seats that may edit a delivery
+   * site. A viewer may read the company's own particulars and may not change them.
+   */
+  @Patch('profile')
+  @RequirePermissions('identity.user.write')
+  updateCommercialProfile(
+    @Body(new ZodValidationPipe(commercialProfileSchema)) body: CommercialProfileDto,
+  ): Promise<OrgProfileView> {
+    return this.account.updateCommercialProfile(body);
   }
 
   // -------------------------------------------------------------------------
@@ -311,9 +352,7 @@ export class AccountController {
 
   @Get('team/invites/preview')
   @Public()
-  previewInvite(
-    @Req() req: Request,
-  ): Promise<InvitePreviewView> {
+  previewInvite(@Req() req: Request): Promise<InvitePreviewView> {
     const token = typeof req.query.token === 'string' ? req.query.token : '';
     return this.teamInvites.previewInvite(token);
   }
@@ -369,7 +408,9 @@ export class AccountController {
     @Param('userId', new ZodValidationPipe(uuidSchema)) userId: string,
     @Body(new ZodValidationPipe(setMemberPasswordSchema)) body: SetMemberPasswordDto,
   ): Promise<{ ok: true }> {
-    return this.account.setMemberPassword(userId, body.password).then(() => ({ ok: true as const }));
+    return this.account
+      .setMemberPassword(userId, body.password)
+      .then(() => ({ ok: true as const }));
   }
 
   /** Clear second-factor enrolment and end every session. */

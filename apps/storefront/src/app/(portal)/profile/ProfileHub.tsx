@@ -15,6 +15,7 @@ import { usePortal } from '../shell/PortalContext';
 import { SubmitForReview } from './SubmitForReview';
 import { ProfileFlow } from './ProfileFlow';
 import {
+  GATING_SECTIONS,
   PROFILE_SECTIONS,
   profileCompletionPct,
   sectionBlockingReason,
@@ -52,7 +53,9 @@ export function ProfileHub(): React.JSX.Element {
   const fromCheckout = useSearchParams().get('reason') === 'checkout';
 
   const pct = profileCompletionPct(onboarding, session);
-  const doneCount = PROFILE_SECTIONS.filter((s) => sectionIsDone(s, onboarding, session)).length;
+  // Counted over the cards that actually gate, so the denominator matches the
+  // percentage. Preferences is weight 0 and belongs in neither.
+  const doneCount = GATING_SECTIONS.filter((s) => sectionIsDone(s, onboarding, session)).length;
   const finished = (): void => {
     setOpen(null);
     toast({
@@ -84,12 +87,19 @@ export function ProfileHub(): React.JSX.Element {
     <div className="hub-page">
       <HubPageHeader
         title="Your profile"
-        subtitle={profile?.legalName && profile.legalName !== 'Pending company details' ? profile.legalName : undefined}
+        subtitle={
+          profile?.legalName && profile.legalName !== 'Pending company details'
+            ? profile.legalName
+            : undefined
+        }
         actions={
           pct >= 100 ? (
             <StatusPill tone="pass" label="Every section done" />
           ) : (
-            <StatusPill tone="warn" label={`${pct}% · ${doneCount} of ${PROFILE_SECTIONS.length} sections`} />
+            <StatusPill
+              tone="warn"
+              label={`${pct}% · ${doneCount} of ${GATING_SECTIONS.length} sections`}
+            />
           )
         }
       />
@@ -99,7 +109,7 @@ export function ProfileHub(): React.JSX.Element {
           {
             label: 'Progress',
             value: `${pct}%`,
-            sub: `${doneCount} of ${PROFILE_SECTIONS.length} sections done`,
+            sub: `${doneCount} of ${GATING_SECTIONS.length} sections done`,
           },
           { label: 'Status', value: status, sub: 'ordering opens after approval' },
         ]}
@@ -120,8 +130,8 @@ export function ProfileHub(): React.JSX.Element {
 
       {fromCheckout && pct < 100 ? (
         <p className="mt-4 text-body text-ink" role="status" data-testid="checkout-reason">
-          Checkout needs a finished profile: we invoice a registered business and deliver to a
-          site you have named. Fill in the cards below and your cart is where you left it.
+          Checkout needs a finished profile: we invoice a registered business and deliver to a site
+          you have named. Fill in the cards below and your cart is where you left it.
         </p>
       ) : null}
 

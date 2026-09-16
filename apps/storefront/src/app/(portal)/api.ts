@@ -315,6 +315,19 @@ export interface OrgProfile {
 export const getProfile = (): Promise<ApiResult<OrgProfile>> =>
   call<OrgProfile>('/api/account/profile', { method: 'GET' });
 
+/**
+ * Headcount and yearly volume, and nothing else.
+ *
+ * These used to be required on the profile before a first order could be
+ * placed. They decide nothing about whether we can invoice or deliver, so they
+ * are asked on the home screen once there is a buying pattern to price.
+ */
+export const updateCommercialProfile = (body: {
+  employeeCountBand?: string;
+  annualTurnoverBand?: string;
+}): Promise<ApiResult<OrgProfile>> =>
+  call<OrgProfile>('/api/account/profile', { method: 'PATCH', body: JSON.stringify(body) });
+
 export const updateMember = (
   userId: string,
   body: { roles?: string[]; status?: 'ACTIVE' | 'SUSPENDED' },

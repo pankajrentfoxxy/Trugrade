@@ -80,6 +80,8 @@ export function PincodeLocalityFields({
 }: PincodeLocalityFieldsProps): React.JSX.Element {
   const [areas, setAreas] = React.useState<readonly PincodeArea[]>([]);
   const [stateLocked, setStateLocked] = React.useState(false);
+  /** The buyer said the filled area was wrong and asked for the list. */
+  const [pickingArea, setPickingArea] = React.useState(false);
   const [lookupError, setLookupError] = React.useState<string | null>(null);
   const [lookingUp, setLookingUp] = React.useState(false);
   const lastLookup = React.useRef<string | null>(null);
@@ -92,6 +94,7 @@ export function PincodeLocalityFields({
   const resetLookup = React.useCallback((): void => {
     setAreas([]);
     setStateLocked(false);
+    setPickingArea(false);
     setLookupError(null);
     lastLookup.current = null;
   }, []);
@@ -112,8 +115,15 @@ export function PincodeLocalityFields({
       lastLookup.current = pincode;
       setAreas(result.data.areas);
       setStateLocked(true);
-      // City stays empty until the applicant picks — unless we can match a saved name.
-      const nextCity = pickCityFromAreas(cityHint, result.data.areas);
+      setPickingArea(false);
+      // The first area, unless a saved name matches one of them.
+      //
+      // City used to stay empty until the applicant chose from a Select, which
+      // made the exception — a pincode spanning several localities — a question
+      // every buyer had to answer. The directory is ordered, the first entry is
+      // right nearly always, and "Not this area?" is there for when it is not.
+      const matched = pickCityFromAreas(cityHint, result.data.areas);
+      const nextCity = matched || result.data.areas[0]?.value || '';
       onChangeRef.current({
         state: result.data.stateCode,
         city: nextCity,
@@ -161,7 +171,10 @@ export function PincodeLocalityFields({
 
   const pincodeError = errors.pincode ?? lookupError ?? undefined;
   const cityError =
-    errors.city ?? (areas.length > 0 && !value.city ? 'Choose the area this pincode covers.' : undefined);
+    errors.city ??
+    (pickingArea && areas.length > 0 && !value.city
+      ? 'Choose the area this pincode covers.'
+      : undefined);
 
   return (
     <>
@@ -181,7 +194,10 @@ export function PincodeLocalityFields({
           onBlur={handlePincodeBlur}
           onChange={(e) => {
             engaged.current = true;
-            const next = e.target.value.replace(/[^\d\s]/g, '').replace(/\s+/g, ' ').slice(0, 7);
+            const next = e.target.value
+              .replace(/[^\d\s]/g, '')
+              .replace(/\s+/g, ' ')
+              .slice(0, 7);
             const normalised = normalisePincode(next);
             const cityHint = normalised !== lastLookup.current ? '' : value.city;
             if (normalised !== lastLookup.current) {
@@ -200,11 +216,10 @@ export function PincodeLocalityFields({
           error={pincodeError}
           hint={lookingUp ? 'Looking up areas for this pincode…' : undefined}
         />
-        {!readOnly ? (
+        {!readOnly && pickingArea && areas.length > 0 ? (
           <Select
             label="City"
             required
-            disabled={areas.length === 0}
             options={cityOptions}
             value={value.city}
             onFocus={onFocus}
@@ -217,10 +232,18 @@ export function PincodeLocalityFields({
             label="City"
             required
             readOnly
+            className="profile-hub-readonly"
             value={value.city}
             onFocus={onFocus}
             onBlur={onBlur}
             error={cityError}
+            hint={
+              !readOnly && areas.length > 1 ? (
+                <button type="button" className="hub-link" onClick={() => setPickingArea(true)}>
+                  Not this area?
+                </button>
+              ) : undefined
+            }
           />
         )}
       </div>
@@ -235,9 +258,7 @@ export function PincodeLocalityFields({
         onChange={(e) => onChange({ state: e.target.value })}
         error={errors.state}
         hint={
-          stateLocked && value.state.length > 0
-            ? 'Filled from the pincode directory.'
-            : undefined
+          stateLocked && value.state.length > 0 ? 'Filled from the pincode directory.' : undefined
         }
       />
     </>

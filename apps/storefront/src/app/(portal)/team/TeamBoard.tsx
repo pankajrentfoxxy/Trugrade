@@ -180,7 +180,9 @@ export function TeamBoard(): React.JSX.Element {
   const invites = team.invites ?? [];
   const active = members.filter((m) => m.status === 'ACTIVE').length;
   const approvers = members.filter(
-    (m) => m.status === 'ACTIVE' && m.roles.some((r) => r === 'CUSTOMER_OWNER' || r === 'CUSTOMER_APPROVER'),
+    (m) =>
+      m.status === 'ACTIVE' &&
+      m.roles.some((r) => r === 'CUSTOMER_OWNER' || r === 'CUSTOMER_APPROVER'),
   ).length;
 
   const notGiven = (what: string): React.JSX.Element => (
@@ -274,11 +276,16 @@ export function TeamBoard(): React.JSX.Element {
   ];
 
   const inviteColumns: ReadonlyArray<Column<TeamInvite>> = [
-    { key: 'name', header: 'Name', cell: (inv) => <span className="hub-td-ink">{inv.fullName}</span> },
+    {
+      key: 'name',
+      header: 'Name',
+      cell: (inv) => <span className="hub-td-ink">{inv.fullName}</span>,
+    },
     {
       key: 'email',
       header: 'Email',
-      cell: (inv) => (inv.email ? <span className="font-mono">{inv.email}</span> : notGiven('email')),
+      cell: (inv) =>
+        inv.email ? <span className="font-mono">{inv.email}</span> : notGiven('email'),
     },
     { key: 'role', header: 'Role', cell: (inv) => ROLE_LABEL[inv.role] ?? inv.role },
     { key: 'sent', header: 'Sent', numeric: true, cell: (inv) => inIst(inv.sentAt) },
@@ -286,7 +293,9 @@ export function TeamBoard(): React.JSX.Element {
       key: 'expires',
       header: 'Expires in',
       numeric: true,
-      cell: (inv) => <span className="font-mono tnum">{formatCountdown(inv.expiresInSeconds)}</span>,
+      cell: (inv) => (
+        <span className="font-mono tnum">{formatCountdown(inv.expiresInSeconds)}</span>
+      ),
     },
     {
       key: 'actions',
@@ -319,12 +328,31 @@ export function TeamBoard(): React.JSX.Element {
         }
       />
 
+      {/*
+        Where the finance and IT contacts went.
+
+        The profile used to demand all three — procurement, finance, IT — as
+        eight required fields before a first order, and a named contact is not
+        the same thing as a seat that can act. They are people, and this is the
+        screen for people. Neither blocks an order.
+      */}
+      {canManage ? (
+        <p className="mt-2 text-body-sm text-ink-2">
+          Invoices go to whoever holds Finance. Invite them here — nothing on this screen blocks an
+          order.
+        </p>
+      ) : null}
+
       <HubKpiRow
         cells={[
           { label: 'People', value: String(members.length), sub: `${active} active` },
           { label: 'Account owners', value: String(team.owners), sub: 'one is the floor' },
           { label: 'Can approve orders', value: String(approvers), sub: 'owners and approvers' },
-          { label: 'Invites pending', value: String(invites.length), sub: 'links expire in 72 hours' },
+          {
+            label: 'Invites pending',
+            value: String(invites.length),
+            sub: 'links expire in 72 hours',
+          },
         ]}
       />
 

@@ -112,7 +112,8 @@ export type VerifyState = 'idle' | 'verifying' | 'verified' | 'rejected';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label: React.ReactNode;
-  hint?: string;
+  /** A sentence, or a control that belongs beside one — "Not this area?". */
+  hint?: React.ReactNode;
   error?: string;
   mono?: boolean;
   verifyState?: VerifyState;
