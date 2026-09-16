@@ -8,6 +8,7 @@ import {
   DataBoard,
   EmptyState,
   HubPageHeader,
+  InfoPopover,
   StatusPill,
   type Column,
   type SortDirection,
@@ -532,10 +533,14 @@ function Terms({
         </div>
       </div>
       <p className="fnote off">
-        Terms version <span className="mono">{terms.version}</span>. Every term above was reckoned
-        against <span className="mono">{asOf}</span> on our clock, not your browser&rsquo;s. You
-        deal only with us for the whole term — there is no supplier for you to chase, because we are
-        the seller.
+        {/* The version and the clock are facts about the figures above and stay
+            on the surface. Who carries the cover is Tier 4. */}
+        Terms <span className="mono">{terms.version}</span>, reckoned against{' '}
+        <span className="mono">{asOf}</span> on our clock.{' '}
+        <InfoPopover label="Who carries this cover">
+          You deal only with us for the whole term. There is no supplier for you to chase, because
+          we are the seller and the warrantor.
+        </InfoPopover>
       </p>
     </section>
   );

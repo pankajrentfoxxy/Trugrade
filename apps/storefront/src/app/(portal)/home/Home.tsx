@@ -94,7 +94,13 @@ export function Home(): React.JSX.Element {
     <div className="hub-page">
       <HubPageHeader
         title="Home"
-        subtitle="What your organisation has on order with us, and the one thing on it that has a clock against it."
+        // A title and a count. What is on order and what has a clock against it
+        // are the KPI row and the "Needs you" panel directly below.
+        subtitle={
+          phase.k === 'ready'
+            ? `${phase.data.orders} ${phase.data.orders === 1 ? 'order' : 'orders'}`
+            : undefined
+        }
         actions={startPurchasing}
       />
 

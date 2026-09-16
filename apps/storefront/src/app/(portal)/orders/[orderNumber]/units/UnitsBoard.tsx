@@ -10,6 +10,7 @@ import {
   GradeBadge,
   QcChip,
   HubPageHeader,
+  InfoPopover,
   SealChip,
   StatusPill,
   type Column,
@@ -301,10 +302,12 @@ export function UnitsBoard({
       </div>
 
       <p className="fnote off ubfoot">
-        Every figure above was measured by us on the machine carrying that serial. None of it is
-        copied from a description somebody else wrote. Where we did not measure something we say so;
-        a blank is never a pass. Open a serial to see the full passport — the twelve inspection
-        areas, the photographs and the wipe certificate.
+        <InfoPopover label="Where these figures come from">
+          Every figure above was measured by us on the machine carrying that serial, never copied
+          from a description somebody else wrote. Where we did not measure something we say so; a
+          blank is never a pass. Open a serial for the full passport — the twelve inspection areas,
+          the photographs and the wipe certificate.
+        </InfoPopover>
       </p>
     </>
   );

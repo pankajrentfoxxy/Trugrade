@@ -3,6 +3,7 @@
 import * as React from 'react';
 import {
   EmptyState,
+  InfoPopover,
   RecordHeader,
   SealChip,
   SidePanel,
@@ -300,13 +301,8 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
                   ? 'Every seal on this delivery has been looked at and none of them is broken.'
                   : 'There is nothing waiting on you here.'
           }
-          footnote={
-            <>
-              A broken seal is our problem, not yours. We collect the machine, we settle it, and we
-              never ask you to contact whoever dispatched it — under our terms there is nobody else
-              for you to chase.
-            </>
-          }
+          // Tier 3: the consequence of finding a broken seal, in twelve words.
+          footnote="A broken seal is our problem. We collect and settle it."
           className="dvside"
         >
           {data.consignments.map((c) =>
@@ -355,11 +351,14 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
         </SidePanel>
       </div>
 
+      {/* Tier 4. Worth saying once to somebody who asks, not on every visit to
+          the screen by somebody standing at a door with a delivery waiting. */}
       <p className="fnote off dvfoot">
-        Every seal code above was applied by our technician at the supply point and photographed in
-        place. Checking it at the door is what turns our claim about the machine into your own
-        record of it — and it is the only check on this platform that does not need an account, a
-        login or us.
+        <InfoPopover label="Why check the seal">
+          Every seal code above was applied by our technician at the supply point and photographed
+          in place. Checking it at the door turns our claim about the machine into your own record
+          of it — and it is the only check on this platform that needs no account and no login.
+        </InfoPopover>
       </p>
     </>
   );

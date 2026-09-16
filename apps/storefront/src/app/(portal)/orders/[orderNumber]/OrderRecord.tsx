@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   AddressCard,
   EmptyState,
+  InfoPopover,
   GradeBadge,
   PriceBreakup,
   RecordHeader,
@@ -208,7 +209,12 @@ function Record({ order }: { order: Order }): React.JSX.Element {
               </div>
               <div>
                 <dt>
-                  Place of supply <span className="denom">s.10(1)(a) IGST Act</span>
+                  Place of supply
+                  {/* Tier 4. The citation and the reasoning behind a `?`, not a
+                      paragraph under a fact most readers already accept. */}
+                  <InfoPopover label="Why this state decides the tax">
+                    {order.tax.basis}
+                  </InfoPopover>
                 </dt>
                 <dd>
                   {order.tax.placeOfSupplyState}{' '}
@@ -547,9 +553,11 @@ function Documents({ order }: { order: Order }): React.JSX.Element {
           </div>
         </dl>
         <p className="fnote off">
-          {BRAND.legalEntity} is the seller, so there is one invoice and it is ours. The proforma,
-          the tax invoice per delivery and the e-way bill are on the Documents tab, each with its
-          number and its date — or the moment that brings it into existence.
+          {BRAND.legalEntity} is the seller, so the invoice is ours.{' '}
+          <InfoPopover label="Where the other documents are">
+            The proforma, the tax invoice per delivery and the e-way bill are on the Documents tab,
+            each with its number and its date — or the moment that brings it into existence.
+          </InfoPopover>
         </p>
       </div>
     </section>
@@ -611,8 +619,10 @@ function Footnote({ order }: { order: Order }): React.JSX.Element {
   }
   return (
     <>
+      {/* The statutory basis is not restated here: it sits behind the `?` on
+          "Place of supply", which is the fact it is about. */}
       <b>Nothing has been charged yet.</b> This is the figure the invoice will carry, and it is the
-      whole of it — {order.tax.basis}.
+      whole of it.
     </>
   );
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   DataBoard,
   EmptyState,
+  InfoPopover,
   HubPageHeader,
   StatusPill,
   type Column,
@@ -192,71 +193,72 @@ export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
         )}
       </div>
 
-      {/* **The empty state is rendered INSTEAD of the board, not inside it.**
-          `DataBoard` puts its `empty` slot in a `<td colSpan>`, so the panel
-          inherits the table's intrinsic width — seven columns of it — and on a
-          phone the whole message sits off the right edge of a horizontal scroll
-          nobody knows is there. That is fine for a table of data, which is
-          supposed to scroll; it is wrong for the one sentence explaining why
-          there is no data. Reported for the shared component rather than
-          changed there. */}
-      {!loading && rows.length === 0 ? (
-        show === 'open' ? (
-          <EmptyState
-            className="rtempty"
-            title="Nothing is with us right now"
-            body={
-              <>
-                All <span className="mono">{scoped.length}</span> of your returns are settled.
-              </>
-            }
-            action={
-              <button type="button" className="pill wire" onClick={() => setValue('show', '')}>
-                Show every return
-              </button>
-            }
-          />
-        ) : (
-          <EmptyState
-            className="rtempty"
-            title="You have never sent a machine back"
-            body={
-              <>
-                That is the outcome we are aiming for. If something is wrong with a machine you can
-                send it back within the inspection window that opens when it arrives — the window
-                and the exact deadline are on each order&rsquo;s delivery tab.
-              </>
-            }
-            action={
-              <a className="pill wire" href="/orders">
-                Your orders
-              </a>
-            }
-          />
-        )
-      ) : (
-        <div className="tbl rttable">
-          <DataBoard
-            caption={
-              loading
-                ? 'Reading your returns.'
-                : `${rows.length} of ${scoped.length} returns, sorted by ${SORT_CAPTION[sortKey]}, ${direction === 'asc' ? 'oldest first' : 'newest first'}.`
-            }
-            columns={COLUMNS}
-            rows={rows}
-            rowKey={(r) => r.returnNumber}
-            sort={{ key: sortKey, direction }}
-            onSort={onSort}
-            loading={loading}
-            skeletonRows={4}
-          />
-        </div>
-      )}
+      {/*
+        The empty state goes through `DataBoard` again.
 
+        This screen used to render it INSTEAD of the board, because the shared
+        component put its `empty` slot in a `<td colSpan>` — inheriting the
+        table's intrinsic width, so on a phone the one sentence explaining why
+        there is no data sat off the right edge of a scroll nobody knew was
+        there. That was reported rather than fixed, and four other boards went
+        on passing `empty` into the defect. It is fixed in `DataBoard` now: the
+        panel renders outside the table, where there are no columns to be as
+        wide as. So this passes `empty` like everything else.
+      */}
+      <div className="tbl rttable">
+        <DataBoard
+          caption={
+            loading
+              ? 'Reading your returns.'
+              : `${rows.length} of ${scoped.length} returns, sorted by ${SORT_CAPTION[sortKey]}, ${direction === 'asc' ? 'oldest first' : 'newest first'}.`
+          }
+          columns={COLUMNS}
+          rows={rows}
+          rowKey={(r) => r.returnNumber}
+          sort={{ key: sortKey, direction }}
+          onSort={onSort}
+          loading={loading}
+          skeletonRows={4}
+          empty={
+            show === 'open' ? (
+              <EmptyState
+                className="rtempty"
+                title="Nothing is with us right now"
+                body={
+                  <>
+                    All <span className="mono">{scoped.length}</span> of your returns are settled.
+                  </>
+                }
+                action={
+                  <button type="button" className="pill wire" onClick={() => setValue('show', '')}>
+                    Show every return
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                className="rtempty"
+                title="You have never sent a machine back"
+                body="Send one back within the inspection window on its delivery tab."
+                action={
+                  <a className="pill wire" href="/orders">
+                    Your orders
+                  </a>
+                }
+              />
+            )
+          }
+        />
+      </div>
+
+      {/* Tier 4. The whole explanation, behind a disclosure rather than under
+          every visit to this board. */}
       <p className="fnote off rtfoot">
-        A return is settled by us and only by us. We collect the machine at our cost, inspect it
-        against the report it was sold under, and refund or replace it — you are never asked to deal
-        with whoever dispatched it.
+        <InfoPopover label="Who settles a return">
+          We do, and only we do. We collect the machine at our cost, inspect it against the report
+          it was sold under, and refund or replace it — you are never asked to deal with whoever
+          dispatched it.
+        </InfoPopover>
       </p>
     </>
   );

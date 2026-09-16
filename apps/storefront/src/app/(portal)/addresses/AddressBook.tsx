@@ -101,13 +101,9 @@ function Record({
     <>
       <RecordHeader
         title="Where we deliver, and who we bill"
-        subtitle={
-          <>
-            Every site your organisation takes delivery at, and the registered address on your
-            invoices. A driver is shown the contact, the landmark and the gate instruction on the
-            site they are delivering to, exactly as they are written here.
-          </>
-        }
+        // A title and a count. What a driver is shown is a consequence of the
+        // fields, and it is said beside them rather than 39 words up here.
+        subtitle="Delivery sites and the address we invoice"
         identifiers={[
           { label: 'Delivery sites', value: String(active.length) },
           { label: 'Retired', value: String(retired.length) },
@@ -206,8 +202,7 @@ function Record({
 
             {book.billing.length === 0 ? (
               <p className="fnote off">
-                We hold no separate billing address for you, so invoices are addressed to the
-                registered address on your GST certificate.
+                Invoices go to the registered address on your GST certificate.
               </p>
             ) : (
               <div className="adrgrid">
@@ -512,10 +507,7 @@ function SiteFormFields({
 
       <p className="adrmissing">
         <b className="notmeasured">Receiving hours: not recorded</b>
-        <span>
-          We do not yet hold the hours a site will accept goods, so we cannot promise a driver
-          arrives inside them. Put them in the gate instruction and they reach the driver.
-        </span>
+        <span>Put them in the gate instruction and the driver sees them.</span>
       </p>
     </>
   );
@@ -589,10 +581,7 @@ function AddSite({
     >
       <summary>{title}</summary>
       <div className="adradd-body">
-        <p className="adradd-note">
-          Everything below the address is what the driver is shown on the day. A landmark and a gate
-          instruction are the difference between a delivery and a second attempt.
-        </p>
+        <p className="adradd-note">The driver is shown these on the day.</p>
         <form className="adrform" onSubmit={(e) => void submit(e)} noValidate>
           {saved !== null && (
             <p className="adrok" role="status">
