@@ -12,6 +12,7 @@ import {
   getApprovals,
   getOrderReadiness,
   getProfile,
+  type ApprovalRow,
   type OrderReadiness,
   type OrgProfile,
 } from '../api';
@@ -52,6 +53,14 @@ export interface PortalState {
    * that turns out to be nothing.
    */
   approvalsWaiting: number;
+  /**
+   * The first page of those, so Home renders the same rows the board does.
+   *
+   * Pending approvals used to come from two endpoints with two DTOs — Home read
+   * `/orders/summary`'s `PendingApproval`, `/approvals` read `ApprovalRow` —
+   * and rendered the same rows from each. One source, read once here.
+   */
+  approvals: ApprovalRow[];
   /** Re-read everything. Called after a profile section saves. */
   reload: () => void;
   /** Replace the session in place, e.g. after the buyer adds their name. */
@@ -88,6 +97,7 @@ export function PortalProvider({
   const [onboarding, setOnboarding] = React.useState<ResumableOnboarding | null>(null);
   const [readiness, setReadiness] = React.useState<OrderReadiness | null>(null);
   const [approvalsWaiting, setApprovalsWaiting] = React.useState(0);
+  const [approvals, setApprovals] = React.useState<ApprovalRow[]>([]);
   const [token, setToken] = React.useState(0);
 
   React.useEffect(() => {
@@ -123,13 +133,14 @@ export function PortalProvider({
         getProfile(),
         getOnboarding(),
         getOrderReadiness(),
-        getApprovals('status=waiting&per=1'),
+        getApprovals('status=waiting&per=5'),
       ]);
       if (!live) return;
       setProfile(p.ok ? p.data : null);
       setOnboarding(o.ok ? o.data : null);
       setReadiness(r.ok ? r.data : null);
       setApprovalsWaiting(a.ok ? a.data.waitingOnYou : 0);
+      setApprovals(a.ok ? a.data.approvals : []);
     })();
     return () => {
       live = false;
@@ -155,11 +166,12 @@ export function PortalProvider({
             onboarding,
             readiness,
             approvalsWaiting,
+            approvals,
             reload,
             setSession,
           }
         : null,
-    [gate, profile, onboarding, readiness, approvalsWaiting, reload, setSession],
+    [gate, profile, onboarding, readiness, approvalsWaiting, approvals, reload, setSession],
   );
 
   if (gate.k === 'wrong-portal') {

@@ -213,19 +213,26 @@ describe('a vendor purchase order is unreachable from the buyer’s screen', () 
   it('names the documents that ARE the buyer’s, and sends them to the rest', async () => {
     await shown(CONFIRMED);
     // The two that belong to the buyer and are on this page: their own PO
-    // reference and our confirmation, which is this screen.
+    // reference and our confirmation.
     expect(screen.getByText('Our order confirmation')).toBeInTheDocument();
     expect(screen.getByText('Your PO reference')).toBeInTheDocument();
+
+    // The confirmation is a document, not a sentence. Its value used to be the
+    // literal words "This page" — a document named and never produced, while
+    // `OrderPdfService` had been able to render one all along.
+    expect(screen.queryByText('This page')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the PDF' })).toHaveAttribute(
+      'href',
+      '/api/buyer/orders/TT-26-00002/confirmation.pdf',
+    );
 
     // The proforma and the tax invoice were hard-coded here as "Not issued yet"
     // while nothing could issue one. T22 built the issuance, so restating them
     // here would be a second copy that goes stale the first time an invoice is
-    // raised. This panel points at the screen that reads their real state.
+    // raised — and the duplicate link to that screen is gone too, because the
+    // record's own tab strip is already how a buyer reaches it.
     expect(screen.queryByText('Not issued yet')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /documents on this order/i })).toHaveAttribute(
-      'href',
-      '/orders/TT-26-00002/documents',
-    );
+    expect(screen.queryByRole('link', { name: /documents on this order/i })).toBeNull();
 
     // Still no download and still no disabled button pretending at a file.
     expect(document.querySelector('a[download]')).toBeNull();

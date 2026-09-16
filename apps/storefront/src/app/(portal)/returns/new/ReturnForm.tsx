@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { EmptyState, HubPageHeader, WhyRail, type WhyRailItem } from '@trugrade/ui';
+import { EmptyState, type WhyRailItem } from '@trugrade/ui';
+import { CaseFormShell } from '../../cases/CaseForm';
 import type { ApiFailure } from '../../../register/api';
 import {
   EVIDENCE_MINIMUM,
@@ -163,169 +164,165 @@ export function ReturnForm({
   };
 
   return (
-    <>
-      <HubPageHeader
-        title="Send a machine back"
-        subtitle="We collect it, at our cost, and refund or replace it."
-      />
-
-      <div className="flow2">
-        <form className="rnform" onSubmit={submit} noValidate>
-          {refusal && <Refusal failure={refusal} />}
-
-          <fieldset className="cfield">
-            <legend>Which machines</legend>
-            {loading ? (
-              <p className="ink4">Reading your machines…</p>
-            ) : returnable.length === 0 ? (
-              <p className="cfnone">
-                None of your <span className="mono">{machines.length}</span> machines can be sent
-                back today. The reasons are listed below — each one has a different way forward, and
-                none of them is a dead end.
-              </p>
-            ) : (
-              <ul className="rnpick">
-                {returnable.map((m) => (
-                  <li key={m.serialNumber}>
-                    <label className={chosen.has(m.serialNumber) ? 'rnmach on' : 'rnmach'}>
-                      <input
-                        type="checkbox"
-                        checked={chosen.has(m.serialNumber)}
-                        onChange={() => toggle(m.serialNumber)}
-                        onFocus={() => setActive('Which machines')}
-                      />
-                      <span className="rnserial mono">{m.serialNumber}</span>
-                      <span className="rntitle">
-                        {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
-                      </span>
-                      <Window machine={m} windowHours={windowHours} />
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {mixed && (
-              <p className="rnmixed" role="alert">
-                Those machines are on two different orders, and a return is raised against one
-                order&rsquo;s delivery. Raise one return for each order — the windows on them are
-                different, and merging the two would report the wrong deadline on one of them.
-              </p>
-            )}
-
-            {blocked.length > 0 && (
-              // Open when NOTHING can be returned, because then the reasons are
-              // the only content on the screen and the buyer's next step is
-              // inside them. Collapsed on a form that can still be filled in,
-              // where they are a footnote rather than the answer.
-              <details className="cblocked" open={returnable.length === 0}>
-                <summary>
-                  <span className="mono">{blocked.length}</span>{' '}
-                  {blocked.length === 1 ? 'machine cannot' : 'machines cannot'} be sent back — why
-                </summary>
-                <ul>
-                  {blocked.map((m) => (
-                    <li key={m.serialNumber}>
-                      <span className="mono">{m.serialNumber}</span> {m.blockedReason}
-                      {m.openReturn && (
-                        <>
-                          {' · '}
-                          <a href={`/returns/${encodeURIComponent(m.openReturn.returnNumber)}`}>
-                            open it
-                          </a>
-                        </>
-                      )}
-                      {m.openReturn === null && m.window !== null && !m.window.open && (
-                        <>
-                          {' · '}
-                          <a href="/warranty">raise a warranty claim instead</a>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </fieldset>
-
-          <fieldset className="cfield">
-            <legend>What is wrong</legend>
-            <div
-              className="careas"
-              role="radiogroup"
-              aria-label="Reason for the return"
-              onFocus={() => setActive('What is wrong')}
-            >
-              {RETURN_REASONS.map((r) => (
-                <label key={r} className={reason === r ? 'carea on' : 'carea'}>
-                  <input
-                    type="radio"
-                    name="reasonCode"
-                    value={r}
-                    checked={reason === r}
-                    onChange={() => setReason(r)}
-                  />
-                  <span className="l">{REASON_LABEL[r].label}</span>
-                  <span className="d">{REASON_LABEL[r].hint}</span>
-                </label>
-              ))}
-            </div>
-            {minEvidence > 0 && (
-              <p className="rnevidence">
-                {REASON_LABEL[reason as ReturnReason].label} needs{' '}
-                <span className="mono">{minEvidence}</span>{' '}
-                {minEvidence === 1 ? 'photograph' : 'photographs'}, and{' '}
-                <b>uploading them here is not built yet</b>. Raise the return anyway — we will ask
-                you for the pictures by email and the return is on record from now. We would rather
-                have it recorded than hold your remedy up for a file picker.
-              </p>
-            )}
-          </fieldset>
-
-          <fieldset className="cfield">
-            <legend>What it does</legend>
-            <label className="csel">
-              <span className="l">Describe the problem</span>
-              <textarea
-                rows={5}
-                value={description}
-                maxLength={4000}
-                onChange={(e) => setDescription(e.target.value)}
-                onFocus={() => setActive('What is wrong')}
-                placeholder="The lid has a deep scratch across the whole width that is not in any of the inspection photographs."
-              />
-              <span className={trimmed.length > 0 && trimmed.length < 20 ? 'd short' : 'd'}>
-                <span className="mono">{trimmed.length}</span> of at least{' '}
-                <span className="mono">20</span> characters. The engineer who inspects the machine
-                when it comes back reads this first.
-              </span>
-            </label>
-          </fieldset>
-
-          <div className="cactions">
-            <button type="submit" className="pill acc" disabled={!canSubmit}>
-              {submitting
-                ? 'Raising the return…'
-                : selected.length > 1
-                  ? `Send back ${selected.length} machines`
-                  : 'Send this machine back'}
-            </button>
-            <a
-              className="pill wire"
-              href={initialOrder ? `/orders/${encodeURIComponent(initialOrder)}/units` : '/returns'}
-            >
-              {initialOrder ? 'Back to the order' : 'Your returns'}
-            </a>
-          </div>
-          <p className="fnote off">
-            Rule 7(4) take-back is ours and cannot be passed on. Nothing on this form goes to
-            whoever supplied the machine, and you will never be asked to contact them.
+    <CaseFormShell
+      title="Send a machine back"
+      subtitle="We collect it, at our cost, and refund or replace it."
+      formClassName="rnform"
+      onSubmit={submit}
+      refusal={refusal}
+      noun="return"
+      why={WHY}
+      activeTerm={active}
+    >
+      <fieldset className="cfield">
+        <legend>Which machines</legend>
+        {loading ? (
+          <p className="ink4">Reading your machines…</p>
+        ) : returnable.length === 0 ? (
+          <p className="cfnone">
+            None of your <span className="mono">{machines.length}</span> machines can be sent back
+            today. The reasons are listed below — each one has a different way forward, and none of
+            them is a dead end.
           </p>
-        </form>
+        ) : (
+          <ul className="rnpick">
+            {returnable.map((m) => (
+              <li key={m.serialNumber}>
+                <label className={chosen.has(m.serialNumber) ? 'rnmach on' : 'rnmach'}>
+                  <input
+                    type="checkbox"
+                    checked={chosen.has(m.serialNumber)}
+                    onChange={() => toggle(m.serialNumber)}
+                    onFocus={() => setActive('Which machines')}
+                  />
+                  <span className="rnserial mono">{m.serialNumber}</span>
+                  <span className="rntitle">
+                    {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
+                  </span>
+                  <Window machine={m} windowHours={windowHours} />
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <WhyRail items={WHY} title="Why we ask" activeTerm={active} className="claimwhy" />
+        {mixed && (
+          <p className="rnmixed" role="alert">
+            Those machines are on two different orders, and a return is raised against one
+            order&rsquo;s delivery. Raise one return for each order — the windows on them are
+            different, and merging the two would report the wrong deadline on one of them.
+          </p>
+        )}
+
+        {blocked.length > 0 && (
+          // Open when NOTHING can be returned, because then the reasons are
+          // the only content on the screen and the buyer's next step is
+          // inside them. Collapsed on a form that can still be filled in,
+          // where they are a footnote rather than the answer.
+          <details className="cblocked" open={returnable.length === 0}>
+            <summary>
+              <span className="mono">{blocked.length}</span>{' '}
+              {blocked.length === 1 ? 'machine cannot' : 'machines cannot'} be sent back — why
+            </summary>
+            <ul>
+              {blocked.map((m) => (
+                <li key={m.serialNumber}>
+                  <span className="mono">{m.serialNumber}</span> {m.blockedReason}
+                  {m.openReturn && (
+                    <>
+                      {' · '}
+                      <a href={`/returns/${encodeURIComponent(m.openReturn.returnNumber)}`}>
+                        open it
+                      </a>
+                    </>
+                  )}
+                  {m.openReturn === null && m.window !== null && !m.window.open && (
+                    <>
+                      {' · '}
+                      <a href="/warranty">raise a warranty claim instead</a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </fieldset>
+
+      <fieldset className="cfield">
+        <legend>What is wrong</legend>
+        <div
+          className="careas"
+          role="radiogroup"
+          aria-label="Reason for the return"
+          onFocus={() => setActive('What is wrong')}
+        >
+          {RETURN_REASONS.map((r) => (
+            <label key={r} className={reason === r ? 'carea on' : 'carea'}>
+              <input
+                type="radio"
+                name="reasonCode"
+                value={r}
+                checked={reason === r}
+                onChange={() => setReason(r)}
+              />
+              <span className="l">{REASON_LABEL[r].label}</span>
+              <span className="d">{REASON_LABEL[r].hint}</span>
+            </label>
+          ))}
+        </div>
+        {minEvidence > 0 && (
+          <p className="rnevidence">
+            {REASON_LABEL[reason as ReturnReason].label} needs{' '}
+            <span className="mono">{minEvidence}</span>{' '}
+            {minEvidence === 1 ? 'photograph' : 'photographs'}, and{' '}
+            <b>uploading them here is not built yet</b>. Raise the return anyway — we will ask you
+            for the pictures by email and the return is on record from now. We would rather have it
+            recorded than hold your remedy up for a file picker.
+          </p>
+        )}
+      </fieldset>
+
+      <fieldset className="cfield">
+        <legend>What it does</legend>
+        <label className="csel">
+          <span className="l">Describe the problem</span>
+          <textarea
+            rows={5}
+            value={description}
+            maxLength={4000}
+            onChange={(e) => setDescription(e.target.value)}
+            onFocus={() => setActive('What is wrong')}
+            placeholder="The lid has a deep scratch across the whole width that is not in any of the inspection photographs."
+          />
+          <span className={trimmed.length > 0 && trimmed.length < 20 ? 'd short' : 'd'}>
+            <span className="mono">{trimmed.length}</span> of at least{' '}
+            <span className="mono">20</span> characters. The engineer who inspects the machine when
+            it comes back reads this first.
+          </span>
+        </label>
+      </fieldset>
+
+      <div className="cactions">
+        <button type="submit" className="pill acc" disabled={!canSubmit}>
+          {submitting
+            ? 'Raising the return…'
+            : selected.length > 1
+              ? `Send back ${selected.length} machines`
+              : 'Send this machine back'}
+        </button>
+        <a
+          className="pill wire"
+          href={initialOrder ? `/orders/${encodeURIComponent(initialOrder)}/units` : '/returns'}
+        >
+          {initialOrder ? 'Back to the order' : 'Your returns'}
+        </a>
       </div>
-    </>
+      <p className="fnote off">
+        Rule 7(4) take-back is ours and cannot be passed on. Nothing on this form goes to whoever
+        supplied the machine, and you will never be asked to contact them.
+      </p>
+    </CaseFormShell>
   );
 }
 
@@ -367,19 +364,6 @@ function Window({
  * that shut while the form was open, or the return number already running on
  * that machine.
  */
-function Refusal({ failure }: { failure: ApiFailure }): React.JSX.Element {
-  return (
-    <div className="cfrefusal" role="alert">
-      <h2>We could not raise this return</h2>
-      <p>{failure.message}</p>
-      {Object.entries(failure.fields).map(([field, message]) => (
-        <p key={field} className="f">
-          {message}
-        </p>
-      ))}
-    </div>
-  );
-}
 
 /* ==========================================================================
  * States that are not the form

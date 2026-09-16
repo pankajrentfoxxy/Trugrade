@@ -3,14 +3,19 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Post,
   Query,
   Redirect,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { uuidSchema } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
+import { OrderPdfService } from './internal/order-pdf.service';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
   addCartItemSchema,
@@ -103,6 +108,7 @@ export class OrderingController {
     private readonly orderBoard: OrderListService,
     private readonly approvals: ApprovalService,
     private readonly requirements: RfqIntakeService,
+    private readonly orderPdf: OrderPdfService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -466,6 +472,40 @@ export class OrderingController {
    * list handed out. An id belonging to another organisation, or to another
    * order, answers 404.
    */
+  /**
+   * Our order confirmation, as the PDF it has always been able to be.
+   *
+   * `OrderPdfService` renders one and was reachable from no buyer route, so the
+   * order record listed "Our order confirmation" and gave its value as the
+   * literal string **"This page"** — a document named and not produced.
+   *
+   * `ordering.own.read` rather than `payment.invoice.read_own`: a confirmation
+   * is not an invoice. It is the record of what was ordered, which every seat
+   * that may read the order may read, including an approver deciding whether to
+   * sign for it.
+   *
+   * Streamed rather than redirected, unlike the invoice: there is no stored
+   * object to hand out a token for — it is rendered from the order on each
+   * request, so it cannot go stale and there is no key path to leak.
+   */
+  @Get('orders/:orderNumber/confirmation.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @RequirePermissions('ordering.own.read')
+  async orderConfirmationPdf(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const document = await this.orderPdf.render(orderNumber);
+    // `inline`, not `attachment`: a buyer checking what they ordered wants to
+    // look at it, and a forced download of a one-page confirmation is a file in
+    // somebody's Downloads folder they then have to find.
+    res.setHeader('Content-Disposition', `inline; filename="${document.filename}"`);
+    // `StreamableFile`, not the Buffer itself: Nest's default serialiser turns a
+    // returned Buffer into `{"type":"Buffer","data":[…]}` and sends that under
+    // the PDF content type, which every reader refuses.
+    return new StreamableFile(document.bytes);
+  }
+
   @Get('orders/:orderNumber/documents/:documentId')
   @Redirect(undefined, 302)
   @RequirePermissions('payment.invoice.read_own')

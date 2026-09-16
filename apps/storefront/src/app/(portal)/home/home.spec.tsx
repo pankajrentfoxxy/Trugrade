@@ -25,7 +25,7 @@ import '@testing-library/jest-dom';
 import { findVendorIdentityLeaks, type VendorIdentity } from '@trugrade/contracts';
 import { Home } from './Home';
 import { PortalContext, type PortalState } from '../shell/PortalContext';
-import type { OrderDashboard, Team } from '../api';
+import type { ApprovalRow, OrderDashboard, Team } from '../api';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
@@ -82,6 +82,33 @@ const REAL: OrderDashboard = {
   approvalSlaHours: 24,
 };
 
+/**
+ * The approvals Home renders, in the shape the one source returns.
+ *
+ * Home used to render `/orders/summary`'s own `PendingApproval` while
+ * `/approvals` rendered `ApprovalRow` — two endpoints and two DTOs for one
+ * fact. The shell reads the first page of the inbox once and both screens use
+ * it, so these rows come through the portal state rather than the dashboard.
+ */
+const WAITING: ApprovalRow[] = [
+  {
+    id: 'a1',
+    orderNumber: 'TT-26-00004',
+    status: 'PENDING',
+    approverName: 'Suresh Pillai',
+    requestedByName: 'Farah Khan',
+    requestedAt: agoHours(11),
+    expiresAt: inHours(13),
+    decidedAt: null,
+    comment: null,
+    orderValue: '307942.24',
+    unitsHeld: 6,
+    slaHours: 24,
+    decidable: true,
+    blockedReason: null,
+  },
+];
+
 const EMPTY: OrderDashboard = {
   orders: 0,
   machines: 0,
@@ -136,6 +163,7 @@ const STATE: PortalState = {
   },
   profile: null,
   approvalsWaiting: 4,
+  approvals: [],
   readiness: {
     orgStatus: 'REGISTERED',
     suspended: false,
@@ -182,11 +210,14 @@ const STATE: PortalState = {
   setSession: () => undefined,
 };
 
-const show = async (data: OrderDashboard): Promise<HTMLElement> => {
+const show = async (
+  data: OrderDashboard,
+  approvals: ApprovalRow[] = WAITING,
+): Promise<HTMLElement> => {
   mockGet.mockResolvedValue({ ok: true, data });
   mockTeam.mockResolvedValue({ ok: true, data: TEAM });
   render(
-    <PortalContext.Provider value={STATE}>
+    <PortalContext.Provider value={{ ...STATE, approvals }}>
       <Home />
     </PortalContext.Provider>,
   );
@@ -231,17 +262,13 @@ describe('every figure on the KPI strip came from the response', () => {
   });
 
   it('reads the SLA off the row rather than assuming twenty-four hours', async () => {
-    const body = await show({
-      ...REAL,
-      approvalSlaHours: 12,
-      approvals: [{ ...REAL.approvals[0]!, slaHours: 12 }],
-    });
+    const body = await show({ ...REAL, approvalSlaHours: 12 }, [{ ...WAITING[0]!, slaHours: 12 }]);
     expect(screen.getByTestId('held-orders')).toHaveTextContent('12');
     expect(body.textContent ?? '').not.toContain('24 hours');
   });
 
   it('shows no queue when nothing is waiting', async () => {
-    await show({ ...REAL, approvals: [], approvalSlaHours: null, oldestApprovalWaitHours: null });
+    await show({ ...REAL, approvalSlaHours: null, oldestApprovalWaitHours: null }, []);
     await screen.findByText('Nothing is waiting on anybody');
     expect(screen.queryByTestId('held-orders')).not.toBeInTheDocument();
   });

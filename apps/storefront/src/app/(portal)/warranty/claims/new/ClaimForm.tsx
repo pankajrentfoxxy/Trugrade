@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { EmptyState, HubPageHeader, WhyRail, type WhyRailItem } from '@trugrade/ui';
+import { EmptyState, type WhyRailItem } from '@trugrade/ui';
+import { CaseFormShell } from '../../../cases/CaseForm';
 import type { ApiFailure } from '../../../../register/api';
 import {
   FAULT_AREAS,
@@ -149,172 +150,144 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
   };
 
   return (
-    <>
-      <HubPageHeader
-        title="Start a warranty claim"
-        subtitle="We handle the claim ourselves, for the whole term."
-      />
-
-      <div className="flow2">
-        <form className="claimform" onSubmit={submit} noValidate>
-          {refusal && <Refusal failure={refusal} />}
-
-          <fieldset className="cfield">
-            <legend>Which machine</legend>
-            {loading ? (
-              <p className="ink4">Reading your machines…</p>
-            ) : claimable.length === 0 ? (
-              <p className="cfnone">
-                None of your <span className="mono">{machines.length}</span> machines can be claimed
-                on today. The reasons are listed below — each one has a different way forward.
-              </p>
-            ) : (
-              <>
-                <label className="csel">
-                  <span className="l">Serial number</span>
-                  <select
-                    value={serial}
-                    onChange={(e) => setSerial(e.target.value)}
-                    onFocus={() => setActive('Which machine')}
-                    required
-                  >
-                    <option value="">Choose a machine…</option>
-                    {claimable.map((m) => (
-                      <option key={m.serialNumber} value={m.serialNumber}>
-                        {m.serialNumber} — {m.title ?? 'Model no longer catalogued'} (
-                        {m.cover?.daysRemaining} days of cover left)
-                      </option>
-                    ))}
-                  </select>
-                  <span className="d">
-                    <span className="mono">{claimable.length}</span> of{' '}
-                    <span className="mono">{machines.length}</span> machines are in cover and have
-                    no claim open.
-                  </span>
-                </label>
-              </>
-            )}
-
-            {blocked.length > 0 && (
-              <details className="cblocked">
-                <summary>
-                  <span className="mono">{blocked.length}</span>{' '}
-                  {blocked.length === 1 ? 'machine is' : 'machines are'} not claimable — why
-                </summary>
-                <ul>
-                  {blocked.map((m) => (
-                    <li key={m.serialNumber}>
-                      <span className="mono">{m.serialNumber}</span> {blockedReason(m)}
-                      {m.openClaim && (
-                        <>
-                          {' · '}
-                          <a
-                            href={`/warranty/claims/${encodeURIComponent(m.openClaim.claimNumber)}`}
-                          >
-                            open it
-                          </a>
-                        </>
-                      )}
-                      {m.cover !== null && !m.cover.inWarranty && (
-                        <>
-                          {' · '}
-                          <a href="/legal/grievance">ask for a paid repair</a>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </fieldset>
-
-          <fieldset className="cfield">
-            <legend>What is wrong</legend>
-            <div
-              className="careas"
-              role="radiogroup"
-              aria-label="Fault category"
-              onFocus={() => setActive('What is wrong')}
-            >
-              {FAULT_AREAS.map((a) => (
-                <label key={a} className={area === a ? 'carea on' : 'carea'}>
-                  <input
-                    type="radio"
-                    name="faultArea"
-                    value={a}
-                    checked={area === a}
-                    onChange={() => setArea(a)}
-                  />
-                  <span className="l">{FAULT_AREA_LABEL[a].label}</span>
-                  <span className="d">{FAULT_AREA_LABEL[a].hint}</span>
-                </label>
-              ))}
-            </div>
-            <p className="cfhint">
-              These are the twelve areas we inspected before selling the machine. Your claim is
-              compared against what we measured in that exact area — so the more precisely you pick,
-              the faster it is approved.
-            </p>
-          </fieldset>
-
-          <fieldset className="cfield">
-            <legend>What it does</legend>
+    <CaseFormShell
+      title="Start a warranty claim"
+      subtitle="We handle the claim ourselves, for the whole term."
+      formClassName="claimform"
+      onSubmit={submit}
+      refusal={refusal}
+      noun="claim"
+      why={WHY}
+      activeTerm={active}
+    >
+      <fieldset className="cfield">
+        <legend>Which machine</legend>
+        {loading ? (
+          <p className="ink4">Reading your machines…</p>
+        ) : claimable.length === 0 ? (
+          <p className="cfnone">
+            None of your <span className="mono">{machines.length}</span> machines can be claimed on
+            today. The reasons are listed below — each one has a different way forward.
+          </p>
+        ) : (
+          <>
             <label className="csel">
-              <span className="l">Describe the fault</span>
-              <textarea
-                rows={5}
-                value={description}
-                maxLength={4000}
-                onChange={(e) => setDescription(e.target.value)}
-                onFocus={() => setActive('What it does')}
-                placeholder="Battery drops from 100% to about 12% in forty minutes with nothing running."
-              />
-              <span className={trimmed.length > 0 && trimmed.length < 20 ? 'd short' : 'd'}>
-                <span className="mono">{trimmed.length}</span> of at least{' '}
-                <span className="mono">20</span> characters. Say what it does, not that it is broken
-                — an engineer reads this before they pack the van.
+              <span className="l">Serial number</span>
+              <select
+                value={serial}
+                onChange={(e) => setSerial(e.target.value)}
+                onFocus={() => setActive('Which machine')}
+                required
+              >
+                <option value="">Choose a machine…</option>
+                {claimable.map((m) => (
+                  <option key={m.serialNumber} value={m.serialNumber}>
+                    {m.serialNumber} — {m.title ?? 'Model no longer catalogued'} (
+                    {m.cover?.daysRemaining} days of cover left)
+                  </option>
+                ))}
+              </select>
+              <span className="d">
+                <span className="mono">{claimable.length}</span> of{' '}
+                <span className="mono">{machines.length}</span> machines are in cover and have no
+                claim open.
               </span>
             </label>
-          </fieldset>
+          </>
+        )}
 
-          <div className="cactions">
-            <button type="submit" className="pill acc" disabled={!canSubmit}>
-              {submitting ? 'Raising the claim…' : 'Raise the claim'}
-            </button>
-            <a className="pill wire" href="/warranty">
-              Back to warranty
-            </a>
-          </div>
-          <p className="fnote off">
-            We answer every claim ourselves. Nothing on this form goes to whoever supplied the
-            machine, and you will never be asked to contact them.
-          </p>
-        </form>
+        {blocked.length > 0 && (
+          <details className="cblocked">
+            <summary>
+              <span className="mono">{blocked.length}</span>{' '}
+              {blocked.length === 1 ? 'machine is' : 'machines are'} not claimable — why
+            </summary>
+            <ul>
+              {blocked.map((m) => (
+                <li key={m.serialNumber}>
+                  <span className="mono">{m.serialNumber}</span> {blockedReason(m)}
+                  {m.openClaim && (
+                    <>
+                      {' · '}
+                      <a href={`/warranty/claims/${encodeURIComponent(m.openClaim.claimNumber)}`}>
+                        open it
+                      </a>
+                    </>
+                  )}
+                  {m.cover !== null && !m.cover.inWarranty && (
+                    <>
+                      {' · '}
+                      <a href="/legal/grievance">ask for a paid repair</a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </fieldset>
 
-        <WhyRail items={WHY} title="Why we ask" activeTerm={active} className="claimwhy" />
-      </div>
-    </>
-  );
-}
-
-/**
- * The server's refusal, verbatim.
- *
- * `role="alert"` so it is announced the moment it appears — a person who pressed
- * a button and got nothing has no way to know the page answered. The message is
- * the server's own sentence and is never summarised: it is the one that names
- * the exact expiry date, or the claim number that is already open.
- */
-function Refusal({ failure }: { failure: ApiFailure }): React.JSX.Element {
-  return (
-    <div className="cfrefusal" role="alert">
-      <h2>We could not raise this claim</h2>
-      <p>{failure.message}</p>
-      {Object.entries(failure.fields).map(([field, message]) => (
-        <p key={field} className="f">
-          {message}
+      <fieldset className="cfield">
+        <legend>What is wrong</legend>
+        <div
+          className="careas"
+          role="radiogroup"
+          aria-label="Fault category"
+          onFocus={() => setActive('What is wrong')}
+        >
+          {FAULT_AREAS.map((a) => (
+            <label key={a} className={area === a ? 'carea on' : 'carea'}>
+              <input
+                type="radio"
+                name="faultArea"
+                value={a}
+                checked={area === a}
+                onChange={() => setArea(a)}
+              />
+              <span className="l">{FAULT_AREA_LABEL[a].label}</span>
+              <span className="d">{FAULT_AREA_LABEL[a].hint}</span>
+            </label>
+          ))}
+        </div>
+        <p className="cfhint">
+          These are the twelve areas we inspected before selling the machine. Your claim is compared
+          against what we measured in that exact area — so the more precisely you pick, the faster
+          it is approved.
         </p>
-      ))}
-    </div>
+      </fieldset>
+
+      <fieldset className="cfield">
+        <legend>What it does</legend>
+        <label className="csel">
+          <span className="l">Describe the fault</span>
+          <textarea
+            rows={5}
+            value={description}
+            maxLength={4000}
+            onChange={(e) => setDescription(e.target.value)}
+            onFocus={() => setActive('What it does')}
+            placeholder="Battery drops from 100% to about 12% in forty minutes with nothing running."
+          />
+          <span className={trimmed.length > 0 && trimmed.length < 20 ? 'd short' : 'd'}>
+            <span className="mono">{trimmed.length}</span> of at least{' '}
+            <span className="mono">20</span> characters. Say what it does, not that it is broken —
+            an engineer reads this before they pack the van.
+          </span>
+        </label>
+      </fieldset>
+
+      <div className="cactions">
+        <button type="submit" className="pill acc" disabled={!canSubmit}>
+          {submitting ? 'Raising the claim…' : 'Raise the claim'}
+        </button>
+        <a className="pill wire" href="/warranty">
+          Back to warranty
+        </a>
+      </div>
+      <p className="fnote off">
+        We answer every claim ourselves. Nothing on this form goes to whoever supplied the machine,
+        and you will never be asked to contact them.
+      </p>
+    </CaseFormShell>
   );
 }

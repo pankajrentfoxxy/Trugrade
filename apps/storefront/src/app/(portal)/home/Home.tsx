@@ -19,8 +19,8 @@ import {
   getDashboard,
   getTeam,
   updateCommercialProfile,
+  type ApprovalRow,
   type OrderDashboard,
-  type PendingApproval,
   type Team,
 } from '../api';
 import { usePortal } from '../shell/PortalContext';
@@ -114,6 +114,7 @@ export function Home(): React.JSX.Element {
  * ======================================================================== */
 
 function Workspace({ data, team }: { data: OrderDashboard; team: Team | null }): React.JSX.Element {
+  const { approvals } = usePortal();
   return (
     <>
       {data.orders === 0 ? (
@@ -137,7 +138,7 @@ function Workspace({ data, team }: { data: OrderDashboard; team: Team | null }):
         <div className="hub-split__main">
           <Panel
             title="Needs you"
-            count={data.approvals.length || undefined}
+            count={approvals.length || undefined}
             actions={
               data.approvalSlaHours !== null ? (
                 <Link href="/approvals">Open approvals</Link>
@@ -146,7 +147,7 @@ function Workspace({ data, team }: { data: OrderDashboard; team: Team | null }):
               )
             }
           >
-            {data.approvals.length === 0 ? (
+            {approvals.length === 0 ? (
               <div className="px-5 py-4">
                 <EmptyState
                   title="Nothing is waiting on anybody"
@@ -154,7 +155,7 @@ function Workspace({ data, team }: { data: OrderDashboard; team: Team | null }):
                 />
               </div>
             ) : (
-              <Approvals approvals={data.approvals} />
+              <Approvals approvals={approvals} />
             )}
           </Panel>
         </div>
@@ -214,7 +215,15 @@ function kpis(data: OrderDashboard): { label: string; value: string; sub: string
  * the serials, the landed cost and the policy clause that fired are all on
  * screen. Every row leads there.
  */
-function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): React.JSX.Element {
+/**
+ * The orders waiting on a signature, from the one source that serves them.
+ *
+ * These rows used to come from `/orders/summary`'s own `PendingApproval` while
+ * `/approvals` rendered the same rows from `ApprovalRow` — two endpoints, two
+ * DTOs, one fact. The shell already reads the first page of the approvals
+ * inbox for the rail's badge, so Home reads that.
+ */
+function Approvals({ approvals }: { approvals: readonly ApprovalRow[] }): React.JSX.Element {
   return (
     <ul className="divide-y divide-rule-2" data-testid="held-orders">
       {approvals.map((a) => (
@@ -242,7 +251,9 @@ function Approvals({ approvals }: { approvals: readonly PendingApproval[] }): Re
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            {a.breached ? (
+            {/* The server's own verdict. `EXPIRED` past the deadline is decided
+                there and never by subtracting dates in the browser. */}
+            {a.status === 'EXPIRED' ? (
               <StatusPill tone="warn" label="Past its deadline" />
             ) : (
               <Deadline expiresAt={a.expiresAt} />

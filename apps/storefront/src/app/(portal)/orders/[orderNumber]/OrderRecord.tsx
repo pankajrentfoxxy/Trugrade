@@ -528,25 +528,28 @@ function Documents({ order }: { order: Order }): React.JSX.Element {
                 <span className="mono">{order.orderNumber}</span>.
               </span>
             </dt>
-            <dd>This page</dd>
+            {/*
+              This used to read, as the value of a named document, the literal
+              words "This page".
+
+              `OrderPdfService` has rendered a real confirmation all along and
+              was reachable from no buyer route. It is rendered per request from
+              the order itself, so it cannot go stale.
+            */}
+            <dd>
+              <a
+                className="hub-link"
+                href={`/api/buyer/orders/${encodeURIComponent(order.orderNumber)}/confirmation.pdf`}
+              >
+                Open the PDF
+              </a>
+            </dd>
           </div>
         </dl>
-        <div className="odocsnote">
-          <p>
-            The proforma, the tax invoice per delivery and the e-way bill are on their own screen,
-            each with its number and its date — or, where one has not been raised yet, the moment
-            that brings it into existence.
-          </p>
-          <a
-            className="pill wire"
-            href={`/orders/${encodeURIComponent(order.orderNumber)}/documents`}
-          >
-            Documents on this order
-          </a>
-        </div>
         <p className="fnote off">
-          {BRAND.legalEntity} is the seller on this order, so there is one invoice and it is ours.
-          There is no other paperwork for you to chase and none of it is issued by anyone else.
+          {BRAND.legalEntity} is the seller, so there is one invoice and it is ours. The proforma,
+          the tax invoice per delivery and the e-way bill are on the Documents tab, each with its
+          number and its date — or the moment that brings it into existence.
         </p>
       </div>
     </section>
