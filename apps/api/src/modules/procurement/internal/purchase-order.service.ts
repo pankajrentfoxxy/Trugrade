@@ -456,7 +456,14 @@ export class PurchaseOrderService {
     input: { skuId: string; grade: string; unitId: string },
   ): Promise<VendorPoDetail> {
     const po = await this.mine(poId);
-    if (!['ACKNOWLEDGED', 'PARTIAL'].includes(po.status)) {
+    // DISPATCH_READY is attachable, and the reason is about the MESSAGE rather
+    // than the permission. Stage 3A auto-advances a purchase order the moment
+    // its last accepted line has a machine on it, so a vendor who double-clicks
+    // Attach now meets a packed PO — and "machines can no longer be attached" is
+    // a worse answer than the one four lines below, which says the demand is
+    // already filled. Every slot being taken is precisely what made it ready, so
+    // the specific check refuses it anyway; this just lets the caller reach it.
+    if (!['ACKNOWLEDGED', 'PARTIAL', 'DISPATCH_READY'].includes(po.status)) {
       throw new PreconditionFailedError(
         po.status === 'RAISED'
           ? `${po.po_number} has not been accepted yet. Accept it before attaching a machine.`

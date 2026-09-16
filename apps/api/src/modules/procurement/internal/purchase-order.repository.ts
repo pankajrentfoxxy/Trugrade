@@ -740,7 +740,11 @@ export class PurchaseOrderRepository {
           FROM procurement.purchase_order
          WHERE id = ${poId}::uuid AND vendor_org_id = ${orgId}::uuid
          FOR UPDATE`;
-      if (!po || !['ACKNOWLEDGED', 'PARTIAL'].includes(po.status)) return null;
+      // DISPATCH_READY dispatches. Stage 3A advances a purchase order to it as
+      // soon as every accepted line carries a machine, which is exactly the
+      // state a vendor presses Dispatch from — without this the auto-advance
+      // locked the vendor out of their own dispatch endpoint.
+      if (!po || !['ACKNOWLEDGED', 'PARTIAL', 'DISPATCH_READY'].includes(po.status)) return null;
 
       const [missing] = await this.prisma.$queryRaw<Array<{ n: bigint }>>`
         SELECT count(*) AS n
