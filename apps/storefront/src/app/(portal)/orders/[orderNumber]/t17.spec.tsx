@@ -197,12 +197,17 @@ describe('a vendor purchase order is unreachable from the buyer’s screen', () 
   it('offers no link that could reach one', async () => {
     const container = await shown(CONFIRMED);
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '');
-    // Every link on the screen goes to a unit passport the buyer already owns,
-    // and nothing goes anywhere near procurement.
+    // Nothing on the screen goes anywhere near procurement. This is the half
+    // that matters, and it is unchanged.
     for (const href of hrefs) {
       expect(href).not.toMatch(/purchase-order|purchase_order|\/po\/|procurement|vendor/i);
     }
-    expect(hrefs.filter((h) => h.startsWith('/unit/'))).toHaveLength(3);
+    // Each of the three machines links to THIS order's own machines board,
+    // which carries the QC verdict, the battery health and the seal. The serial
+    // used to link straight to /unit/[serial] — the PUBLIC passport, outside
+    // the portal chrome — so a buyer checking one machine on their own order
+    // left the portal without meaning to. The passport is one click on.
+    expect(hrefs.filter((h) => h.includes('/units#'))).toHaveLength(3);
   });
 
   it('names the documents that ARE the buyer’s, and sends them to the rest', async () => {
@@ -217,9 +222,10 @@ describe('a vendor purchase order is unreachable from the buyer’s screen', () 
     // here would be a second copy that goes stale the first time an invoice is
     // raised. This panel points at the screen that reads their real state.
     expect(screen.queryByText('Not issued yet')).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: /documents on this order/i }),
-    ).toHaveAttribute('href', '/orders/TT-26-00002/documents');
+    expect(screen.getByRole('link', { name: /documents on this order/i })).toHaveAttribute(
+      'href',
+      '/orders/TT-26-00002/documents',
+    );
 
     // Still no download and still no disabled button pretending at a file.
     expect(document.querySelector('a[download]')).toBeNull();

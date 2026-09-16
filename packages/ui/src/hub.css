@@ -89,6 +89,7 @@
 
 .hub-mast__search {
   position: relative;
+  position: relative;
   min-width: 0;
 }
 
@@ -118,6 +119,21 @@
 .hub-mast__search input:focus {
   outline: 2px solid var(--acc);
   outline-offset: -2px;
+}
+
+/**
+ * The way out of a portal search to the public catalogue.
+ *
+ * Offered rather than assumed: inside the portal the box searches the buyer's
+ * own orders, because somebody typing an order number above their orders board
+ * is not shopping. This appears only once something has been typed.
+ */
+.hub-mast__elsewhere {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .hub-mast__account {

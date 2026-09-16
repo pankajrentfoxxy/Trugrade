@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import type { Route } from 'next';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DataBoard,
@@ -454,10 +455,20 @@ function Summary({
         value={loading ? null : String(pending)}
         denominator={loading ? '' : `of ${total}`}
       />
+      {/* The figure a buyer could count and not open: the register excludes
+          CLOSED and REJECTED, so every settled claim was unreachable. */}
       <Figure
         label="Open claims"
         value={loading ? null : String(openClaims)}
-        denominator={loading ? '' : `of ${claims.length} raised`}
+        denominator={
+          loading ? (
+            ''
+          ) : (
+            <Link className="hub-link" href="/warranty/claims">
+              of {claims.length} raised
+            </Link>
+          )
+        }
       />
     </dl>
   );
@@ -470,7 +481,8 @@ function Figure({
 }: {
   label: string;
   value: string | null;
-  denominator: string;
+  /** A count with its denominator, or a link to where that denominator opens. */
+  denominator: React.ReactNode;
 }): React.JSX.Element {
   return (
     <div>

@@ -184,10 +184,16 @@ describe('platform.ticket.read', () => {
   it('took the button that implied a support thread with it', () => {
     // "Add something to this return" was the one amber action on the record and
     // it went to a policy page. A settled case keeps its real escalation.
-    const ret = read('returns', '[returnNumber]', 'ReturnRecord.tsx');
-    expect(ret).not.toContain('Add something to this return');
-    expect(ret).toContain('Dispute this outcome');
-    const claim = read('warranty', 'claims', '[claimNumber]', 'ClaimRecord.tsx');
-    expect(claim).not.toContain('Add something to this claim');
+    // Both records are now one component, so the assertion is about that one.
+    const shared = read('cases', 'CaseRecord.tsx');
+    expect(shared).toContain('Dispute this outcome');
+    // And it is a secondary control, not the screen's one amber action.
+    expect(shared).toContain(String.raw`pill wire crside-a" href="/legal/grievance"`);
+    for (const f of [
+      ['returns', '[returnNumber]', 'ReturnRecord.tsx'],
+      ['warranty', 'claims', '[claimNumber]', 'ClaimRecord.tsx'],
+    ] as const) {
+      expect(read(...f)).not.toMatch(/Add something to this/);
+    }
   });
 });

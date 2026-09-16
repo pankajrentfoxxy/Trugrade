@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import {
   AddressCard,
   EmptyState,
@@ -144,7 +145,12 @@ function Record({ order }: { order: Order }): React.JSX.Element {
             </div>
             <div className="omach">
               {order.dispatchGroups.map((group) => (
-                <DispatchBlock key={group.label} group={group} released={released} />
+                <DispatchBlock
+                  key={group.label}
+                  group={group}
+                  released={released}
+                  orderNumber={order.orderNumber}
+                />
               ))}
             </div>
           </section>
@@ -159,6 +165,12 @@ function Record({ order }: { order: Order }): React.JSX.Element {
               </div>
             </div>
             <AddressCard address={asAddress(order.deliveryAddress)} />
+            {/* /addresses had zero inbound links: the rail was its only entry. */}
+            <p className="fnote off">
+              <Link className="hub-link" href="/addresses">
+                Your delivery sites
+              </Link>
+            </p>
           </section>
 
           <Documents order={order} />
@@ -255,8 +267,8 @@ function Headline({ order }: { order: Order }): React.JSX.Element {
   }
   return (
     <>
-      {machines(order.unitsAllocated)} allocated to you by serial number, from{' '}
-      {BRAND.legalEntity} on one invoice.
+      {machines(order.unitsAllocated)} allocated to you by serial number, from {BRAND.legalEntity}{' '}
+      on one invoice.
     </>
   );
 }
@@ -349,7 +361,9 @@ function ApprovalPanel({
           <dd className="mono">{inIst(approval.requestedAt)}</dd>
         </div>
         <div>
-          <dt>{pending ? 'Held until' : approval.status === 'EXPIRED' ? 'Expired' : 'Deadline was'}</dt>
+          <dt>
+            {pending ? 'Held until' : approval.status === 'EXPIRED' ? 'Expired' : 'Deadline was'}
+          </dt>
           <dd className="mono">
             {inIst(approval.expiresAt)}
             {pending && (
@@ -402,9 +416,12 @@ function ApprovalPanel({
 function DispatchBlock({
   group,
   released,
+  orderNumber,
 }: {
   group: DispatchGroup;
   released: boolean;
+  /** So a serial can link to this order's own machines board. */
+  orderNumber: string;
 }): React.JSX.Element {
   return (
     <div className="tbl odisp">
@@ -418,11 +435,22 @@ function DispatchBlock({
         {group.machines.map((m) => (
           <li key={m.serialNumber}>
             <div className="omid">
-              {/* The serial is the link. A buyer checking one machine wants the
-                  passport for that machine, not the model page. */}
-              <a className="mono omserial" href={`/unit/${m.serialNumber}`}>
+              {/*
+                The serial is the link, and it stays inside the portal.
+
+                It used to go straight to `/unit/[serial]` — the PUBLIC
+                passport, outside the portal chrome — so a buyer checking one
+                machine on their own order left the portal without meaning to.
+                The primary click is this order's own machines board, which
+                carries the QC verdict, the battery health and the seal. The
+                passport is still one click from there.
+              */}
+              <Link
+                className="mono omserial"
+                href={`/orders/${encodeURIComponent(orderNumber)}/units#${m.serialNumber}`}
+              >
                 {m.serialNumber}
-              </a>
+              </Link>
               <span className="omtitle">
                 {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
               </span>
@@ -647,8 +675,8 @@ function Missing({ orderNumber }: { orderNumber: string }): React.JSX.Element {
         <p>
           Nothing on your organisation&rsquo;s account is numbered{' '}
           <span className="mono">{orderNumber}</span>. Check it against your confirmation — ours
-          look like <span className="mono">TT-26-00004</span> — or ask whoever placed it to share
-          it from their account.
+          look like <span className="mono">TT-26-00004</span> — or ask whoever placed it to share it
+          from their account.
         </p>
         <p className="retry">
           <a className="pill acc" href="/search">

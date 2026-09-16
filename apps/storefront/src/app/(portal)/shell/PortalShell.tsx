@@ -77,6 +77,18 @@ function Masthead(): React.JSX.Element {
         </span>
       </Link>
 
+      {/*
+        Inside the portal, this searches the buyer's OWN orders.
+
+        It used to push `/search?q=` — the public catalogue — while sitting
+        directly above an orders board whose own search already accepts an order
+        number, a PO reference or a serial. Somebody typing an order number into
+        the box at the top of their orders screen was sent shopping.
+
+        The catalogue is still one click away, offered underneath rather than
+        assumed: a buyer in the portal is far more often looking for something
+        they have already bought.
+      */}
       <form
         className="hub-mast__search"
         role="search"
@@ -84,7 +96,7 @@ function Masthead(): React.JSX.Element {
           e.preventDefault();
           const next = q.trim();
           if (!next) return;
-          router.push(`/search?q=${encodeURIComponent(next)}` as Route);
+          router.push(`/orders?q=${encodeURIComponent(next)}` as Route);
         }}
       >
         <SearchIcon />
@@ -92,9 +104,17 @@ function Masthead(): React.JSX.Element {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search inspected laptops"
-          aria-label="Search inspected laptops"
+          placeholder="Search your orders"
+          aria-label="Search your orders by order number, PO reference or serial"
         />
+        {q.trim() ? (
+          <Link
+            className="hub-link hub-mast__elsewhere"
+            href={`/search?q=${encodeURIComponent(q.trim())}` as Route}
+          >
+            Search the catalogue instead
+          </Link>
+        ) : null}
       </form>
 
       <div className="hub-mast__account">

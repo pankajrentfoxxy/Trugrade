@@ -43,6 +43,7 @@ const TABS: readonly OrderTabDef[] = [
   // GET /buyer/orders/:n/documents checks `payment.invoice.read_own`, which an
   // approver and a viewer do not hold. The tab used to render for them and 403.
   { segment: '/documents', label: 'Documents', permission: 'payment.invoice.read_own' },
+  { segment: '/tracking', label: 'Tracking' },
   { segment: '/delivery', label: 'Delivery check' },
 ];
 

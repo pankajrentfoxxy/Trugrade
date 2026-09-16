@@ -163,6 +163,7 @@ function Workspace({ data, team }: { data: OrderDashboard; team: Team | null }):
           <PricingPanel orders={data.orders} />
           <ProfilePanel />
           <TeamPanel team={team} />
+          <PlacesPanel />
         </aside>
       </div>
     </>
@@ -397,6 +398,41 @@ function ProfilePanel(): React.JSX.Element {
       <Link href="/profile" className="hub-link mt-3 inline-block text-body-sm">
         Open profile
       </Link>
+    </section>
+  );
+}
+
+/**
+ * The four rail destinations Home never linked to.
+ *
+ * Home reached Approvals, Profile, Team and the catalogue, and nothing else —
+ * a buyer landing here had no path to their orders, their returns, their
+ * warranty or their delivery sites except the rail. `/addresses` in particular
+ * had no inbound link from anywhere in the portal at all.
+ */
+function PlacesPanel(): React.JSX.Element {
+  const places = [
+    { to: '/orders', label: 'Orders', note: 'Everything your organisation has placed' },
+    { to: '/returns', label: 'Returns', note: 'Machines you have sent back' },
+    { to: '/warranty', label: 'Warranty', note: 'Cover on the machines you own' },
+    { to: '/addresses', label: 'Addresses', note: 'Where we deliver, and who we bill' },
+  ] as const;
+
+  return (
+    <section className="mb-6" aria-labelledby="home-places">
+      <h2 id="home-places" className="hub-dock__title">
+        Everything else
+      </h2>
+      <ul className="flex flex-col gap-2">
+        {places.map((p) => (
+          <li key={p.to}>
+            <Link href={p.to} className="hub-link text-body-sm">
+              {p.label}
+            </Link>
+            <span className="ml-2 text-body-sm text-ink-3">{p.note}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
