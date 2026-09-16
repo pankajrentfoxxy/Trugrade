@@ -215,16 +215,48 @@ describe('VR-058 / VR-059 — tokens', () => {
       mfa: true,
     });
 
-  it('issues an access token carrying the flattened permission set, so a guard never hits the database', async () => {
+  it('carries the roles, and no longer the flattened permission set', async () => {
     const issued = await issueFor();
     const claims = await tokens.verifyAccess(issued.accessToken);
 
     expect(claims.sub).toBe('99999999-0000-4000-8000-000000000001');
     expect(claims.org_id).toBe(VENDOR_A);
     expect(claims.roles).toEqual(['VENDOR_OWNER']);
-    expect(claims.scope).toContain('listing.own.write');
-    expect(claims.scope).not.toContain('listing.any.write');
     expect(claims.mfa).toBe(true);
+
+    // `scope` used to be embedded so a guard never had to hit the database. It
+    // still does not: `permissionsFor` is pure and derives the same answer from
+    // the roles above. Embedding it is what broke production — see the size
+    // assertion below.
+    expect(claims.scope).toBeUndefined();
+    const derived = permissionsFor(claims.roles);
+    expect(derived.has('listing.own.write')).toBe(true);
+    expect(derived.has('listing.any.write')).toBe(false);
+  });
+
+  /**
+   * The regression this pins, in one number.
+   *
+   * A PLATFORM_SUPERADMIN holds every permission. Stage 7 took the map from 58
+   * entries to 103, the signed token went past 4,096 bytes, and **every browser
+   * silently discards a cookie over that size**. `POST /auth/login` returned
+   * 200, set a cookie Chrome threw away, and the next request was
+   * unauthenticated — with nothing logged anywhere, because the failure was a
+   * limit in the user agent rather than an error in the server.
+   *
+   * 3,500 leaves room for the cookie name and its attributes, which count
+   * against the same budget.
+   */
+  it('stays small enough for a browser to keep, for the seat that holds everything', async () => {
+    const { accessToken } = await tokens.issue({
+      userId: '99999999-0000-4000-8000-000000000001',
+      orgId: null,
+      orgType: 'PLATFORM',
+      roles: ['PLATFORM_SUPERADMIN'],
+      permissions: [...permissionsFor(['PLATFORM_SUPERADMIN'])],
+      mfa: true,
+    });
+    expect(accessToken.length).toBeLessThan(3500);
   });
 
   it('rejects a tampered token', async () => {

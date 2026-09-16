@@ -15,8 +15,23 @@ export interface AccessTokenClaims extends JwtClaims {
   org_id: string | null;
   org_type: 'VENDOR' | 'BUYER' | 'PLATFORM';
   roles: Role[];
-  /** Flattened permission set, so a guard never has to hit the database. */
-  scope: Permission[];
+  /**
+   * The flattened permission set — **no longer written, still read.**
+   *
+   * It was embedded so a guard never had to hit the database. It does not have
+   * to: `permissionsFor(roles)` is a pure function in `@trugrade/contracts` and
+   * derives the same set from `roles`, which the token already carries.
+   *
+   * Writing it was a live outage. A PLATFORM_SUPERADMIN holds every permission,
+   * Stage 7 took the list from 58 entries to 103, and the signed token went past
+   * 4,096 bytes — the per-cookie limit every browser enforces. Chrome dropped the
+   * cookie silently, so `POST /auth/login` returned 200, set a cookie the browser
+   * discarded, and the very next request was unauthenticated. Nothing logged an
+   * error anywhere: the failure was a size limit in the user agent.
+   *
+   * Optional, so tokens issued before this change keep working until they expire.
+   */
+  scope?: Permission[];
   sid: string;
   jti: string;
   /** True once MFA has been satisfied for this session. */
@@ -176,7 +191,9 @@ export class TokenService implements OnModuleInit {
         org_id: input.orgId,
         org_type: input.orgType,
         roles: input.roles,
-        scope: input.permissions,
+        // `scope` is deliberately NOT written — see the claim's own note. The
+        // guard derives it from `roles`, which keeps the cookie under 4 KB no
+        // matter how many permissions the map grows to.
         sid: sessionId,
         mfa: input.mfa,
         ...(input.accessExpiresAt

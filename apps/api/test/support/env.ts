@@ -62,6 +62,22 @@ for (const file of [
 }
 
 /**
+ * The client URLs are the suite's own, never production's.
+ *
+ * The root `.env` carries the live hosts, and the block above reads it — so
+ * without this, `resolveSessionAudience` compares a fixture's
+ * `http://localhost:5173` against `https://seller.rentfoxxy.com`, decides the
+ * request is a storefront one, and looks for the storefront cookie. The fixture
+ * set the console cookie, so no token is found, no principal is resolved, and a
+ * public route quietly answers as an anonymous caller.
+ *
+ * That cost an afternoon: the failure reads exactly like a broken guard and is
+ * entirely a configuration mismatch between the suite and the deployment.
+ */
+process.env.STOREFRONT_URL = process.env.STOREFRONT_URL_TEST ?? 'http://localhost:3000';
+process.env.CONSOLE_URL = process.env.CONSOLE_URL_TEST ?? 'http://localhost:5173';
+
+/**
  * The one thing `.env.test` was really protecting: this suite truncates every
  * table it can reach, so pointing it at a database holding real work destroys
  * it. Names rather than URLs, because credentials and query strings differ

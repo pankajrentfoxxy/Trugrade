@@ -215,7 +215,7 @@ describe('a vendor is not a reviewer', () => {
 
   it('a vendor token carries no kyc permission at all to spend', async () => {
     const claims = await app.get(TokenService).verifyAccess(vendorToken);
-    expect(claims.scope.filter((p) => p.startsWith('kyc.'))).toEqual([]);
+    expect((claims.scope ?? []).filter((p) => p.startsWith('kyc.'))).toEqual([]);
   });
 });
 

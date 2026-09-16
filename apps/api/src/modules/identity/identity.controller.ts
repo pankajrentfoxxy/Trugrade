@@ -3,6 +3,7 @@ import type { CookieOptions, Request, Response } from 'express';
 import {
   normaliseEmail,
   normaliseMobile,
+  permissionsFor,
   uuidSchema,
   type Permission,
   type Role,
@@ -991,7 +992,9 @@ export class IdentityController {
       orgId: claims.org_id,
       orgType: claims.org_type,
       roles: claims.roles,
-      permissions: claims.scope,
+      // Same fallback as the guard: a token no longer carries `scope`, and the
+      // set is derived from the roles it does carry.
+      permissions: claims.scope ?? [...permissionsFor(claims.roles)],
       ...userSessionFields(user),
       mfaRequired: !claims.mfa,
       accessToken: tokens.accessToken,

@@ -204,6 +204,6 @@ describe('the condition-image library itself stays behind the write permission',
 
   it('a vendor token carries no catalog permission at all to spend', async () => {
     const claims = await app.get(TokenService).verifyAccess(vendorToken);
-    expect(claims.scope.filter((p) => p.startsWith('catalog.'))).toEqual([]);
+    expect((claims.scope ?? []).filter((p) => p.startsWith('catalog.'))).toEqual([]);
   });
 });

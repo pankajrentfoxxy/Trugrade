@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import { MFA_REQUIRED_ROLES, type Permission, type Role } from '@trugrade/contracts';
+import { MFA_REQUIRED_ROLES, permissionsFor, type Permission, type Role } from '@trugrade/contracts';
 import { ForbiddenError, UnauthenticatedError } from '../errors/domain-errors';
 import { RequestContextService, type Principal } from '../db/org-scope';
 import { AppConfig } from '../config';
@@ -112,7 +112,11 @@ export class AuthGuard implements CanActivate {
       orgId: claims.org_id,
       orgType: claims.org_type,
       roles: claims.roles,
-      permissions: new Set(claims.scope),
+      // Derived from roles rather than read from the token. `permissionsFor` is
+      // pure and in-memory, so this is still no database hit — and it keeps the
+      // session cookie small enough for a browser to accept. A token issued
+      // before the change still carries `scope`, and that wins while it lasts.
+      permissions: new Set(claims.scope ?? permissionsFor(claims.roles)),
       sessionId: claims.sid,
       mfaSatisfied: claims.mfa,
     };
