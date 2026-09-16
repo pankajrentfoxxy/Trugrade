@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config';
 import { Money } from '@trugrade/contracts';
-import { DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
+import { DataBoard, EmptyState, HubPageHeader, StatusPill, type Column } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
 import { getOrderDocuments, type OrderDocument, type OrderDocuments } from './api';
 
@@ -106,16 +106,14 @@ export function DocumentsBoard({ orderNumber }: { orderNumber: string }): React.
 
   return (
     <>
-      <div className="wshead dochead">
-        <h1>
-          Documents on order <span className="mono">{orderNumber}</span>
-        </h1>
-        <p>
-          {BRAND.legalEntity} is the seller on this order, so the invoice is ours and there is one
-          per delivery. Everything below is either here or says which moment brings it into
-          existence — nothing on this page is waiting on paperwork from anybody else.
-        </p>
-      </div>
+      <HubPageHeader
+        title={
+          <>
+            Documents on order <span className="font-mono tnum">{orderNumber}</span>
+          </>
+        }
+        subtitle={`${BRAND.legalEntity} is the seller, so every invoice here is ours.`}
+      />
 
       <Summary
         issued={data?.issuedCount ?? 0}
@@ -179,9 +177,7 @@ function columns(primaryId: string | null): readonly Column<OrderDocument>[] {
           {/* The sentence this screen exists for. It appears exactly when the
               document does not, and it is prose rather than a dash because a
               dash beside "E-way bill" reads as a document with no number. */}
-          {d.whenItWillExist !== null && (
-            <span className="docwhen">{d.whenItWillExist}</span>
-          )}
+          {d.whenItWillExist !== null && <span className="docwhen">{d.whenItWillExist}</span>}
         </div>
       ),
     },

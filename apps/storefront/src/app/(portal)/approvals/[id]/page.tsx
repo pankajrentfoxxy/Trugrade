@@ -57,10 +57,8 @@ export default async function ApprovalPage({
 }): Promise<React.JSX.Element> {
   const { id } = await params;
   return (
-    <div className="body">
-      <div className="wrap">
-        <ApprovalRecord approvalId={decodeURIComponent(id)} />
-      </div>
+    <div className="hub-page">
+      <ApprovalRecord approvalId={decodeURIComponent(id)} />
     </div>
   );
 }

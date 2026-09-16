@@ -43,10 +43,8 @@ export default async function ReturnsPage({
   ).toString();
 
   return (
-    <div className="body">
-      <div className="wrap">
-        <ReturnsBoard query={query} />
-      </div>
+    <div className="hub-page">
+      <ReturnsBoard query={query} />
     </div>
   );
 }

@@ -9,17 +9,15 @@ import { Skeleton } from '@trugrade/ui';
  */
 export default function Loading(): React.JSX.Element {
   return (
-    <div className="body">
-      <div className="wrap">
-        <div className="wshead obhead">
-          <Skeleton className="h-9 w-64 rounded" />
-        </div>
-        <div className="cols">
-          <Skeleton className="skrail" />
-          <div>
-            <Skeleton className="h-12 w-full rounded" />
-            <Skeleton className="mt-3 h-96 w-full rounded-lg" />
-          </div>
+    <div className="hub-page">
+      <div className="hub-heading">
+        <Skeleton className="h-9 w-64 rounded" />
+      </div>
+      <div className="cols">
+        <Skeleton className="skrail" />
+        <div>
+          <Skeleton className="h-12 w-full rounded" />
+          <Skeleton className="mt-3 h-96 w-full rounded-lg" />
         </div>
       </div>
     </div>

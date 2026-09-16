@@ -9,6 +9,7 @@ import {
   EmptyState,
   GradeBadge,
   QcChip,
+  HubPageHeader,
   SealChip,
   StatusPill,
   type Column,
@@ -206,16 +207,16 @@ export function UnitsBoard({
 
   return (
     <>
-      <div className="wshead ubhead">
-        <h1>
-          Machines on order <span className="mono">{orderNumber}</span>
-        </h1>
-        <p>
-          Every machine on this order by serial number, with what our inspection found. This is the
-          record to put in your asset register — the serial on the case, the seal code on the lid
-          and the measurements behind them are all here.
-        </p>
-      </div>
+      <HubPageHeader
+        title={
+          <>
+            Machines on order <span className="font-mono tnum">{orderNumber}</span>
+          </>
+        }
+        subtitle={
+          data === null ? undefined : `${all.length} ${all.length === 1 ? 'machine' : 'machines'}`
+        }
+      />
 
       <Summary units={all} flagged={flagged.length} loading={data === null} />
 

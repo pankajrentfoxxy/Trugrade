@@ -3,7 +3,14 @@
 import * as React from 'react';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
-import { DataBoard, EmptyState, StatusPill, type Column, type SortDirection } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  HubPageHeader,
+  StatusPill,
+  type Column,
+  type SortDirection,
+} from '@trugrade/ui';
 import type { ApiFailure } from '../../register/api';
 import {
   CLAIM_STATUS,
@@ -171,14 +178,12 @@ export function WarrantyBoard({ query }: { query: string }): React.JSX.Element {
 
   return (
     <>
-      <div className="wshead wthead">
-        <h1>Warranty</h1>
-        <p>
-          Every machine your organisation owns, and how long we cover it for. Cover starts the day a
-          machine reaches you, not the day you ordered it — so a laptop still in transit shows no
-          term yet rather than a term already running down.
-        </p>
-      </div>
+      <HubPageHeader
+        title="Warranty"
+        subtitle={
+          data === null ? undefined : `${all.length} ${all.length === 1 ? 'machine' : 'machines'}`
+        }
+      />
 
       <Summary machines={all} claims={claims} loading={data === null} />
 

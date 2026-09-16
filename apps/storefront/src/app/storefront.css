@@ -240,8 +240,15 @@ header,footer{width:100%;max-width:100%}
 .pill{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:5px;font-size:13.5px;font-weight:600}
 .pill.acc{background:var(--acc);color:var(--acc-on)}
 .pill.acc:hover{background:var(--acc-dk)}
-.pill.wire{border:1px solid var(--chrome-line-2);color:var(--on-chrome)}
-.pill.wire:hover{background:var(--chrome-2)}
+/* A wire pill sits on a working surface nearly everywhere it is used — every
+   board, every record, every empty state, and the cart. Its base rule used to be
+   the HEADER's dark-chrome variant, so on a sheet it drew a near-white border on
+   white and six separate rules around this file existed to undo it. The base is
+   now the common case and the exception is scoped to the one place it is true. */
+.pill.wire{background:var(--sheet);border:1px solid var(--rule);color:var(--ink)}
+.pill.wire:hover{background:var(--sheet-2);border-color:var(--acc);color:var(--acc-ink)}
+.hero .pill.wire{background:transparent;border-color:var(--chrome-line-2);color:var(--on-chrome)}
+.hero .pill.wire:hover{background:var(--chrome-2);color:var(--on-chrome)}
 .gauge{border:1px solid var(--chrome-line);border-radius:6px;background:var(--chrome-2)}
 .gauge .gt{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
   color:var(--on-chrome-3);display:flex;justify-content:space-between;align-items:center;
@@ -1326,8 +1333,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .chdone-fact dd{margin:0;font-size:14px;color:var(--ink)}
 .chdone-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--s3);width:100%;
   padding-top:var(--s2)}
-.chdonewire{background:var(--sheet-2);border-color:var(--rule);color:var(--ink)}
-.chdonewire:hover{background:var(--sheet-3);border-color:var(--acc)}
 @media (max-width:520px){
   .chdone-facts{grid-template-columns:1fr;gap:var(--s3);text-align:left}
   .chdone-actions{flex-direction:column}
@@ -1853,20 +1858,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .ostate .empty a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
 .ostate .empty a.pill{text-decoration:none}
 
-/* `.pill.wire` is a CHROME control: `--on-chrome` ink on a `--chrome-line-2`
-   border. That is right on the dark header and on the landing hero, which are
-   dark in both themes — and it is white-on-white on a light working surface.
-   T21's "Show all machines" has the same problem and is not this task's file to
-   change; reported as a system gap. Scoped here rather than globally, because
-   the two dark uses are correct as they are. */
-.doctable .pill.wire,
-.odocsnote .pill.wire,
-.ostate .empty .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
-.doctable .pill.wire:hover,
-.odocsnote .pill.wire:hover,
-.ostate .empty .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc);
-  color:var(--acc-ink)}
-
 /* ==========================================================================
  * T23 — /account/warranty, /account/warranty/claims/new and .../[claimNumber].
  *
@@ -1988,8 +1979,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .cblocked a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
 
 .cactions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.cactions .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
-.cactions .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc)}
 .cactions .pill.acc:disabled{opacity:.5;cursor:not-allowed}
 
 /* A refusal, not a validation buzz. --fail because it genuinely refused, and the
@@ -2014,8 +2003,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin-bottom:4px}
 .crfacts dd{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
 .crside-a{justify-content:center;width:100%;text-decoration:none}
-.crside .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
-.crside .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc)}
 
 @media(max-width:1000px){
   .flow2{grid-template-columns:minmax(0,1fr)}
@@ -2225,8 +2212,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 /* ---- the actions panel -------------------------------------------------- */
 
 .dvside .pill{justify-content:center;width:100%;text-decoration:none}
-.dvside .pill.wire{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
-.dvside .pill.wire:hover{background:var(--sheet-2);border-color:var(--acc)}
 .dvsign:disabled{opacity:.5;cursor:not-allowed}
 .dvsigned,.dvcannot{margin:0;display:flex;flex-direction:column;gap:3px;
   padding:11px 13px;border:1px solid var(--rule);border-radius:var(--r-sm);
@@ -2300,19 +2285,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .rtnew{margin-left:auto;text-decoration:none;white-space:nowrap}
 @media(max-width:900px){.rtnew{margin-left:0;width:100%;justify-content:center}}
 
-/* `.pill.wire`'s base rule is the HEADER's dark-chrome variant — on-chrome text
-   on a translucent white border — which is correct on the dark chrome and very
-   nearly invisible on a light working surface. Every screen that puts one on a
-   sheet has had to restate it (.cactions, .crside, .dvside), and the one place
-   nobody had was inside an EmptyState: T24's returns board found it, and T21's
-   units board, T22's documents board and T23's warranty board all have the same
-   button in the same place. One rule rather than four. */
-.empty .pill.wire,
-.rtempty .pill.wire,
-.dvscan .pill.wire{background:var(--sheet-2);border-color:var(--rule);color:var(--ink)}
-.empty .pill.wire:hover,
-.rtempty .pill.wire:hover,
-.dvscan .pill.wire:hover{background:var(--sheet-3);border-color:var(--acc)}
 
 .rtempty{margin-top:12px}
 

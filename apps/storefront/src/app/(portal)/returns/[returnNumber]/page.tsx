@@ -39,10 +39,8 @@ export default async function ReturnRecordPage({
 }): Promise<React.JSX.Element> {
   const { returnNumber } = await params;
   return (
-    <div className="body">
-      <div className="wrap">
-        <ReturnRecord returnNumber={decodeURIComponent(returnNumber)} />
-      </div>
+    <div className="hub-page">
+      <ReturnRecord returnNumber={decodeURIComponent(returnNumber)} />
     </div>
   );
 }

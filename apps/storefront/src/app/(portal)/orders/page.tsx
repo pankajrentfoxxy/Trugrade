@@ -59,10 +59,8 @@ export default async function OrdersPage({
 }): Promise<React.JSX.Element> {
   const params = await searchParams;
   return (
-    <div className="body">
-      <div className="wrap">
-        <OrdersBoard query={toQueryString(params)} />
-      </div>
+    <div className="hub-page">
+      <OrdersBoard query={toQueryString(params)} />
     </div>
   );
 }

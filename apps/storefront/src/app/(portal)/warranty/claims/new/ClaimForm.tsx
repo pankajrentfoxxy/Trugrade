@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { EmptyState, WhyRail, type WhyRailItem } from '@trugrade/ui';
+import { EmptyState, HubPageHeader, WhyRail, type WhyRailItem } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
 import {
   FAULT_AREAS,
@@ -150,13 +150,10 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
 
   return (
     <>
-      <div className="wshead wthead">
-        <h1>Start a warranty claim</h1>
-        <p>
-          Tell us which machine and what it does. We handle the claim ourselves — you bought from
-          us, we inspected the machine before it shipped, and we carry the cover for the whole term.
-        </p>
-      </div>
+      <HubPageHeader
+        title="Start a warranty claim"
+        subtitle="We handle the claim ourselves, for the whole term."
+      />
 
       <div className="flow2">
         <form className="claimform" onSubmit={submit} noValidate>
@@ -274,8 +271,8 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
               />
               <span className={trimmed.length > 0 && trimmed.length < 20 ? 'd short' : 'd'}>
                 <span className="mono">{trimmed.length}</span> of at least{' '}
-                <span className="mono">20</span> characters. Say what it does, not that it is
-                broken — an engineer reads this before they pack the van.
+                <span className="mono">20</span> characters. Say what it does, not that it is broken
+                — an engineer reads this before they pack the van.
               </span>
             </label>
           </fieldset>

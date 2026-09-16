@@ -3,7 +3,14 @@
 import * as React from 'react';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
-import { DataBoard, EmptyState, Pagination, StatusPill, type Column } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  HubPageHeader,
+  Pagination,
+  StatusPill,
+  type Column,
+} from '@trugrade/ui';
 import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { Deadline, inIst } from '../../../lib/deadline';
@@ -36,10 +43,7 @@ const PER_PAGE = [10, 25, 50] as const;
  * result. Expired is neutral too, and the row says in words that nothing was
  * charged, because a deadline that passed is not a decision anybody took.
  */
-const PILL: Record<
-  ApprovalRow['status'],
-  { tone: 'pass' | 'fail' | 'neutral'; label: string }
-> = {
+const PILL: Record<ApprovalRow['status'], { tone: 'pass' | 'fail' | 'neutral'; label: string }> = {
   PENDING: { tone: 'neutral', label: 'Waiting on you' },
   APPROVED: { tone: 'pass', label: 'Approved' },
   REJECTED: { tone: 'fail', label: 'Declined' },
@@ -124,26 +128,24 @@ export function ApprovalsBoard({ query }: { query: string }): React.JSX.Element 
 
   return (
     <>
-      <div className="wshead obhead">
-        {/* The heading follows the filter. "Orders waiting on you" over a board
-            of settled ones is a false statement about somebody's money. */}
-        <h1>
-          {status === 'held'
+      {/* The heading follows the filter. "Orders waiting on you" over a board
+          of settled ones is a false statement about somebody's money. */}
+      <HubPageHeader
+        title={
+          status === 'held'
             ? 'Orders held for approval'
             : status === 'waiting'
               ? 'Orders waiting on you'
               : status === 'decided'
                 ? 'Orders you have decided'
-                : 'Every order sent to you'}
-        </h1>
-        <p>
-          {status === 'held'
-            ? 'Each of these is an order your organisation has raised, with the machines already held off sale, waiting for the named approver to sign off. Nothing has been charged and no order has been placed with a supply point until they do.'
-            : status === 'waiting'
-              ? 'Each of these is an order somebody at your organisation has raised, with the machines already held off sale, waiting for you to say yes. Nothing has been charged and no order has been placed with a supply point until you do.'
-              : 'Every approval addressed to you, settled or not. A decision is kept after it is taken, with the reason you gave, because it is the record of who committed the spend.'}
-        </p>
-      </div>
+                : 'Every order sent to you'
+        }
+        subtitle={
+          inbox === null
+            ? undefined
+            : `${inbox.total.toLocaleString('en-IN')} ${inbox.total === 1 ? 'order' : 'orders'}`
+        }
+      />
 
       <div className="cols">
         <Rail
@@ -178,7 +180,11 @@ export function ApprovalsBoard({ query }: { query: string }): React.JSX.Element 
             </span>
             {inbox !== null && inbox.waitingOnYou > 0 && status !== 'waiting' && (
               <div className="r">
-                <button type="button" className="sel gh" onClick={() => setValue('status', 'waiting')}>
+                <button
+                  type="button"
+                  className="sel gh"
+                  onClick={() => setValue('status', 'waiting')}
+                >
                   Show the <span className="mono">{inbox.waitingOnYou}</span> still waiting
                 </button>
               </div>
@@ -304,9 +310,7 @@ const COLUMNS: ReadonlyArray<Column<ApprovalRow>> = [
             <Deadline expiresAt={a.expiresAt} />
           </span>
         ) : a.status === 'EXPIRED' ? (
-          <span className="obdue">
-            closed {inIst(a.expiresAt)} · nothing charged
-          </span>
+          <span className="obdue">closed {inIst(a.expiresAt)} · nothing charged</span>
         ) : (
           <span className="obdue">
             {a.decidedAt === null ? (
@@ -353,9 +357,7 @@ const columnsFor = (boardStatus: string): ReadonlyArray<Column<ApprovalRow>> =>
                   <Deadline expiresAt={a.expiresAt} />
                 </span>
               ) : a.status === 'EXPIRED' ? (
-                <span className="obdue">
-                  closed {inIst(a.expiresAt)} · nothing charged
-                </span>
+                <span className="obdue">closed {inIst(a.expiresAt)} · nothing charged</span>
               ) : (
                 <span className="obdue">
                   {a.decidedAt === null ? (
@@ -491,9 +493,9 @@ function Nothing({ status, onClear }: { status: string; onClear: () => void }): 
       <div className="empty calm">
         <h3>Nothing held for approval</h3>
         <p>
-          No order at your organisation is waiting on a signature right now. When one is, it
-          appears here with what it costs, who raised it, who must sign off, and how long the
-          machines are held for.
+          No order at your organisation is waiting on a signature right now. When one is, it appears
+          here with what it costs, who raised it, who must sign off, and how long the machines are
+          held for.
         </p>
       </div>
     );

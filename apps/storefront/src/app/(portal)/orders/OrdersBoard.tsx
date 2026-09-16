@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   DataBoard,
   EmptyState,
+  HubPageHeader,
   Pagination,
   StatusPill,
   type Column,
@@ -14,12 +15,7 @@ import {
 import { Money, buyerOrderStatusLabel } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { inIst } from '../../../lib/deadline';
-import {
-  getOrders,
-  type OrderFacetOption,
-  type OrderList,
-  type OrderSummary,
-} from '../api';
+import { getOrders, type OrderFacetOption, type OrderList, type OrderSummary } from '../api';
 
 /**
  * The order board. See `page.tsx` for the archetype and the rules.
@@ -138,19 +134,18 @@ export function OrdersBoard({ query }: { query: string }): React.JSX.Element {
 
   const list = phase.k === 'ready' ? phase.list : null;
   const sort = params.get('sort') ?? 'recent';
-  const applied = [...params.entries()].filter(
-    ([k, v]) => !NOT_A_FILTER.has(k) && v !== '',
-  );
+  const applied = [...params.entries()].filter(([k, v]) => !NOT_A_FILTER.has(k) && v !== '');
 
   return (
     <>
-      <div className="wshead obhead">
-        <h1>Your orders</h1>
-        <p>
-          Every order your organisation has placed with us. Search by our order number, by your own
-          PO reference, or by the serial number of one machine.
-        </p>
-      </div>
+      <HubPageHeader
+        title="Your orders"
+        subtitle={
+          list === null
+            ? undefined
+            : `${list.total.toLocaleString('en-IN')} ${list.total === 1 ? 'order' : 'orders'}`
+        }
+      />
 
       <div className="cols">
         <Rail
@@ -182,11 +177,7 @@ export function OrdersBoard({ query }: { query: string }): React.JSX.Element {
             </span>
             <div className="r">
               <label htmlFor="osort">Sort</label>
-              <select
-                id="osort"
-                value={sort}
-                onChange={(e) => setValue('sort', e.target.value)}
-              >
+              <select id="osort" value={sort} onChange={(e) => setValue('sort', e.target.value)}>
                 {SORTS.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -300,9 +291,7 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
         {/* Why this row is in a serial search. A result with no visible reason
             reads as a mistake. */}
         {o.matchedSerials.length > 0 && (
-          <span className="obhit">
-            matched {o.matchedSerials.join(', ')}
-          </span>
+          <span className="obhit">matched {o.matchedSerials.join(', ')}</span>
         )}
       </span>
     ),

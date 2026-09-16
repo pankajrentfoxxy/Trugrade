@@ -3,7 +3,14 @@
 import * as React from 'react';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
-import { DataBoard, EmptyState, StatusPill, type Column, type SortDirection } from '@trugrade/ui';
+import {
+  DataBoard,
+  EmptyState,
+  HubPageHeader,
+  StatusPill,
+  type Column,
+  type SortDirection,
+} from '@trugrade/ui';
 import type { ApiFailure } from '../../register/api';
 import { getReturns, RETURN_STATUS, type ReturnView } from './api';
 
@@ -112,14 +119,12 @@ export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
 
   return (
     <>
-      <div className="wshead rthead">
-        <h1>Your returns</h1>
-        <p>
-          Every machine you have sent back, and what happened to it. A return goes to us — we
-          bought the machine, we sold it to you and we carry the take-back ourselves. There is
-          nobody else for you to contact about any of these.
-        </p>
-      </div>
+      <HubPageHeader
+        title="Your returns"
+        subtitle={
+          loading ? undefined : `${scoped.length} ${scoped.length === 1 ? 'return' : 'returns'}`
+        }
+      />
 
       <div className="rbar rtbar">
         <span className="cnt">
@@ -238,8 +243,8 @@ export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
 
       <p className="fnote off rtfoot">
         A return is settled by us and only by us. We collect the machine at our cost, inspect it
-        against the report it was sold under, and refund or replace it — you are never asked to
-        deal with whoever dispatched it.
+        against the report it was sold under, and refund or replace it — you are never asked to deal
+        with whoever dispatched it.
       </p>
     </>
   );

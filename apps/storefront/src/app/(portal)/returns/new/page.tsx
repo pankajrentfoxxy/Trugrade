@@ -53,14 +53,12 @@ export default async function NewReturnPage({
   const preselected = units === undefined ? [] : Array.isArray(units) ? units : units.split(',');
 
   return (
-    <div className="body">
-      <div className="wrap">
-        <ReturnForm
-          initialOrder={order ?? ''}
-          initialSerials={preselected.map((s) => s.trim().toUpperCase()).filter(Boolean)}
-          initialReason={reason ?? ''}
-        />
-      </div>
+    <div className="hub-page">
+      <ReturnForm
+        initialOrder={order ?? ''}
+        initialSerials={preselected.map((s) => s.trim().toUpperCase()).filter(Boolean)}
+        initialReason={reason ?? ''}
+      />
     </div>
   );
 }

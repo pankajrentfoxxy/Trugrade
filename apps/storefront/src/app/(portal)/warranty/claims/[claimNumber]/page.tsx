@@ -38,10 +38,8 @@ export default async function ClaimPage({
 }): Promise<React.JSX.Element> {
   const { claimNumber } = await params;
   return (
-    <div className="body">
-      <div className="wrap">
-        <ClaimRecord claimNumber={decodeURIComponent(claimNumber)} />
-      </div>
+    <div className="hub-page">
+      <ClaimRecord claimNumber={decodeURIComponent(claimNumber)} />
     </div>
   );
 }

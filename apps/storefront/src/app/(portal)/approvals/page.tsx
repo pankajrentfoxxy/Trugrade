@@ -68,10 +68,8 @@ export default async function ApprovalsPage({
   }
 
   return (
-    <div className="body">
-      <div className="wrap">
-        <ApprovalsBoard query={query.toString()} />
-      </div>
+    <div className="hub-page">
+      <ApprovalsBoard query={query.toString()} />
     </div>
   );
 }

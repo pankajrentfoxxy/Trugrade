@@ -67,10 +67,8 @@ export default async function OrderPage({
 }): Promise<React.JSX.Element> {
   const { orderNumber } = await params;
   return (
-    <div className="body">
-      <div className="wrap">
-        <OrderRecord orderNumber={decodeURIComponent(orderNumber)} />
-      </div>
+    <div className="hub-page">
+      <OrderRecord orderNumber={decodeURIComponent(orderNumber)} />
     </div>
   );
 }

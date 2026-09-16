@@ -71,10 +71,8 @@ export default async function OrderUnitsPage({
   ).toString();
 
   return (
-    <div className="body">
-      <div className="wrap">
-        <UnitsBoard orderNumber={decodeURIComponent(orderNumber)} query={query} />
-      </div>
+    <div className="hub-page">
+      <UnitsBoard orderNumber={decodeURIComponent(orderNumber)} query={query} />
     </div>
   );
 }

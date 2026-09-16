@@ -57,10 +57,8 @@ export default async function WarrantyPage({
   ).toString();
 
   return (
-    <div className="body">
-      <div className="wrap">
-        <WarrantyBoard query={query} />
-      </div>
+    <div className="hub-page">
+      <WarrantyBoard query={query} />
     </div>
   );
 }

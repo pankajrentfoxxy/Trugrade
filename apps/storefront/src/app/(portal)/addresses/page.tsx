@@ -49,10 +49,8 @@ export const metadata: Metadata = {
 
 export default function AddressesPage(): React.JSX.Element {
   return (
-    <div className="body">
-      <div className="wrap">
-        <AddressBook />
-      </div>
+    <div className="hub-page">
+      <AddressBook />
     </div>
   );
 }

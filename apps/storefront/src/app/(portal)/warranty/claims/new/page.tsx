@@ -42,10 +42,8 @@ export default async function NewClaimPage({
 }): Promise<React.JSX.Element> {
   const { serial } = await searchParams;
   return (
-    <div className="body">
-      <div className="wrap">
-        <ClaimForm initialSerial={serial ?? ''} />
-      </div>
+    <div className="hub-page">
+      <ClaimForm initialSerial={serial ?? ''} />
     </div>
   );
 }

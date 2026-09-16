@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { EmptyState, WhyRail, type WhyRailItem } from '@trugrade/ui';
+import { EmptyState, HubPageHeader, WhyRail, type WhyRailItem } from '@trugrade/ui';
 import type { ApiFailure } from '../../../register/api';
 import {
   EVIDENCE_MINIMUM,
@@ -164,14 +164,10 @@ export function ReturnForm({
 
   return (
     <>
-      <div className="wshead rnhead">
-        <h1>Send a machine back</h1>
-        <p>
-          Inside the inspection window that opens when a delivery reaches you, any machine on it can
-          come back to us. We collect it, we inspect it against the report it was sold under, and we
-          refund or replace it — at our cost, on our own invoice.
-        </p>
-      </div>
+      <HubPageHeader
+        title="Send a machine back"
+        subtitle="We collect it, at our cost, and refund or replace it."
+      />
 
       <div className="flow2">
         <form className="rnform" onSubmit={submit} noValidate>
@@ -200,9 +196,7 @@ export function ReturnForm({
                       />
                       <span className="rnserial mono">{m.serialNumber}</span>
                       <span className="rntitle">
-                        {m.title ?? (
-                          <span className="notmeasured">Model no longer catalogued</span>
-                        )}
+                        {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
                       </span>
                       <Window machine={m} windowHours={windowHours} />
                     </label>
@@ -236,9 +230,7 @@ export function ReturnForm({
                       {m.openReturn && (
                         <>
                           {' · '}
-                          <a
-                            href={`/returns/${encodeURIComponent(m.openReturn.returnNumber)}`}
-                          >
+                          <a href={`/returns/${encodeURIComponent(m.openReturn.returnNumber)}`}>
                             open it
                           </a>
                         </>
@@ -320,11 +312,7 @@ export function ReturnForm({
             </button>
             <a
               className="pill wire"
-              href={
-                initialOrder
-                  ? `/orders/${encodeURIComponent(initialOrder)}/units`
-                  : '/returns'
-              }
+              href={initialOrder ? `/orders/${encodeURIComponent(initialOrder)}/units` : '/returns'}
             >
               {initialOrder ? 'Back to the order' : 'Your returns'}
             </a>

@@ -23,9 +23,7 @@ export default async function OrderLayout({
   const { orderNumber } = await params;
   return (
     <>
-      <div className="wrap">
-        <OrderNav orderNumber={decodeURIComponent(orderNumber)} />
-      </div>
+      <OrderNav orderNumber={decodeURIComponent(orderNumber)} />
       {children}
     </>
   );
