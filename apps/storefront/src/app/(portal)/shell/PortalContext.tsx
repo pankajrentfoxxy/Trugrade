@@ -8,7 +8,7 @@ import {
   type ResumableOnboarding,
   type SessionView,
 } from '../../register/api';
-import { getProfile, type OrgProfile } from '../api';
+import { getOrderReadiness, getProfile, type OrderReadiness, type OrgProfile } from '../api';
 
 /**
  * What every portal screen needs to know about who is here.
@@ -32,6 +32,12 @@ export interface PortalState {
   profile: OrgProfile | null;
   /** `null` while in flight, or for a seat refused onboarding (403). */
   onboarding: ResumableOnboarding | null;
+  /**
+   * Whether this organisation may order, from the server. `null` while in
+   * flight or when the read was refused — never a guess, and never recomputed
+   * from the profile cards.
+   */
+  readiness: OrderReadiness | null;
   /** Re-read everything. Called after a profile section saves. */
   reload: () => void;
   /** Replace the session in place, e.g. after the buyer adds their name. */
@@ -66,6 +72,7 @@ export function PortalProvider({
   const [gate, setGate] = React.useState<Gate>({ k: 'checking' });
   const [profile, setProfile] = React.useState<OrgProfile | null>(null);
   const [onboarding, setOnboarding] = React.useState<ResumableOnboarding | null>(null);
+  const [readiness, setReadiness] = React.useState<OrderReadiness | null>(null);
   const [token, setToken] = React.useState(0);
 
   React.useEffect(() => {
@@ -97,10 +104,11 @@ export function PortalProvider({
     if (gate.k !== 'ready') return;
     let live = true;
     void (async () => {
-      const [p, o] = await Promise.all([getProfile(), getOnboarding()]);
+      const [p, o, r] = await Promise.all([getProfile(), getOnboarding(), getOrderReadiness()]);
       if (!live) return;
       setProfile(p.ok ? p.data : null);
       setOnboarding(o.ok ? o.data : null);
+      setReadiness(r.ok ? r.data : null);
     })();
     return () => {
       live = false;
@@ -120,9 +128,9 @@ export function PortalProvider({
   const value = React.useMemo<PortalState | null>(
     () =>
       gate.k === 'ready'
-        ? { session: gate.session, profile, onboarding, reload, setSession }
+        ? { session: gate.session, profile, onboarding, readiness, reload, setSession }
         : null,
-    [gate, profile, onboarding, reload, setSession],
+    [gate, profile, onboarding, readiness, reload, setSession],
   );
 
   if (gate.k === 'wrong-portal') {

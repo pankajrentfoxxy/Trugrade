@@ -24,12 +24,7 @@ import {
   type Team,
 } from '../api';
 import { usePortal } from '../shell/PortalContext';
-import {
-  GATING_SECTIONS,
-  nextIncompleteSection,
-  profileCompletionPct,
-  sectionIsDone,
-} from '../profile/sections.config';
+import { nextIncompleteSection } from '../profile/sections.config';
 import { ANNUAL_VOLUMES, EMPLOYEE_BANDS } from '../../register/picklists';
 import { Select } from '../../../lib/controls';
 
@@ -364,10 +359,8 @@ function PricingPanel({ orders }: { orders: number }): React.JSX.Element | null 
 }
 
 function ProfilePanel(): React.JSX.Element {
-  const { session, onboarding } = usePortal();
-  const verified = onboarding?.status === 'VERIFIED';
-  const pct = profileCompletionPct(onboarding, session);
-  const done = GATING_SECTIONS.filter((s) => sectionIsDone(s, onboarding, session)).length;
+  const { session, onboarding, readiness } = usePortal();
+  const verified = readiness?.prepaid ?? onboarding?.status === 'VERIFIED';
   const next = nextIncompleteSection(null, onboarding, session);
 
   return (
@@ -379,23 +372,25 @@ function ProfilePanel(): React.JSX.Element {
         <p className="text-body-sm text-ink-4">Not measured yet</p>
       ) : verified ? (
         <>
-          <StatusPill tone="pass" label="Verified" />
+          <StatusPill tone="pass" label="Ready to order" />
           <p className="mt-2 text-body-sm text-ink-2">
-            Your organisation can order. Statutory details change through support.
+            {readiness?.credit
+              ? 'Your organisation can order on any terms we offer.'
+              : 'Your organisation can order, paying up front. Credit terms need a review.'}
           </p>
         </>
       ) : (
         <>
-          <p className="text-body">
-            <span className="font-mono tnum text-ink">{pct}%</span>{' '}
-            <span className="text-ink-3">
-              · {done} of {GATING_SECTIONS.length} sections done
-            </span>
-          </p>
-          <p className="mt-2 text-body-sm text-ink-2">
-            {next
-              ? `Next: ${next.title}. Ordering opens once your profile is verified.`
-              : 'Every section is saved. Submit it for review from your profile.'}
+          {/*
+            The number lives in the shell banner, once. What is useful here is
+            the next thing to do, and — where the server has one — the reason
+            ordering is not open yet, in its words rather than ours.
+          */}
+          <p className="text-body-sm text-ink-2">
+            {readiness?.blockedReason ??
+              (next
+                ? `Next: ${next.title}.`
+                : 'Every section is saved. Submit it for review from your profile.')}
           </p>
         </>
       )}

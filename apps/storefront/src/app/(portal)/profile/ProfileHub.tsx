@@ -2,22 +2,12 @@
 
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
-import {
-  Button,
-  EmptyState,
-  HubKpiRow,
-  HubPageHeader,
-  Skeleton,
-  StatusPill,
-  useToast,
-} from '@trugrade/ui';
+import { Button, EmptyState, HubPageHeader, Skeleton, StatusPill, useToast } from '@trugrade/ui';
 import { usePortal } from '../shell/PortalContext';
 import { SubmitForReview } from './SubmitForReview';
 import { ProfileFlow } from './ProfileFlow';
 import {
-  GATING_SECTIONS,
   PROFILE_SECTIONS,
-  profileCompletionPct,
   sectionBlockingReason,
   sectionIsDone,
   sectionSummary,
@@ -45,17 +35,12 @@ const STATUS_LABEL: Readonly<Record<string, string>> = {
 };
 
 export function ProfileHub(): React.JSX.Element {
-  const { session, profile, onboarding, reload } = usePortal();
+  const { session, profile, onboarding, readiness, reload } = usePortal();
   const [open, setOpen] = React.useState<ProfileSectionId | null>(null);
   const toast = useToast();
   // The cart sends an unfinished profile here; say why, rather than leaving
   // somebody who pressed "Continue to checkout" wondering how they got here.
   const fromCheckout = useSearchParams().get('reason') === 'checkout';
-
-  const pct = profileCompletionPct(onboarding, session);
-  // Counted over the cards that actually gate, so the denominator matches the
-  // percentage. Preferences is weight 0 and belongs in neither.
-  const doneCount = GATING_SECTIONS.filter((s) => sectionIsDone(s, onboarding, session)).length;
   const finished = (): void => {
     setOpen(null);
     toast({
@@ -85,6 +70,13 @@ export function ProfileHub(): React.JSX.Element {
 
   return (
     <div className="hub-page">
+      {/*
+        No percentage here.
+
+        It used to be rendered three times on this one screen — the shell
+        banner, a header pill and a KPI cell — and a fourth time on Home. The
+        banner above every portal screen is the one that stays.
+      */}
       <HubPageHeader
         title="Your profile"
         subtitle={
@@ -92,27 +84,7 @@ export function ProfileHub(): React.JSX.Element {
             ? profile.legalName
             : undefined
         }
-        actions={
-          pct >= 100 ? (
-            <StatusPill tone="pass" label="Every section done" />
-          ) : (
-            <StatusPill
-              tone="warn"
-              label={`${pct}% · ${doneCount} of ${GATING_SECTIONS.length} sections`}
-            />
-          )
-        }
-      />
-
-      <HubKpiRow
-        cells={[
-          {
-            label: 'Progress',
-            value: `${pct}%`,
-            sub: `${doneCount} of ${GATING_SECTIONS.length} sections done`,
-          },
-          { label: 'Status', value: status, sub: 'ordering opens after approval' },
-        ]}
+        actions={<StatusPill tone={status === 'Verified' ? 'pass' : 'neutral'} label={status} />}
       />
 
       <SubmitForReview className="mt-2" />
@@ -128,7 +100,8 @@ export function ProfileHub(): React.JSX.Element {
         </p>
       ) : null}
 
-      {fromCheckout && pct < 100 ? (
+      {/* The cart sent them here because the SERVER refused, so ask the server. */}
+      {fromCheckout && readiness && !readiness.prepaid ? (
         <p className="mt-4 text-body text-ink" role="status" data-testid="checkout-reason">
           Checkout needs a finished profile: we invoice a registered business and deliver to a site
           you have named. Fill in the cards below and your cart is where you left it.

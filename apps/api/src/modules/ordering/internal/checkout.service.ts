@@ -140,6 +140,48 @@ export interface BreakUpView {
   tax: TaxSplitView;
 }
 
+/**
+ * Whether this organisation may order, and what is still outstanding.
+ *
+ * Derived on the server in `orderReadiness`, and carried on the checkout
+ * session so the cart and the profile banner render the server's answer rather
+ * than each recomputing the rule in a second language.
+ */
+const SUSPENDED_REASON =
+  'Ordering is paused on this account. Contact us and we will tell you exactly what is outstanding.';
+
+const CREDIT_REASON =
+  'Credit terms need a review before they open. Pay for this order up front and we will email the moment credit clears — usually within one working day.';
+
+/** The prepaid refusal, from the list of what is outstanding. */
+const missingReason = (missing: readonly string[]): string =>
+  `Before your first order we need ${listOf(missing)}. It takes a couple of minutes on your profile.`;
+
+/** "your GSTIN, a billing address and a delivery address". */
+const listOf = (items: readonly string[]): string =>
+  items.length <= 1
+    ? (items[0] ?? 'nothing')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+
+export interface OrderReadiness {
+  orgStatus: string;
+  suspended: boolean;
+  /** Pay up front now. Automatic: verified GSTIN, a billing address, a site. */
+  prepaid: boolean;
+  /** Credit terms. Reviewed by a human, exactly as before. */
+  credit: boolean;
+  /** What prepaid is still waiting on, in the buyer's words. Empty when ready. */
+  missing: string[];
+  /**
+   * Why ordering is not open, as one sentence, or null when it is.
+   *
+   * **The same sentence the refusal uses.** The screen renders this verbatim
+   * rather than composing its own from `missing`, so the banner and the refusal
+   * at checkout cannot drift into saying two different things.
+   */
+  blockedReason: string | null;
+}
+
 export interface CheckoutSessionView {
   cartId: string;
   cartName: string;
@@ -152,6 +194,8 @@ export interface CheckoutSessionView {
   deliverySites: DeliverySiteView[];
   paymentModes: PaymentModeView[];
   poRequired: boolean;
+  /** The server's own answer on whether this buyer may order, and on what. */
+  readiness: OrderReadiness;
   /** Chosen so far, echoed back so a reload resumes where the buyer was. */
   selection: {
     gstProfileId: string | null;
@@ -343,7 +387,10 @@ export class CheckoutService {
   async confirm(input: ConfirmInput): Promise<OrderConfirmationView> {
     const buyer = this.buyer();
     await this.requireCart(input.cartId);
-    await this.assertBuyerMayOrder(buyer.orgId);
+    // The mode being paid with decides which door this has to pass: prepaid is
+    // automatic, credit is reviewed. Checked here rather than on the session
+    // because this is the call that takes the money.
+    await this.assertBuyerMayOrder(buyer.orgId, input.paymentMode);
 
     const items = await this.cartItems(input.cartId);
     if (items.length === 0) {
@@ -504,11 +551,12 @@ export class CheckoutService {
     };
   }): Promise<CheckoutSessionView> {
     const buyer = this.buyer();
-    const [gstProfiles, addresses, prefs, modes] = await Promise.all([
+    const [gstProfiles, addresses, prefs, modes, readiness] = await Promise.all([
       this.gstProfiles(buyer.orgId),
       this.addresses(buyer.orgId),
       this.preferences(buyer.orgId),
       this.paymentModes(buyer.orgId),
+      this.orderReadiness(buyer.orgId),
     ]);
 
     const serials = await this.serialsByListing(input.held);
@@ -557,6 +605,7 @@ export class CheckoutService {
       deliverySites: addresses.delivery,
       paymentModes: modes,
       poRequired: prefs.poRequired,
+      readiness,
       selection: {
         gstProfileId:
           input.selection.gstProfileId ??
@@ -568,12 +617,9 @@ export class CheckoutService {
           addresses.billing.find((a) => a.isDefault)?.id ??
           null,
         deliveryAddressId: delivery?.id ?? null,
-        paymentMode:
-          input.selection.paymentMode ?? modes.find((m) => m.allowed)?.mode ?? null,
+        paymentMode: input.selection.paymentMode ?? modes.find((m) => m.allowed)?.mode ?? null,
       },
-      breakUp: delivery
-        ? await this.breakUp(input.items, input.facts, delivery, goods)
-        : null,
+      breakUp: delivery ? await this.breakUp(input.items, input.facts, delivery, goods) : null,
       approval: approval
         ? {
             required: true,
@@ -726,24 +772,108 @@ export class CheckoutService {
   }
 
   /**
-   * Buyer org VERIFIED, and inside its credit headroom.
+   * Whether this organisation may order, and on what terms.
    *
-   * The verification message says what is happening and roughly when, rather
-   * than refusing flatly: an organisation mid-review is a customer we want, and
-   * "not allowed" reads as a rejection of them rather than a state of their
-   * paperwork.
+   * **Derived, never stored, and computed in this one place.** A stored column
+   * would have to be recomputed on every event that can change the answer — a
+   * GSTIN verified, a delivery site added, an address retired, an account
+   * suspended — and there is no event consumer anywhere in this API to hang
+   * that on. The first recomputation anybody forgot would leave a buyer
+   * permanently unable to order with nothing on screen to explain it. Support
+   * can still override, through the org status that has always been the door.
+   *
+   * Two questions, not one:
+   *
+   * - **Prepaid is automatic.** A buyer paying up front is being trusted with
+   *   nothing: they give us money and we give them a laptop. What we genuinely
+   *   need is the ability to raise a compliant tax invoice and deliver a
+   *   machine — a verified GSTIN, a billing address, and somewhere to send it.
+   *   Human review protects nothing on that path, and it used to block it
+   *   entirely: `VERIFIED` is reachable only through a reviewer, so a buyer who
+   *   filled every field and submitted was still refused here.
+   * - **Credit is reviewed.** That is where the underwriting sits, and it is
+   *   unchanged: the organisation must be VERIFIED.
    */
-  private async assertBuyerMayOrder(orgId: string): Promise<void> {
-    const [org] = await this.prisma.$queryRaw<Array<{ status: string }>>`
-      SELECT status::text AS status FROM identity.organization WHERE id = ${orgId}::uuid`;
+  /**
+   * The readiness of the signed-in buyer's own organisation.
+   *
+   * Public so the cart and the profile banner can render the server's answer
+   * before a checkout session exists. They used to recompute the rule in a
+   * second language — the cart added up profile-card weights — which is how a
+   * buyer could be told 100% by one screen and refused by the next.
+   */
+  readiness(): Promise<OrderReadiness> {
+    return this.orderReadiness(this.buyer().orgId);
+  }
+
+  private async orderReadiness(orgId: string): Promise<OrderReadiness> {
+    // Three single-schema reads, never a join. `kyc.gst_profile` and
+    // `identity.org_address` belong to other modules and the seam is enforced;
+    // the same reason `gstProfiles` and `addresses` above are separate queries.
+    const [[org], [gst], [sites]] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ status: string }>>`
+        SELECT status::text AS status FROM identity.organization WHERE id = ${orgId}::uuid`,
+      this.prisma.$queryRaw<Array<{ verified: number }>>`
+        SELECT count(*)::int AS verified FROM kyc.gst_profile
+         WHERE org_id = ${orgId}::uuid AND api_verified_at IS NOT NULL`,
+      this.prisma.$queryRaw<Array<{ billing: number; delivery: number }>>`
+        SELECT count(*) FILTER (WHERE type = 'BILLING' OR is_billing_enabled)::int AS billing,
+               count(*) FILTER (WHERE type = 'SHIPPING')::int                      AS delivery
+          FROM identity.org_address
+         WHERE org_id = ${orgId}::uuid AND is_active`,
+    ]);
     if (!org) throw new NotFoundError('organisation');
-    if (org.status !== 'VERIFIED') {
-      throw new PreconditionFailedError(
-        org.status === 'SUSPENDED'
-          ? 'Ordering is paused on this account. Contact us and we will tell you exactly what is outstanding.'
-          : 'Your account is still being verified, so orders cannot be placed yet. We will email the moment it clears — usually within one working day.',
-        { orgStatus: org.status },
-      );
+
+    // What is outstanding, named the way the buyer's own profile names it, so
+    // the screen can print the server's list rather than compute a second one.
+    const missing = [
+      (gst?.verified ?? 0) === 0 && 'your GSTIN',
+      (sites?.billing ?? 0) === 0 && 'a billing address',
+      (sites?.delivery ?? 0) === 0 && 'a delivery address',
+    ].filter((x): x is string => typeof x === 'string');
+
+    const suspended = org.status === 'SUSPENDED';
+    const prepaid = !suspended && missing.length === 0;
+    return {
+      orgStatus: org.status,
+      suspended,
+      prepaid,
+      credit: org.status === 'VERIFIED',
+      missing,
+      blockedReason: suspended ? SUSPENDED_REASON : prepaid ? null : missingReason(missing),
+    };
+  }
+
+  /**
+   * The refusal, worded for the mode being paid with.
+   *
+   * The prepaid sentences are the ones that were already here; the credit one is
+   * new and names the review rather than describing the buyer's paperwork.
+   */
+  private async assertBuyerMayOrder(
+    orgId: string,
+    mode: 'PREPAID' | 'PARTIAL_ADVANCE' | 'CREDIT' = 'PREPAID',
+  ): Promise<void> {
+    const ready = await this.orderReadiness(orgId);
+
+    if (ready.suspended) {
+      throw new PreconditionFailedError(SUSPENDED_REASON, { orgStatus: ready.orgStatus });
+    }
+
+    if (mode === 'CREDIT' && !ready.credit) {
+      throw new PreconditionFailedError(CREDIT_REASON, {
+        orgStatus: ready.orgStatus,
+        reason: 'credit_needs_review',
+      });
+    }
+
+    if (!ready.prepaid) {
+      // `blockedReason` is this same sentence, so the banner that sent them here
+      // and the refusal that stopped them say one thing.
+      throw new PreconditionFailedError(ready.blockedReason ?? missingReason(ready.missing), {
+        orgStatus: ready.orgStatus,
+        missing: ready.missing,
+      });
     }
   }
 
@@ -1107,7 +1237,9 @@ export class CheckoutService {
     });
 
     return {
-      billing: rows.filter((r) => r.is_billing_enabled || r.type === 'BILLING' || r.type === 'REGISTERED').map(view),
+      billing: rows
+        .filter((r) => r.is_billing_enabled || r.type === 'BILLING' || r.type === 'REGISTERED')
+        .map(view),
       delivery: rows.filter((r) => r.type === 'SHIPPING' || r.type === 'REGISTERED').map(view),
     };
   }

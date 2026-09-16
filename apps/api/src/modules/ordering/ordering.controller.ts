@@ -49,6 +49,7 @@ import { CartService, type CartSummary, type CartView } from './internal/cart.se
 import {
   CheckoutService,
   type CheckoutSessionView,
+  type OrderReadiness,
   type OrderConfirmationView,
 } from './internal/checkout.service';
 import {
@@ -56,10 +57,7 @@ import {
   type OrderDashboardView,
   type OrderListView,
 } from './internal/order-list.service';
-import {
-  OrderDocumentsService,
-  type OrderDocumentsView,
-} from './internal/order-documents.service';
+import { OrderDocumentsService, type OrderDocumentsView } from './internal/order-documents.service';
 import {
   DeliveryCheckService,
   type DeliveryView,
@@ -186,6 +184,21 @@ export class OrderingController {
    * imposed, read straight off `ordering.checkout_hold`. It is not a scarcity
    * device: nothing about it is invented, and it releases on its own.
    */
+  /**
+   * Whether this organisation may order, and what is outstanding if not.
+   *
+   * Read before a cart becomes a checkout, so the cart's button and the
+   * profile's banner say the same thing the confirm call will. `ordering.own.read`
+   * rather than `cart.write`: an approver or a viewer who cannot buy is still
+   * owed the reason ordering is not open, and a screen that stayed silent for
+   * them would be the third gate all over again.
+   */
+  @Get('order-readiness')
+  @RequirePermissions('ordering.own.read')
+  orderReadiness(): Promise<OrderReadiness> {
+    return this.checkout.readiness();
+  }
+
   @Post('checkout')
   @HttpCode(200)
   @RequirePermissions('ordering.cart.write')
@@ -463,7 +476,6 @@ export class OrderingController {
     const { url } = await this.documents.download(orderNumber, documentId);
     return { url, statusCode: 302 };
   }
-
 
   // -------------------------------------------------------------------------
   // Approvals — T25, and the decision that did not exist

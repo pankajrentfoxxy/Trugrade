@@ -312,6 +312,30 @@ export interface OrgProfile {
   registeredAddress: RegisteredAddress | null;
 }
 
+/**
+ * Whether this organisation may order, and what is outstanding if not.
+ *
+ * **The server's answer, never recomputed here.** The cart used to add up the
+ * profile cards' weights and decide for itself, which is how a buyer could be
+ * told "100% complete" by one screen and refused by the next: completeness and
+ * readiness are different questions, and only one of them is ours to answer.
+ */
+export interface OrderReadiness {
+  orgStatus: string;
+  suspended: boolean;
+  /** Pay up front now. Automatic once we can invoice and deliver. */
+  prepaid: boolean;
+  /** Credit terms, which a human still reviews. */
+  credit: boolean;
+  /** What prepaid is waiting on, in the buyer's words. Empty when ready. */
+  missing: string[];
+  /** Why ordering is not open, in the server's own words. Null when it is. */
+  blockedReason: string | null;
+}
+
+export const getOrderReadiness = (): Promise<ApiResult<OrderReadiness>> =>
+  call<OrderReadiness>('/api/buyer/order-readiness', { method: 'GET' });
+
 export const getProfile = (): Promise<ApiResult<OrgProfile>> =>
   call<OrgProfile>('/api/account/profile', { method: 'GET' });
 

@@ -114,7 +114,14 @@ const TEAM: Team = {
   owners: 1,
 };
 
-/** Two of five sections complete. The screen must say "2 of 5" beside any percentage. */
+/**
+ * Account done, Tax and Delivery not — and ordering not yet open.
+ *
+ * `readiness` is the server's answer, which is now the only thing that decides
+ * whether the screen says a buyer can order. It is null-able for a refused read
+ * and is deliberately set here rather than left undefined, so the panel is
+ * tested against a real server answer rather than its fallback.
+ */
 const STATE: PortalState = {
   session: {
     userId: 'u1',
@@ -128,6 +135,15 @@ const STATE: PortalState = {
     mobile: '+919876543210',
   },
   profile: null,
+  readiness: {
+    orgStatus: 'REGISTERED',
+    suspended: false,
+    prepaid: false,
+    credit: false,
+    missing: ['your GSTIN', 'a delivery address'],
+    blockedReason:
+      'Before your first order we need your GSTIN and a delivery address. It takes a couple of minutes on your profile.',
+  },
   onboarding: {
     orgId: 'o1',
     status: 'REGISTERED',
@@ -231,21 +247,22 @@ describe('every figure on the KPI strip came from the response', () => {
 });
 
 /* ==========================================================================
- * 2. The one percentage carries its denominator
+ * 2. The percentage is rendered once, and not here
  * ======================================================================== */
 
-it('says how many sections the profile percentage is out of', async () => {
+it('renders no percentage of its own, and names what the server is waiting for', async () => {
   const body = await show(REAL);
-  // Account alone, of the three cards that gate ordering: 30 of 100.
-  //
-  // The fixture has STATUTORY complete and BUSINESS_PROFILE not, and the Tax
-  // card is responsible for both — so it is not done, and the percentage says
-  // so. The denominator is three because Preferences is weight 0 and gates
-  // nothing; counting it would put a card in the denominator that can never
-  // move the number.
   const text = body.textContent ?? '';
-  expect(text).toContain('30%');
-  expect(text).toContain('1 of 3 sections');
+
+  // The figure used to be rendered four times across the portal, once here.
+  // The shell banner is the one that stays; a dock panel repeating it is a
+  // second rendering of one number, and this screen is not where it belongs.
+  expect(text).not.toMatch(/d+%/);
+
+  // What is useful here is the reason ordering is not open, in the server's
+  // own words, so this and the refusal at checkout cannot disagree.
+  expect(text).toContain('your GSTIN');
+  expect(text).toContain('a delivery address');
 });
 
 /* ==========================================================================
