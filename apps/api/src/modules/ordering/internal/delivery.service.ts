@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AuditService } from '../../identity';
 import { ClockPort } from '../../../shared/clock';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { NotFoundError, PreconditionFailedError } from '../../../shared/errors/domain-errors';
@@ -84,9 +85,20 @@ export class DeliveryService {
     private readonly prisma: PrismaService,
     private readonly clock: ClockPort,
     private readonly platform: PlatformService,
+    private readonly audit: AuditService,
   ) {}
 
-  async record(orderNumber: string): Promise<DeliveryRecorded> {
+  /**
+   * The manual override.
+   *
+   * Every normal delivery is recorded by a carrier webhook or by the rider's
+   * own app. This is the escape hatch for the carrier whose webhook never
+   * fires, and `reason` is required because an override with no stated cause is
+   * indistinguishable, a month later, from a mistake — which matters here more
+   * than most places, since this call starts the seven-day return window and
+   * every warranty on the order.
+   */
+  async record(orderNumber: string, override?: { reason: string; actorUserId: string }): Promise<DeliveryRecorded> {
     const now = this.clock.now();
 
     return this.prisma.runInTransaction(async () => {
@@ -94,6 +106,19 @@ export class DeliveryService {
         SELECT id, status::text AS status FROM ordering."order"
          WHERE order_number = ${orderNumber}`;
       if (!order) throw new NotFoundError('order', { reason: 'no_such_order' });
+
+      // Recorded before the work, inside the same transaction: an override that
+      // rolled back must not leave an audit row claiming it happened, and one
+      // that succeeded must not be able to lose its reason.
+      if (override) {
+        await this.audit.record({
+          action: 'ordering.delivery.override',
+          entityType: 'order',
+          entityId: order.id,
+          actorUserId: override.actorUserId,
+          after: { orderNumber, reason: override.reason, recordedAt: now.toISOString() },
+        });
+      }
 
       // An order nobody has approved has not been bought yet.
       //

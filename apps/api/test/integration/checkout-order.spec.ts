@@ -51,6 +51,7 @@ import { OrderUnitsService } from '../../src/modules/ordering/internal/order-uni
 import { HoldService } from '../../src/modules/ordering/internal/hold.service';
 import {
   OrderTransactionService,
+  laneKey,
   type PostDecrementStep,
 } from '../../src/modules/ordering/internal/order-transaction.service';
 import { seedLogisticsNcr } from '../../prisma/seed/logistics-ncr';
@@ -1299,7 +1300,7 @@ describe('the transaction as an API, with no hold in front of it', () => {
             supplyPointLabel: 'Supply Point A · Gurugram',
           },
         ],
-        freightByVendor: new Map([[v.orgId, Money.rupees(149)]]),
+        freightByLane: new Map([[laneKey(v.orgId, v.addressId), Money.rupees(149)]]),
         approval: null,
         holdExpiresAt: new Date(NOW.getTime() + 20 * 60_000),
       }),

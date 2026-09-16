@@ -5,6 +5,7 @@ import { QcService } from '../../qc';
 import { ClockPort } from '../../../shared/clock';
 import { RequestContextService } from '../../../shared/db/org-scope';
 import { EventBus } from '../../../shared/events/event-bus';
+import { AutomationService } from '../../../shared/automation/automation.service';
 import {
   ConflictError,
   NotFoundError,
@@ -262,6 +263,7 @@ export class PurchaseOrderService {
     private readonly clock: ClockPort,
     private readonly ctx: RequestContextService,
     private readonly events: EventBus,
+    private readonly automation: AutomationService,
   ) {}
 
   kpiSummary(): Promise<PoKpiSummary> {
@@ -435,11 +437,7 @@ export class PurchaseOrderService {
     return this.detail(poId);
   }
 
-  async attachableUnits(
-    poId: string,
-    skuId: string,
-    grade: string,
-  ): Promise<AttachableUnitView[]> {
+  async attachableUnits(poId: string, skuId: string, grade: string): Promise<AttachableUnitView[]> {
     const po = await this.mine(poId);
     const [reservedIds, takenIds] = await Promise.all([
       this.repo.reservedUnitIdsForOrder(po.order_id),
@@ -469,9 +467,7 @@ export class PurchaseOrderService {
 
     const slots = (await this.repo.linesOf(poId)).filter(
       (l) =>
-        l.sku_id === input.skuId &&
-        l.grade_at_po === input.grade &&
-        l.line_status === 'ACCEPTED',
+        l.sku_id === input.skuId && l.grade_at_po === input.grade && l.line_status === 'ACCEPTED',
     );
     if (slots.length === 0) {
       throw new ValidationError('That SKU and grade are not on this purchase order.', {
@@ -528,7 +524,32 @@ export class PurchaseOrderService {
         reason: 'po_slot_taken',
       });
     }
+
+    await this.markPackedIfComplete(poId, po.po_number);
     return this.detail(poId);
+  }
+
+  /**
+   * The last serial turns an acknowledgement into a packed consignment.
+   *
+   * **Acknowledge is a promise; pack is a fact.** `po_status` already carries
+   * DISPATCH_READY and `dispatchPo` already refuses while any accepted line has
+   * no `unit_id` — but nothing ever wrote that status, so a fully-scanned PO was
+   * indistinguishable from one nobody had touched. It is the trigger for
+   * booking: a carrier called at acknowledgement collects machines that are
+   * still on a shelf.
+   */
+  private async markPackedIfComplete(poId: string, poNumber: string): Promise<void> {
+    const lines = await this.repo.linesOf(poId);
+    const accepted = lines.filter((l) => l.line_status === 'ACCEPTED');
+    if (accepted.length === 0 || accepted.some((l) => !l.unit_id)) return;
+
+    const moved = await this.repo.markDispatchReady(poId, this.clock.now());
+    if (!moved) return;
+    await this.automation.note('R2', poNumber, 'SKIPPED', {
+      reason: 'Packed and ready to dispatch. Booking runs when dispatch is pressed.',
+      machines: accepted.length,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -704,7 +725,9 @@ export class PurchaseOrderService {
         lineTotal: Money.sum(bucket.map((l) => l.agreedNetPayout)),
         lineStatus,
         rejectionReason:
-          lineStatus === 'REJECTED' ? (bucket.find((l) => l.rejectionReason)?.rejectionReason ?? null) : null,
+          lineStatus === 'REJECTED'
+            ? (bucket.find((l) => l.rejectionReason)?.rejectionReason ?? null)
+            : null,
         attachedCount: bucket.filter((l) => l.unitId).length,
         serials: bucket
           .filter((l) => l.unitId)

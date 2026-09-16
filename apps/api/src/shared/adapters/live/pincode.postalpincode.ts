@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { stateCodeFromName } from '@trugrade/contracts';
-import {
-  PincodeLookupPort,
-  type PincodeArea,
-  type PincodeLookupResult,
-} from '../ports';
+import { PincodeLookupPort, type PincodeArea, type PincodeLookupResult } from '../ports';
 
 interface RawPostOffice {
   Name?: string;

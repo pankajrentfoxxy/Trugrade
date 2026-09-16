@@ -28,6 +28,7 @@ import {
   type QcReportRow,
 } from './qc.repository';
 import { GradeCorrectionService } from './grade-correction.service';
+import { InspectionOutcomeService } from './inspection-outcome.service';
 import {
   ToleranceService,
   addDays,
@@ -160,6 +161,7 @@ export interface VerdictOutcome {
 
 interface UnitRow {
   id: string;
+  serial_number: string;
   listing_id: string | null;
   vendor_org_id: string;
   sku_id: string;
@@ -185,6 +187,7 @@ export class VerdictService {
     private readonly repo: QcRepository,
     private readonly tolerance: ToleranceService,
     private readonly corrections: GradeCorrectionService,
+    private readonly outcome: InspectionOutcomeService,
     private readonly bus: EventBus,
   ) {}
 
@@ -466,6 +469,30 @@ export class VerdictService {
           })
         : null;
 
+    // A mismatch reaches the vendor as a correction they may accept, contest —
+    // or ignore. The ops task is what stops "ignore" meaning the machine sits
+    // out of stock forever with nobody holding it. Same transaction as the
+    // correction: half of this escalation is worse than neither half.
+    // `listing_id` is nullable: a unit can be inspected before it belongs to a
+    // listing (a return coming back through QC is the live case). There is no
+    // listing for an operator to act on then, and the grade correction above
+    // still reaches the vendor.
+    if (result.requiresGradeCorrection && gradeFinal !== null && unit.listing_id !== null) {
+      await this.outcome.raiseGradeMismatch({
+        unitId: unit.id,
+        listingId: unit.listing_id,
+        serialNumber: unit.serial_number,
+        gradeDeclared: unit.grade_declared,
+        gradeActual: gradeFinal,
+        reason: result.vendorMessage,
+        gradeCorrectionId,
+      });
+    }
+
+    // The evidence, attached where eight screens have been promising it. Never
+    // allowed to fail the verdict — see `attachReportPdf`.
+    if (certified) await this.outcome.attachReportPdf(report.id, unit.serial_number);
+
     const [after] = await this.prisma.$queryRaw<Array<{ is_sellable: boolean }>>`
       SELECT is_sellable FROM listing.unit WHERE id = ${unit.id}::uuid`;
 
@@ -624,7 +651,7 @@ export class VerdictService {
    */
   private async unit(unitId: string): Promise<UnitRow> {
     const [row] = await this.prisma.$queryRaw<UnitRow[]>`
-      SELECT id, listing_id, vendor_org_id, sku_id, grade_declared,
+      SELECT id, serial_number, listing_id, vendor_org_id, sku_id, grade_declared,
              vendor_ask_price::text AS vendor_ask_price
         FROM listing.unit WHERE id = ${unitId}::uuid`;
     if (!row) throw new NotFoundError('unit', { unitId });

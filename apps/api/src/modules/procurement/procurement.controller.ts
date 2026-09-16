@@ -90,9 +90,7 @@ export class ProcurementController {
 
   @Get(':poId')
   @RequirePermissions('procurement.po.read_own')
-  detail(
-    @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
-  ): Promise<VendorPoDetail> {
+  detail(@Param('poId', new ZodValidationPipe(uuidSchema)) poId: string): Promise<VendorPoDetail> {
     return this.pos.detail(poId);
   }
 

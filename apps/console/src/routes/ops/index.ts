@@ -39,12 +39,11 @@ export const opsRoutes: ConsoleRoute[] = [
     element: React.createElement(OpsOrderRecordRoute),
     permission: 'ordering.any.read' satisfies Permission,
   },
-  {
-    path: '/procurement/pos',
-    element: React.createElement(OpsPurchaseOrderBoardRoute),
-    permission: 'procurement.po.read_any' satisfies Permission,
-    label: 'Purchase orders',
-  },
+  // `/procurement/pos` moved to `routes/opsSurface.tsx` in Stage 8: the same
+  // path, the same permission, but the dispatch board rather than a read-only
+  // list. `OpsPurchaseOrderBoardRoute` is still exported below — it is what the
+  // vendor-facing surface and the existing screen tests render — but two
+  // registrations of one path would leave which board you get up to array order.
 ];
 
 export { OpsOrderBoardRoute, OpsOrderRecordRoute, OpsPurchaseOrderBoardRoute };

@@ -284,6 +284,60 @@ describe('SUPPLIER HUB — vendor surface contrast', () => {
   });
 });
 
+const OPS = css.slice(
+  css.indexOf(":root[data-surface='ops']"),
+  css.indexOf(":root[data-surface='ops'][data-density='default']"),
+);
+
+/**
+ * The ops surface, checked the same way — plus two pairs the hub suite has no
+ * reason to carry.
+ *
+ * `--ink-3`/`--ink-4` are measured on `--sheet-3` as well as on `--sheet`,
+ * because that is the table header ground and it is where the 11px uppercase
+ * micro-labels actually sit. A neutral that clears 4.5:1 on white and fails on
+ * the header is the exact defect this pair exists to catch, and it is invisible
+ * to a test that only ever checks against white.
+ *
+ * The rail pairs are checked because the ops rail is near-black: every other
+ * surface in this file puts its chrome ink on a light ground, so nothing else
+ * in the suite would notice if the rail's muted ink went unreadable.
+ */
+describe('OPS — internal console contrast', () => {
+  it.each([
+    ['ink on sheet', 'ink', 'sheet', 4.5],
+    ['ink on ground', 'ink', 'ground', 4.5],
+    ['ink-2 on sheet', 'ink-2', 'sheet', 4.5],
+    ['ink-2 on ground', 'ink-2', 'ground', 4.5],
+    ['ink-3 on sheet', 'ink-3', 'sheet', 4.5],
+    ['ink-3 on ground', 'ink-3', 'ground', 4.5],
+    ['ink-3 on the table header', 'ink-3', 'sheet-3', 4.5],
+    ['ink-4 on sheet', 'ink-4', 'sheet', 4.5],
+    ['ink-4 on ground', 'ink-4', 'ground', 4.5],
+    ['ink-4 on the table header', 'ink-4', 'sheet-3', 4.5],
+    ['acc-on on acc', 'acc-on', 'acc', 4.5],
+    ['acc-ink on sheet', 'acc-ink', 'sheet', 4.5],
+    ['acc-ink on acc-wash', 'acc-ink', 'acc-wash', 4.5],
+    ['on-chrome on the rail', 'on-chrome', 'chrome', 4.5],
+    ['on-chrome-2 on the rail', 'on-chrome-2', 'chrome', 4.5],
+    ['on-chrome-2 on the rail hover', 'on-chrome-2', 'chrome-2', 4.5],
+    ['the accent on the rail', 'brand-tint', 'chrome', 4.5],
+    ['pass on sheet', 'pass', 'sheet', 4.5],
+    ['pass on pass-wash', 'pass', 'pass-wash', 4.5],
+    ['warn on sheet', 'warn', 'sheet', 4.5],
+    ['warn on warn-wash', 'warn', 'warn-wash', 4.5],
+    ['fail on sheet', 'fail', 'sheet', 4.5],
+    ['fail on fail-wash', 'fail', 'fail-wash', 4.5],
+    ['acc-on on warn', 'acc-on', 'warn', 4.5],
+  ] as const)('%s clears %s:1', (_n, fg, bg, min) => {
+    expect(contrast(token(OPS, fg), token(OPS, bg))).toBeGreaterThanOrEqual(min);
+  });
+
+  it('keeps the ops rail dark — the surface signature, not a theme choice', () => {
+    expect(token(OPS, 'chrome')).toBe('#161319');
+  });
+});
+
 /**
  * CLAUDE.md: "One DataBoard component, three settings." The three settings are
  * row heights, and they are asserted here because they are the one part of the

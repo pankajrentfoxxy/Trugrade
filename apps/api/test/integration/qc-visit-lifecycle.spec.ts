@@ -30,6 +30,9 @@ import { QcRepository } from '../../src/modules/qc/internal/qc.repository';
 import { SchedulingService } from '../../src/modules/qc/internal/scheduling.service';
 import { SealingService } from '../../src/modules/qc/internal/sealing.service';
 import { VisitClosingService } from '../../src/modules/qc/internal/visit-closing.service';
+import { InspectionOutcomeService } from '../../src/modules/qc/internal/inspection-outcome.service';
+import { ReportPdfService } from '../../src/modules/qc/internal/report-pdf.service';
+import { ToleranceService } from '../../src/modules/qc/internal/tolerance.service';
 import {
   closeTestDb,
   migrateTestDatabase,
@@ -108,6 +111,9 @@ beforeAll(async () => {
       SchedulingService,
       SealingService,
       VisitClosingService,
+      ToleranceService,
+      ReportPdfService,
+      InspectionOutcomeService,
     ],
   }).compile();
 

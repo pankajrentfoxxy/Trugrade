@@ -5,6 +5,7 @@ import { seedMarginRules, MARGIN_RULE_COUNT } from './margin-rules';
 import {
   GRADE_CORRECTION_AUTO_APPLY_DAYS,
   INSPECTION_WINDOW_HOURS,
+  RETURN_WINDOW_HOURS,
   OTP_POLICY,
   PAYOUT_MIN_THRESHOLD_INR,
   QC_EXPIRY_WARNING_DAYS,
@@ -132,7 +133,12 @@ export const CONFIG: Array<[string, unknown, string]> = [
   [
     'ordering.inspection_window_hours',
     INSPECTION_WINDOW_HOURS,
-    'Q5 — the r.7(4) take-back window, and the payout-eligibility clock',
+    'Q5 — the r.7(4) take-back window, and the grade-dispute clock',
+  ],
+  [
+    'ordering.return_window_hours',
+    RETURN_WINDOW_HOURS,
+    'Seven days from delivery. A vendor payable is not eligible until it closes.',
   ],
   ['ordering.reservation_ttl_minutes', RESERVATION_TTL_MINUTES, 'Checkout stock hold'],
   [

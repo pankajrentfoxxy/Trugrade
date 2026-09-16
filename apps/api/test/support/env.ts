@@ -29,8 +29,27 @@ import { readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const file = join(__dirname, '..', '..', '.env.test');
-if (existsSync(file)) {
+/**
+ * `.env.test` first, then the repo root `.env` — both as defaults.
+ *
+ * The root file is read here for one reason, and it is a bug this harness had
+ * until Stage 7 found it: when `apps/api/.env.test` does not exist (it is
+ * git-ignored, so on a fresh checkout it never does) DATABASE_URL_TEST was
+ * undefined at this point, the override at the bottom of this file did not
+ * fire, and the app's own `loadEnv` then defaulted DATABASE_URL from the root
+ * `.env` — to the DEV database. The fixtures kept talking to `trugrade_test`
+ * while every request through Nest talked to `trugrade`. That does not fail
+ * loudly; it fails as "column does not exist" on a migration that is plainly
+ * applied, or worse, as a test that passes against data it did not write.
+ *
+ * The root `.env` already declares DATABASE_URL_TEST. Reading it here is what
+ * makes the two halves of a run agree on one database.
+ */
+for (const file of [
+  join(__dirname, '..', '..', '.env.test'),
+  join(__dirname, '..', '..', '..', '..', '.env'),
+]) {
+  if (!existsSync(file)) continue;
   for (const line of readFileSync(file, 'utf8').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;

@@ -6,11 +6,20 @@ import { ProcurementController } from './procurement.controller';
 import { PayablesController } from './payables.controller';
 import { OpsProcurementController } from './ops-procurement.controller';
 import { ProcurementService } from './procurement.service';
+import { OrderPropagationService } from './internal/order-propagation.service';
+import { PayoutRunService } from './internal/payout-run.service';
+import { PoPdfService } from './internal/po-pdf.service';
+import { PayoutController } from './payout.controller';
+import { FinanceBoardsController } from './finance-boards.controller';
+import { EscrowCreditController } from './escrow-credit.controller';
+import { FinanceBoardService } from './internal/finance-board.service';
 import { PurchaseOrderRepository } from './internal/purchase-order.repository';
 import { PurchaseOrderService } from './internal/purchase-order.service';
 import { PayableRepository } from './internal/payable.repository';
 import { PayableService } from './internal/payable.service';
 import { OpsPurchaseOrderService } from './internal/ops-purchase-order.service';
+import { IdentityModule } from '../identity';
+import { AutomationModule } from '../../shared/automation/automation.service';
 
 /**
  * The procurement module's first internals and first routes (T32).
@@ -29,10 +38,21 @@ import { OpsPurchaseOrderService } from './internal/ops-purchase-order.service';
  * the current one", which is a rule `qc` owns.
  */
 @Module({
-  imports: [CatalogModule, QcModule, EventBusModule],
-  controllers: [ProcurementController, PayablesController, OpsProcurementController],
+  imports: [AutomationModule, CatalogModule, QcModule, EventBusModule, IdentityModule],
+  controllers: [
+    ProcurementController,
+    PayablesController,
+    OpsProcurementController,
+    PayoutController,
+    FinanceBoardsController,
+    EscrowCreditController,
+  ],
   providers: [
     ProcurementService,
+    OrderPropagationService,
+    PayoutRunService,
+    FinanceBoardService,
+    PoPdfService,
     PurchaseOrderRepository,
     PurchaseOrderService,
     PayableRepository,

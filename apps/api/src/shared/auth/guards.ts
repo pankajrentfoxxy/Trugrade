@@ -11,6 +11,7 @@ import { MFA_REQUIRED_ROLES, type Permission, type Role } from '@trugrade/contra
 import { ForbiddenError, UnauthenticatedError } from '../errors/domain-errors';
 import { RequestContextService, type Principal } from '../db/org-scope';
 import { AppConfig } from '../config';
+import { ClockPort } from '../clock';
 import { TokenService, type AccessTokenClaims } from './token.service';
 import { extractSessionAccessToken, isOrgTypeAllowedOnAudience, resolveSessionAudience, wrongPortalMessage } from './session-cookies';
 
@@ -50,6 +51,7 @@ export class AuthGuard implements CanActivate {
     private readonly tokens: TokenService,
     private readonly ctx: RequestContextService,
     private readonly config: AppConfig,
+    private readonly clock: ClockPort,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -118,6 +120,23 @@ export class AuthGuard implements CanActivate {
     this.ctx.setPrincipal(principal);
 
     if (isPublic) return true;
+
+    // Time-boxed seats end here, not on the screen.
+    //
+    // An external CA is engaged for an audit and their login is dated. Hiding
+    // the nav when the date passes is a cosmetic control — the endpoints are
+    // still there and a bookmarked URL still reaches them — so the refusal has
+    // to be at the guard, before any handler runs. `axp` is minted from
+    // user_account.access_expires_at and re-read on every refresh, so the
+    // longest a dead seat can survive is one access-token lifetime.
+    if (claims.axp !== undefined && claims.axp * 1000 <= this.clock.nowMs()) {
+      throw new ForbiddenError(
+        'This account’s access ended on ' +
+          new Date(claims.axp * 1000).toISOString().slice(0, 10) +
+          '. Ask the person who invited you to extend it.',
+        { reason: 'access_expired' },
+      );
+    }
 
     // MFA is mandatory for roles that can move money or change where it goes.
     // Checked here rather than at login so a session cannot be established

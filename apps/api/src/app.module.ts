@@ -7,6 +7,7 @@ import { PrismaModule } from './shared/db/prisma.service';
 import { ContextModule } from './shared/db/org-scope';
 import { RedisModule } from './shared/redis/redis.service';
 import { EventBusModule } from './shared/events/event-bus';
+import { AutomationModule } from './shared/automation/automation.service';
 import { AdaptersModule } from './shared/adapters/adapters.module';
 import { AuthGuard, PermissionsGuard } from './shared/auth/guards';
 import { AuthModule } from './shared/auth/auth.module';
@@ -39,6 +40,7 @@ import { PlatformModule } from './modules/platform';
     ContextModule,
     RedisModule,
     EventBusModule,
+    AutomationModule,
     AdaptersModule,
     AuthModule,
     HttpModule,

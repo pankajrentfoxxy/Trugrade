@@ -8,15 +8,13 @@ describe('ifsc.razorpay.com lookup', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('maps a known IFSC to bank, branch and city', async () => {
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(
-        reply(200, {
-          BANK: 'HDFC Bank',
-          BRANCH: 'TULSIANI CHMBRS - NARIMAN PT',
-          CITY: 'GREATER MUMBAI',
-        }),
-      );
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      reply(200, {
+        BANK: 'HDFC Bank',
+        BRANCH: 'TULSIANI CHMBRS - NARIMAN PT',
+        CITY: 'GREATER MUMBAI',
+      }),
+    );
     const result = await adapter.lookupIfsc('HDFC0000001');
     expect(result.outcome).toBe('PASS');
     expect(result.data).toEqual({

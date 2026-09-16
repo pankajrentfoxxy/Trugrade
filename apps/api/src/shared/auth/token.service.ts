@@ -21,6 +21,16 @@ export interface AccessTokenClaims extends JwtClaims {
   jti: string;
   /** True once MFA has been satisfied for this session. */
   mfa: boolean;
+  /**
+   * Seat expiry, epoch seconds, absent for a permanent seat.
+   *
+   * Carried in the token rather than read per request so the guard stays free of
+   * a database round trip. It is deliberately NOT folded into `exp`: an expired
+   * seat and an expired token are different refusals — one says sign in again,
+   * the other says your access ended — and collapsing them would send a CA whose
+   * engagement finished round the login loop forever.
+   */
+  axp?: number;
 }
 
 export interface IssuedTokens {
@@ -142,6 +152,7 @@ export class TokenService implements OnModuleInit {
     roles: Role[];
     permissions: Permission[];
     mfa: boolean;
+    accessExpiresAt?: Date | null;
     userAgent?: string;
     ip?: string;
     /** Continuing an existing family on refresh; a fresh login starts a new one. */
@@ -168,6 +179,9 @@ export class TokenService implements OnModuleInit {
         scope: input.permissions,
         sid: sessionId,
         mfa: input.mfa,
+        ...(input.accessExpiresAt
+          ? { axp: Math.floor(input.accessExpiresAt.getTime() / 1000) }
+          : {}),
       },
       this.privateKey,
     );
@@ -244,6 +258,7 @@ export class TokenService implements OnModuleInit {
       orgType: 'VENDOR' | 'BUYER' | 'PLATFORM';
       roles: Role[];
       permissions: Permission[];
+      accessExpiresAt?: Date | null;
     }>,
   ): Promise<IssuedTokens> {
     const [sessionId, raw] = presented.split('.', 2);
@@ -284,6 +299,7 @@ export class TokenService implements OnModuleInit {
       orgType: 'VENDOR' | 'BUYER' | 'PLATFORM';
       roles: Role[];
       permissions: Permission[];
+      accessExpiresAt?: Date | null;
     }>,
   ): Promise<IssuedTokens> {
     const json = await this.redis.client.get(this.sessionKey(sessionId));
@@ -328,6 +344,9 @@ export class TokenService implements OnModuleInit {
       roles: fresh.roles,
       permissions: fresh.permissions,
       mfa: record.mfa,
+      // Re-read every rotation, so revoking a seat takes effect within one
+      // access-token lifetime rather than one refresh-token lifetime.
+      accessExpiresAt: fresh.accessExpiresAt ?? null,
       familyId: record.familyId,
       sessionId,
       userAgent: record.userAgent,

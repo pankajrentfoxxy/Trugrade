@@ -55,9 +55,7 @@ export interface ILogisticsService {
    * has a 500 ms p95 to hit (PHASE_05 Task 4). Ten calls to `quoteFreight` is
    * thirty statements; this is three. Key the returned Map with `freightLaneKey`.
    */
-  quoteFreightBatch(
-    requests: readonly FreightQuoteRequest[],
-  ): Promise<Map<string, FreightQuote>>;
+  quoteFreightBatch(requests: readonly FreightQuoteRequest[]): Promise<Map<string, FreightQuote>>;
 
   /** Can any active carrier deliver here at all? The filter-level question. */
   isServiceable(pincode: string): Promise<boolean>;
@@ -69,10 +67,7 @@ export interface ILogisticsService {
    * so it cannot reveal the origin city, the carrier or the vendor behind a
    * supply point. See `FreightService.dispatchEstimate`.
    */
-  dispatchEstimate(input: {
-    fromPincode: string;
-    toPincode: string;
-  }): Promise<DispatchEstimate>;
+  dispatchEstimate(input: { fromPincode: string; toPincode: string }): Promise<DispatchEstimate>;
 }
 
 /**

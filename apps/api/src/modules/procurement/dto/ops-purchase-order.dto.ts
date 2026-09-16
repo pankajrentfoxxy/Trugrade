@@ -25,9 +25,20 @@ export const opsPurchaseOrderListQuerySchema = z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a date as YYYY-MM-DD, for example 2026-08-30.')
       .optional(),
+    /**
+     * A saved view. Narrower than `status` and not a synonym for it: a view is
+     * a question somebody asks ("what can I dispatch"), and one of them may
+     * cover several statuses later without the URL changing meaning.
+     */
+    view: z.enum(['ready', 'partial', 'awaiting', 'dispatched', 'received', 'all']).optional(),
     sort: z.enum(['recent', 'oldest', 'value', 'value_asc']).default('recent'),
-    page: z.coerce.number().int().min(1).max(1000).default(1),
-    per: z.coerce.number().int().min(5).max(100).default(25),
+    // No ceiling: the service clamps to the last page that exists. A stale
+    // bookmark naming page 9,999 is not a client error worth a 422 — every
+    // other board in this console recovers from one, and this was the only
+    // endpoint that refused instead.
+    page: z.coerce.number().int().min(1).default(1),
+    dir: z.enum(['asc', 'desc']).optional(),
+    per: z.coerce.number().int().min(5).max(100).default(40),
   })
   .refine((v) => !v.from || !v.to || v.from <= v.to, {
     path: ['to'],

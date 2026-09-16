@@ -169,6 +169,25 @@ export class ReturnsRepository {
     return toReturn(rows[0]!);
   }
 
+  /**
+   * Close a return: refused, or completed.
+   *
+   * The resolution text is the buyer's answer and is stored verbatim. Nothing
+   * here decides what a resolution means to the money — that is
+   * `ReturnsService.resolveReturn`, because "the machines are staying with the
+   * buyer" is a commercial conclusion and not a row update.
+   */
+  async resolve(returnNumber: string, status: string, resolution: string): Promise<void> {
+    // Both vocabularies are the table's own: `status` is REJECTED or REFUNDED,
+    // `resolution` is REJECT or REFUND, and both carry CHECK constraints. The
+    // service translates "the buyer keeps them" into these rather than a third
+    // set of words being invented here.
+    await this.prisma.$executeRaw`
+      UPDATE platform.return_request
+         SET status = ${status}, resolution = ${resolution}
+       WHERE return_number = ${returnNumber}`;
+  }
+
   /** `platform.v_current_config`, the same view the warranty term is read from. */
   async config(keys: readonly string[]): Promise<Map<string, unknown>> {
     const rows = await this.prisma.$queryRaw<Array<{ key: string; value_json: unknown }>>`

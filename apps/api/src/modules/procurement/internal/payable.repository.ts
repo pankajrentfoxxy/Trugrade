@@ -74,10 +74,9 @@ export class PayableRepository {
   vendorOrgId(): string {
     const orgId = this.scope.currentOrgId;
     if (!orgId) {
-      throw new ForbiddenError(
-        'This is one vendor’s money, so one has to be signed in.',
-        { reason: 'vendor_route_without_org' },
-      );
+      throw new ForbiddenError('This is one vendor’s money, so one has to be signed in.', {
+        reason: 'vendor_route_without_org',
+      });
     }
     return orgId;
   }
@@ -112,7 +111,6 @@ export class PayableRepository {
          AND (${wanted}::text IS NULL OR vp.status = ${wanted}::text)
        ORDER BY vp.created_at DESC`;
   }
-
 
   /**
    * When each of those orders was delivered.

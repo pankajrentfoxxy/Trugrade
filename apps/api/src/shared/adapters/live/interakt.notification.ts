@@ -1,11 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfig } from '../../config';
 import { ProviderError } from '../../errors/domain-errors';
-import {
-  NotificationPort,
-  type NotificationReceipt,
-  type NotificationRequest,
-} from '../ports';
+import { NotificationPort, type NotificationReceipt, type NotificationRequest } from '../ports';
 
 const INTERAKT_MESSAGE_URL = 'https://api.interakt.ai/v1/public/message/';
 
@@ -76,7 +72,10 @@ export class InteraktNotification extends NotificationPort {
       this.logger.error(
         `Interakt rejected ${this.otpTemplate} -> ${req.to}: ${response.status} ${JSON.stringify(body)}`,
       );
-      throw new ProviderError('interakt', { templateCode: req.templateCode, status: response.status });
+      throw new ProviderError('interakt', {
+        templateCode: req.templateCode,
+        status: response.status,
+      });
     }
 
     const id =

@@ -56,6 +56,8 @@ export interface AuthenticatedUser {
   fullName: string;
   email: string | null;
   mobile: string | null;
+  /** When this seat stops existing. NULL is permanent; see the column comment. */
+  accessExpiresAt: Date | null;
 }
 
 /**
@@ -117,18 +119,29 @@ export class IdentityService implements IIdentityService {
         mobile: string | null;
         mfa_enabled: boolean;
         status: string;
+        access_expires_at: Date | null;
         roles: string[] | null;
       }>
     >`
       SELECT u.id, u.org_id, o.org_type::text AS org_type, o.status::text AS org_status,
              u.full_name, u.email::text AS email, u.mobile, u.mfa_enabled, u.status,
+             u.access_expires_at,
              array_remove(array_agg(r.code), NULL) AS roles
       FROM identity.user_account u
       JOIN identity.organization o ON o.id = u.org_id
-      LEFT JOIN identity.user_role ur ON ur.user_id = u.id
+      -- An expired grant is not a role. user_role.expires_at has existed since
+      -- the baseline and nothing read it: every grant was aggregated with no
+      -- date filter, so a time-boxed seat (an external CA engaged for an audit,
+      -- a contractor, a covering approver) kept working past the day it was
+      -- meant to stop. now() is the database clock, so a skewed application
+      -- server cannot extend somebody's access.
+      LEFT JOIN identity.user_role ur
+        ON ur.user_id = u.id
+       AND (ur.expires_at IS NULL OR ur.expires_at > now())
       LEFT JOIN identity.role r ON r.id = ur.role_id
       WHERE u.id = ${userId}::uuid
       GROUP BY u.id, o.org_type, o.status`;
+
 
     const row = rows[0];
     if (!row) throw new NotFoundError('user');
@@ -146,6 +159,7 @@ export class IdentityService implements IIdentityService {
       fullName: row.full_name,
       email: row.email,
       mobile: row.mobile,
+      accessExpiresAt: row.access_expires_at,
     };
   }
 
@@ -631,6 +645,20 @@ export class IdentityService implements IIdentityService {
 
     const user = await this.getUser(userId);
 
+    // An engagement that ended is access that ended. Refused here as well as at
+    // the guard because the two answer different questions: the guard stops a
+    // token still in a browser, this stops a fresh sign-in, and a person whose
+    // seat expired should be told that rather than be handed a working session
+    // that fails on the first screen.
+    if (user.accessExpiresAt && user.accessExpiresAt.getTime() <= this.clock.nowMs()) {
+      throw new ForbiddenError(
+        'This account’s access ended on ' +
+          user.accessExpiresAt.toISOString().slice(0, 10) +
+          '. Ask the person who invited you to extend it.',
+        { reason: 'access_expired' },
+      );
+    }
+
     // A suspended organisation cannot transact, and saying so plainly beats a
     // permission error on every subsequent screen.
     if (['SUSPENDED', 'BLACKLISTED', 'DEACTIVATED'].includes(user.orgStatus)) {
@@ -661,6 +689,7 @@ export class IdentityService implements IIdentityService {
       roles: user.roles,
       permissions: user.permissions,
       mfa: !user.mfaRequired,
+      accessExpiresAt: user.accessExpiresAt,
       ip: input.ip,
       userAgent: input.userAgent,
     });
@@ -719,7 +748,12 @@ export class IdentityService implements IIdentityService {
         // long-lived login gets re-checked against reality.
         throw new ForbiddenError('This organisation account is suspended.');
       }
-      return { orgType: user.orgType, roles: user.roles, permissions: user.permissions };
+      return {
+        orgType: user.orgType,
+        roles: user.roles,
+        permissions: user.permissions,
+        accessExpiresAt: user.accessExpiresAt,
+      };
     });
   }
 

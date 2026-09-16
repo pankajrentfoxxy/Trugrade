@@ -130,6 +130,127 @@ export function Modal({
 }
 
 /* ==========================================================================
+ * Drawer
+ * ======================================================================== */
+
+const DRAWER_WIDTH = {
+  md: 'sm:max-w-[520px]',
+  lg: 'sm:max-w-[680px]',
+  xl: 'sm:max-w-[840px]',
+} as const;
+
+export interface DrawerProps {
+  open: boolean;
+  onClose: () => void;
+  /** The record's identity. Mono where it is an identifier — the caller decides. */
+  title: React.ReactNode;
+  /** One line under the title: status, owner, age. Never a paragraph. */
+  subtitle?: React.ReactNode;
+  size?: keyof typeof DRAWER_WIDTH;
+  /** The actions. Pinned to the bottom so a long record never buries them. */
+  footer?: React.ReactNode;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * A record, opened beside the board rather than on top of it.
+ *
+ * **Why a drawer and not a modal.** A queue is a queue: an operator works down
+ * it, and a modal throws away the board's scroll position on every open and
+ * close, so row 40 costs forty scrolls instead of one. The drawer leaves the
+ * board mounted and where it was.
+ *
+ * A modal is still right for a decision with no record behind it — assign a
+ * rider, create a run, preview a document — and `Modal` above is that.
+ *
+ * It is the same `<dialog showModal()>` underneath, for the same reason: focus
+ * entry, the tab cycle, inert background, Esc and focus restoration are all
+ * behaviours the platform implements correctly and a hand-rolled trap gets
+ * subtly wrong. Only the geometry differs — full height, pinned right, and full
+ * width on a phone, where a 520px panel beside nothing is just a bad modal.
+ */
+export function Drawer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  size = 'lg',
+  footer,
+  children,
+  className,
+}: DrawerProps): React.JSX.Element {
+  const dialogRef = React.useRef<HTMLDialogElement>(null);
+  const headingRef = React.useRef<HTMLHeadingElement>(null);
+  const id = React.useId();
+
+  React.useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open) {
+      if (typeof dialog.showModal === 'function') {
+        if (!dialog.open) dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+      headingRef.current?.focus();
+    } else if (dialog.open) {
+      if (typeof dialog.close === 'function') dialog.close();
+      else dialog.removeAttribute('open');
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={`${id}-title`}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose();
+      }}
+      className={cn(
+        // `mr-0` with `ml-auto` is what pins a <dialog> to the right edge; the
+        // element is centred by the UA stylesheet otherwise.
+        'ml-auto mr-0 h-dvh max-h-dvh w-full border-l border-rule bg-sheet p-0 text-ink shadow-3',
+        DRAWER_WIDTH[size],
+        className,
+      )}
+    >
+      <div className="flex h-full flex-col">
+        <header className="flex items-start justify-between gap-4 border-b border-rule px-5 py-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2
+              id={`${id}-title`}
+              ref={headingRef}
+              tabIndex={-1}
+              className="truncate font-sans text-h2 text-ink"
+            >
+              {title}
+            </h2>
+            {subtitle && <div className="text-body-sm text-ink-2">{subtitle}</div>}
+          </div>
+          <Button variant="ghost" onClick={onClose} aria-label="Close record">
+            <span aria-hidden="true">✕</span>
+          </Button>
+        </header>
+
+        {/* The only scrolling region: the header and the actions stay put. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+
+        {footer && (
+          <footer className="flex flex-wrap items-center gap-3 border-t border-rule bg-sheet-2 px-5 py-3">
+            {footer}
+          </footer>
+        )}
+      </div>
+    </dialog>
+  );
+}
+
+/* ==========================================================================
  * Toast
  * ======================================================================== */
 

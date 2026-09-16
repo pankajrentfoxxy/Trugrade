@@ -23,8 +23,10 @@ import { OrderTransactionService } from './internal/order-transaction.service';
 import { CatalogLookup } from './internal/catalog-lookup';
 import { DeliveryCheckService } from './internal/delivery-check.service';
 import { DeliveryService } from './internal/delivery.service';
+import { OrderPdfService } from './internal/order-pdf.service';
 import { OwnedUnitsService } from './internal/owned-units.service';
 import { RfqIntakeService } from './internal/rfq-intake.service';
+import { AutomationModule } from '../../shared/automation/automation.service';
 
 /**
  * Registers the cart and the bulk-requirement intake.
@@ -76,6 +78,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
  */
 @Module({
   imports: [
+    AutomationModule,
     PrismaModule,
     ClockModule,
     IdentityModule,
@@ -87,6 +90,7 @@ import { RfqIntakeService } from './internal/rfq-intake.service';
   ],
   controllers: [OrderingController, OrderingOpsController],
   providers: [
+    OrderPdfService,
     OrderingService,
     CartService,
     CheckoutService,

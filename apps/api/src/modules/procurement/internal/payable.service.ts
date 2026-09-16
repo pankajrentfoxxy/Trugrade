@@ -16,11 +16,13 @@ import { PayableRepository, type PayableRow } from './payable.repository';
  *      statement — the full deduction stack — is built here from the payables
  *      that genuinely exist, and `payoutsEver` is read rather than assumed so
  *      the screen stops saying "none" the day one is run.
- *   2. **Nothing sets `vendor_payable.eligible_at`.** It is carried through as
- *      null. The rule's answer (delivery + the inspection window) is computed
- *      separately and labelled as the rule rather than as a record, because
- *      "this is when it becomes payable under the policy" and "we have recorded
- *      it as payable" are different claims and only one of them is true.
+ *   2. **`vendor_payable.eligible_at` is now written at delivery** — by the one
+ *      delivery path in `logistics`, as delivery + `ordering.return_window_hours`.
+ *      It was null for the life of this file, and the rule's answer was computed
+ *      here and labelled as the rule rather than as a record, because "payable
+ *      under the policy" and "recorded as payable" are different claims and only
+ *      one was true. The computed fallback below is kept for rows delivered
+ *      before that shipped; for everything since, the record is the answer.
  *   3. There is no payout cycle to promise against. `procurement.default_payout_cycle`
  *      says `T_PLUS_2` and `vendor.vendor_payout_preference` has no rows; deriving
  *      an "expected on" from either would be a date a vendor plans cash against
@@ -47,6 +49,15 @@ export type PayableWaitingOn =
   | 'NOT_DELIVERED'
   /** Delivered, and the buyer's 48-hour inspection window is still open. */
   | 'INSPECTION_WINDOW_OPEN'
+  /**
+   * Past inspection, inside the seven-day return window.
+   *
+   * A separate answer from INSPECTION_WINDOW_OPEN because they are separate
+   * clocks: a payable delivered 60 hours ago is past inspection and still inside
+   * the return window, and a vendor asking "why have I not been paid" is owed the
+   * true reason rather than the nearer one.
+   */
+  | 'RETURN_WINDOW_OPEN'
   /** Payable by the rule. Nothing has paid it, and nothing can yet. */
   | 'NO_PAYOUT_RUN'
   /** Delivered, but `ordering.inspection_window_hours` is not configured. */
@@ -308,6 +319,13 @@ export class PayableService {
     if (ctx.deliveredAt === null) return 'NOT_DELIVERED';
     if (ctx.windowHours === null || ctx.closesAt === null) return 'WINDOW_NOT_CONFIGURED';
     if (ctx.closesAt.getTime() > ctx.now.getTime()) return 'INSPECTION_WINDOW_OPEN';
+    // The recorded window, which is the longer one and the one that actually
+    // gates payment. Read from the row rather than recomputed: a payable whose
+    // window was re-armed after a refused return carries a later date than
+    // delivery plus the policy, and the row is what a payout run selects on.
+    if (r.eligible_at !== null && r.eligible_at.getTime() > ctx.now.getTime()) {
+      return 'RETURN_WINDOW_OPEN';
+    }
     return 'NO_PAYOUT_RUN';
   }
 
@@ -337,8 +355,7 @@ export class PayableService {
     const thresholdInr = input.config.get('tax.tds_vendor_threshold_inr');
     const ratePct = input.config.get('tax.tds_rate_pct');
     const noPanRatePct = input.config.get('tax.tds_rate_no_pan_pct');
-    const threshold =
-      typeof thresholdInr === 'number' ? Money.rupees(thresholdInr) : null;
+    const threshold = typeof thresholdInr === 'number' ? Money.rupees(thresholdInr) : null;
 
     // The whole year's purchases as ONE purchase against a zero base: that is
     // the question "has this vendor crossed the threshold this year", which is

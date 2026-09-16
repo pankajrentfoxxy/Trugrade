@@ -70,6 +70,32 @@ export const envSchema = z
     SMTP_PASS: z.string().optional().default(''),
     SMTP_FROM: z.string().optional().default(''),
 
+    /**
+     * Carrier webhook signing secrets.
+     *
+     * Absent means that carrier's callbacks are not live, and the webhook route
+     * refuses every call rather than accepting unsigned ones "until we get the
+     * secret" — which is how an endpoint that can mark an order delivered ends
+     * up open. Rotated outside the repo; see the launch checklist.
+     */
+    BLUEDART_WEBHOOK_SECRET: z.string().optional(),
+    PORTER_WEBHOOK_SECRET: z.string().optional(),
+
+    /**
+     * Carrier credentials. A carrier whose three values are all present is
+     * served by its real adapter; anything less keeps the fake, so a
+     * half-configured environment falls back rather than throwing on every
+     * booking.
+     */
+    BLUEDART_BASE_URL: z.string().optional(),
+    BLUEDART_LOGIN_ID: z.string().optional(),
+    BLUEDART_LICENCE_KEY: z.string().optional(),
+    BLUEDART_AREA_CODE: z.string().optional(),
+    PORTER_BASE_URL: z.string().optional(),
+    PORTER_API_KEY: z.string().optional(),
+    /** Our own riders need no credentials, so this is an explicit switch. */
+    INHOUSE_CARRIER_LIVE: boolish.default(false),
+
     /** Interakt WhatsApp — phone OTP when set. Empty keeps the fake in dev/test. */
     INTERAKT_API_KEY: z.string().optional().default(''),
     INTERAKT_OTP_TEMPLATE: z.string().default('otp_verification'),

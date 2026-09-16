@@ -13,6 +13,7 @@ import {
   ValidationError,
 } from '../../../shared/errors/domain-errors';
 import { QcRepository, type QcVisitRow } from './qc.repository';
+import { InspectionOutcomeService } from './inspection-outcome.service';
 import type { QcUnitOutcome } from '../dto/qc.dto';
 
 /**
@@ -138,6 +139,7 @@ export class VisitClosingService {
     private readonly config: AppConfig,
     private readonly repo: QcRepository,
     private readonly otp: OtpService,
+    private readonly outcome: InspectionOutcomeService,
     private readonly bus: EventBus,
   ) {}
 
@@ -506,6 +508,17 @@ export class VisitClosingService {
                updated_at      = ${this.clock.now()}
          WHERE id = ${row.listing_id}::uuid`;
 
+      // A batch where nothing passed is paused, and somebody has to know. The
+      // task carries the reason the spec wanted on the listing itself; see
+      // `raiseBatchFailed` for why this is not REJECTED.
+      if (row.sellable === 0) {
+        await this.outcome.raiseBatchFailed({
+          listingId: row.listing_id,
+          totalUnits: row.total,
+          reasons: await this.failureReasons(row.listing_id),
+        });
+      }
+
       await this.bus.publish('listing.published', {
         listingId: row.listing_id,
         skuId: row.sku_id,
@@ -521,6 +534,30 @@ export class VisitClosingService {
       });
     }
     return out;
+  }
+
+  /**
+   * Why the batch failed, in the vendor's own words from their own reports.
+   *
+   * Read off `qc_mismatch` rather than composed here: the mismatch rows are what
+   * the technician actually recorded and what the vendor can already see on the
+   * correction, and a second phrasing of the same failure is a second thing to
+   * keep in step.
+   */
+  private async failureReasons(listingId: string): Promise<string[]> {
+    const units = await this.prisma.$queryRaw<Array<{ qc_report_id: string | null }>>`
+      SELECT qc_report_id FROM listing.unit WHERE listing_id = ${listingId}::uuid`;
+    const reportIds = units.map((u) => u.qc_report_id).filter((v): v is string => v !== null);
+    if (!reportIds.length) return [];
+
+    const rows = await this.prisma.$queryRaw<Array<{ field: string; n: bigint }>>`
+      SELECT field, count(*)::bigint AS n
+        FROM qc.qc_mismatch
+       WHERE qc_report_id = ANY(${reportIds}::uuid[])
+       GROUP BY field
+       ORDER BY n DESC
+       LIMIT 5`;
+    return rows.map((r) => `${r.field} (${Number(r.n)})`);
   }
 }
 

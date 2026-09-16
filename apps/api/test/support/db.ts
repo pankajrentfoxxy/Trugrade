@@ -154,6 +154,15 @@ export async function truncateAll(db: PrismaClient = testDb()): Promise<void> {
       -- without re-migrating, which is how a suite starts failing on "0 steps".
       AND tablename NOT IN ('platform_config','qc_tolerance_rule','qc_sampling_rule',
                             'routing_rule','carrier','commission_rule','role','permission',
+                            -- The twelve automation rules are seeded by their own
+                            -- migration and referenced by id from code: R2 is the
+                            -- booking rule whether or not a seed script has run.
+                            'automation_rule',
+                            -- The delegation-of-authority ladder is seeded by its
+                            -- own migration and read on every approval. An empty
+                            -- table is not "no limits" — it is a checker with no
+                            -- required role, which is the wrong way to fail.
+                            'authority_band',
                             'role_permission','qc_tool_provider',
                             'onboarding_step_definition','onboarding_field_requirement',
                             'document_type_rule','partitioned_table',
@@ -188,7 +197,10 @@ async function restoreReference(db: PrismaClient): Promise<void> {
     SELECT count(*)::bigint AS n FROM platform.platform_config`;
   const [margin] = await db.$queryRaw<Array<{ n: bigint }>>`
     SELECT count(*)::bigint AS n FROM procurement.margin_rule`;
-  if (Number(config?.n ?? 0) > 0 && Number(margin?.n ?? 0) > 0) return;
+  if (Number(config?.n ?? 0) > 0 && Number(margin?.n ?? 0) > 0) {
+    await restoreAutomationRules(db);
+    return;
+  }
 
   if (Number(config?.n ?? 0) === 0) {
     const { seedConfig } = await import('../../prisma/seed/reference');
@@ -198,4 +210,39 @@ async function restoreReference(db: PrismaClient): Promise<void> {
     const { seedMarginRules } = await import('../../prisma/seed/margin-rules');
     await seedMarginRules(db);
   }
+  await restoreAutomationRules(db);
+  await restoreAuthorityBands(db);
+}
+
+/**
+ * The delegation ladder, put back if it is missing.
+ *
+ * Excluded from the TRUNCATE above, but an exclusion added after the fact does
+ * not restore what an earlier run already took — and an empty ladder does not
+ * fail loudly, it silently stops `ApprovalService.decide` requiring any role at
+ * all. A control that weakens quietly is the worst kind.
+ */
+async function restoreAuthorityBands(db: PrismaClient): Promise<void> {
+  const [row] = await db.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*)::bigint AS n FROM identity.authority_band`;
+  if (Number(row?.n ?? 0) > 0) return;
+  const { seedAuthorityBands } = await import('../../prisma/seed/authority-bands');
+  await seedAuthorityBands(db);
+}
+
+/**
+ * The automation rules, put back after CASCADE takes them.
+ *
+ * `automation_rule.updated_by` points at `identity.user_account`, so truncating
+ * the user table takes the rules with it — naming the table in the exclusion
+ * list above is not enough, exactly as the header comment says of
+ * `platform_config`. Code refers to these rules by id (`R2` is booking), so an
+ * empty table is a suite that fails on a missing rule rather than on its subject.
+ */
+async function restoreAutomationRules(db: PrismaClient): Promise<void> {
+  const [rules] = await db.$queryRaw<Array<{ n: bigint }>>`
+    SELECT count(*)::bigint AS n FROM platform.automation_rule`;
+  if (Number(rules?.n ?? 0) > 0) return;
+  const { seedAutomationRules } = await import('../../prisma/seed/automation-rules');
+  await seedAutomationRules(db);
 }

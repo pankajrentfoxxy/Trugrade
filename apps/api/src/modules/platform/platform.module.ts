@@ -8,6 +8,7 @@ import { PlatformService } from './platform.service';
 import { OrderingLookup } from './internal/ordering-lookup';
 import { ReturnsRepository } from './internal/returns.repository';
 import { ReturnsService } from './internal/returns.service';
+import { LocalPayableHoldPort, PayableHoldPort } from './internal/payable-hold.port';
 import { WarrantyRepository } from './internal/warranty.repository';
 import { WarrantyService } from './internal/warranty.service';
 
@@ -38,6 +39,9 @@ import { WarrantyService } from './internal/warranty.service';
     WarrantyService,
     WarrantyRepository,
     ReturnsService,
+    // The seam that lets a return stop a vendor payment without this module
+    // importing procurement. See `payable-hold.port.ts`.
+    { provide: PayableHoldPort, useClass: LocalPayableHoldPort },
     ReturnsRepository,
     OrderingLookup,
   ],

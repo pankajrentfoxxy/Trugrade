@@ -2,11 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { AppConfig } from '../../config';
 import { ProviderError } from '../../errors/domain-errors';
-import {
-  NotificationPort,
-  type NotificationReceipt,
-  type NotificationRequest,
-} from '../ports';
+import { NotificationPort, type NotificationReceipt, type NotificationRequest } from '../ports';
 
 /**
  * Sends EMAIL through SMTP (Nodemailer). SMS / WhatsApp / push stay on the
@@ -84,7 +80,8 @@ const OTP_SUBJECTS: Record<string, string> = {
 function renderEmail(req: NotificationRequest): { subject: string; text: string; html: string } {
   const code = req.variables.code;
   const minutes = req.variables.minutes ?? '10';
-  const isOtp = Boolean(code) && (req.templateCode.includes('OTP') || req.templateCode in OTP_SUBJECTS);
+  const isOtp =
+    Boolean(code) && (req.templateCode.includes('OTP') || req.templateCode in OTP_SUBJECTS);
 
   if (isOtp && code) {
     const subject = OTP_SUBJECTS[req.templateCode] ?? 'Your Trugrade verification code';

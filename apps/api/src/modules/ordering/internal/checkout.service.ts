@@ -23,6 +23,7 @@ import { CatalogLookup } from './catalog-lookup';
 import { HoldService, type HeldStock } from './hold.service';
 import {
   OrderTransactionService,
+  laneKey,
   type OrderLineRequest,
   type PostDecrementStep,
 } from './order-transaction.service';
@@ -205,6 +206,8 @@ interface OfferFacts {
   unitPrice: Money;
   gstRatePct: number;
   vendorOrgId: string;
+  /** The warehouse row itself, not just its pincode — the PO split is keyed on it. */
+  pickupAddressId: string;
   pickupPincode: string;
   purchasable: boolean;
 }
@@ -437,7 +440,7 @@ export class CheckoutService {
       // state on the GSTIN.
       deliveryStateCode: delivery.stateCode,
       lines,
-      freightByVendor: freight.byVendor,
+      freightByLane: freight.byLane,
       approval: approval
         ? {
             approverUserId: approval.approverUserId,
@@ -611,7 +614,7 @@ export class CheckoutService {
       };
     }
 
-    const freightTotal = Money.sum([...freight.byVendor.values()]);
+    const freightTotal = Money.sum([...freight.byLane.values()]);
     const taxable = goods.add(freightTotal);
     const split = resolveTaxSplit({
       supplierState: OUR_STATE_CODE,
@@ -651,14 +654,20 @@ export class CheckoutService {
     items: Array<{ listingId: string; qty: number }>,
     facts: Map<string, OfferFacts>,
     toPincode: string,
-  ): Promise<{ byVendor: Map<string, Money>; unpricedReason: string | null }> {
+  ): Promise<{ byLane: Map<string, Money>; unpricedReason: string | null }> {
     // One consignment per supply point: the machines leaving one warehouse
     // travel together, so quoting per line would charge a minimum three times.
+    //
+    // Keyed on the pickup ADDRESS rather than its pincode, and returned per
+    // lane rather than summed per vendor, because `order-transaction.service.ts`
+    // raises one purchase order per vendor per pickup address and reads this map
+    // with the identical key. Summed per vendor, a vendor shipping from two
+    // warehouses had both lanes' freight land on whichever PO was built first.
     const perLane = new Map<string, { vendorOrgId: string; from: string; units: number }>();
     for (const item of items) {
       const offer = facts.get(item.listingId);
       if (!offer) continue;
-      const key = `${offer.vendorOrgId}:${offer.pickupPincode}`;
+      const key = laneKey(offer.vendorOrgId, offer.pickupAddressId);
       const lane = perLane.get(key);
       if (lane) lane.units += item.qty;
       else
@@ -675,11 +684,11 @@ export class CheckoutService {
       weightGrams: BOXED_LAPTOP_GRAMS,
       units: l.units,
     }));
-    if (requests.length === 0) return { byVendor: new Map(), unpricedReason: null };
+    if (requests.length === 0) return { byLane: new Map(), unpricedReason: null };
 
     const quotes = await this.logistics.quoteFreightBatch(requests);
-    const byVendor = new Map<string, Money>();
-    for (const lane of perLane.values()) {
+    const byLane = new Map<string, Money>();
+    for (const [key, lane] of perLane) {
       const quote = quotes.get(
         freightLaneKey({
           fromPincode: lane.from,
@@ -690,16 +699,16 @@ export class CheckoutService {
       );
       if (!quote?.serviceable) {
         return {
-          byVendor: new Map(),
+          byLane: new Map(),
           // The carrier's own sentence, which never names the origin.
           unpricedReason:
             quote?.reason ??
             'We cannot price delivery to that pincode yet, so we will not put a figure on it. Try another delivery site, or contact us and we will quote it by hand.',
         };
       }
-      byVendor.set(lane.vendorOrgId, (byVendor.get(lane.vendorOrgId) ?? Money.ZERO).add(quote.amount));
+      byLane.set(key, (byLane.get(key) ?? Money.ZERO).add(quote.amount));
     }
-    return { byVendor, unpricedReason: null };
+    return { byLane, unpricedReason: null };
   }
 
   /* ----------------------------------------------------------------------
@@ -960,6 +969,7 @@ export class CheckoutService {
         unitPrice: stock.unitPrice,
         gstRatePct: Number(r.gst_rate),
         vendorOrgId: r.vendor_org_id,
+        pickupAddressId: r.pickup_location_id,
         pickupPincode: pincodes.get(r.pickup_location_id) ?? '',
         purchasable: stock.purchasable,
       });

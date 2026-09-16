@@ -877,6 +877,16 @@ export const TIMEZONE = 'Asia/Kolkata'; // VR-160
  */
 export const INSPECTION_WINDOW_HOURS = 48;
 
+/**
+ * Seven days from delivery, and the clock a vendor payable waits on.
+ *
+ * Deliberately a second constant rather than a longer inspection window: that
+ * one answers "the buyer may dispute the grade" and this one "the buyer may send
+ * it back". Payment waits for the longer of the two, and they will not move
+ * together — one is a QC promise, the other a commercial one.
+ */
+export const RETURN_WINDOW_HOURS = 168;
+
 export const WARRANTY_DURATIONS_MONTHS = Object.freeze([3, 6, 12] as const);
 
 export const PLATFORM_CONFIG_KEY = rule({

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FacilityScope, OrgScope } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
+import { OrderPropagationService } from './order-propagation.service';
 import {
   ForbiddenError,
   PreconditionFailedError,
@@ -76,6 +77,11 @@ export interface PoRespondResult {
   rejectedLineIds: string[];
   owedNet: string;
   tdsAmount: string;
+  /** What the answer did to the customer's order. See `OrderPropagationService`. */
+  orderStatus: string;
+  subOrderStatus: string;
+  releasedUnits: number;
+  opsTaskId: string | null;
 }
 
 export interface PoKpiSummary {
@@ -118,6 +124,7 @@ export class PurchaseOrderRepository {
     private readonly prisma: PrismaService,
     private readonly scope: OrgScope,
     private readonly facilities: FacilityScope,
+    private readonly propagation: OrderPropagationService,
   ) {}
 
   /**
@@ -374,7 +381,9 @@ export class PurchaseOrderRepository {
        ORDER BY u.serial_number`;
   }
 
-  async unitForVendor(unitId: string): Promise<AttachableUnitRow & { sku_id: string; grade: string } | null> {
+  async unitForVendor(
+    unitId: string,
+  ): Promise<(AttachableUnitRow & { sku_id: string; grade: string }) | null> {
     const orgId = this.vendorOrgId();
     const [row] = await this.prisma.$queryRaw<
       Array<AttachableUnitRow & { sku_id: string; grade: string }>
@@ -538,9 +547,11 @@ export class PurchaseOrderRepository {
           po_number: string;
           status: string;
           tds_rate_pct: string;
+          vendor_org_id: string;
         }>
       >`
-        SELECT id, order_id, po_number, status::text AS status, tds_rate_pct::text AS tds_rate_pct
+        SELECT id, order_id, po_number, status::text AS status, tds_rate_pct::text AS tds_rate_pct,
+               vendor_org_id
           FROM procurement.purchase_order
          WHERE id = ${poId}::uuid AND vendor_org_id = ${orgId}::uuid
          FOR UPDATE`;
@@ -654,6 +665,31 @@ export class PurchaseOrderRepository {
         },
       });
 
+      // The customer's order moves HERE, in this transaction, because nothing in
+      // this repository subscribes to an event: `events.publish` writes to an
+      // outbox with no reader, so an acknowledgement that only published one
+      // would still leave the buyer's screen exactly as it was.
+      const propagated = await this.propagation.propagate({
+        poId,
+        orderId: po.order_id,
+        vendorOrgId: po.vendor_org_id,
+        poNumber: po.po_number,
+        tdsRatePct: tdsRate,
+        acceptedLineIds,
+        rejectedLines: existing
+          .filter((l) => rejectedLineIds.includes(l.id))
+          .map((l) => ({
+            lineId: l.id,
+            skuId: l.sku_id,
+            grade: l.grade_at_po,
+            agreedNetPayout: l.agreed_net_payout,
+            reason:
+              lines.find((r) => r.lineId === l.id)?.reason ?? 'No reason given by the vendor.',
+          })),
+        now,
+        actorUserId,
+      });
+
       return {
         orderId: po.order_id,
         poNumber: po.po_number,
@@ -663,8 +699,30 @@ export class PurchaseOrderRepository {
         rejectedLineIds,
         owedNet,
         tdsAmount,
+        orderStatus: propagated.orderStatus,
+        subOrderStatus: propagated.subOrderStatus,
+        releasedUnits: propagated.releasedUnits,
+        opsTaskId: propagated.opsTaskId,
       };
     });
+  }
+
+  /**
+   * ACKNOWLEDGED or PARTIAL becomes DISPATCH_READY: the vendor has scanned every
+   * accepted machine into a sealed box.
+   *
+   * Guarded on the status rather than on a re-count, so two concurrent attaches
+   * of the last two slots produce one transition and one booking.
+   */
+  async markDispatchReady(poId: string, now: Date): Promise<boolean> {
+    const orgId = this.vendorOrgId();
+    const updated = await this.prisma.$executeRaw`
+      UPDATE procurement.purchase_order
+         SET status = 'DISPATCH_READY', updated_at = ${now}
+       WHERE id = ${poId}::uuid
+         AND vendor_org_id = ${orgId}::uuid
+         AND status IN ('ACKNOWLEDGED', 'PARTIAL')`;
+    return updated > 0;
   }
 
   /** Mark consignment dispatched once every accepted line has its serials. */
@@ -701,10 +759,9 @@ export class PurchaseOrderRepository {
         SELECT count(*) AS n FROM procurement.purchase_order_line
          WHERE po_id = ${poId}::uuid AND line_status = 'ACCEPTED'`;
       if (Number(acceptedCount?.n ?? 0) === 0) {
-        throw new PreconditionFailedError(
-          'There are no accepted lines to dispatch.',
-          { reason: 'no_accepted_lines' },
-        );
+        throw new PreconditionFailedError('There are no accepted lines to dispatch.', {
+          reason: 'no_accepted_lines',
+        });
       }
 
       await this.prisma.$executeRaw`

@@ -28,3 +28,13 @@ export {
   type ContactPromotion,
   type OrgProfilePatch,
 } from './internal/promotion.service';
+
+// Maker-checker. `procurement` opens a PAYOUT_RUN request inside the
+// transaction that drafts the run, and decides it when a checker approves —
+// every other document that needs a second signature joins the same table
+// rather than growing its own pair of columns.
+export {
+  ApprovalService,
+  type ApprovalRequestRow,
+  type AuthorityBand,
+} from './internal/approval.service';

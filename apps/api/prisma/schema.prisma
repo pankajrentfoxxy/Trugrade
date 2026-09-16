@@ -651,6 +651,7 @@ model user_account {
   password_changed_at                                                        DateTime?                     @db.Timestamptz(6)
   password_expires_at                                                        DateTime?                     @db.Timestamptz(6)
   mfa_enrolled_at                                                            DateTime?                     @db.Timestamptz(6)
+  access_expires_at                                                          DateTime?                     @db.Timestamptz(6)
   catalog_change_log                                                         catalog_change_log[]
   condition_image_condition_image_created_byTouser_account                   condition_image[]             @relation("condition_image_created_byTouser_account")
   condition_image_condition_image_retired_byTouser_account                   condition_image[]             @relation("condition_image_retired_byTouser_account")
@@ -1869,6 +1870,9 @@ model sub_order {
   accepted_at                             DateTime?     @db.Timestamptz(6)
   rejected_at                             DateTime?     @db.Timestamptz(6)
   invoice_id                              String?       @db.Uuid
+  /// The supply point these lines leave from, and the PO that buys them.
+  pickup_address_id                       String?       @db.Uuid
+  purchase_order_id                       String?       @db.Uuid
   pickup_task                             pickup_task[]
   shipment                                shipment[]
   order_line                              order_line[]
@@ -1877,7 +1881,9 @@ model sub_order {
   organization                            organization  @relation(fields: [vendor_org_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   invoice_invoice_sub_order_idTosub_order invoice[]     @relation("invoice_sub_order_idTosub_order")
 
+  @@unique([order_id, vendor_org_id, pickup_address_id], map: "uq_suborder_order_vendor_pickup")
   @@index([vendor_org_id, status], map: "ix_suborder_vendor")
+  @@index([purchase_order_id], map: "ix_suborder_po")
   @@schema("ordering")
 }
 
@@ -3360,6 +3366,10 @@ model purchase_order {
   consignment_carrier     String?
   consignment_awb         String?
   dispatched_at           DateTime?             @db.Timestamptz(6)
+  /// The vendor warehouse this PO picks from. A PO is one consignment.
+  pickup_address_id       String?               @db.Uuid
+  /// "Supply Point A - Gurugram" — what a buyer may see. Never the vendor's name.
+  supply_point_label      String?
   created_at              DateTime              @default(now()) @db.Timestamptz(6)
   updated_at              DateTime              @default(now()) @db.Timestamptz(6)
   goods_receipt        goods_receipt?
@@ -3370,7 +3380,7 @@ model purchase_order {
   vendor_invoice       vendor_invoice[]
   vendor_payable       vendor_payable?
 
-  @@unique([order_id, vendor_org_id], map: "uq_po_order_vendor")
+  @@unique([order_id, vendor_org_id, pickup_address_id], map: "uq_po_order_vendor_pickup")
   @@index([order_id], map: "ix_po_order")
   @@index([vendor_org_id, status], map: "ix_po_vendor_status")
   @@schema("procurement")

@@ -11,7 +11,14 @@ import { applyTrustedProxy } from './shared/http/trust-proxy';
 import { BRAND } from '@trugrade/config';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: false,
+    // The exact bytes a carrier signed, kept for the webhook routes.
+    // `CarrierWebhookController` verifies an HMAC over the raw body: re-encoding
+    // the parsed object reorders keys and normalises whitespace, so a signature
+    // checked against the re-encoded form verifies nothing at all.
+    rawBody: true,
+  });
   const config = app.get(AppConfig);
   applyTrustedProxy(app.getHttpAdapter().getInstance());
 

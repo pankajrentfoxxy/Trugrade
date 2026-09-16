@@ -9,6 +9,9 @@ import { DeviceSureClient } from './internal/devicesure.client';
 import { IdentityModule } from '../identity';
 import { SchedulingService } from './internal/scheduling.service';
 import { SealingService } from './internal/sealing.service';
+import { InspectionOutcomeService } from './internal/inspection-outcome.service';
+import { InspectionBoardService } from './internal/inspection-board.service';
+import { InspectionsController } from './inspections.controller';
 import { VisitClosingService } from './internal/visit-closing.service';
 import { ReverificationService } from './internal/reverification.service';
 import { QcExpiryService } from './internal/qc-expiry.service';
@@ -59,6 +62,7 @@ import { VendorVisitsController } from './vendor-visits.controller';
   // is internal to `qc` — exporting it through the barrel to reach a controller
   // would make the whole correction lifecycle another module's to call.
   controllers: [
+    InspectionsController,
     QcIngestionController,
     QcPublicController,
     QcController,
@@ -73,6 +77,8 @@ import { VendorVisitsController } from './vendor-visits.controller';
     SchedulingService,
     SealingService,
     VisitClosingService,
+    InspectionOutcomeService,
+    InspectionBoardService,
     ReverificationService,
     QcExpiryService,
     AuditRecheckService,

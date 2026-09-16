@@ -17,6 +17,7 @@ import {
 } from '../../../shared/errors/domain-errors';
 import { LockService } from '../../../shared/redis/redis.service';
 import { HoldService } from './hold.service';
+import { AutomationService } from '../../../shared/automation/automation.service';
 
 /**
  * THE order-confirmation transaction — `02_ARCHITECTURE.md` §4.1, `PHASE_06`
@@ -92,8 +93,14 @@ export interface OrderTransactionInput {
   /** Where the movement terminates. The OTHER half, and never the billing state. */
   deliveryStateCode: string;
   lines: readonly OrderLineRequest[];
-  /** Freight for the whole consignment leaving one supply point, by vendor org id. */
-  freightByVendor: ReadonlyMap<string, Money>;
+  /**
+   * Freight per consignment, keyed by `laneKey(vendorOrgId, pickupAddressId)`.
+   *
+   * Keyed by vendor alone until the supply-point split landed, which meant a
+   * vendor shipping from two warehouses had both lanes' freight summed onto
+   * whichever PO happened to be built first.
+   */
+  freightByLane: ReadonlyMap<string, Money>;
   /**
    * Set when a `buyer_approval_policy` threshold fired. The order is created and
    * stock is held, and **no purchase order is raised** — PHASE_06 Task 2 is
@@ -163,6 +170,14 @@ interface AllocatedUnit {
   serialNumber: string;
   listingId: string;
   vendorOrgId: string;
+  /**
+   * `listing.pickup_location_id` — the warehouse this machine leaves from.
+   *
+   * Carried on the unit rather than looked up again per purchase order because
+   * the split below is keyed on it, and a key derived twice is a key that can
+   * disagree with itself.
+   */
+  pickupAddressId: string;
   skuId: string;
   grade: string;
   vendorAskPrice: Money | null;
@@ -173,6 +188,8 @@ interface AllocatedUnit {
 interface PricedLine {
   request: OrderLineRequest;
   vendorOrgId: string;
+  /** The one warehouse this line's machines leave from. See `AllocatedUnit`. */
+  pickupAddressId: string;
   units: AllocatedUnit[];
   /** `unitPrice x qty`. What the buyer sees on the line, before tax. */
   goods: Money;
@@ -197,6 +214,7 @@ export class OrderTransactionService {
     private readonly locks: LockService,
     private readonly events: EventBus,
     private readonly holds: HoldService,
+    private readonly automation: AutomationService,
   ) {}
 
   /**
@@ -243,10 +261,23 @@ export class OrderTransactionService {
     }
 
     const priced = this.price(input, allocations);
-    const byVendor = groupBy(priced, (l) => l.vendorOrgId);
+
+    /**
+     * A purchase order is a vendor's stock at ONE pickup address, not a vendor's
+     * stock on an order. Two warehouses of the same vendor are two POs because
+     * they are two consignments: two lanes, two freight quotes, two dispatch
+     * clocks, and — where the vendor holds more than one GSTIN — two places of
+     * supply. Acknowledging the Gurugram document cannot release the Pune stock.
+     *
+     * This is deliberately the same key `checkout.service.ts` prices freight on.
+     * The two used to disagree: freight was quoted per supply point and summed
+     * per vendor before it reached here, so an order could be quoted as two
+     * lanes and purchased as one document.
+     */
+    const bySupplyPoint = groupBy(priced, (l) => laneKey(l.vendorOrgId, l.pickupAddressId));
 
     const subtotal = Money.sum(priced.map((l) => l.goods));
-    const freightTotal = Money.sum([...byVendor.keys()].map((v) => freightOf(input, v)));
+    const freightTotal = Money.sum([...bySupplyPoint.keys()].map((k) => freightOf(input, k)));
     const freightSplit = this.freightTax(input, freightTotal);
     const igst = Money.sum([...priced.map((l) => l.split.igst), freightSplit.igst]);
     const cgst = Money.sum([...priced.map((l) => l.split.cgst), freightSplit.cgst]);
@@ -280,11 +311,15 @@ export class OrderTransactionService {
     const purchaseOrderIds: string[] = [];
     let vendorIndex = 0;
 
-    for (const [vendorOrgId, lines] of byVendor) {
+    for (const [supplyPointKey, lines] of bySupplyPoint) {
       vendorIndex += 1;
+      const { vendorOrgId, pickupAddressId } = splitLaneKey(supplyPointKey);
       const vendorGoods = Money.sum(lines.map((l) => l.goods));
       const vendorGst = Money.sum(lines.map((l) => l.split.total));
-      const vendorFreight = freightOf(input, vendorOrgId);
+      const vendorFreight = freightOf(input, supplyPointKey);
+      // Sequenced per order, so the same warehouse is Supply Point A on one
+      // order and B on another and nothing correlates across orders.
+      const supplyPointLabel = await this.supplyPointLabel(pickupAddressId, vendorIndex);
 
       // 7. sub_order — INTERNAL grouping. There is one seller, one order and one
       //    invoice; this row exists so a dispatch point can be tracked and a
@@ -293,9 +328,11 @@ export class OrderTransactionService {
       const subOrderId = randomUUID();
       await this.prisma.$executeRaw`
         INSERT INTO ordering.sub_order
-          (id, order_id, sub_order_number, vendor_org_id, subtotal, gst_total, freight, status)
+          (id, order_id, sub_order_number, vendor_org_id, pickup_address_id,
+           subtotal, gst_total, freight, status)
         VALUES (${subOrderId}::uuid, ${orderId}::uuid,
                 ${`${orderNumber}-${vendorIndex}`}, ${vendorOrgId}::uuid,
+                ${pickupAddressId}::uuid,
                 ${vendorGoods.toString()}::numeric, ${vendorGst.toString()}::numeric,
                 ${vendorFreight.toString()}::numeric,
                 ${lineStatus}::public.order_status)`;
@@ -372,15 +409,33 @@ export class OrderTransactionService {
       // stock is held but *nothing is committed*, and a PO sitting in a vendor
       // portal against an order a manager has not signed is a commitment.
       if (!input.approval) {
-        purchaseOrderIds.push(
-          await this.raisePurchaseOrder({
-            orderId,
-            vendorOrgId,
-            units: lines.flatMap((l) => l.units),
-            now,
-            failAt: input.failAt,
-          }),
-        );
+        const poId = await this.raisePurchaseOrder({
+          orderId,
+          vendorOrgId,
+          pickupAddressId,
+          supplyPointLabel,
+          units: lines.flatMap((l) => l.units),
+          now,
+          failAt: input.failAt,
+        });
+        purchaseOrderIds.push(poId);
+
+        // R1. The rule body IS this transaction — a PO raised after the order
+        // committed would leave a window where the buyer holds stock nobody has
+        // been asked to supply — so the run is recorded rather than wrapped.
+        await this.automation.note('R1', orderNumber, 'OK', {
+          purchaseOrderId: poId,
+          supplyPointLabel,
+          machines: lines.reduce((n, l) => n + l.units.length, 0),
+        });
+
+        // One sub-order, one PO, walked in either direction. The two splits used
+        // to be computed separately from the same data with nothing joining
+        // them, so "which PO does this consignment belong to" was a question
+        // answered by re-deriving the grouping rather than by reading a column.
+        await this.prisma.$executeRaw`
+          UPDATE ordering.sub_order SET purchase_order_id = ${poId}::uuid
+           WHERE id = ${subOrderId}::uuid`;
       }
     }
 
@@ -503,16 +558,22 @@ export class OrderTransactionService {
         vendor_ask_price: { toString(): string } | null;
         valuation_method: string;
         qc_report_id: string | null;
+        pickup_location_id: string;
       }>
     >`
-      SELECT id, serial_number, vendor_org_id, sku_id,
-             COALESCE(grade_actual, grade_declared)::text AS grade,
-             vendor_ask_price, valuation_method, qc_report_id
-        FROM listing.unit
-       WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[])
-         AND status = 'LISTED'::public.unit_status
-       ORDER BY id
-         FOR UPDATE SKIP LOCKED
+      SELECT u.id, u.serial_number, u.vendor_org_id, u.sku_id,
+             COALESCE(u.grade_actual, u.grade_declared)::text AS grade,
+             u.vendor_ask_price, u.valuation_method, u.qc_report_id,
+             l.pickup_location_id
+        FROM listing.unit u
+        JOIN listing.listing l ON l.id = u.listing_id
+       WHERE u.id = ANY(${candidates.map((c) => c.id)}::uuid[])
+         AND u.status = 'LISTED'::public.unit_status
+       ORDER BY u.id
+         -- Only the unit row is locked. Locking the listing row here as well
+         -- would serialise every checkout of the same listing behind this
+         -- statement, which is the queue SKIP LOCKED exists to avoid.
+         FOR UPDATE OF u SKIP LOCKED
        LIMIT ${line.qty}`;
 
     if (units.length < line.qty) {
@@ -527,12 +588,30 @@ export class OrderTransactionService {
       serialNumber: u.serial_number,
       listingId: line.listingId,
       vendorOrgId: u.vendor_org_id,
+      pickupAddressId: u.pickup_location_id,
       skuId: u.sku_id,
       grade: u.grade,
       vendorAskPrice: u.vendor_ask_price ? Money.parse(u.vendor_ask_price.toString()) : null,
       valuationMethod: u.valuation_method,
       qcReportId: u.qc_report_id,
     }));
+  }
+
+  /**
+   * "Supply Point A - Gurugram" — the only name a buyer ever sees for a
+   * warehouse.
+   *
+   * The letter is the consignment's position in THIS order, so the same
+   * warehouse is A on one order and B on another: a buyer comparing two orders
+   * cannot tell that both came from the same place, which is the whole point of
+   * the label. The city is the address's own, because a delivery estimate that
+   * cannot say where the machine ships from is not an estimate.
+   */
+  private async supplyPointLabel(pickupAddressId: string, sequence: number): Promise<string> {
+    const [row] = await this.prisma.$queryRaw<Array<{ city: string }>>`
+      SELECT city FROM identity.org_address WHERE id = ${pickupAddressId}::uuid`;
+    const letter = String.fromCharCode(64 + Math.min(Math.max(sequence, 1), 26));
+    return row?.city ? `Supply Point ${letter} - ${row.city}` : `Supply Point ${letter}`;
   }
 
   /* ------------------------------------------------------------------------
@@ -542,6 +621,10 @@ export class OrderTransactionService {
   private async raisePurchaseOrder(input: {
     orderId: string;
     vendorOrgId: string;
+    /** The one warehouse this PO picks from. Part of its uniqueness. */
+    pickupAddressId: string;
+    /** What a buyer may see for this consignment. Never the vendor's name. */
+    supplyPointLabel: string;
     units: readonly AllocatedUnit[];
     now: Date;
     failAt?: (step: PostDecrementStep) => void;
@@ -561,14 +644,20 @@ export class OrderTransactionService {
     }
 
     // A purchase order carries one `valuation_method`, because Rule 32(5) margin
-    // treatment is decided for the purchase as a whole and `uq_po_order_vendor`
-    // allows exactly one PO per vendor per order. Two answers on one PO would
-    // misstate the GST on whichever half lost.
+    // treatment is decided for the purchase as a whole. Two answers on one PO
+    // would misstate the GST on whichever half lost.
+    //
+    // `uq_po_order_vendor_pickup` allows one PO per vendor per PICKUP ADDRESS
+    // per order, so this refusal is narrower than it was: a vendor whose
+    // Gurugram stock is MARGIN and whose Pune stock is REGULAR is now two
+    // documents with one method each, which is two correct answers rather than
+    // one refused order. Only a single warehouse mixing both still refuses.
     const methods = new Set(units.map((u) => u.valuationMethod));
     if (methods.size > 1) {
       throw new PreconditionFailedError(SUPPLY_POINT_UNAVAILABLE, {
         reason: 'mixed_valuation_method',
         vendorOrgId,
+        pickupAddressId: input.pickupAddressId,
       });
     }
     const valuationMethod = methods.has('MARGIN') ? 'MARGIN' : 'REGULAR';
@@ -591,7 +680,8 @@ export class OrderTransactionService {
     const poNumber = await this.nextPoNumber();
     await this.prisma.$executeRaw`
       INSERT INTO procurement.purchase_order
-        (id, po_number, vendor_org_id, order_id, status, total_net,
+        (id, po_number, vendor_org_id, order_id, pickup_address_id, supply_point_label,
+         status, total_net,
          tds_rate_pct, tds_amount, valuation_method, terms_days, created_at, updated_at)
       -- status carries no ::po_status cast, deliberately. The Phase 6 migration
       -- created that enum under whatever search_path was current, so it landed
@@ -600,6 +690,7 @@ export class OrderTransactionService {
       -- infers the parameter type from the target column, which stays right if
       -- the type is ever moved to where it belongs.
       VALUES (${poId}::uuid, ${poNumber}, ${vendorOrgId}::uuid, ${input.orderId}::uuid,
+              ${input.pickupAddressId}::uuid, ${input.supplyPointLabel},
               'RAISED', ${totalNet.toString()}::numeric,
               ${tds.ratePct}, ${tds.amount.toString()}::numeric,
               ${valuationMethod}, 15, ${input.now}, ${input.now})`;
@@ -724,6 +815,7 @@ export class OrderTransactionService {
       return {
         request,
         vendorOrgId: units[0]?.vendorOrgId ?? '',
+        pickupAddressId: units[0]?.pickupAddressId ?? '',
         units,
         goods,
         taxable,
@@ -856,12 +948,22 @@ export class OrderTransactionService {
     });
 
     const units = await this.unitFacts(rows.map((r) => r.unit_id));
-    const byVendor = groupBy(rows, (r) => r.vendor_org_id);
+
+    // Split exactly as placement does — one PO per vendor per pickup address.
+    // The held units carry their own supply point, so an approval released
+    // three days later groups the way the order was quoted rather than the way
+    // this path happened to read it back.
+    const bySupplyPoint = groupBy(rows, (r) =>
+      laneKey(r.vendor_org_id, units.get(r.unit_id)?.pickupAddressId ?? ''),
+    );
 
     const status = statusFor(order.payment_mode);
     const purchaseOrderIds: string[] = [];
+    let supplyPointIndex = 0;
 
-    for (const [vendorOrgId, vendorRows] of byVendor) {
+    for (const [supplyPointKey, vendorRows] of bySupplyPoint) {
+      supplyPointIndex += 1;
+      const { vendorOrgId, pickupAddressId } = splitLaneKey(supplyPointKey);
       const allocated = vendorRows.map((r) => {
         const fact = units.get(r.unit_id);
         // The machine moved while the approval sat. Refusing here is the only
@@ -876,9 +978,22 @@ export class OrderTransactionService {
         return { ...fact, serialNumber: r.serial_number, listingId: r.listing_id };
       });
 
-      purchaseOrderIds.push(
-        await this.raisePurchaseOrder({ orderId, vendorOrgId, units: allocated, now }),
-      );
+      const poId = await this.raisePurchaseOrder({
+        orderId,
+        vendorOrgId,
+        pickupAddressId,
+        supplyPointLabel: await this.supplyPointLabel(pickupAddressId, supplyPointIndex),
+        units: allocated,
+        now,
+      });
+      purchaseOrderIds.push(poId);
+      await this.prisma.$executeRaw`
+        UPDATE ordering.sub_order
+           SET purchase_order_id = ${poId}::uuid,
+               pickup_address_id = ${pickupAddressId}::uuid
+         WHERE order_id = ${orderId}::uuid
+           AND vendor_org_id = ${vendorOrgId}::uuid
+           AND (pickup_address_id IS NULL OR pickup_address_id = ${pickupAddressId}::uuid)`;
     }
 
     await this.prisma.$executeRaw`
@@ -993,22 +1108,26 @@ export class OrderTransactionService {
         vendor_ask_price: { toString(): string } | null;
         valuation_method: string;
         qc_report_id: string | null;
+        pickup_location_id: string;
       }>
     >`
-      SELECT id, vendor_org_id, sku_id,
-             COALESCE(grade_actual, grade_declared)::text AS grade,
-             vendor_ask_price, valuation_method, qc_report_id
-        FROM listing.unit
-       WHERE id = ANY(${[...unitIds]}::uuid[])
-         AND status = 'RESERVED'::public.unit_status
-       ORDER BY id
-         FOR UPDATE`;
+      SELECT u.id, u.vendor_org_id, u.sku_id,
+             COALESCE(u.grade_actual, u.grade_declared)::text AS grade,
+             u.vendor_ask_price, u.valuation_method, u.qc_report_id,
+             l.pickup_location_id
+        FROM listing.unit u
+        JOIN listing.listing l ON l.id = u.listing_id
+       WHERE u.id = ANY(${[...unitIds]}::uuid[])
+         AND u.status = 'RESERVED'::public.unit_status
+       ORDER BY u.id
+         FOR UPDATE OF u`;
     return new Map(
       rows.map((u) => [
         u.id,
         {
           unitId: u.id,
           vendorOrgId: u.vendor_org_id,
+          pickupAddressId: u.pickup_location_id,
           skuId: u.sku_id,
           grade: u.grade,
           vendorAskPrice: u.vendor_ask_price ? Money.parse(u.vendor_ask_price.toString()) : null,
@@ -1070,8 +1189,22 @@ function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[
   return out;
 }
 
-const freightOf = (input: OrderTransactionInput, vendorOrgId: string): Money =>
-  input.freightByVendor.get(vendorOrgId) ?? Money.ZERO;
+/**
+ * The key a consignment is grouped, quoted and purchased on: one vendor's stock
+ * at one pickup address. `checkout.service.ts` builds the identical key when it
+ * quotes freight, which is what stops the quote and the purchase from splitting
+ * the same order two different ways.
+ */
+export const laneKey = (vendorOrgId: string, pickupAddressId: string): string =>
+  `${vendorOrgId}|${pickupAddressId}`;
+
+const splitLaneKey = (key: string): { vendorOrgId: string; pickupAddressId: string } => {
+  const [vendorOrgId = '', pickupAddressId = ''] = key.split('|');
+  return { vendorOrgId, pickupAddressId };
+};
+
+const freightOf = (input: OrderTransactionInput, supplyPointKey: string): Money =>
+  input.freightByLane.get(supplyPointKey) ?? Money.ZERO;
 
 const machines = (n: number): string => (n === 1 ? 'machine' : 'machines');
 

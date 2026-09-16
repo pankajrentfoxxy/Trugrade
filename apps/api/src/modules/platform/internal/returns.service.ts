@@ -9,6 +9,7 @@ import {
 } from '../../../shared/errors/domain-errors';
 import { OrderingLookup } from './ordering-lookup';
 import { ReturnsRepository, type ReturnRow } from './returns.repository';
+import { PayableHoldPort } from './payable-hold.port';
 
 /**
  * Returns inside the 48-hour inspection window — T24, `03_UX_SPEC.md` §3A.4.
@@ -204,6 +205,7 @@ export class ReturnsService {
     private readonly clock: ClockPort,
     private readonly ctx: RequestContextService,
     private readonly ordering: OrderingLookup,
+    private readonly payableHold: PayableHoldPort,
   ) {}
 
   /* ------------------------------------------------------------------------
@@ -369,7 +371,45 @@ export class ReturnsService {
       );
     }
 
+    // The vendor's money stops here, in the same breath as the return. Paying
+    // for a machine that is on its way back to the supplier is the one mistake
+    // this whole window exists to prevent, and an event nobody consumes would
+    // leave a gap in which a payout run could still select the payable.
+    await this.payableHold.holdForReturn(
+      input.orderNumber,
+      `Return ${created[0]?.returnNumber ?? ''} open on ${serials.length} machine(s)`,
+    );
+
     return { returns: await this.decorate(created) };
+  }
+
+  /**
+   * A return that is finished with, and what it does to the vendor's money.
+   *
+   * Refused means the buyer keeps the machines, so the vendor is owed and the
+   * window is re-armed from now — the goods were in dispute in between, and
+   * restarting from the original delivery would pay against a clock that was
+   * not running. Completed means the machines went back, so the payable stays
+   * held until the credit note reduces it.
+   */
+  async resolveReturn(
+    returnNumber: string,
+    outcome: 'REFUSED' | 'COMPLETED',
+  ): Promise<{ payablesReArmed: number }> {
+    const view = await this.view(returnNumber);
+    // REJECTED/REJECT is "we are not taking it back"; REFUNDED/REFUND is "we
+    // did". Both words come from the table's own CHECK constraints.
+    await this.repo.resolve(
+      returnNumber,
+      outcome === 'REFUSED' ? 'REJECTED' : 'REFUNDED',
+      outcome === 'REFUSED' ? 'REJECT' : 'REFUND',
+    );
+
+    if (outcome !== 'REFUSED') return { payablesReArmed: 0 };
+    const hours = (await this.windowHours()) ?? 0;
+    return {
+      payablesReArmed: await this.payableHold.releaseHold(view.orderNumber, hours),
+    };
   }
 
   /**

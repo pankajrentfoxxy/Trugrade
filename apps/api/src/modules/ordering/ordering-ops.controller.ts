@@ -1,11 +1,25 @@
-import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { RequirePermissions } from '../../shared/auth/guards';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { z } from 'zod';
+import { CurrentUser, RequirePermissions } from '../../shared/auth/guards';
+import type { Principal } from '../../shared/db/org-scope';
 import { ZodValidationPipe } from '../../shared/http/http';
 import type { IssuedInvoice } from '../payment';
 import { orderNumberSchema } from './dto/ordering.dto';
 import { opsOrderListQuerySchema, type OpsOrderListQueryDto } from './dto/ops-order.dto';
 import { DeliveryService, type DeliveryRecorded } from './internal/delivery.service';
 import { OrderDocumentsService } from './internal/order-documents.service';
+
+/**
+ * A reason, and a real one.
+ *
+ * Eight characters is not a quality bar, it is a typo bar: it stops "ok" and an
+ * accidental space from standing as the record of why somebody overrode a
+ * carrier. What makes the reason useful is that it is required at all.
+ */
+const deliveryOverrideSchema = z.object({
+  reason: z.string().trim().min(8).max(500),
+});
+type DeliveryOverrideDto = z.infer<typeof deliveryOverrideSchema>;
 import {
   OpsOrderService,
   type OpsOrderBoardView,
@@ -133,10 +147,17 @@ export class OrderingOpsController {
    */
   @Post(':orderNumber/delivery')
   @HttpCode(200)
-  @RequirePermissions('logistics.delivery.execute')
+  // `ordering.any.override` and not `logistics.delivery.execute`: this is an
+  // ops override of a fact the carrier or the rider normally reports, and the
+  // rider's own path is /rider/delivery/:id/complete. A RIDER holding the
+  // logistics permission should not be able to declare an order delivered from
+  // a console they never open.
+  @RequirePermissions('ordering.any.override')
   deliver(
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+    @Body(new ZodValidationPipe(deliveryOverrideSchema)) body: DeliveryOverrideDto,
+    @CurrentUser() actor: Principal,
   ): Promise<DeliveryRecorded> {
-    return this.delivery.record(orderNumber);
+    return this.delivery.record(orderNumber, { reason: body.reason, actorUserId: actor.userId });
   }
 }

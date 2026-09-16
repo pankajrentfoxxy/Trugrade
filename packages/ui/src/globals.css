@@ -426,6 +426,101 @@
     font-size: 15px;
   }
 
+  /**
+   * OPS — the internal console. Composes with data-t and data-density.
+   *
+   * THE RAIL IS NEAR-BLACK WITH A PLUM UNDERTONE, and that is the one
+   * deliberate departure from the supplier hub above. It earns its place twice:
+   * it separates chrome from content so the eye lands on the data rather than
+   * on the navigation, and it makes internal tooling look unmistakably unlike
+   * anything a vendor or a customer sees — which matters the moment somebody
+   * screen-shares.
+   *
+   * Plum is already the buyer surface's accent, so the platform reads as one
+   * family across three surfaces rather than three products.
+   *
+   * SEMANTIC COLOUR IS NOT THE ACCENT. A row is never plum because it is
+   * important; it is plum because it is selected. Grades stay neutral and
+   * pass/fail keep green and red to themselves.
+   *
+   * Every pair below clears 4.5:1 on its own ground, including the two weakest
+   * inks measured against --sheet-3 (the table header), which is the check that
+   * matters for 11px uppercase micro-labels and the one a white-only test
+   * misses.
+   */
+  :root[data-surface='ops'] {
+    --chrome: #161319;
+    --chrome-2: #1e1a22;
+    --chrome-3: #2c262f;
+    --on-chrome: #ffffff;
+    --on-chrome-2: #9c96a3;
+    --on-chrome-3: #9c96a3;
+    --chrome-line: #2c262f;
+    --chrome-line-2: #241f28;
+
+    --ground: #f6f7f9;
+    --sheet: #ffffff;
+    --sheet-2: #fbfbfc;
+    --sheet-3: #f2f3f5;
+
+    --ink: #15171c;
+    --ink-2: #474e58;
+    --ink-3: #5a626d;
+    --ink-4: #636c7a;
+
+    --rule: #e5e8ec;
+    --rule-2: #eef0f3;
+
+    --acc: #6f3380;
+    --acc-dk: #5b2a6a;
+    --acc-on: #ffffff;
+    --acc-ink: #7d3a90;
+    --acc-wash: #f8f1fb;
+    --acc-2: #e6d2ee;
+    --acc-glow: rgba(111, 51, 128, 0.18);
+    --scan: rgba(111, 51, 128, 0.7);
+    /* The accent as it appears ON the dark rail, where #6f3380 is unreadable. */
+    --brand-tint: #c98de0;
+
+    --pass: #0f7a4d;
+    --pass-wash: #e6f5ee;
+    --pass-line: #bce3d1;
+    --warn: #9c5e08;
+    --warn-wash: #fdf3e3;
+    --warn-line: #f0d9ab;
+    --warn-track: #efe6d4;
+    --fail: #b02620;
+    --fail-wash: #fceceb;
+    --fail-line: #f0c7c4;
+
+    --r-xs: 3px;
+    --r-sm: 4px;
+    --r: 5px;
+    --r-lg: 7px;
+    --r-xl: 9px;
+    --shadow: 0 1px 2px rgba(21, 23, 28, 0.06), 0 1px 3px rgba(21, 23, 28, 0.08);
+    --shadow-2: 0 8px 28px rgba(21, 23, 28, 0.16), 0 20px 64px rgba(21, 23, 28, 0.14);
+
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+    /* 1480 left a dead band on a wide monitor that the user noticed and named. */
+    --maxw: 1800px;
+  }
+
+  :root[data-surface='ops'][data-density='default'] {
+    --d-row-h: 40px;
+  }
+  :root[data-surface='ops'][data-density='compact'] {
+    --d-row-h: 34px;
+  }
+
+  /* 14px read as scattered text in empty space on a screen this dense. */
+  :root[data-surface='ops'] {
+    font-size: 15px;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }

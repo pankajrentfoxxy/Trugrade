@@ -1,11 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { stateCodeFromGstin } from '@trugrade/contracts';
 import { AppConfig } from '../../config';
-import {
-  GstinVerificationPort,
-  type GstinTaxpayer,
-  type VerificationResult,
-} from '../ports';
+import { GstinVerificationPort, type GstinTaxpayer, type VerificationResult } from '../ports';
 import { nameSimilarity } from '../fakes/kyc.fakes';
 
 /**
@@ -69,13 +65,23 @@ export class ZohoGstinVerification extends GstinVerificationPort {
         provider: 'zoho-books',
         latencyMs,
         costPaise: 0,
-        reason: this.extractError(body, 'The GST portal has no record of this GSTIN. Check the number against your certificate.'),
+        reason: this.extractError(
+          body,
+          'The GST portal has no record of this GSTIN. Check the number against your certificate.',
+        ),
         raw: body,
       };
     }
 
     const data = this.extractPayload(body);
-    const legalName = this.pick(data, 'legal_name', 'legalName', 'lgnm', 'business_name', 'company_name');
+    const legalName = this.pick(
+      data,
+      'legal_name',
+      'legalName',
+      'lgnm',
+      'business_name',
+      'company_name',
+    );
     if (!legalName) {
       return {
         outcome: 'FAIL',
@@ -97,13 +103,7 @@ export class ZohoGstinVerification extends GstinVerificationPort {
       status,
       stateCode: stateCodeFromGstin(gstin) ?? gstin.slice(0, 2),
       registrationDate: this.normalisePortalDate(
-        this.pick(
-          data,
-          'registered_date',
-          'registration_date',
-          'registrationDate',
-          'rgdt',
-        ),
+        this.pick(data, 'registered_date', 'registration_date', 'registrationDate', 'rgdt'),
       ),
       taxpayerType: this.pick(data, 'taxpayer_type', 'taxpayerType', 'dty') || undefined,
       principalAddress: this.formatAddress(data) || undefined,
@@ -210,16 +210,10 @@ export class ZohoGstinVerification extends GstinVerificationPort {
       (pob.address as Record<string, unknown> | undefined);
     if (!addr || typeof addr !== 'object') return undefined;
 
-    const line1 = [
-      this.pick(addr, 'flno'),
-      this.pick(addr, 'bno'),
-      this.pick(addr, 'bnm'),
-    ]
+    const line1 = [this.pick(addr, 'flno'), this.pick(addr, 'bno'), this.pick(addr, 'bnm')]
       .filter(Boolean)
       .join(', ');
-    const line2 = [this.pick(addr, 'st'), this.pick(addr, 'locality')]
-      .filter(Boolean)
-      .join(', ');
+    const line2 = [this.pick(addr, 'st'), this.pick(addr, 'locality')].filter(Boolean).join(', ');
     const city = this.pick(addr, 'loc', 'dst', 'city');
     const pincode = this.pick(addr, 'pncd', 'pincode', 'pin');
     const state = stateCodeFromGstin(gstin) ?? '';
@@ -235,12 +229,7 @@ export class ZohoGstinVerification extends GstinVerificationPort {
   }
 
   private mapConstitutionType(data: Record<string, unknown>): string | undefined {
-    const raw = this.pick(
-      data,
-      'constitution_of_business',
-      'constitutionOfBusiness',
-      'ctb',
-    );
+    const raw = this.pick(data, 'constitution_of_business', 'constitutionOfBusiness', 'ctb');
     if (!raw) return undefined;
     const n = raw.toLowerCase();
     if (n.includes('private limited')) return 'PVT_LTD';
@@ -285,9 +274,7 @@ export class ZohoGstinVerification extends GstinVerificationPort {
       (data.address as Record<string, unknown>);
     if (!pob || typeof pob !== 'object') return '';
     const addr =
-      (pob.addr as Record<string, unknown>) ||
-      (pob.address as Record<string, unknown>) ||
-      pob;
+      (pob.addr as Record<string, unknown>) || (pob.address as Record<string, unknown>) || pob;
     return [
       this.pick(addr, 'address_line_1', 'addressLine1', 'bnm', 'bno', 'street'),
       this.pick(addr, 'address_line_2', 'addressLine2', 'st', 'landmark'),

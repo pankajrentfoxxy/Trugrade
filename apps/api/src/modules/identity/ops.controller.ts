@@ -452,4 +452,75 @@ export class OpsController {
 
     return { metrics, queues, gaps };
   }
+
+  /**
+   * The numbers on the rail and the tabs, in one request.
+   *
+   * Eight requests to draw a navigation rail is eight chances to render it half
+   * populated, and each count would be from a different instant. One statement
+   * per module schema, combined here — the same rule the dashboard above
+   * follows, and the reason `no-cross-schema-join` does not need an exemption
+   * for a navigation aid.
+   *
+   * **A key is absent, never zero, when the seat cannot open that screen.** The
+   * rail renders nothing for an absent key, so "not yours" and "none" do not
+   * render identically — which they would if this returned 0 for both.
+   */
+  @Get('counts')
+  async counts(): Promise<Record<string, number>> {
+    const held = this.requirePlatform();
+    const can = (p: Permission): boolean => held.has(p);
+    const out: Record<string, number> = {};
+    const one = async (sql: Promise<Array<{ n: bigint }>>): Promise<number> =>
+      Number((await sql)[0]?.n ?? 0);
+
+    if (can('kyc.application.read')) {
+      // The same predicate `KycService.reviewQueue` uses, including the
+      // submitted-at guard: twelve organisations carry a review status with no
+      // submission instant — residue from an abandoned flow — and counting them
+      // here would put a badge on the rail for work the queue does not show.
+      out.kyc = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM identity.organization
+         WHERE status::text IN ('KYC_SUBMITTED', 'UNDER_REVIEW', 'INFO_REQUESTED')
+           AND submitted_for_review_at IS NOT NULL`);
+    }
+    if (can('ordering.any.read')) {
+      out.orders = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM ordering."order"
+         WHERE status::text NOT IN ('DELIVERED', 'CANCELLED', 'CLOSED', 'REFUNDED')`);
+    }
+    if (can('procurement.po.read_any')) {
+      out.pos = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM procurement.purchase_order
+         WHERE status::text = 'DISPATCH_READY'`);
+    }
+    if (can('logistics.shipment.read')) {
+      out.shipments = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM logistics.shipment
+         WHERE status::text IN ('EXCEPTION', 'FAILED', 'RTO', 'CANCELLED')`);
+    }
+    if (can('logistics.ndr.action')) {
+      out.ndr = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM logistics.delivery_attempt
+         WHERE outcome::text <> 'DELIVERED' AND next_attempt_on IS NOT NULL`);
+    }
+    if (can('procurement.payable.read_any')) {
+      out.payables = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM procurement.vendor_payable
+         WHERE status::text = 'ACCRUED' AND hold_reason IS NULL
+           AND eligible_at IS NOT NULL AND eligible_at <= now()`);
+    }
+    if (can('qc.visit.read')) {
+      // Unscheduled visits only: a visit already assigned is work in flight, and
+      // a badge that counts it is a badge that never reaches zero.
+      out.inspections = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM qc.qc_visit
+         WHERE technician_id IS NULL AND status::text IN ('REQUESTED', 'QUOTED')`);
+    }
+    if (can('identity.audit.read')) {
+      out.approvals = await one(this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*)::bigint AS n FROM identity.approval_request WHERE status = 'PENDING'`);
+    }
+    return out;
+  }
 }

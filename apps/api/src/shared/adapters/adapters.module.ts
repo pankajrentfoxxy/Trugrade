@@ -1,5 +1,6 @@
 import { Global, Logger, Module, type Provider } from '@nestjs/common';
 import { AppConfig, ConfigModule } from '../config';
+import { PrismaService } from '../db/prisma.service';
 import { ClockModule } from '../clock';
 import {
   BankVerificationPort,
@@ -10,6 +11,8 @@ import {
   PincodeLookupPort,
   NotificationPort,
   ObjectStorePort,
+  CreditLinePort,
+  EscrowPort,
   PanVerificationPort,
   PaymentGatewayPort,
   QcPlatformPort,
@@ -21,7 +24,11 @@ import {
   FakePanVerification,
 } from './fakes/kyc.fakes';
 import { ZohoGstinVerification } from './live/gstin.zoho';
+import { FakeCreditLine, FakeEscrow } from './fakes/finance.fakes';
 import { PostalPincodeLookup } from './live/pincode.postalpincode';
+import { BlueDartCarrier } from './live/bluedart.carrier';
+import { PorterCarrier } from './live/porter.carrier';
+import { InHouseCarrier } from './live/inhouse.carrier';
 import { RazorpayIfscBankVerification } from './live/ifsc.razorpay';
 import { InteraktNotification } from './live/interakt.notification';
 import { SmtpNotification } from './live/smtp.notification';
@@ -78,6 +85,13 @@ const fakeProviders: Provider[] = [
     useClass: PostalPincodeLookup,
   },
   { provide: PanVerificationPort, useClass: FakePanVerification },
+  // Escrow and customer credit: contracts with one fake each, and no provider
+  // signed. The fake is the record of what WOULD be held, so the screens can be
+  // honest rather than absent.
+  FakeEscrow,
+  FakeCreditLine,
+  { provide: EscrowPort, useExisting: FakeEscrow },
+  { provide: CreditLinePort, useExisting: FakeCreditLine },
   { provide: BankVerificationPort, useClass: RazorpayIfscBankVerification },
   {
     provide: NotificationPort,
@@ -108,10 +122,63 @@ const fakeProviders: Provider[] = [
   FakePorter,
   FakeInHouse,
   {
+    /**
+     * Fakes by default; a real adapter takes over the moment that carrier has
+     * live credentials.
+     *
+     * The fakes are not scaffolding to delete — they are the executable
+     * description of the contract, and the whole test suite runs against them.
+     * So the registry is built from them and then overwritten per carrier, which
+     * means a half-configured environment falls back to a fake rather than to a
+     * carrier that throws on every call.
+     */
     provide: CARRIER_REGISTRY,
-    inject: [FakeDelhivery, FakeBlueDart, FakeShiprocket, FakeDtdc, FakePorter, FakeInHouse],
-    useFactory: (...carriers: CarrierPort[]): CarrierRegistry =>
-      new Map(carriers.map((c) => [c.code, c])),
+    inject: [
+      AppConfig,
+      PrismaService,
+      FakeDelhivery,
+      FakeBlueDart,
+      FakeShiprocket,
+      FakeDtdc,
+      FakePorter,
+      FakeInHouse,
+    ],
+    useFactory: (
+      config: AppConfig,
+      prisma: PrismaService,
+      ...carriers: CarrierPort[]
+    ): CarrierRegistry => {
+      const registry = new Map(carriers.map((c) => [c.code, c]));
+
+      const blueDartBase = config.all.BLUEDART_BASE_URL;
+      const blueDartLogin = config.all.BLUEDART_LOGIN_ID;
+      const blueDartKey = config.all.BLUEDART_LICENCE_KEY;
+      if (blueDartBase && blueDartLogin && blueDartKey) {
+        registry.set(
+          'BLUEDART',
+          new BlueDartCarrier({
+            baseUrl: blueDartBase,
+            loginId: blueDartLogin,
+            licenceKey: blueDartKey,
+            ...(config.all.BLUEDART_AREA_CODE ? { areaCode: config.all.BLUEDART_AREA_CODE } : {}),
+          }),
+        );
+      }
+
+      const porterBase = config.all.PORTER_BASE_URL;
+      const porterKey = config.all.PORTER_API_KEY;
+      if (porterBase && porterKey) {
+        registry.set('PORTER', new PorterCarrier({ baseUrl: porterBase, apiKey: porterKey }));
+      }
+
+      // In-house has no credentials to wait for — the "provider" is our own
+      // rider app, and `InHouseCarrier` reads the tracking rows it writes.
+      if (config.all.INHOUSE_CARRIER_LIVE) {
+        registry.set('INHOUSE', new InHouseCarrier(prisma));
+      }
+
+      return registry;
+    },
   },
 ];
 
@@ -145,6 +212,10 @@ const fakeProviders: Provider[] = [
   ],
   exports: [
     ObjectUrlSigner,
+    EscrowPort,
+    CreditLinePort,
+    FakeEscrow,
+    FakeCreditLine,
     GstinVerificationPort,
     PincodeLookupPort,
     PanVerificationPort,

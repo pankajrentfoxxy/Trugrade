@@ -54,6 +54,8 @@ export {
 export {
   Modal,
   type ModalProps,
+  Drawer,
+  type DrawerProps,
   ToastProvider,
   useToast,
   type ToastInput,

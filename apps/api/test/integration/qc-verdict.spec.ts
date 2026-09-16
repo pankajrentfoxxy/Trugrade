@@ -28,9 +28,12 @@ import { PrismaService } from '../../src/shared/db/prisma.service';
 import { ContextModule } from '../../src/shared/db/org-scope';
 import { EventBus } from '../../src/shared/events/event-bus';
 import { QcRepository, type AreaResultInput } from '../../src/modules/qc/internal/qc.repository';
+import { AdaptersModule } from '../../src/shared/adapters/adapters.module';
 import { ToleranceService } from '../../src/modules/qc/internal/tolerance.service';
 import { VerdictService } from '../../src/modules/qc/internal/verdict.service';
 import { GradeCorrectionService } from '../../src/modules/qc/internal/grade-correction.service';
+import { InspectionOutcomeService } from '../../src/modules/qc/internal/inspection-outcome.service';
+import { ReportPdfService } from '../../src/modules/qc/internal/report-pdf.service';
 import { QC_AREA_CODES } from '../../src/modules/qc/dto/qc.dto';
 import {
   closeTestDb,
@@ -81,7 +84,9 @@ beforeAll(async () => {
   clock = new FixedClock(new Date(`${today!.d}T06:00:00.000Z`));
 
   moduleRef = await Test.createTestingModule({
-    imports: [ConfigModule, ContextModule],
+    // AdaptersModule supplies ObjectStorePort, which ReportPdfService needs to
+    // store the report Stage 9 attaches at certification.
+    imports: [ConfigModule, ContextModule, AdaptersModule],
     providers: [
       { provide: ClockPort, useValue: clock },
       {
@@ -98,6 +103,8 @@ beforeAll(async () => {
       QcRepository,
       ToleranceService,
       GradeCorrectionService,
+      ReportPdfService,
+      InspectionOutcomeService,
       VerdictService,
     ],
   }).compile();

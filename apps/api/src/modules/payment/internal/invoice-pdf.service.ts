@@ -1,11 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import type { PDFFont, PDFPage } from 'pdf-lib';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config';
 import { Money, RULE_32_5_NARRATION } from '@trugrade/contracts';
 import { ClockPort } from '../../../shared/clock';
 import type { OrderBillingBasis } from '../dto/invoice.dto';
 import type { Issuer, PricedDocument, PricedLine } from './invoice-issue.service';
+import {
+  BODY,
+  LEAD,
+  MARGIN,
+  MUTED,
+  PAGE,
+  WASH,
+  Sheet,
+  drawFooters,
+  drawLetterhead,
+  newSheet,
+  wrap,
+  type RenderedDocument,
+} from '../../../shared/pdf/sheet';
+
+// Re-exported: three callers import this type from here and the type itself now
+// lives with the letterhead, which is where every renderer's output is described.
+export type { RenderedDocument };
 
 /**
  * The invoice as a printed document.
@@ -43,16 +59,6 @@ import type { Issuer, PricedDocument, PricedLine } from './invoice-issue.service
  * would drift and the second one to drift would be the one nobody reads.
  */
 
-/** A4 in points. This gets printed on an office printer and filed. */
-const PAGE: [number, number] = [595.28, 841.89];
-const MARGIN = 40;
-const LEAD = 12;
-const BODY = 9;
-const INK = rgb(0.09, 0.09, 0.11);
-const MUTED = rgb(0.42, 0.42, 0.46);
-const RULE = rgb(0.82, 0.82, 0.85);
-const WASH = rgb(0.95, 0.95, 0.96);
-
 /**
  * Description, HSN, qty, rate, taxable, GST%, GST. RIGHT edges, in points.
  *
@@ -63,13 +69,6 @@ const WASH = rgb(0.95, 0.95, 0.96);
  * `18 15084.00` as one run with no gap between the rate and the amount.
  */
 const COLUMNS = { hsn: 305, qty: 348, rate: 412, taxable: 478, rate_pct: 505, gst: 555 };
-
-export interface RenderedDocument {
-  bytes: Buffer;
-  /** Order number and document kind only — never a vendor, never a serial list. */
-  filename: string;
-  documentNumber: string;
-}
 
 export interface RenderInput {
   kind: 'TAX' | 'PROFORMA';
@@ -87,7 +86,8 @@ export class InvoicePdfService {
   constructor(private readonly clock: ClockPort) {}
 
   async render(input: RenderInput): Promise<RenderedDocument> {
-    const doc = await PDFDocument.create();
+    const sheet = await newSheet();
+    const doc = sheet.doc;
     const tax = input.kind === 'TAX';
     const title = tax ? 'Tax invoice' : 'Proforma invoice';
 
@@ -103,16 +103,12 @@ export class InvoicePdfService {
     doc.setCreationDate(this.clock.now());
     doc.setModificationDate(this.clock.now());
 
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    const sheet = new Sheet(doc, font, bold);
-
     this.drawHeader(sheet, input, title);
     this.drawParties(sheet, input);
     for (const consignment of input.documents) this.drawConsignment(sheet, input, consignment);
     this.drawGrandTotal(sheet, input);
     this.drawNarration(sheet, input);
-    sheet.footers(title);
+    drawFooters(sheet, title);
 
     // `useObjectStreams: false` keeps the document's own dictionaries — the
     // metadata among them — as plain objects rather than inside a compressed
@@ -132,24 +128,21 @@ export class InvoicePdfService {
    * ------------------------------------------------------------------- */
 
   private drawHeader(sheet: Sheet, input: RenderInput, title: string): void {
-    sheet.text(BRAND.legalEntity, { size: 15, font: 'bold' });
-    sheet.text(`${BRAND.name} · ${LEGAL_DISCLOSURE.website}`, { size: 8.5, colour: MUTED });
-    sheet.gap(8);
-    sheet.text(title.toUpperCase(), { size: 13, font: 'bold' });
-
-    if (input.kind === 'PROFORMA') {
+    // The shared letterhead, which is what makes this document look like the
+    // purchase order and the order confirmation rather than like a third
+    // system. The registered office, the GSTIN and the CIN come with it.
+    drawLetterhead(sheet, {
+      title,
+      documentNumber: input.documentNumber,
+      date: input.documentDate,
+      copyLabel: input.kind === 'TAX' ? 'Original for recipient' : null,
       // The single most important sentence on a proforma. A finance team that
       // files this as a tax invoice claims credit that does not exist yet.
-      sheet.gap(2);
-      sheet.text(
-        'This is NOT a tax invoice. No GST is payable on it and no input tax credit may be claimed against it.',
-        { size: 8.5, font: 'bold' },
-      );
-    }
-
-    sheet.gap(6);
-    sheet.rule();
-    sheet.gap(6);
+      warning:
+        input.kind === 'PROFORMA'
+          ? 'This is NOT a tax invoice. No GST is payable on it and no input tax credit may be claimed against it.'
+          : null,
+    });
 
     const right = PAGE[0] / 2 + 10;
     const top = sheet.y;
@@ -404,175 +397,3 @@ const rate = (c: PricedDocument): number => c.lines[0]?.gstRatePct ?? 18;
  * would be a third place to keep true. What the two files share is the *rule* —
  * an explicit allow-list, no row handed to a renderer — not a code path.
  */
-class Sheet {
-  page: PDFPage;
-  y: number;
-  readonly fonts: { regular: PDFFont; bold: PDFFont };
-  private readonly pages: PDFPage[] = [];
-
-  constructor(
-    readonly doc: PDFDocument,
-    regular: PDFFont,
-    bold: PDFFont,
-  ) {
-    this.fonts = { regular, bold };
-    this.page = doc.addPage(PAGE);
-    this.pages.push(this.page);
-    this.y = PAGE[1] - MARGIN - 12;
-  }
-
-  newPage(): void {
-    this.page = this.doc.addPage(PAGE);
-    this.pages.push(this.page);
-    this.y = PAGE[1] - MARGIN - 12;
-  }
-
-  /** Break before a block that would otherwise be orphaned across the fold. */
-  pageBreakIfBelow(points: number): void {
-    if (this.y < MARGIN + points) this.newPage();
-  }
-
-  gap(points: number): void {
-    this.y -= points;
-  }
-
-  at(
-    x: number,
-    y: number,
-    value: string,
-    opts: { size?: number; font?: 'regular' | 'bold'; colour?: typeof INK } = {},
-  ): void {
-    this.page.drawText(pdfSafe(value), {
-      x,
-      y,
-      size: opts.size ?? BODY,
-      font: opts.font === 'bold' ? this.fonts.bold : this.fonts.regular,
-      color: opts.colour ?? INK,
-    });
-  }
-
-  /** Right-aligned at `x`. Every number on this document is right-aligned. */
-  right(
-    x: number,
-    y: number,
-    value: string,
-    opts: { size?: number; font?: 'regular' | 'bold'; colour?: typeof INK } = {},
-  ): void {
-    const size = opts.size ?? BODY;
-    const font = opts.font === 'bold' ? this.fonts.bold : this.fonts.regular;
-    const text = pdfSafe(value);
-    this.at(x - font.widthOfTextAtSize(text, size), y, text, opts);
-  }
-
-  text(
-    value: string,
-    opts: { size?: number; font?: 'regular' | 'bold'; colour?: typeof INK } = {},
-  ): void {
-    this.at(MARGIN, this.y, value, opts);
-    this.y -= (opts.size ?? BODY) + 3;
-  }
-
-  /** A stack of lines in one column. `null` entries are simply absent. */
-  block(x: number, lines: ReadonlyArray<string | null>): void {
-    for (const line of lines) {
-      if (line === null || line.trim() === '') continue;
-      this.at(x, this.y, line, { size: 8.5 });
-      this.y -= 11;
-    }
-  }
-
-  /**
-   * A labelled value in a column. `null` prints the words rather than a blank —
-   * a blank beside "Your PO reference" reads as a reference nobody typed.
-   */
-  pair(label: string, value: string | null, x: number): void {
-    this.at(x, this.y, label, { size: 7.5, colour: MUTED });
-    this.at(x + 96, this.y, value ?? 'None given', {
-      size: 8.5,
-      font: value === null ? 'regular' : 'bold',
-      colour: value === null ? MUTED : INK,
-    });
-    this.y -= LEAD;
-  }
-
-  total(label: string, amount: Money, emphatic = false): void {
-    this.right(COLUMNS.taxable, this.y, label, {
-      size: emphatic ? 9.5 : BODY,
-      font: emphatic ? 'bold' : 'regular',
-    });
-    this.right(COLUMNS.gst, this.y, amount.toString(), {
-      size: emphatic ? 9.5 : BODY,
-      font: emphatic ? 'bold' : 'regular',
-    });
-    this.y -= LEAD;
-  }
-
-  rule(): void {
-    this.page.drawLine({
-      start: { x: MARGIN, y: this.y },
-      end: { x: PAGE[0] - MARGIN, y: this.y },
-      thickness: 0.6,
-      color: RULE,
-    });
-    this.y -= 4;
-  }
-
-  /** The same footer on every page, so a page separated from the file still names itself. */
-  footers(title: string): void {
-    this.pages.forEach((page, i) => {
-      page.drawText(
-        pdfSafe(
-          `${title} · ${BRAND.legalEntity} · computer generated, valid without signature · page ${i + 1} of ${this.pages.length}`,
-        ),
-        { x: MARGIN, y: MARGIN - 12, size: 7, font: this.fonts.regular, color: MUTED },
-      );
-    });
-  }
-}
-
-/**
- * Punctuation that has a Latin-1 equivalent, mapped rather than dropped.
- *
- * The em dash matters more here than it looks. Our own constants are typeset —
- * `LEGAL_DISCLOSURE.customerCare.hours` is "Mon–Sat, 10:00–18:00 IST" and the
- * place-of-supply basis carries an em dash — so dropping them printed
- * "Mon Sat, 10:00 18:00 IST" and "s.10(1)(a) IGST Act place of supply is…" on a
- * document a buyer's auditor reads. A hyphen is right; a hole is not.
- */
-const TRANSLITERATE: ReadonlyArray<readonly [RegExp, string]> = [
-  [/[–—−]/g, '-'],
-  [/[‘’‛]/g, "'"],
-  [/[“”]/g, '"'],
-  [/…/g, '...'],
-  [/[™®]/g, ''],
-  [/₹/g, 'Rs '],
-];
-
-/**
- * The standard PDF fonts encode WinAnsi, which stops at U+00FF. Model names
- * arrive from a third-party catalogue and carry trademark signs and smart
- * quotes; an unencodable character makes the writer throw, so without this the
- * whole invoice fails to generate because a laptop's model name ends in a "™".
- * Latin-1 and below is kept, the middle dot included.
- */
-function pdfSafe(value: string): string {
-  let out = value;
-  for (const [pattern, replacement] of TRANSLITERATE) out = out.replace(pattern, replacement);
-  return out.replace(/[^\x20-\x7E\xA0-\xFF]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-/** Break on spaces at `width` characters. Serial lists and narration only. */
-function wrap(value: string, width: number): string[] {
-  const out: string[] = [];
-  let line = '';
-  for (const word of value.split(/\s+/).filter(Boolean)) {
-    if (line.length + word.length + 1 > width && line !== '') {
-      out.push(line);
-      line = word;
-    } else {
-      line = line === '' ? word : `${line} ${word}`;
-    }
-  }
-  if (line !== '') out.push(line);
-  return out;
-}

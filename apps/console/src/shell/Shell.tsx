@@ -4,6 +4,7 @@ import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { cn, Logo } from '@trugrade/ui';
 import { useAuth } from '../lib/auth';
 import { AccountMenu } from './AccountMenu';
+import { OpsShell } from './OpsShell';
 import { CommandPalette } from './CommandPalette';
 import { activeEntry, visibleGroups, type NavEntry } from './nav';
 
@@ -212,9 +213,21 @@ function SiteFooter(): React.JSX.Element {
   );
 }
 
+/**
+ * The admin frame.
+ *
+ * Platform staff get `OpsShell` — seven domains, a tab strip and a record
+ * drawer. The delegation happens here rather than at each of the twenty route
+ * definitions, so adding a screen does not mean choosing a frame, and the
+ * vendor-facing paths that still reach this component keep the old chrome.
+ */
 export function Shell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const { principal } = useAuth();
   const { pathname } = useLocation();
+
+  if (principal?.orgType === 'PLATFORM' && !pathname.startsWith('/vendor')) {
+    return <OpsShell>{children}</OpsShell>;
+  }
 
   const groups = principal ? visibleGroups(principal) : [];
   const visible = groups.flatMap(([, entries]) => entries);

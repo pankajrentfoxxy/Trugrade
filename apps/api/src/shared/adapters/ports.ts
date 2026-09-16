@@ -157,6 +157,112 @@ export interface PaymentCapture {
   failureReason?: string;
 }
 
+/* ==========================================================================
+ * Escrow and customer credit — contracts only, until a provider signs
+ * ======================================================================== */
+
+export interface OpenEscrowAccount {
+  orgId: string;
+  legalName: string;
+  purpose: 'PAYOUT';
+}
+export interface EscrowAccountRef {
+  accountRef: string;
+  provider: string;
+}
+export interface FundEscrow {
+  accountRef: string;
+  amount: Money;
+  reference: string;
+}
+export interface HoldEscrow {
+  accountRef: string;
+  amount: Money;
+  /** The order or consignment the hold is against, for the statement. */
+  reference: string;
+  releaseAfter?: Date;
+}
+export interface EscrowTxnRef {
+  txnRef: string;
+  provider: string;
+  at: string;
+}
+export interface EscrowHoldRef {
+  holdRef: string;
+  provider: string;
+}
+export interface BeneficiaryRef {
+  orgId: string;
+  accountNumberLast4: string;
+  ifsc: string;
+}
+export interface EscrowEntry {
+  txnRef: string;
+  kind: 'FUND' | 'HOLD' | 'RELEASE' | 'REFUND';
+  amount: Money;
+  at: string;
+  narration: string;
+}
+
+/**
+ * Escrow sits on the PAYOUT leg, not the collection leg.
+ *
+ * Collection already works through the payment gateway. What escrow buys is that
+ * vendor money is ring-fenced from the moment of order and released on a rule
+ * the platform cannot quietly override — which is a promise to vendors, not a
+ * payment mechanism. Modelling it here rather than inside the payout service is
+ * what keeps signing a provider an adapter change instead of a refactor.
+ */
+export abstract class EscrowPort {
+  abstract openAccount(input: OpenEscrowAccount): Promise<EscrowAccountRef>;
+  abstract fund(input: FundEscrow): Promise<EscrowTxnRef>;
+  abstract hold(input: HoldEscrow): Promise<EscrowHoldRef>;
+  abstract release(holdRef: string, to: BeneficiaryRef, amount: Money): Promise<EscrowTxnRef>;
+  abstract refund(holdRef: string, amount: Money, reason: string): Promise<EscrowTxnRef>;
+  abstract balance(accountRef: string): Promise<Money>;
+  abstract statement(accountRef: string, from: Date, to: Date): Promise<EscrowEntry[]>;
+}
+
+export interface CreditApplication {
+  orgId: string;
+  legalName: string;
+  gstin: string;
+  requestedLimit: Money;
+}
+export interface CreditDecision {
+  outcome: 'APPROVED' | 'REFERRED' | 'DECLINED';
+  limit: Money;
+  /** The NBFC's own words. We do not paraphrase a credit decision. */
+  reason: string;
+  decisionRef: string;
+}
+export interface CreditLimit {
+  orgId: string;
+  limit: Money;
+  available: Money;
+  provider: string | null;
+}
+export interface CreditReservation {
+  reservationRef: string;
+  amount: Money;
+  expiresAt: string;
+}
+
+/**
+ * Customer credit, underwritten by an NBFC and not by us.
+ *
+ * The platform's job is to ask for a limit, be told one, and refuse an order
+ * that exceeds it. No pricing, no scoring and no risk logic belongs on this side
+ * of the port — the moment any of it does, we are lending.
+ */
+export abstract class CreditLinePort {
+  abstract requestLimit(input: CreditApplication): Promise<CreditDecision>;
+  abstract currentLimit(orgId: string): Promise<CreditLimit>;
+  abstract reserve(orgId: string, orderId: string, amount: Money): Promise<CreditReservation>;
+  abstract settle(reservationRef: string, amount: Money): Promise<void>;
+  abstract release(reservationRef: string, reason: string): Promise<void>;
+}
+
 export abstract class PaymentGatewayPort {
   abstract createIntent(input: {
     amount: Money;

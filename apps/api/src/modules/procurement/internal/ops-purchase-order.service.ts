@@ -71,6 +71,16 @@ export interface OpsPoFacetOption {
 
 export interface OpsPoBoardView {
   rows: OpsPoRow[];
+  /**
+   * The saved views, with their counts, in the same response as the page.
+   *
+   * Ordered so the FIRST one is the default, and the default is never All: the
+   * only view on this board anybody can act on is Packed, and a board that
+   * opens on 1,680 rows has handed the filtering back to the operator.
+   */
+  views: Array<{ key: string; label: string; count: number }>;
+  /** Rows before any filter, so the pager can say how much was narrowed. */
+  grandTotal: number;
   total: number;
   page: number;
   per: number;
@@ -122,7 +132,18 @@ export class OpsPurchaseOrderService {
   async list(query: OpsPurchaseOrderListQueryDto): Promise<OpsPoBoardView> {
     const q = query.q ?? null;
     const like = q === null ? null : `%${q.replace(/[%_\\]/g, '\\$&')}%`;
-    const status = query.status ?? null;
+    // A view resolves to a status here rather than in the URL, so the board's
+    // vocabulary ("ready") and the table's ("DISPATCH_READY") can diverge
+    // without the link somebody bookmarked changing meaning.
+    const VIEW_STATUS: Readonly<Record<string, string | null>> = {
+      ready: 'DISPATCH_READY',
+      partial: 'PARTIAL',
+      awaiting: 'RAISED',
+      dispatched: 'DISPATCHED',
+      received: 'RECEIVED',
+      all: null,
+    };
+    const status = query.status ?? (query.view ? (VIEW_STATUS[query.view] ?? null) : null);
     const vendor = query.vendor ?? null;
     const from = query.from ?? null;
     const to = query.to ?? null;
@@ -191,7 +212,31 @@ export class OpsPurchaseOrderService {
 
     const now = this.clock.now().getTime();
 
+    // One scan for every badge. Six separate counts would be six round trips and
+    // six answers from six different instants, and a badge that disagrees with
+    // what the board renders destroys trust in every other number on the screen.
+    const [viewCounts] = await this.prisma.$queryRaw<
+      Array<Record<string, bigint>>
+    >`
+      SELECT count(*) AS all_rows,
+             count(*) FILTER (WHERE po.status::text = 'DISPATCH_READY') AS ready,
+             count(*) FILTER (WHERE po.status::text = 'PARTIAL') AS partial,
+             count(*) FILTER (WHERE po.status::text = 'RAISED') AS awaiting,
+             count(*) FILTER (WHERE po.status::text = 'DISPATCHED') AS dispatched,
+             count(*) FILTER (WHERE po.status::text = 'RECEIVED') AS received
+        FROM procurement.purchase_order po`;
+    const n = (k: string): number => Number(viewCounts?.[k] ?? 0);
+
     return {
+      views: [
+        { key: 'ready', label: 'Packed · ready', count: n('ready') },
+        { key: 'partial', label: 'Partial', count: n('partial') },
+        { key: 'awaiting', label: 'Awaiting vendor', count: n('awaiting') },
+        { key: 'dispatched', label: 'Dispatched', count: n('dispatched') },
+        { key: 'received', label: 'Received', count: n('received') },
+        { key: 'all', label: 'All', count: n('all_rows') },
+      ],
+      grandTotal: n('all_rows'),
       rows: rows.map((r) => ({
         poId: r.id,
         poNumber: r.po_number,
@@ -227,7 +272,11 @@ export class OpsPurchaseOrderService {
       searchedFor:
         q === null
           ? null
-          : ['a purchase-order number', 'the order number that caused it', 'a serial on one of its lines'],
+          : [
+              'a purchase-order number',
+              'the order number that caused it',
+              'a serial on one of its lines',
+            ],
     };
   }
 

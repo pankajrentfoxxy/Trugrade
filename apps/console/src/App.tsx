@@ -16,6 +16,7 @@ import { SkuRecordRoute } from './routes/SkuRecord';
 import { SkuRequestsRoute } from './routes/SkuRequests';
 import { VendorReviewRoute } from './routes/VendorReview';
 import { opsRoutes } from './routes/ops';
+import { opsSurfaceRoutes } from './routes/opsSurface';
 import { platformRoutes } from './routes/platform';
 import { qcRoutes } from './routes/qc';
 import { unitRoutes } from './routes/units';
@@ -224,6 +225,23 @@ export function App(): React.JSX.Element {
             The QC barrel hands back elements bare — guarding and chroming them is
             the shell's business, so both wrappers go on here.
           */}
+          {/*
+            Stage 8's screens. Declared before the QC barrel only so the reading
+            order matches the rail's; react-router ranks by specificity, not by
+            position, so nothing here depends on it.
+          */}
+          {opsSurfaceRoutes.map((r) => (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={
+                <Shell>
+                  <RequirePermission permission={r.permission}>{r.element}</RequirePermission>
+                </Shell>
+              }
+            />
+          ))}
+
           {qcRoutes.map((r) => (
             <Route
               key={r.path}

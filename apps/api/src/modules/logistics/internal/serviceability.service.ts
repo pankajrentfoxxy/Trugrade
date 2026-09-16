@@ -106,9 +106,7 @@ export class ServiceabilityService {
    *
    * Both tables are `logistics`, so the join is inside one module's schema.
    */
-  async outboundServicesFor(
-    pincodes: readonly string[],
-  ): Promise<Map<string, CarrierService[]>> {
+  async outboundServicesFor(pincodes: readonly string[]): Promise<Map<string, CarrierService[]>> {
     const wanted = unique(pincodes);
     if (wanted.length === 0) return new Map();
 

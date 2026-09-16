@@ -471,6 +471,10 @@ export class AccountService {
    * Team
    * ------------------------------------------------------------------- */
 
+  // Every role aggregate in this file filters on expires_at. A grant that has
+  // run out is not a role: the login stopped honouring it, so a screen that
+  // still lists it is telling an administrator something the guard disagrees
+  // with, and the last-owner floor below would count a dead owner as a live one.
   async team(): Promise<TeamView> {
     const orgId = this.orgId();
     const me = this.ctx.requirePrincipal();
@@ -482,7 +486,8 @@ export class AccountService {
                (SELECT array_agg(r.code ORDER BY r.code)
                   FROM identity.user_role ur
                   JOIN identity.role r ON r.id = ur.role_id
-                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id),
+                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id
+                   AND (ur.expires_at IS NULL OR ur.expires_at > now())),
                ARRAY[]::text[]) AS roles
         FROM identity.user_account u
        WHERE u.org_id = ${orgId}::uuid
@@ -548,7 +553,8 @@ export class AccountService {
                (SELECT array_agg(r.code ORDER BY r.code)
                   FROM identity.user_role ur
                   JOIN identity.role r ON r.id = ur.role_id
-                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id),
+                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id
+                   AND (ur.expires_at IS NULL OR ur.expires_at > now())),
                ARRAY[]::text[]) AS roles
         FROM identity.user_account u
        WHERE u.id = ${userId}::uuid AND u.org_id = ${orgId}::uuid`;
@@ -579,6 +585,7 @@ export class AccountService {
         SELECT count(*)::int AS n
           FROM identity.user_account u
           JOIN identity.user_role ur ON ur.user_id = u.id AND ur.org_id = u.org_id
+                                    AND (ur.expires_at IS NULL OR ur.expires_at > now())
           JOIN identity.role r ON r.id = ur.role_id
          WHERE u.org_id = ${orgId}::uuid AND u.status = 'ACTIVE' AND r.code = ${ownerRole}`;
       if ((owners?.n ?? 0) <= 1) {
@@ -743,7 +750,8 @@ export class AccountService {
                (SELECT array_agg(r.code)
                   FROM identity.user_role ur
                   JOIN identity.role r ON r.id = ur.role_id
-                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id),
+                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id
+                   AND (ur.expires_at IS NULL OR ur.expires_at > now())),
                ARRAY[]::text[]) AS roles
         FROM identity.user_account u
        WHERE u.id = ${userId}::uuid AND u.org_id = ${orgId}::uuid`;
@@ -797,7 +805,8 @@ export class AccountService {
                (SELECT array_agg(r.code ORDER BY r.code)
                   FROM identity.user_role ur
                   JOIN identity.role r ON r.id = ur.role_id
-                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id),
+                 WHERE ur.user_id = u.id AND ur.org_id = u.org_id
+                   AND (ur.expires_at IS NULL OR ur.expires_at > now())),
                ARRAY[]::text[]) AS roles
         FROM identity.user_account u
        WHERE u.id = ${userId}::uuid AND u.org_id = ${orgId}::uuid`;
