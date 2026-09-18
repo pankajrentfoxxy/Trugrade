@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "turbo run build",
+    "build": "turbo run build --concurrency=1",
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",
