@@ -11,6 +11,7 @@ import {
 } from '@trugrade/ui';
 import { changeControlFor, type ChangeControl } from '@trugrade/contracts';
 import { Section, Textarea } from '../lib/controls';
+import { apiFetch } from '../lib/auth';
 import {
   DocumentsPanel,
   VerificationPanel,
@@ -42,7 +43,7 @@ type Decision = 'APPROVED' | 'REJECTED' | 'INFO_REQUESTED';
  * away leaves the reviewer with a status code and no idea what to fix.
  */
 async function postDecision(orgId: string, decision: Decision, notes?: string): Promise<void> {
-  const res = await fetch(`/api/kyc/orgs/${orgId}/decision`, {
+  const res = await apiFetch(`/api/kyc/orgs/${orgId}/decision`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
@@ -150,8 +151,8 @@ function useDocuments(orgId: string | undefined): {
     void (async () => {
       try {
         const [docsRes, reasonsRes] = await Promise.all([
-          fetch(`/api/kyc/orgs/${orgId}/documents`, { credentials: 'include' }),
-          fetch('/api/kyc/document-rejection-reasons', { credentials: 'include' }),
+          apiFetch(`/api/kyc/orgs/${orgId}/documents`),
+          apiFetch('/api/kyc/document-rejection-reasons'),
         ]);
         if (docsRes.status === 403) {
           if (!cancelled) setError('Your account does not hold the document permission.');
@@ -182,7 +183,7 @@ async function postDocumentDecision(
   documentId: string,
   body: { decision: 'VERIFIED' | 'REJECTED'; reasonCode?: string; specific?: string },
 ): Promise<void> {
-  const res = await fetch(`/api/kyc/orgs/${orgId}/documents/${documentId}/review`, {
+  const res = await apiFetch(`/api/kyc/orgs/${orgId}/documents/${documentId}/review`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
@@ -209,7 +210,7 @@ export function VendorReviewRoute(): React.JSX.Element {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`/api/kyc/review/${orgId}`, { credentials: 'include' });
+        const res = await apiFetch(`/api/kyc/review/${orgId}`, { credentials: 'include' });
         if (!res.ok) throw new Error(`Could not load this application (${res.status})`);
         const d = (await res.json()) as VendorReviewData;
         if (!cancelled) setData(d);

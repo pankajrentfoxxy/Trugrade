@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@trugrade/ui';
-import { usePrincipal } from '../../lib/auth';
+import { usePrincipal, apiFetch } from '../../lib/auth';
 import { useResource } from '../../lib/useResource';
 import { BoardScreen } from '../../boards/BoardScreen';
 import { Id, StatusDot, Unmeasured, toneOf, word } from '../../boards/bits';
@@ -120,7 +120,7 @@ function RuleLine({
   const toggle = async (): Promise<void> => {
     setBusy(true);
     try {
-      await fetch(`/api/ops/platform/automation/rules/${encodeURIComponent(rule.id)}/enabled`, {
+      await apiFetch(`/api/ops/platform/automation/rules/${encodeURIComponent(rule.id)}/enabled`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },

@@ -4,6 +4,13 @@
  * Buyers stay on the storefront; vendors and staff use the console. Every
  * "Become a supplier" / "Sell on Trugrade" link must land here, not on a
  * storefront route that duplicated the form.
+ *
+ * And it lands on the console's front door, not on a form. A refurbisher
+ * arriving from the shop used to be dropped straight into step one of
+ * registration with nothing said about what they were registering for; the
+ * homepage at `/` says it, and carries the same "Start selling" control.
+ * Only the storefront's own `/sell/register` still deep-links to the form —
+ * somebody who typed that has already decided.
  */
 
 const LOCAL_CONSOLE = 'http://localhost:5173';
@@ -73,3 +80,6 @@ export function consoleUrl(path = ''): string {
 }
 
 export const consoleSellRegisterUrl = (): string => consoleUrl('/sell/register');
+
+/** The console's homepage — where every "Sell on Trugrade" link now lands. */
+export const consoleHomeUrl = (): string => consoleUrl('/');

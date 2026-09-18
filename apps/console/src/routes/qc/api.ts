@@ -1,4 +1,4 @@
-import { refreshSession } from '../../lib/auth';
+import { apiFetch } from '../../lib/auth';
 
 /**
  * The two things the QC console does that the catalog screens never had to:
@@ -12,7 +12,9 @@ import { refreshSession } from '../../lib/auth';
  * mechanism — no optimistic state, nothing that could leave the screen claiming
  * an inspection was recorded when it was not.
  *
- * The one retry here is not about flakiness. See `withFreshSession`.
+ * A lapsed session is not one of those failures, and is not this module's to
+ * handle: `apiFetch` restores and replays, and signs out rather than resolving
+ * if the session is genuinely gone. So a 401 never reaches `failure` below.
  */
 
 /**
@@ -35,42 +37,17 @@ async function failure(res: Response, fallback: string): Promise<Error> {
   return new Error(`${fallback} (${res.status})`);
 }
 
-/**
- * Send it; on a 401, spend the refresh cookie once and send it again.
- *
- * An inspection is twelve areas, detected hardware, six photographs and a seal.
- * It takes far longer than the fifteen-minute access cookie, and the reads that
- * drew the screen all happened at the top of that. So the technician's FIRST
- * write — usually choosing a photograph — was the request that met the lapse,
- * and it answered with the API's own "Please sign in to continue." in red under
- * the file input while the refresh cookie sat in the jar, still good for weeks,
- * and the chrome went on drawing a signed-in session. Every read on this screen
- * already recovers itself this way (`useResource`); the two writers did not.
- *
- * `refreshSession` is single-flight, so six photographs picked in a row spend
- * one rotation between them rather than six.
- */
-async function withFreshSession(go: () => Promise<Response>): Promise<Response> {
-  const res = await go();
-  if (res.status !== 401) return res;
-  await refreshSession();
-  return go();
-}
-
 export async function send<T>(
   url: string,
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body: unknown,
   failureLabel: string,
 ): Promise<T> {
-  const res = await withFreshSession(() =>
-    fetch(url, {
-      method,
-      headers: { 'content-type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
-    }),
-  );
+  const res = await apiFetch(url, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw await failure(res, failureLabel);
   // 204 on the action endpoints; callers that expect nothing type T as void.
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
@@ -87,13 +64,11 @@ export async function send<T>(
  */
 export async function uploadPhoto<T>(file: File, failureLabel: string): Promise<T> {
   // Built once and sent up to twice: `FormData` is serialised per request, not
-  // consumed like a stream, so the retry posts the same bytes.
+  // consumed like a stream, so a replay after a session restore posts the same
+  // bytes. No `content-type` — the browser sets it, with the multipart boundary.
   const form = new FormData();
   form.append('file', file);
-  // No `content-type` — the browser sets it, with the multipart boundary.
-  const res = await withFreshSession(() =>
-    fetch('/api/qc/photos', { method: 'POST', credentials: 'include', body: form }),
-  );
+  const res = await apiFetch('/api/qc/photos', { method: 'POST', body: form });
   if (!res.ok) throw await failure(res, failureLabel);
   return (await res.json()) as T;
 }

@@ -113,8 +113,9 @@ export function VendorListingsRoute(): React.JSX.Element {
           l.vendorAskPrice ? rupees(l.vendorAskPrice) : <span className="text-ink-4">—</span>,
       },
       {
+        // Headed with its denominator, which is the ask in the column beside it.
         key: 'commission',
-        header: 'Commission',
+        header: 'Commission · of your ask',
         cell: (l) =>
           l.commissionPct != null && l.commissionAmount ? (
             <span className="font-mono tnum text-ink">

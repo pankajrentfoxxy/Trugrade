@@ -2,6 +2,7 @@ import { BoardScreen } from '../../boards/BoardScreen';
 import { Id, StatusDot, Unmeasured, toneOf, word } from '../../boards/bits';
 import type { BoardConfig } from '../../boards/types';
 import { day, inr } from '../fulfilment/api';
+import { apiFetch } from '../../lib/auth';
 
 /** Archetype B — board. */
 
@@ -45,7 +46,7 @@ const config: BoardConfig<PayableRow> = {
       // selection: a run built from a stale page is a run that pays a payable
       // whose hold landed thirty seconds ago.
       run: async () => {
-        const res = await fetch('/api/finance/payout-runs', {
+        const res = await apiFetch('/api/finance/payout-runs', {
           method: 'POST',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },

@@ -350,11 +350,14 @@ export function RepriceRoute(): React.JSX.Element {
                 <div className="flex items-baseline justify-between gap-4">
                   <dt className="text-body-sm text-ink-2">
                     Our commission
-                    {/* The denominator, in words. It cannot be a rupee figure:
-                        the rupee denominator IS the selling price, and that is
-                        the one number this screen may not show. */}
+                    {/* The denominator, and now it can be the rupee figure
+                        itself: the percentage is a share of the vendor's own
+                        ask, which is a number this screen already shows. It
+                        used to be a share of the selling price — the one number
+                        this screen may not show — so it could only be named in
+                        words, and by saying what it was NOT. */}
                     <span className="block text-label text-ink-4">
-                      of the selling price, not of your{' '}
+                      of your{' '}
                       <span className="font-mono tnum">{rupees(preview.perUnitPayout)}</span>
                     </span>
                   </dt>

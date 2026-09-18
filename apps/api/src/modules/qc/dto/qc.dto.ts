@@ -326,6 +326,36 @@ export const slotTimeSchema = z
   .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Expected a time like 09:30.');
 
 /**
+ * `HH:MM` and `HH:MM:SS` compared as the same clock.
+ *
+ * Both forms are accepted above, and `'09:30' < '09:30:00'` lexically — so a
+ * slot of 09:30 to 09:30:00 is zero minutes long and would compare as valid.
+ * Padding first is what makes the comparison mean what it reads as.
+ */
+const asSeconds = (value: string): string => (value.length === 5 ? `${value}:00` : value);
+
+/**
+ * A slot ends after it starts.
+ *
+ * Declared on the shared `schedule` object so both `POST /qc/visits` and
+ * `POST /qc/visits/:id/schedule` refuse it at the edge, with the field named.
+ * `SchedulingService.schedule()` checks it again and keeps doing so: it is
+ * reachable from callers that never passed through this schema, and a rule
+ * about what a slot *is* belongs with the code that writes the row.
+ */
+const endsAfterItStarts = <T extends { slotFrom: string; slotTo: string }>(
+  slot: T,
+  ctx: z.RefinementCtx,
+): void => {
+  if (asSeconds(slot.slotTo) > asSeconds(slot.slotFrom)) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['slotTo'],
+    message: 'End time must be later than the start time.',
+  });
+};
+
+/**
  * The technician app's replay key.
  *
  * Every mutating request its outbox sends carries one — in the body and as an
@@ -384,6 +414,7 @@ export const createVisitSchema = z.object({
       slotTo: slotTimeSchema,
       technicianId: uuidSchema.optional(),
     })
+    .superRefine(endsAfterItStarts)
     .optional(),
 });
 export type CreateVisitDto = z.infer<typeof createVisitSchema>;

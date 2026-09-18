@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { ResumableOnboarding } from '@trugrade/contracts';
-import { refreshSession } from './auth';
+import { apiFetch } from './auth';
 
 /**
  * `GET /api/onboarding/steps`, read the way every vendor screen needs it.
@@ -19,11 +19,7 @@ export type OnboardingState =
 
 export async function fetchOnboarding(): Promise<OnboardingState> {
   try {
-    let res = await fetch('/api/onboarding/steps', { credentials: 'include' });
-    if (res.status === 401) {
-      await refreshSession();
-      res = await fetch('/api/onboarding/steps', { credentials: 'include' });
-    }
+    const res = await apiFetch('/api/onboarding/steps');
     if (res.status === 403) return { kind: 'not-yours' };
     if (!res.ok) return { kind: 'error', message: `Profile progress did not load (${res.status})` };
     return { kind: 'ready', data: (await res.json()) as ResumableOnboarding };

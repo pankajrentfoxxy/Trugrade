@@ -129,7 +129,10 @@ export function RequirePlatform({ children }: { children: React.ReactNode }): Re
   const location = useLocation();
 
   if (loading) return <div className="p-6 text-ink-2">Checking your session…</div>;
-  if (!principal || principal.mfaRequired) {
+  // Same two doors as `RequirePermission`: no session goes to the front door,
+  // a session that still owes a factor goes to the one screen that can ask.
+  if (!principal) return <Navigate to="/" state={{ from: location.pathname }} replace />;
+  if (principal.mfaRequired) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
   if (principal.orgType !== 'PLATFORM') {

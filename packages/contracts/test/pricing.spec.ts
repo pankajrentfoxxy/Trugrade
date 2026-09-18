@@ -50,9 +50,40 @@ describe('NET_PAYOUT — the vendor names the amount, we derive the price', () =
     // 28000 + 12% margin + 1.2%/mo over 3 platform-backed months
     expect(b.sellingPrice.toString()).toBe('32368.00');
 
-    // Stated as a share of what the CUSTOMER pays, not of the payout. A vendor
-    // who divides 4368 by 32368 must land on the number we showed them.
-    expect(b.commissionPct).toBe(Math.round((4368 / 32368) * 10_000) / 100);
+    // Stated as a share of the vendor's OWN ask, which is the only number on
+    // the screen they chose. A vendor who divides 4368 by 28000 must land on
+    // the figure we showed them — and multiplying it back out must return the
+    // charge, which is the sum they will actually do.
+    expect(b.commissionPct).toBe(Math.round((4368 / 28_000) * 10_000) / 100);
+    expect(Money.percentOf(b.vendorNetPayout, b.commissionPct).toString()).toBe('4368.00');
+  });
+
+  it('charges more than the margin, so the margin is never what the pct names', () => {
+    const b = priceFromNetPayout({
+      vendorNetPayout: Money.rupees(28_000),
+      grade: 'A',
+      rule: RULE,
+      vendorWarrantyMonths: 3,
+    });
+
+    // The gap between what the vendor receives and what the buyer pays is the
+    // whole charge — margin, logistics, QC and the warranty reserve.
+    const charge = b.sellingPrice.sub(b.vendorNetPayout);
+    expect(charge.toString()).toBe('4368.00');
+
+    // Margin alone is ₹1,008 short of it, which is the reserve. Pairing this
+    // number with `commissionPct` on one line is what made the vendor's payout
+    // panel show a percentage and a rupee figure that measured different
+    // things, and three rows that did not add up.
+    expect(b.marginAmount.toString()).toBe('3360.00');
+    expect(charge.gt(b.marginAmount)).toBe(true);
+
+    // Multiplied back out against the ask it returns the charge to the paisa,
+    // because 15.6% of 28,000 needs no rounding to land. On a base where the
+    // 2-dp percentage does not divide cleanly it is off by a fraction of a
+    // rupee, never by the ₹1,008 that quoting the margin instead would cost.
+    expect(Money.percentOf(b.vendorNetPayout, b.commissionPct).toString()).toBe('4368.00');
+    expect(b.vendorNetPayout.add(charge).eq(b.sellingPrice)).toBe(true);
   });
 
   // Q22: the customer is sold the vendor's term + 3, floored at 6 total.
@@ -161,13 +192,33 @@ describe('COMMISSION — the same contract, spoken as a percentage', () => {
       rule: RULE,
       vendorWarrantyMonths: 3,
     });
+    /*
+      The two modes quote against different denominators, and converting is the
+      vendor's whole exposure to that.
+
+      NET_PAYOUT quotes our charge over the vendor's own ask, because that is
+      the number they chose and the only one they can check by hand.
+      `payoutFromCommission` takes a rate over the sale price, because there the
+      vendor names the sale price instead. So `p_sale = p_ask / (1 + p_ask)`:
+      feed the ask-based figure in raw and the payout lands ₹681 out.
+    */
+    const asShareOfSale = quoted.commissionPct / (1 + quoted.commissionPct / 100);
     const back = payoutFromCommission({
+      expectedSalePrice: quoted.sellingPrice,
+      commissionPct: Math.round(asShareOfSale * 100) / 100,
+    });
+    // Rebased, both modes still land on one stored rupee value, within the
+    // rounding of a 2-dp percentage. Anything wider and the screens disagree.
+    expect(Number(back.vendorNetPayout.sub(quoted.vendorNetPayout).abs().paise)).toBeLessThan(500);
+
+    // And the trap, recorded: the raw figure is not interchangeable between them.
+    const naive = payoutFromCommission({
       expectedSalePrice: quoted.sellingPrice,
       commissionPct: quoted.commissionPct,
     });
-    // Both modes land on one stored rupee value, within the rounding of a 2-dp
-    // percentage. Anything wider and the two screens disagree with each other.
-    expect(Number(back.vendorNetPayout.sub(quoted.vendorNetPayout).abs().paise)).toBeLessThan(500);
+    expect(Number(naive.vendorNetPayout.sub(quoted.vendorNetPayout).abs().paise)).toBeGreaterThan(
+      50_000,
+    );
   });
 });
 

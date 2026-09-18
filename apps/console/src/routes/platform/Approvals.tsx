@@ -6,6 +6,7 @@ import { BoardScreen } from '../../boards/BoardScreen';
 import { Id, StatusDot, Unmeasured, toneOf, word } from '../../boards/bits';
 import type { BoardConfig } from '../../boards/types';
 import { inr, when } from '../fulfilment/api';
+import { apiFetch } from '../../lib/auth';
 
 /** Archetype B — board. */
 
@@ -134,7 +135,7 @@ function Decide({
     setBusy(decision);
     setFailed(null);
     try {
-      const res = await fetch(`/api/approvals/${encodeURIComponent(approval.id)}/decide`, {
+      const res = await apiFetch(`/api/approvals/${encodeURIComponent(approval.id)}/decide`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },

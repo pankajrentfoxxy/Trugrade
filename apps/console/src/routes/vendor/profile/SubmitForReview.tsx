@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Button, cn } from '@trugrade/ui';
 import type { ResumableOnboarding } from '@trugrade/contracts';
-import { refreshSession } from '../../../lib/auth';
+import { apiFetch } from '../../../lib/auth';
 import { useOnboardingReload } from '../../../lib/vendorOnboarding';
 
 /**
@@ -63,13 +63,7 @@ async function postSubmit(): Promise<
   { ok: true; slaDueAt: string } | { ok: false; message: string }
 > {
   try {
-    const send = (): Promise<Response> =>
-      fetch('/api/onboarding/submit', { method: 'POST', credentials: 'include' });
-    let res = await send();
-    if (res.status === 401) {
-      await refreshSession();
-      res = await send();
-    }
+    const res = await apiFetch('/api/onboarding/submit', { method: 'POST' });
     const body = (await res.json().catch(() => null)) as {
       slaDueAt?: string;
       error?: { message?: string };

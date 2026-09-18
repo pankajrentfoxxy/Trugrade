@@ -286,6 +286,16 @@ describe('vendor payout preview', () => {
     expect(preview.customerWarrantyMonths).toBe(6);
     expect(preview.commissionPct).toBeGreaterThan(0);
 
+    // The vendor's payout panel renders these three on one card, so they have
+    // to reconcile: the gross the vendor asked for, plus our whole charge, is
+    // what the buyer pays. `commissionAmount` used to carry the margin alone —
+    // a rupee figure sitting beside a percentage that measured something else,
+    // on a card whose rows therefore did not add up.
+    expect(preview.commissionAmount.toString()).toBe(
+      preview.buyerPays.sub(preview.grossPayout).toString(),
+    );
+    expect(preview.grossPayout.add(preview.commissionAmount).eq(preview.buyerPays)).toBe(true);
+
     const codes = preview.deductions.map((d) => d.code).sort();
     expect(codes).toEqual(['PENALTY', 'TDS']);
     // 0.1% of (Rs 1.4 crore - Rs 50 lakh), plus the penalty.

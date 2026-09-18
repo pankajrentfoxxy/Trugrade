@@ -32,7 +32,7 @@ import { AuthModal, type AuthMode } from './AuthModal';
  */
 export function AuthButtons({
   /**
-   * Resolved on the server. `consoleSellRegisterUrl()` reads `window` when it
+   * Resolved on the server. `consoleHomeUrl()` reads `window` when it
    * can, so calling it here would let the client disagree with the server's
    * markup on the first paint.
    */

@@ -5,6 +5,7 @@ import type { ResumableOnboarding } from '@trugrade/contracts';
 import { fetchOnboarding } from '../../lib/vendorOnboarding';
 import type { OrgProfile } from './profile-api';
 import { nextIncompleteSection, PROFILE_SECTIONS, sectionIsDone } from './profile/sections.config';
+import { apiFetch } from '../../lib/auth';
 
 /**
  * The card a locked section shows instead of its board.
@@ -46,7 +47,7 @@ export function useProfileGate(): {
       // 403: this seat cannot read onboarding (Ops, Finance, Viewer), but every
       // member can read the org's own status, and that is all the gate needs.
       try {
-        const res = await fetch('/api/account/profile', { credentials: 'include' });
+        const res = await apiFetch('/api/account/profile', { credentials: 'include' });
         if (!res.ok) throw new Error(`Profile unavailable (${res.status})`);
         const profile = (await res.json()) as OrgProfile;
         if (!cancelled) setVerified(profile.status === 'VERIFIED');

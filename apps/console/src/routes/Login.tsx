@@ -165,6 +165,10 @@ export function LoginRoute(): React.JSX.Element {
       return;
     }
 
+    // Deliberately NOT `apiFetch`. This runs on a cookie set seconds ago, and
+    // `apiFetch` signs out on a second 401 — which on this screen would be
+    // sign in, 401, sign out, back to this screen. A refusal here just routes
+    // the supplier home, which is the right answer whatever the reason.
     const res = await fetch('/api/onboarding/steps', { credentials: 'include' });
     if (!res.ok) {
       void navigate('/', { replace: true });

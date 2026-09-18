@@ -2,6 +2,7 @@ import * as React from 'react';
 import { persistInOrder } from '../persist';
 import { Chip, SectionDialog, SelectTile } from '@trugrade/ui';
 import { completeStep, saveStep } from '../../../../../../storefront/src/app/register/api';
+import { apiFetch } from '../../../../lib/auth';
 
 const VOLUMES = [
   { id: '1-10', label: 'Up to 10 / month' },
@@ -43,7 +44,7 @@ export function StockSection({
 
   React.useEffect(() => {
     if (!open) return;
-    void fetch('/api/public/brands', { credentials: 'include' })
+    void apiFetch('/api/public/brands')
       .then((r) => r.json())
       .then((body: { name?: string }[]) => {
         if (Array.isArray(body)) setBrandOptions(body.map((b) => b.name ?? '').filter(Boolean));

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { refreshSession } from '../lib/auth';
+import { apiFetch } from '../lib/auth';
 import { API, type DashboardTiles } from '../routes/vendor/api';
 
 export interface VendorCounts {
@@ -28,11 +28,7 @@ async function loadCounts(): Promise<VendorCounts> {
 
   inflight = (async () => {
     try {
-      let res = await fetch(API.dashboard, { credentials: 'include' });
-      if (res.status === 401) {
-        await refreshSession();
-        res = await fetch(API.dashboard, { credentials: 'include' });
-      }
+      const res = await apiFetch(API.dashboard);
       if (!res.ok) return {};
       const data = (await res.json()) as DashboardTiles;
       const value: VendorCounts = {};

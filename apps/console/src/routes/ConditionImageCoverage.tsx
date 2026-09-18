@@ -23,6 +23,7 @@ import {
 import { Board, PageHeader, Section } from '../lib/controls';
 import { useResource } from '../lib/useResource';
 import { useUrlState } from '../lib/urlState';
+import { apiFetch } from '../lib/auth';
 
 /**
  * ARCHETYPE B — Board. One row per model, a column per grade, row actions.
@@ -251,10 +252,9 @@ const PHOTO_MIME = ['image/jpeg', 'image/png', 'image/webp'];
  * is the better change and it is another lane's file.
  */
 async function send<T>(method: string, url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method,
     headers: { 'content-type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(body),
   });
   // 204 on a retire and a reorder, so an empty body is a success, not a parse
@@ -640,7 +640,9 @@ function BulkUpload({
         const blob = byName.get(file.filename);
         if (!blob) throw new Error(`"${file.filename}" is no longer selected. Drop the folder again.`);
         // Straight to object storage on the presigned URL. The bytes never pass
-        // through the API, which is why the browser is allowed to send 5 MB.
+        // through the API, which is why the browser is allowed to send 5 MB —
+        // and why this is a plain `fetch`: there is no session cookie on this
+        // request, so a 401 from the store is the store's answer, not ours.
         const put = await fetch(file.url!, {
           method: 'PUT',
           headers: { 'content-type': blob.type || 'image/jpeg' },

@@ -5,6 +5,7 @@ import { ChainStrip } from '../../boards/ChainStrip';
 import { Id, StatusDot, Unmeasured, toneOf, word } from '../../boards/bits';
 import type { BoardConfig } from '../../boards/types';
 import { FULFILMENT_API, day, inr, type DispatchResult } from './api';
+import { apiFetch } from '../../lib/auth';
 
 /** Archetype B — board, with a pipeline. */
 
@@ -55,7 +56,7 @@ const config: BoardConfig<PoRow> = {
       label: 'Dispatch',
       permission: 'procurement.po.dispatch',
       run: async (rows) => {
-        const res = await fetch(FULFILMENT_API.dispatchBulk, {
+        const res = await apiFetch(FULFILMENT_API.dispatchBulk, {
           method: 'POST',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },

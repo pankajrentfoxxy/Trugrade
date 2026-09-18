@@ -24,6 +24,7 @@ import { vendorRoutes } from './routes/vendor';
 import { Shell } from './shell/Shell';
 import { VendorShell } from './shell/VendorShell';
 import { NAV, canSee } from './shell/nav';
+import { SellLanding } from './routes/SellLanding';
 
 /**
  * Where signing in actually lands you.
@@ -38,7 +39,11 @@ import { NAV, canSee } from './shell/nav';
 function Landing(): React.JSX.Element {
   const { principal, loading } = useAuth();
   if (loading) return <div className="p-6 text-ink-2">Checking your session…</div>;
-  if (!principal) return <Navigate to="/login" replace />;
+  // Signed out, `/` is the public face of the hub rather than a bounce to the
+  // sign-in form: most people who reach this origin without a session are
+  // refurbishers deciding whether to have one, and a bare password box tells
+  // them nothing. Every other path still lands on /login through the guard.
+  if (!principal) return <SellLanding />;
 
   const first = NAV.find((n) => canSee(n, principal));
   if (!first) {

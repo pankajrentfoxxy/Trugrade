@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { ThemeToggle } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
-import { consoleSellRegisterUrl } from '../lib/console-url';
+import { consoleHomeUrl } from '../lib/console-url';
 
 /**
  * Who, if anyone, is signed in — read on the server from the request's own
@@ -142,7 +142,7 @@ export async function SiteHeader({
                 Help
               </a>
               <a
-                href={consoleSellRegisterUrl()}
+                href={consoleHomeUrl()}
                 className="util-promo"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -185,9 +185,9 @@ export async function SiteHeader({
               </Link>
             )}
             {user ? (
-              <AccountMenu fullName={user.fullName} sellUrl={consoleSellRegisterUrl()} />
+              <AccountMenu fullName={user.fullName} sellUrl={consoleHomeUrl()} />
             ) : (
-              <AuthButtons sellUrl={consoleSellRegisterUrl()} />
+              <AuthButtons sellUrl={consoleHomeUrl()} />
             )}
             {/* Last, so the cart is the rightmost control in both states —
                 the place every storefront puts it and the place a buyer's

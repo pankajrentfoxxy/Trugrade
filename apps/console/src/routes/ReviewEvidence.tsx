@@ -10,6 +10,7 @@ import {
   type StatusPillProps,
 } from '@trugrade/ui';
 import { Board, Section, Select, Textarea } from '../lib/controls';
+import { apiFetch } from '../lib/auth';
 
 /**
  * The evidence half of the onboarding record (archetype C): what our providers
@@ -344,7 +345,7 @@ function ViewDocumentCell({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/kyc/orgs/${orgId}/documents/${documentId}/url`, {
+      const res = await apiFetch(`/api/kyc/orgs/${orgId}/documents/${documentId}/url`, {
         credentials: 'include',
       });
       const body = (await res.json()) as { url?: string; error?: { message?: string } };

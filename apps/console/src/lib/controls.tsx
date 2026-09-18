@@ -75,6 +75,7 @@ export function Select({
   options,
   className,
   id,
+  required,
   ...props
 }: {
   label: string;
@@ -85,9 +86,21 @@ export function Select({
   const generated = React.useId();
   const selectId = id ?? generated;
   return (
-    <Field label={label} hint={hint} error={error} htmlFor={selectId} className={className}>
+    <Field
+      label={label}
+      hint={hint}
+      error={error}
+      htmlFor={selectId}
+      className={className}
+      // Named, not swept into `...props`. Left in the spread it reached the
+      // `<select>` and never the `<label>`, so a required dropdown was the one
+      // control on a form that carried no asterisk — `Field` has drawn one all
+      // along and was never told.
+      required={required}
+    >
       <select
         id={selectId}
+        required={required}
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined}
         className={cn(CONTROL, 'h-11', error && 'border-fail')}
@@ -318,7 +331,13 @@ export function Datum({
  * result — "nothing wrong here" — which is exactly the reading it must not get.
  * Words, in `--ink-4`, with the reason available to a screen reader.
  */
-export function NotMeasured({ why, label = 'Not measured' }: { why: string; label?: string }): React.JSX.Element {
+export function NotMeasured({
+  why,
+  label = 'Not measured',
+}: {
+  why: string;
+  label?: string;
+}): React.JSX.Element {
   return (
     // `font-sans` explicitly: `DataTable` puts a numeric column in mono and
     // tabular figures, and these are words. A sentence in IBM Plex Mono in the

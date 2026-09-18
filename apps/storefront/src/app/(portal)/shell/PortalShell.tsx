@@ -4,7 +4,6 @@ import * as React from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
-import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { HubAccountMenu, Skeleton, ToastProvider } from '@trugrade/ui';
 import { logout } from '../../register/api';
 import { PortalProvider, usePortal } from './PortalContext';
@@ -274,60 +273,6 @@ function LockIcon(): React.JSX.Element {
   );
 }
 
-function PortalFooter(): React.JSX.Element {
-  const {
-    legalName,
-    brandName,
-    website,
-    gstin,
-    cin,
-    registeredOffice: office,
-    customerCare,
-    grievanceOfficer,
-  } = LEGAL_DISCLOSURE;
-
-  return (
-    <footer>
-      <div className="mx-auto grid max-w-[var(--maxw)] gap-6 px-8 py-6 md:grid-cols-3">
-        <div>
-          <span className="text-[16px] font-semibold text-ink">{brandName}</span>
-          <p className="mt-2 font-mono text-[11px] text-ink-3">{legalName}</p>
-        </div>
-        <div>
-          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">
-            Office
-          </h5>
-          <address className="mt-2 font-mono text-[12px] not-italic leading-[1.7] text-ink-3">
-            {office.line1}
-            <br />
-            {office.city}, {office.state} {office.pincode}
-          </address>
-          <a
-            href={website}
-            className="mt-2 inline-block font-mono text-[12px] text-ink-3 underline"
-          >
-            {website}
-          </a>
-        </div>
-        <div>
-          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">Care</h5>
-          <p className="mt-2 font-mono text-[12px] text-ink-3">{customerCare.email}</p>
-          <p className="font-mono text-[12px] text-ink-3">{grievanceOfficer.email}</p>
-          <Link href="/legal" className="mt-2 inline-block text-[12px] text-ink-3 underline">
-            Policies and legal
-          </Link>
-        </div>
-      </div>
-      <div className="mx-auto max-w-[var(--maxw)] border-t border-rule px-8 py-3 font-mono text-[11px] text-ink-4">
-        {legalName}
-        {cin ? ` · CIN ${cin}` : ''}
-        {` · GSTIN ${gstin}`}
-        {` · ${grievanceOfficer.designation}`}
-      </div>
-    </footer>
-  );
-}
-
 /** The frame with nothing in it yet — drawn while the session is being checked. */
 function Checking(): React.JSX.Element {
   return (
@@ -362,7 +307,6 @@ function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
           {children}
         </main>
       </div>
-      <PortalFooter />
     </div>
   );
 }

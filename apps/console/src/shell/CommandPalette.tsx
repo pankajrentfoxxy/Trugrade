@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { cn } from '@trugrade/ui';
-import { useAuth } from '../lib/auth';
+import { useAuth, apiFetch } from '../lib/auth';
 import { rupees, UNIT_API, type ConsoleSearch } from '../routes/units/api';
 import { visibleGroups, type NavEntry } from './nav';
 
@@ -160,7 +160,7 @@ export function CommandPalette(): React.JSX.Element | null {
     setLoading(true);
     void (async () => {
       try {
-        const res = await fetch(UNIT_API.search(q), { credentials: 'include' });
+        const res = await apiFetch(UNIT_API.search(q), { credentials: 'include' });
         if (!res.ok) throw new Error(`Search is unavailable (${res.status})`);
         const body = (await res.json()) as ConsoleSearch;
         if (cancelled) return;

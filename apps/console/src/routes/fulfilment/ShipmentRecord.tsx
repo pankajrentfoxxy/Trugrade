@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Modal } from '@trugrade/ui';
-import { usePrincipal } from '../../lib/auth';
+import { usePrincipal, apiFetch } from '../../lib/auth';
 import { useResource } from '../../lib/useResource';
 import { Id, StatusDot, Unmeasured, toneOf, word } from '../../boards/bits';
 import { inr, when, type ShipmentRow } from './api';
@@ -206,7 +206,7 @@ function RecordDelivery({
     setBusy(true);
     setFailed(null);
     try {
-      const res = await fetch(`/api/ops/orders/${encodeURIComponent(orderNumber)}/delivery`, {
+      const res = await apiFetch(`/api/ops/orders/${encodeURIComponent(orderNumber)}/delivery`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },

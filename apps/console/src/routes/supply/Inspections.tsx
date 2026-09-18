@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Drawer, Modal } from '@trugrade/ui';
+import { Button, Drawer, Input, Modal } from '@trugrade/ui';
 import { usePrincipal } from '../../lib/auth';
 import { useResource } from '../../lib/useResource';
 import { nowMs } from '../../lib/clock';
@@ -238,8 +238,12 @@ function AssignTechnician({
 }): React.JSX.Element {
   const principal = usePrincipal();
   const [open, setOpen] = useState(false);
-    // Tomorrow. A visit booked for today is a visit whose slot has usually gone.
+  // Tomorrow. A visit booked for today is a visit whose slot has usually gone.
   const [date, setDate] = useState(new Date(nowMs() + 86_400_000).toISOString().slice(0, 10));
+  // The slot the visit is booked into. `qc_visit.slot_from` is a `time` column
+  // and the endpoint wants `HH:MM`, which is exactly what a time input gives.
+  const [from, setFrom] = useState('10:00');
+  const [to, setTo] = useState('13:00');
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -250,7 +254,22 @@ function AssignTechnician({
 
   if (!principal?.permissions.includes('qc.visit.schedule')) return <></>;
 
+  // Padded, because both notations reach the endpoint and '09:30' sorts before
+  // '09:30:00' as a raw string — the same trap the DTO's rule pads out of.
+  const asSeconds = (t: string): string => (t.length === 5 ? `${t}:00` : t);
+  const slotBackwards = Boolean(from && to) && asSeconds(to) <= asSeconds(from);
+
   const assign = async (technicianId: string): Promise<void> => {
+    // Caught here so the operator is told which end is wrong, rather than
+    // spending a round trip to be told the slot has to end after it starts.
+    if (!from || !to) {
+      setFailed('Give the slot a start and an end time.');
+      return;
+    }
+    if (slotBackwards) {
+      setFailed('End time must be later than the start time.');
+      return;
+    }
     setBusy(technicianId);
     setFailed(null);
     try {
@@ -261,16 +280,21 @@ function AssignTechnician({
         body: JSON.stringify({
           technicianId,
           scheduledDate: date,
-          slotFrom: `${date}T10:00:00.000Z`,
-          slotTo: `${date}T13:00:00.000Z`,
+          slotFrom: from,
+          slotTo: to,
         }),
       });
       if (!res.ok) {
-        const body: { error?: { message?: string } } = await res.json().catch(() => ({}));
+        const body: { error?: { message?: string; fields?: Record<string, string> } } = await res
+          .json()
+          .catch(() => ({}));
         // The scheduler's refusals are written for a human — "that technician is
         // not certified on this tool" — so they are shown as-is rather than
-        // replaced with a generic failure.
-        throw new Error(body.error?.message ?? 'The assignment was refused.');
+        // replaced with a generic failure. A field-level refusal carries its
+        // answer in `fields`; the top-level message for one of those is
+        // "Some of the details need fixing", which names nothing.
+        const field = Object.values(body.error?.fields ?? {})[0];
+        throw new Error(field ?? body.error?.message ?? 'The assignment was refused.');
       }
       setOpen(false);
       onAssigned();
@@ -287,16 +311,37 @@ function AssignTechnician({
         {visit.technicianName ? 'Reassign' : 'Assign technician'}
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Assign a technician">
-        <label className="flex flex-col gap-1">
-          <span className="text-body-sm text-ink-2">Date</span>
-          <input
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Input
+            label="Date"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-9 w-48 rounded border border-rule bg-sheet px-3 text-body-sm text-ink"
+            required
           />
-        </label>
-        {failed && <p className="text-body-sm text-fail">{failed}</p>}
+          <Input
+            label="Slot from"
+            type="time"
+            mono
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            required
+          />
+          <Input
+            label="Slot to"
+            type="time"
+            mono
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            required
+            error={slotBackwards ? 'End time must be later than the start time.' : undefined}
+          />
+        </div>
+        {failed && (
+          <p className="text-body-sm text-fail" role="alert">
+            {failed}
+          </p>
+        )}
         <ul className="flex flex-col gap-1">
           {(loads ?? []).map((tech) => {
             const onDay = tech.byDay[date] ?? 0;
@@ -313,6 +358,9 @@ function AssignTechnician({
                   size="sm"
                   variant="secondary"
                   loading={busy === tech.technicianId}
+                  {...(slotBackwards
+                    ? { disabledReason: 'The slot has to end after it starts.' }
+                    : {})}
                   onClick={() => void assign(tech.technicianId)}
                 >
                   Assign

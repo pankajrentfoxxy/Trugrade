@@ -1,12 +1,6 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Button,
-  GradeBadge,
-  Input,
-  Modal,
-  Skeleton,
-} from '@trugrade/ui';
+import { Button, GradeBadge, Input, Modal, Skeleton } from '@trugrade/ui';
 import { GRADES, VENDOR_NET_PAYOUT, type Grade } from '@trugrade/contracts';
 import { Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
@@ -28,7 +22,10 @@ export function CreateListingDialog({
   onClose: () => void;
 }): React.JSX.Element | null {
   const navigate = useNavigate();
-  const { data: facilities } = useResource<VendorFacility[]>(API.facilities, 'Facilities unavailable');
+  const { data: facilities } = useResource<VendorFacility[]>(
+    API.facilities,
+    'Facilities unavailable',
+  );
   const [sku, setSku] = React.useState<SkuDetail | null>(null);
   const [grade, setGrade] = React.useState<Grade>('A');
   const [qty, setQty] = React.useState('5');
@@ -119,7 +116,13 @@ export function CreateListingDialog({
     Number(ask) <= VENDOR_NET_PAYOUT.max;
 
   return (
-    <Modal open={open} onClose={onClose} title="Create listing" description="Machine, grade, quantity, ask." size="lg">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Create listing"
+      description="Machine, grade, quantity, ask."
+      size="lg"
+    >
       <div className="flex flex-col gap-4">
         {error && (
           <p className="text-body-sm text-fail" role="alert">
@@ -129,18 +132,33 @@ export function CreateListingDialog({
 
         <MachinePicker onSelect={setSku} />
 
-        <div className="flex flex-wrap gap-2">
-          {GRADES.map((g) => (
-            <button key={g} type="button" onClick={() => setGrade(g)}>
-              <GradeBadge grade={g} variant={grade === g ? 'verified' : 'declared'} />
-            </button>
-          ))}
+        {/*
+          A group of badges, so it carries no `<label>` of its own the way the
+          fields around it do — named here, with the same marker, rather than
+          being the one answer on the form that looks optional.
+        */}
+        <div className="flex flex-col gap-2">
+          <p className="text-body-sm font-medium text-ink-2" id="create-listing-grade">
+            Grade
+            <span className="text-fail" aria-hidden="true">
+              {' '}
+              *
+            </span>
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-labelledby="create-listing-grade">
+            {GRADES.map((g) => (
+              <button key={g} type="button" aria-pressed={grade === g} onClick={() => setGrade(g)}>
+                <GradeBadge grade={g} variant={grade === g ? 'verified' : 'declared'} />
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
             label="Quantity"
             type="number"
+            required
             min={1}
             value={qty}
             onChange={(e) => setQty(e.target.value)}
@@ -149,6 +167,7 @@ export function CreateListingDialog({
             label="Your ask (net per machine)"
             mono
             type="number"
+            required
             min={VENDOR_NET_PAYOUT.min}
             max={VENDOR_NET_PAYOUT.max}
             value={ask}
@@ -159,6 +178,7 @@ export function CreateListingDialog({
         {facilities ? (
           <Select
             label="Pickup facility"
+            required
             value={facilityId}
             onChange={(e) => setFacilityId(e.target.value)}
             options={[
@@ -175,21 +195,62 @@ export function CreateListingDialog({
 
         {previewError && <p className="text-body-sm text-fail">{previewError}</p>}
         {preview && (
+          /*
+            Two sums, both of which have to close on screen.
+
+            The buyer's side: the ask for the batch, plus our whole charge, is
+            what the buyer pays. The vendor's side: that same ask, less each
+            deduction, is what lands in their account. The panel used to print
+            the *net* against the buyer's price with only the commission between
+            them, so any vendor with TDS withheld — every vendor over the
+            threshold — saw three numbers that were short by exactly the
+            deduction, and no line naming it.
+
+            What is still not itemised is our own cost stack: the margin, the
+            warranty reserve, the QC allocation and the freight allowance are one
+            figure here on purpose, and the API does not send them.
+          */
           <div className="rounded border border-rule bg-sheet-2 p-4" data-testid="payout-preview">
             <dl className="grid gap-2 text-body-sm">
-              <div className="flex justify-between">
-                <dt className="text-ink-2">You receive</dt>
-                <dd className="font-mono tnum text-ink">{rupees(preview.netPayout.toString())}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-2">
+                  Your ask
+                  <span className="ml-2 font-mono tnum text-ink-3">
+                    {preview.units} × {rupees(preview.perUnitPayout)}
+                  </span>
+                </dt>
+                <dd className="font-mono tnum text-ink">{rupees(preview.grossPayout)}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-ink-2">Commission</dt>
-                <dd className="font-mono tnum text-acc-ink">
-                  {preview.commissionPct}% · {rupees(preview.commissionAmount)}
-                </dd>
+              {/*
+                The percentage still carries its denominator, but the
+                denominator is now the ask directly above it — so the panel
+                reads top to bottom as the deal runs: you ask this, we add our
+                percentage of it, the buyer pays the total.
+              */}
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-2">
+                  Commission
+                  <span className="ml-2 text-ink-3">
+                    <span className="font-mono tnum">{preview.commissionPct}%</span> of your ask
+                  </span>
+                </dt>
+                <dd className="font-mono tnum text-acc-ink">{rupees(preview.commissionAmount)}</dd>
               </div>
-              <div className="flex justify-between border-t border-rule-2 pt-2">
+              <div className="flex justify-between gap-4 border-t border-rule-2 pt-2">
                 <dt className="text-ink">Buyer pays</dt>
                 <dd className="font-mono tnum text-ink">{rupees(preview.buyerPays)}</dd>
+              </div>
+
+              {/* Named, never a silent gap between the ask and what arrives. */}
+              {preview.deductions.map((d) => (
+                <div key={d.code} className="flex justify-between gap-4 pt-1">
+                  <dt className="text-ink-2">{d.label}</dt>
+                  <dd className="font-mono tnum text-ink-2">−{rupees(d.amount)}</dd>
+                </div>
+              ))}
+              <div className="flex justify-between gap-4 border-t border-rule-2 pt-2">
+                <dt className="text-ink">You receive</dt>
+                <dd className="font-mono tnum text-ink">{rupees(preview.netPayout)}</dd>
               </div>
             </dl>
           </div>

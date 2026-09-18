@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { cn } from '@trugrade/ui';
 import { useAuth, type Principal } from '../lib/auth';
 import { VendorSurfaceSync } from '../lib/vendor-surface';
@@ -231,57 +230,6 @@ function Rail({
   );
 }
 
-function VendorFooter(): React.JSX.Element {
-  const {
-    legalName,
-    brandName,
-    website,
-    gstin,
-    cin,
-    registeredOffice: office,
-    customerCare,
-    grievanceOfficer,
-  } = LEGAL_DISCLOSURE;
-
-  return (
-    <footer>
-      <div className="mx-auto grid max-w-[var(--maxw)] gap-6 px-8 py-6 md:grid-cols-3">
-        <div>
-          <span className="text-[16px] font-semibold text-ink">{brandName}</span>
-          <p className="mt-2 font-mono text-[11px] text-ink-3">{legalName}</p>
-        </div>
-        <div>
-          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">
-            Office
-          </h5>
-          <address className="mt-2 font-mono text-[12px] not-italic leading-[1.7] text-ink-3">
-            {office.line1}
-            <br />
-            {office.city}, {office.state} {office.pincode}
-          </address>
-          <a
-            href={website}
-            className="mt-2 inline-block font-mono text-[12px] text-ink-3 underline"
-          >
-            {website}
-          </a>
-        </div>
-        <div>
-          <h5 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-4">Care</h5>
-          <p className="mt-2 font-mono text-[12px] text-ink-3">{customerCare.email}</p>
-          <p className="font-mono text-[12px] text-ink-3">{grievanceOfficer.email}</p>
-        </div>
-      </div>
-      <div className="mx-auto max-w-[var(--maxw)] border-t border-rule px-8 py-3 font-mono text-[11px] text-ink-4">
-        {legalName}
-        {cin ? ` · CIN ${cin}` : ''}
-        {` · GSTIN ${gstin}`}
-        {` · ${grievanceOfficer.designation}`}
-      </div>
-    </footer>
-  );
-}
-
 export function VendorShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   const { principal } = useAuth();
   const { pathname } = useLocation();
@@ -340,7 +288,6 @@ export function VendorShell({ children }: { children: React.ReactNode }): React.
               {children}
             </main>
           </div>
-          <VendorFooter />
         </div>
       </VendorCountsProvider>
     </OnboardingReloadContext.Provider>

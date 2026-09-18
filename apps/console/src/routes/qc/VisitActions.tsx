@@ -133,6 +133,11 @@ function ScheduleBlock({
 
   const active = (technicians ?? []).filter((t) => t.isActive);
 
+  // Padded, because both notations reach here and '09:30' sorts before
+  // '09:30:00' as a raw string — the same trap the DTO's rule pads out of.
+  const asSeconds = (t: string): string => (t.length === 5 ? `${t}:00` : t);
+  const slotBackwards = Boolean(from && to) && asSeconds(to) <= asSeconds(from);
+
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-body font-medium text-ink">
@@ -147,7 +152,13 @@ function ScheduleBlock({
           required
         />
         <Input label="From" type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <Input label="To" type="time" value={to} onChange={(e) => setTo(e.target.value)} />
+        <Input
+          label="To"
+          type="time"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          error={slotBackwards ? 'End time must be later than the start time.' : undefined}
+        />
         <Select
           label="Technician"
           value={technicianId}
@@ -167,7 +178,11 @@ function ScheduleBlock({
         <Button
           variant="primary"
           loading={busy}
-          {...(date ? {} : { disabledReason: 'Choose the date of the visit first.' })}
+          {...(date
+            ? slotBackwards
+              ? { disabledReason: 'The slot has to end after it starts.' }
+              : {}
+            : { disabledReason: 'Choose the date of the visit first.' })}
           onClick={() =>
             void run('The visit was not booked', async () => {
               await send(

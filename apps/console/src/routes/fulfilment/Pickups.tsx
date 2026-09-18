@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Drawer, Modal } from '@trugrade/ui';
-import { usePrincipal } from '../../lib/auth';
+import { usePrincipal, apiFetch } from '../../lib/auth';
 import { useResource } from '../../lib/useResource';
 import { BoardScreen } from '../../boards/BoardScreen';
 import { Id, StatusDot, Unmeasured, toneOf, word } from '../../boards/bits';
@@ -30,7 +30,7 @@ const config: BoardConfig<PickupRow> = {
       run: async (rows) => {
         const riderId = window.prompt('Rider id for the selected pickups');
         if (!riderId) return { ok: 0, failed: 0 };
-        const res = await fetch('/api/ops/pickups/rider', {
+        const res = await apiFetch('/api/ops/pickups/rider', {
           method: 'POST',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
@@ -217,7 +217,7 @@ function AssignRider({
     setBusy(riderId);
     setFailed(null);
     try {
-      const res = await fetch(`/api/ops/pickups/${encodeURIComponent(task.id)}/rider`, {
+      const res = await apiFetch(`/api/ops/pickups/${encodeURIComponent(task.id)}/rider`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },

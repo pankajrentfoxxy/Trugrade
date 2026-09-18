@@ -141,10 +141,23 @@ export function priceFromNetPayout(input: PriceInputs): PriceBreakdown {
     rawSellingPrice,
     sellingPrice,
     roundingAdjustment: sellingPrice.sub(rawSellingPrice),
-    // The number the vendor sees. Our whole charge over the price the customer
-    // pays — not the margin percentage, which would understate it and invite
-    // an argument the first time they work it out themselves.
-    commissionPct: pct(sellingPrice.sub(vendorNetPayout), sellingPrice),
+    /*
+      The number the vendor sees: our whole charge, over THEIR OWN ask.
+
+      Still the whole charge, never the margin alone — the margin understates it
+      and invites an argument the first time somebody works it out. What changed
+      is the denominator. Quoted over the selling price, the only number a vendor
+      can check it against is one they did not choose, so `25.5%` arrived as
+      `20.32%` and the rupee figure beside it looked wrong. Over their ask the
+      screen reads in the direction the deal actually runs: you ask X, we add
+      our percentage, the buyer pays the total.
+
+      Note this is NOT the same basis as `payoutFromCommission`, where the rate
+      the vendor quotes is by definition a share of the sale price they name.
+      Two modes, two bases, because in each the vendor is naming a different
+      number — so any screen showing one must say which.
+    */
+    commissionPct: pct(sellingPrice.sub(vendorNetPayout), vendorNetPayout),
     totalWarrantyMonths,
     platformBackedMonths,
   };

@@ -59,10 +59,11 @@ import { MarginRuleRepository } from './margin-rule.repository';
  * numbers the preview needs are lifted out by name.
  *
  * The one deliberate exception is `commissionPct`, and it is worth being honest
- * about: our whole charge over the selling price *is* algebraically invertible
- * back to the selling price. PHASE_03 requires it anyway, and requires it for a
- * good reason — the vendor gets the percentage conversation they expect while
- * the contract stays anchored to a fixed rupee amount. What the preview protects
+ * about: our whole charge over the vendor's ask *is* algebraically invertible
+ * back to the selling price, the same way it was when it was quoted over that
+ * price instead. PHASE_03 requires it anyway, and requires it for a good reason
+ * — the vendor gets the percentage conversation they expect while the contract
+ * stays anchored to a fixed rupee amount. What the preview protects
  * is the *itemisation*: the margin amount, the warranty reserve, the QC
  * allocation and the freight allowance are each a separate negotiation we do not
  * want to have per unit, and none of them appears in any vendor-facing type.
@@ -109,9 +110,18 @@ export interface VendorPayoutPreview {
   deductions: PayoutDeduction[];
   totalDeductions: Money;
   netPayout: Money;
-  /** Our whole charge as a percentage of the selling price. PHASE_03 Task 5. */
+  /** Our whole charge as a percentage of the vendor's own ask. PHASE_03 Task 5. */
   commissionPct: number;
-  /** Margin amount per listing line — our charge in rupees, not TDS. */
+  /**
+   * That same charge in rupees — `commissionPct` of `grossPayout`, not the
+   * margin alone.
+   *
+   * The two have to be the same quantity or the panel they are rendered on says
+   * two different things on one line. `priceFromNetPayout` builds the selling
+   * price from margin **plus** logistics, QC and the warranty reserve, so the
+   * margin on its own is neither what the percentage measures nor what closes
+   * the gap between what the vendor receives and what the buyer pays.
+   */
   commissionAmount: Money;
   /** What the buyer pays in total for this line — not labelled retail on vendor screens. */
   buyerPays: Money;
@@ -285,7 +295,13 @@ export class PricingService {
       totalDeductions,
       netPayout: grossPayout.sub(totalDeductions),
       commissionPct: breakdown.commissionPct,
-      commissionAmount: breakdown.marginAmount.times(input.units),
+      // The whole charge, which is what `commissionPct` is a percentage of:
+      // margin, logistics, QC and the warranty reserve. Using `marginAmount`
+      // here paired a 20.32% with ₹7,500 that was 15%, and left the three lines
+      // of the payout panel not adding up — ₹50,000 received plus ₹7,500 is not
+      // the ₹62,750 the buyer pays. COMMISSION mode has always reconciled
+      // (`payoutFromCommission`); this is NET_PAYOUT saying the same thing.
+      commissionAmount: breakdown.sellingPrice.sub(breakdown.vendorNetPayout).times(input.units),
       buyerPays: breakdown.sellingPrice.times(input.units),
       vendorWarrantyMonths: input.vendorWarrantyMonths,
       customerWarrantyMonths: breakdown.totalWarrantyMonths,

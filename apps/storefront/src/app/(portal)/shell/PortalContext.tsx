@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   getOnboarding,
   getSession,
+  setSessionLostHandler,
   type ResumableOnboarding,
   type SessionView,
 } from '../../register/api';
@@ -179,6 +180,19 @@ export function PortalProvider({
     if (gate.k !== 'signed-out') return;
     router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
   }, [gate.k, pathname, router]);
+
+  /**
+   * `call` discovers a dead session outside React; this is how it says so.
+   *
+   * It only reports a session it could not restore — a lapsed access cookie is
+   * repaired and the request replayed without anybody hearing about it. Setting
+   * the gate is the whole redirect: the effect above moves to /sign-in and
+   * carries `next`, so the buyer comes back to the screen they were on.
+   */
+  React.useEffect(() => {
+    setSessionLostHandler(() => setGate({ k: 'signed-out' }));
+    return () => setSessionLostHandler(null);
+  }, []);
 
   const reload = React.useCallback((): void => setToken((n) => n + 1), []);
   const setSession = React.useCallback((next: SessionView): void => {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { refreshSession } from './auth';
+import { apiFetch } from './auth';
 
 export interface Resource<T> {
   /** Null while loading *and* on failure — check `error` first. */
@@ -40,17 +40,11 @@ export function useResource<T>(
     setError(null);
     void (async () => {
       try {
-        let res = await fetch(url, { credentials: 'include' });
-        // The access cookie lapses fifteen minutes in while the refresh cookie is
-        // still good for weeks, so a board opened after that gap answers 401 with
-        // the means to fix itself sitting right there. Spend it once and retry —
-        // `refreshSession` is single-flight, so a screen with several of these
-        // does not turn one lapse into a burst of concurrent rotations.
-        if (res.status === 401) {
-          await refreshSession();
-          if (cancelled) return;
-          res = await fetch(url, { credentials: 'include' });
-        }
+        // `apiFetch` owns the lapsed-cookie case: it restores the session and
+        // replays this read, and signs out rather than resolving if the session
+        // is genuinely gone. A 401 therefore never reaches the label below.
+        const res = await apiFetch(url);
+        if (cancelled) return;
         if (!res.ok) throw new Error(`${failureLabel} (${res.status})`);
         const d = (await res.json()) as T;
         if (!cancelled) setData(d);

@@ -127,6 +127,101 @@ export function refreshSession(): Promise<unknown | AuthFailure> {
   return sessionInFlight;
 }
 
+/* ==========================================================================
+ * A 401 is never a message
+ * ======================================================================== */
+
+/**
+ * Routes that must never be refreshed or replayed.
+ *
+ * A 401 from an auth route is the ANSWER, not a symptom: "those details did not
+ * match" does not become true on a second ask. Replaying `POST /auth/login`
+ * would also spend two of the five attempts the rate limiter allows per email
+ * for one thing the person did once, which is how somebody is locked out for
+ * fifteen minutes by a single click.
+ */
+const NEVER_RETRY = ['/api/auth/'];
+
+/** Set by `AuthProvider`, so this module never imports the router or React state. */
+let sessionLostHandler: (() => void) | null = null;
+
+export function setSessionLostHandler(fn: (() => void) | null): void {
+  sessionLostHandler = fn;
+}
+
+/** One sign-out, however many requests discover the dead session at once. */
+let signingOut = false;
+
+/** Called on a fresh sign-in, so the next dead session is handled again. */
+export function armSessionLoss(): void {
+  signingOut = false;
+}
+
+/**
+ * The session is gone. End it, and never resolve.
+ *
+ * Returning a value here would hand the caller a 401 response to render, and a
+ * 401 must never reach a person as text — the whole point of this policy. There
+ * is also no honest value to return: the request did not succeed and will not.
+ * So the promise never settles, the caller's `catch`/`finally` never runs, no
+ * error state is ever set, and the screen is unmounted a moment later by
+ * `RequirePermission` navigating to /login once the principal is null.
+ *
+ * `POST /auth/logout` is `@Public()` and answers 204 whatever happens — it
+ * cannot fail and leave someone stuck in a session they cannot end.
+ */
+function loseSession(): Promise<never> {
+  if (!signingOut) {
+    signingOut = true;
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(
+      () => undefined,
+    );
+    sessionLostHandler?.();
+  }
+  return new Promise<never>(() => undefined);
+}
+
+/**
+ * Every authenticated call the console makes, and the one place a 401 is handled.
+ *
+ * A 401 is not something a person did wrong, so it is never rendered. It means
+ * the fifteen-minute access cookie lapsed, which is routine: this form takes
+ * longer than that to fill in. So:
+ *
+ *   1. suppress it — nothing is drawn;
+ *   2. `GET /auth/session` once, which rotates the refresh cookie and re-sets both;
+ *   3. replay the original request once;
+ *   4. a 401 at either step means the session is genuinely gone — sign out.
+ *
+ * Only a 401 ends the session. A refresh that failed because the network blinked
+ * is not evidence that the session ended, and signing someone out over it would
+ * swap a silent failure for a rude one — so that case hands the caller the
+ * original response to report in its own words.
+ *
+ * Before this existed, each helper carried its own copy of step 2 and six of
+ * roughly sixteen had one. The rest rendered the API's own "Please sign in to
+ * continue." in red on a form, under a signed-in masthead — a QC technician saw
+ * it under the file input after a twelve-minute inspection, with a refresh
+ * cookie in the jar still good for a fortnight.
+ */
+export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const send = (): Promise<Response> => fetch(input, { credentials: 'include', ...init });
+
+  const first = await send();
+  if (first.status !== 401) return first;
+  if (NEVER_RETRY.some((prefix) => input.startsWith(prefix))) return first;
+
+  const restored = await refreshSession();
+  if (isFailure(restored)) {
+    if (restored.status === 401) return loseSession();
+    // The network, not the session. Nothing was proved either way.
+    return first;
+  }
+
+  const replay = await send();
+  return replay.status === 401 ? loseSession() : replay;
+}
+
 /**
  * The console's session.
  *
@@ -153,6 +248,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   }, []);
 
   /**
+   * `apiFetch` discovers a dead session outside React; this is how it says so.
+   *
+   * Clearing the principal is the whole redirect: `RequirePermission` sends a
+   * null principal to /login. Keeping the navigation there rather than here
+   * means this module never imports the router, and one screen cannot be left
+   * behind holding a session the rest of the app has given up on.
+   */
+  React.useEffect(() => {
+    setSessionLostHandler(() => setPrincipal(null));
+    return () => setSessionLostHandler(null);
+  }, []);
+
+  /**
    * Renew ahead of expiry, because nothing else does.
    *
    * The access cookie is set to `accessTtl - 30s` and there is no interceptor
@@ -167,6 +275,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
    */
   React.useEffect(() => {
     if (!principal) return;
+    // A live session again, so the next dead one is worth signing out over.
+    armSessionLoss();
     const everyMs = SESSION_POLICY.accessTtlSeconds * 0.8 * 1000;
     const id = setInterval(() => {
       void refreshSession().then((result) => {
@@ -289,7 +399,11 @@ export function RequirePermission({
   const location = useLocation();
 
   if (loading) return <div className="p-6 text-ink-2">Checking your session…</div>;
-  if (!principal) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  // Nobody signed in lands on the front door, not on a password box. Whoever
+  // reaches this origin without a session is most likely a refurbisher deciding
+  // whether to have one, and `/` says what the portal is; its "Sell on Trugrade"
+  // control is one click from the sign-in form for everyone else.
+  if (!principal) return <Navigate to="/" state={{ from: location.pathname }} replace />;
   // A restored session that still owes a factor lands back on the login screen,
   // which is the only place that can ask for one.
   if (principal.mfaRequired) {

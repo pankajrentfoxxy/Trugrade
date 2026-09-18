@@ -84,7 +84,44 @@ async function withSessionRestore<T>(
   if (NEVER_RETRY.some((p) => path.startsWith(p))) return first;
 
   const restored = await rawCall<{ userId: string }>('/api/auth/session', { method: 'GET' });
-  return restored.ok ? rawCall<T>(path, init) : first;
+  // Only a 401 ends the session. A restore that failed because the network
+  // blinked proves nothing, so the caller gets its original refusal to report.
+  if (!restored.ok) return restored.status === 401 ? sessionLost<T>() : first;
+
+  const replay = await rawCall<T>(path, init);
+  return !replay.ok && replay.status === 401 ? sessionLost<T>() : replay;
+}
+
+/**
+ * The session is gone. End it, and never resolve.
+ *
+ * Resolving would hand the caller a 401 to render, and a 401 must never reach a
+ * buyer as text: it is not something they did, it is a fifteen-minute cookie
+ * that lapsed while they filled in a form the seeded step definitions estimate
+ * at forty minutes. There is no honest value to return either — the request did
+ * not succeed and will not. So nothing settles, no `catch` runs, no error state
+ * is set, and the shell's gate moves them to the sign-in screen.
+ *
+ * `POST /auth/logout` is `@Public()` and answers 204 whatever happens.
+ */
+let signingOut = false;
+
+function sessionLost<T>(): Promise<ApiResult<T>> {
+  if (!signingOut) {
+    signingOut = true;
+    void rawCall('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    sessionLostHandler?.();
+  }
+  return new Promise<ApiResult<T>>(() => undefined);
+}
+
+/** Set by the portal shell, so this module never imports the router. */
+let sessionLostHandler: (() => void) | null = null;
+
+export function setSessionLostHandler(fn: (() => void) | null): void {
+  sessionLostHandler = fn;
+  // A handler arriving means a shell mounted with a live session.
+  if (fn) signingOut = false;
 }
 
 export async function call<T>(path: string, init: RequestInit): Promise<ApiResult<T>> {

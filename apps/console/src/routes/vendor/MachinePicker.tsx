@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Skeleton } from '@trugrade/ui';
 import { Select } from '../../lib/controls';
 import { API, type PickerBrand, type PickerModel, type SkuDetail } from './api';
+import { apiFetch } from '../../lib/auth';
 
 /**
  * Choosing the machine, one narrowing question at a time.
@@ -142,7 +143,11 @@ const SORT_OF: Partial<Record<SpecRung, (s: SkuDetail) => number>> = {
 };
 
 /** The SKUs still possible given every rung ABOVE `rung`. */
-function narrow(skus: readonly SkuDetail[], choice: Choice, rung: SpecRung | 'variant'): SkuDetail[] {
+function narrow(
+  skus: readonly SkuDetail[],
+  choice: Choice,
+  rung: SpecRung | 'variant',
+): SkuDetail[] {
   const above = RUNGS.slice(2, RUNGS.indexOf(rung)) as SpecRung[];
   return skus.filter((s) => above.every((a) => !choice[a] || KEY_OF[a](s) === choice[a]));
 }
@@ -226,7 +231,7 @@ export function MachinePicker({
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(API.catalogPickerBrands, { credentials: 'include' });
+        const res = await apiFetch(API.catalogPickerBrands, { credentials: 'include' });
         if (!res.ok) throw new Error(`Catalog unavailable (${res.status})`);
         const rows = (await res.json()) as PickerBrand[];
         if (cancelled) return;
@@ -252,7 +257,7 @@ export function MachinePicker({
     setModels(null);
     void (async () => {
       try {
-        const res = await fetch(API.catalogPickerModels(choice.brandId), {
+        const res = await apiFetch(API.catalogPickerModels(choice.brandId), {
           credentials: 'include',
         });
         if (!res.ok) throw new Error(`Models unavailable (${res.status})`);
@@ -284,7 +289,9 @@ export function MachinePicker({
     setSkus(null);
     void (async () => {
       try {
-        const res = await fetch(API.catalogModelSkus(choice.modelId), { credentials: 'include' });
+        const res = await apiFetch(API.catalogModelSkus(choice.modelId), {
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error(`Configurations unavailable (${res.status})`);
         const rows = (await res.json()) as SkuDetail[];
         if (cancelled) return;
@@ -345,6 +352,7 @@ export function MachinePicker({
       {brands ? (
         <Select
           label="Brand"
+          required
           value={choice.brandId}
           onChange={(e) => set('brandId', e.target.value)}
           options={[
@@ -358,6 +366,7 @@ export function MachinePicker({
 
       <Select
         label="Model"
+        required
         value={choice.modelId}
         disabled={!choice.brandId || !models}
         hint={
@@ -376,6 +385,7 @@ export function MachinePicker({
 
       <Select
         label="Processor"
+        required
         value={choice.processor}
         disabled={!choice.modelId || !skus}
         onChange={(e) => set('processor', e.target.value)}
@@ -389,6 +399,7 @@ export function MachinePicker({
 
       <Select
         label="Generation"
+        required
         value={choice.generation}
         disabled={!choice.processor}
         onChange={(e) => set('generation', e.target.value)}
@@ -401,6 +412,7 @@ export function MachinePicker({
       <div className="grid gap-4 sm:grid-cols-2">
         <Select
           label="RAM"
+          required
           value={choice.ram}
           disabled={!choice.generation}
           onChange={(e) => set('ram', e.target.value)}
@@ -412,6 +424,7 @@ export function MachinePicker({
 
         <Select
           label="Hard disk"
+          required
           value={choice.storage}
           disabled={!choice.ram}
           onChange={(e) => set('storage', e.target.value)}
@@ -425,6 +438,7 @@ export function MachinePicker({
       {choice.storage && variantOptionsFor(pool, choice).length > 1 && (
         <Select
           label="Screen and graphics"
+          required
           hint="This configuration comes in more than one screen. Pick the one you hold."
           value={choice.variant}
           onChange={(e) => set('variant', e.target.value)}
@@ -433,7 +447,11 @@ export function MachinePicker({
       )}
 
       {resolved && (
-        <p aria-live="polite" className="text-body-sm text-ink-2" data-testid="machine-picker-resolved">
+        <p
+          aria-live="polite"
+          className="text-body-sm text-ink-2"
+          data-testid="machine-picker-resolved"
+        >
           {/* The catalog entry the vendor has landed on, named once and
               prominently: everything downstream — commission, inspection,
               the buyer's product page — is computed from this row. */}

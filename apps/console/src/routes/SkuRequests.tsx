@@ -3,6 +3,7 @@ import { SKU_IMPORT_COLUMNS, type SkuImportColumn } from '@trugrade/contracts';
 import { Button, EmptyState, Skeleton, StatusPill, Input } from '@trugrade/ui';
 import { PageHeader, Textarea } from '../lib/controls';
 import { useResource } from '../lib/useResource';
+import { apiFetch } from '../lib/auth';
 
 /**
  * ARCHETYPE B — Board. A worklist of records, each with its own row actions.
@@ -54,7 +55,7 @@ interface DecisionResult {
  * envelope and the helper is flagged rather than quietly forked everywhere.
  */
 async function postDecision(requestId: string, body: Decision): Promise<DecisionResult> {
-  const res = await fetch(`/api/catalog/sku-requests/${requestId}/decision`, {
+  const res = await apiFetch(`/api/catalog/sku-requests/${requestId}/decision`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',

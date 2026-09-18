@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal } from '@trugrade/ui';
-import { consoleSellRegisterUrl } from '../../lib/console-url';
+import { consoleHomeUrl } from '../../lib/console-url';
 import { OtpSignIn } from '../sign-in/OtpSignIn';
 import { AuthArt } from './AuthArt';
 
@@ -40,7 +40,7 @@ export function AuthModal({
   // The console origin depends on the host the page is served from, which is
   // only known in the browser; the placeholder is the storefront's own
   // redirect to the same place, so the link is never wrong, only indirect.
-  React.useEffect(() => setSellerUrl(consoleSellRegisterUrl()), []);
+  React.useEffect(() => setSellerUrl(consoleHomeUrl()), []);
 
   const onSignedIn = (url: string, outcome: { created: boolean }): void => {
     if (outcome.created) {

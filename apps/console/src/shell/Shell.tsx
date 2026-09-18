@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { Link, useLocation } from 'react-router';
-import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { cn, Logo } from '@trugrade/ui';
 import { useAuth } from '../lib/auth';
 import { AccountMenu } from './AccountMenu';
@@ -134,86 +133,6 @@ function SectionRail({
 }
 
 /**
- * Consumer Protection (E-Commerce) Rules 2020 r.4(2): legal name, registered
- * address, customer care and the grievance officer, on every page. The content
- * is `LEGAL_DISCLOSURE` — adding a branch office is a config change, never an
- * edit here, and no brand or entity string is written in this file.
- */
-function SiteFooter(): React.JSX.Element {
-  const {
-    legalName,
-    brandName,
-    website,
-    gstin,
-    registeredOffice: office,
-    customerCare,
-    grievanceOfficer,
-  } = LEGAL_DISCLOSURE;
-
-  return (
-    <footer className="tg-chrome mt-auto border-t border-chrome-line">
-      <div className="mx-auto grid max-w-container gap-6 px-5 py-6 md:grid-cols-3">
-        <div>
-          <span className="tg-brandlock inline-block">
-            <Logo size={22} />
-          </span>
-          <p className="mt-3 max-w-[38ch] text-body-sm text-on-chrome-2">
-            {brandName} is a brand of {legalName}
-          </p>
-          <p className="mt-1 max-w-[38ch] text-body-sm text-on-chrome-3">
-            Every unit is opened, tested and graded before it is listed.
-          </p>
-        </div>
-        <div>
-          <h5 className="font-mono text-label uppercase tracking-[0.14em] text-on-chrome-3">
-            Registered office
-          </h5>
-          <address className="mt-3 font-mono text-body-sm not-italic leading-[1.8] text-on-chrome-2">
-            {legalName}
-            <br />
-            {office.line1}
-            <br />
-            {office.city}, {office.state} {office.pincode}
-            <br />
-            {office.country}
-            <br />
-            GSTIN {gstin}
-          </address>
-          <a
-            href={website}
-            className="mt-2 inline-block font-mono text-body-sm text-on-chrome-2 underline decoration-chrome-line-2 underline-offset-4 hover:text-on-chrome"
-          >
-            {website}
-          </a>
-        </div>
-        <div>
-          <h5 className="font-mono text-label uppercase tracking-[0.14em] text-on-chrome-3">
-            Customer care and grievances
-          </h5>
-          <dl className="mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-body-sm text-on-chrome-2">
-            <dt className="text-on-chrome-3">Care</dt>
-            <dd className="font-mono">{customerCare.email}</dd>
-            <dt className="text-on-chrome-3">Phone</dt>
-            <dd className="font-mono">{customerCare.phone}</dd>
-            <dt className="text-on-chrome-3">Hours</dt>
-            <dd className="font-mono">{customerCare.hours}</dd>
-            <dt className="text-on-chrome-3">{grievanceOfficer.designation}</dt>
-            <dd>{grievanceOfficer.name}</dd>
-            <dt className="text-on-chrome-3">Reach</dt>
-            <dd className="font-mono">{grievanceOfficer.email}</dd>
-          </dl>
-        </div>
-      </div>
-      <div className="mx-auto max-w-container border-t border-chrome-line px-5 py-3">
-        <span className="text-body-sm text-on-chrome-3">
-          &copy; <span className="font-mono">{new Date().getFullYear()}</span> {legalName}
-        </span>
-      </div>
-    </footer>
-  );
-}
-
-/**
  * The admin frame.
  *
  * Platform staff get `OpsShell` — seven domains, a tab strip and a record
@@ -261,7 +180,6 @@ export function Shell({ children }: { children: React.ReactNode }): React.JSX.El
           {children}
         </main>
       </div>
-      <SiteFooter />
     </div>
   );
 }

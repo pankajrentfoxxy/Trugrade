@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Link, useParams } from 'react-router';
 import {
   Breadcrumb,
+  Button,
   cn,
   DataBoard,
   EmptyState,
@@ -35,6 +36,7 @@ import {
   type VendorUnitMovement,
 } from './api';
 import { ListingMachineCard, machineTitle } from './ListingMachine';
+import { AddSerialsDialog } from './listings/AddSerialsDialog';
 import { InspectionRequested, RequestInspection } from './listings/RequestInspection';
 
 /**
@@ -380,6 +382,7 @@ export function ListingUnitsRoute(): React.JSX.Element {
   const { id } = useParams();
   const [reloadToken, setReloadToken] = React.useState(0);
   const [requested, setRequested] = React.useState<SubmitAccepted | null>(null);
+  const [addingSerials, setAddingSerials] = React.useState(false);
   const listing = useResource<VendorListing>(
     id ? API.listing(id) : '',
     'This listing did not load',
@@ -405,12 +408,21 @@ export function ListingUnitsRoute(): React.JSX.Element {
       <PageHeader
         title={machineTitle(listing.data)}
         action={
-          <Link
-            className="text-acc-ink underline underline-offset-4"
-            to={`/vendor/listings/${id}/bulk-upload`}
-          >
-            Add more from a CSV
-          </Link>
+          <>
+            {/*
+              Typing three serials should not mean opening a spreadsheet. The
+              CSV route stays first for the warehouse export it is built for.
+            */}
+            <Button variant="secondary" size="sm" onClick={() => setAddingSerials(true)}>
+              Add serials manually
+            </Button>
+            <Link
+              className="text-acc-ink underline underline-offset-4"
+              to={`/vendor/listings/${id}/bulk-upload`}
+            >
+              Add more from a CSV
+            </Link>
+          </>
         }
       >
         {data.length} {data.length === 1 ? 'machine' : 'machines'} on this listing, and where each
@@ -434,12 +446,17 @@ export function ListingUnitsRoute(): React.JSX.Element {
           title="No serials on this listing yet"
           body="A listing with no serials has nothing to inspect and nothing to sell."
           action={
-            <Link
-              className="text-acc-ink underline underline-offset-4"
-              to={`/vendor/listings/${id}/bulk-upload`}
-            >
-              Upload a CSV of serials
-            </Link>
+            <span className="flex flex-wrap items-center justify-center gap-4">
+              <Button variant="primary" onClick={() => setAddingSerials(true)}>
+                Type the serials
+              </Button>
+              <Link
+                className="text-acc-ink underline underline-offset-4"
+                to={`/vendor/listings/${id}/bulk-upload`}
+              >
+                Upload a CSV of serials
+              </Link>
+            </span>
           }
         />
       ) : (
@@ -452,6 +469,13 @@ export function ListingUnitsRoute(): React.JSX.Element {
           />
         </Board>
       )}
+
+      <AddSerialsDialog
+        listingId={id ?? ''}
+        open={addingSerials}
+        onClose={() => setAddingSerials(false)}
+        onAdded={() => setReloadToken((n) => n + 1)}
+      />
     </div>
   );
 }

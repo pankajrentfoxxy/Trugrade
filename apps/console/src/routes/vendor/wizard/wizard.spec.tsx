@@ -423,22 +423,22 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    const brand = await screen.findByLabelText('Brand');
-    expect(screen.getByLabelText('Model')).toBeDisabled();
-    expect(screen.getByLabelText('Processor')).toBeDisabled();
-    expect(screen.getByLabelText('Generation')).toBeDisabled();
-    expect(screen.getByLabelText('RAM')).toBeDisabled();
-    expect(screen.getByLabelText('Hard disk')).toBeDisabled();
+    const brand = await screen.findByLabelText(/^Brand/);
+    expect(screen.getByLabelText(/^Model/)).toBeDisabled();
+    expect(screen.getByLabelText(/^Processor/)).toBeDisabled();
+    expect(screen.getByLabelText(/^Generation/)).toBeDisabled();
+    expect(screen.getByLabelText(/^RAM/)).toBeDisabled();
+    expect(screen.getByLabelText(/^Hard disk/)).toBeDisabled();
 
     await user.selectOptions(brand, 'b-dell');
 
     // One model, so the picker answers that rung itself and moves on.
-    await waitFor(() => expect(screen.getByLabelText('Model')).toHaveValue(MODEL_ID));
+    await waitFor(() => expect(screen.getByLabelText(/^Model/)).toHaveValue(MODEL_ID));
     // Processor and generation are single-valued here; RAM is the real question.
-    await waitFor(() => expect(screen.getByLabelText('Processor')).toHaveValue('Intel|Core i5|i5-1135G7'));
-    expect(screen.getByLabelText('Generation')).toHaveValue('11th');
-    expect(screen.getByLabelText('RAM')).not.toBeDisabled();
-    expect(screen.getByLabelText('RAM')).toHaveValue('');
+    await waitFor(() => expect(screen.getByLabelText(/^Processor/)).toHaveValue('Intel|Core i5|i5-1135G7'));
+    expect(screen.getByLabelText(/^Generation/)).toHaveValue('11th');
+    expect(screen.getByLabelText(/^RAM/)).not.toBeDisabled();
+    expect(screen.getByLabelText(/^RAM/)).toHaveValue('');
   });
 
   it('resolves the SKU only once the configuration is unique', async () => {
@@ -452,20 +452,20 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-dell');
-    await waitFor(() => expect(screen.getByLabelText('RAM')).not.toBeDisabled());
+    await user.selectOptions(await screen.findByLabelText(/^Brand/), 'b-dell');
+    await waitFor(() => expect(screen.getByLabelText(/^RAM/)).not.toBeDisabled());
 
     expect((patch.mock.calls.at(-1)?.[0] as { sku: SkuDetail | null } | undefined)?.sku ?? null)
       .toBeNull();
 
-    await user.selectOptions(screen.getByLabelText('RAM'), '32');
+    await user.selectOptions(screen.getByLabelText(/^RAM/), '32');
 
     await waitFor(() => {
       const after = patch.mock.calls.at(-1)?.[0] as { sku: SkuDetail | null };
       expect(after.sku?.skuId).toBe('sku-32');
     });
     // Storage had one answer under 32 GB, so the vendor was not asked again.
-    expect(screen.getByLabelText('Hard disk')).toHaveValue('512|NVME_SSD');
+    expect(screen.getByLabelText(/^Hard disk/)).toHaveValue('512|NVME_SSD');
     const code = await screen.findByText('DEL-LAT3420-I5-16-512');
     expect(code).toHaveClass('text-pass');
     expect(code).toHaveClass('font-bold');
@@ -491,16 +491,16 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-dell');
-    await waitFor(() => expect(screen.getByLabelText('Processor')).not.toBeDisabled());
+    await user.selectOptions(await screen.findByLabelText(/^Brand/), 'b-dell');
+    await waitFor(() => expect(screen.getByLabelText(/^Processor/)).not.toBeDisabled());
 
-    await user.selectOptions(screen.getByLabelText('Processor'), 'Intel|Core i5|i5-1135G7');
-    await waitFor(() => expect(screen.getByLabelText('RAM')).toHaveValue('16'));
+    await user.selectOptions(screen.getByLabelText(/^Processor/), 'Intel|Core i5|i5-1135G7');
+    await waitFor(() => expect(screen.getByLabelText(/^RAM/)).toHaveValue('16'));
 
     // The i7 in this catalog is a 32 GB machine. Switching processor must not
     // leave 16 GB standing — that would resolve a SKU the vendor never chose.
-    await user.selectOptions(screen.getByLabelText('Processor'), 'Intel|Core i7|i7-1165G7');
-    await waitFor(() => expect(screen.getByLabelText('RAM')).toHaveValue('32'));
+    await user.selectOptions(screen.getByLabelText(/^Processor/), 'Intel|Core i7|i7-1165G7');
+    await waitFor(() => expect(screen.getByLabelText(/^RAM/)).toHaveValue('32'));
   });
 
   it('does not let Continue through until a unique configuration is chosen', async () => {
@@ -513,12 +513,12 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-dell');
-    await waitFor(() => expect(screen.getByLabelText('RAM')).not.toBeDisabled());
+    await user.selectOptions(await screen.findByLabelText(/^Brand/), 'b-dell');
+    await waitFor(() => expect(screen.getByLabelText(/^RAM/)).not.toBeDisabled());
 
     expect(screen.getByRole('button', { name: 'Continue' })).toHaveAttribute('aria-disabled', 'true');
 
-    await user.selectOptions(screen.getByLabelText('RAM'), '32');
+    await user.selectOptions(screen.getByLabelText(/^RAM/), '32');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Continue' })).not.toHaveAttribute(
         'aria-disabled',
@@ -537,7 +537,7 @@ describe('step 1 — machine', () => {
       </MemoryRouter>,
     );
 
-    await user.selectOptions(await screen.findByLabelText('Brand'), 'b-hp');
+    await user.selectOptions(await screen.findByLabelText(/^Brand/), 'b-hp');
 
     expect(await screen.findByText('We do not carry this brand yet. Request the machine below.'))
       .toBeInTheDocument();

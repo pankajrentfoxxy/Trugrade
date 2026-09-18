@@ -1,4 +1,4 @@
-import { refreshSession } from '../../../lib/auth';
+import { apiFetch } from '../../../lib/auth';
 
 export interface TeamMember {
   id: string;
@@ -52,11 +52,7 @@ export type ApiResult<T> = ({ ok: true; data: T } | ApiFailure) & { ok: boolean 
 
 async function call<T>(url: string, init?: RequestInit): Promise<ApiResult<T>> {
   try {
-    let res = await fetch(url, { credentials: 'include', ...init });
-    if (res.status === 401) {
-      await refreshSession();
-      res = await fetch(url, { credentials: 'include', ...init });
-    }
+    const res = await apiFetch(url, init);
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       // The API's refusals arrive as `{ error: { code, message, fields } }`. Reading

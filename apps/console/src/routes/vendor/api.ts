@@ -1,4 +1,5 @@
 import { Money } from '@trugrade/contracts';
+import { apiFetch } from '../../lib/auth';
 
 /**
  * Every API surface the vendor portal touches, in one file.
@@ -857,10 +858,9 @@ export interface PayoutPreview {
  * line instead of "Expected payout must be between ₹1,000 and ₹5,00,000."
  */
 export async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(body),
   });
   if (!res.ok) {
