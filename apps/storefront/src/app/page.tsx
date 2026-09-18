@@ -1,12 +1,13 @@
 import { BRAND } from '@trugrade/config/brand';
 import { getSearch, getStats } from '../lib/api';
+import { consoleSellRegisterUrl } from '../lib/console-url';
 import { toApiQueryString } from './search/query';
 import { BrandRail } from './BrandRail';
-import { HomeBanner } from './HomeBanner';
+import { HeroBanner } from './HeroBanner';
+import { HomePills } from './HomePills';
 import { HomeStrip } from './HomeStrip';
 import { ShopTiles } from './ShopTiles';
 import { SpecShowcase } from './SpecShowcase';
-import { SearchResultCard } from './search/SearchResultCard';
 import { SiteHeader } from './SiteHeader';
 
 /**
@@ -60,6 +61,18 @@ import { SiteHeader } from './SiteHeader';
  */
 export const dynamic = 'force-dynamic';
 
+/**
+ * The brand rail is parked, not deleted.
+ *
+ * Switched off at the homepage's request and switched off is all it is: the
+ * component, its logo files in `public/brands/` and the facet that feeds it are
+ * all untouched, and flipping this back to `true` restores the row exactly as
+ * it was. A flag rather than commented-out JSX so the markup stays type-checked
+ * and linted while it is dark — the same treatment the utility strip gets in
+ * `SiteHeader`.
+ */
+const SHOW_BRAND_RAIL = false;
+
 const PROCESS = [
   [
     'Sourced',
@@ -104,15 +117,14 @@ export default async function HomePage({
 
       {/* Brands, straight under the chrome. Homepage only — it is a way IN to
           the catalogue, and every other page is already inside it. */}
-      <BrandRail brands={search?.facets?.brand} />
+      {SHOW_BRAND_RAIL && <BrandRail brands={search?.facets?.brand} />}
+
+      {/* The three claims, centred, before the banner says anything else. */}
+      <HomePills />
 
       {/* The banner, then the same machines the grid holds, one at a time,
           with their measurements. Both are homepage-only: this is the way in. */}
-      <HomeBanner
-        inspected={stats ? inspected : null}
-        models={stats?.skusCatalogued ?? null}
-        brands={stats?.brandsCatalogued ?? null}
-      />
+      <HeroBanner results={results} sellUrl={consoleSellRegisterUrl()} />
 
       <HomeStrip />
 
@@ -120,31 +132,20 @@ export default async function HomePage({
 
       {results.length > 0 && <SpecShowcase items={results} />}
 
-      {/* 4 — BODY: the grid, full width. No rail — filtering is `/search`'s
-          job, and that page still carries the rail and the result bar. */}
-      <div className="body">
-        <div className="wrap">
-          <main>
-            {results.length > 0 ? (
-              <div className="pcclist">
-                {results.map((r) => (
-                  <SearchResultCard key={`${r.skuId}-${r.grade}`} r={r} />
-                ))}
-              </div>
-            ) : (
-              <div className="empty">
-                <h3>No inspected stock yet</h3>
-                <p>
-                  {stats?.skusCatalogued ?? 0} models are catalogued and{' '}
-                  {stats?.brandsCatalogued ?? 0} brands are onboarded. A laptop appears here once it
-                  has been opened, tested, graded and sealed — never before, and never on the
-                  strength of a supplier&rsquo;s description.
-                </p>
-              </div>
-            )}
-          </main>
-        </div>
-      </div>
+      {/*
+        The product grid is gone from this page.
+
+        `/search` owns the catalogue and carries the rail, the result bar and
+        the sort control that make a grid of it usable; repeating the cards here
+        was a second, unfilterable copy of that page. The search call stays —
+        the banner, the shop tiles and the spec showcase are all fed from the
+        same `results`, so this page still renders real stock, just not as a
+        grid of cards.
+
+        The "No inspected stock yet" empty state went with it. It belonged to
+        the grid, and an empty state for a block that no longer exists is a
+        sentence about nothing.
+      */}
 
       {/* 6 — UTILITY STRIP: verify a certificate, and bulk requirement.
           `.wrap.strip` is one box: the wrap centres it, the strip grid puts

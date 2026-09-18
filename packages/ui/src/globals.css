@@ -283,6 +283,39 @@
      topbar behind. Note the line tokens follow the chrome convention — plain is
      the subtler of the two, -2 the stronger — which is the reverse of how
      --rule and --rule-2 are ordered, hence the crossover. */
+  /* ---- Promo hero palette -------------------------------------------------
+     A supplied hero design in its own warm-black / amber language, held apart
+     from the product palette on purpose. It is one marketing surface, dark in
+     both themes like the header, and it does NOT flip — so these are constants,
+     not theme tokens, and nothing outside `.phero` should reach for them.
+
+     They live here because the design system allows literal hex in this file
+     and nowhere else. `--promo-accent` is a brand colour for this banner only;
+     it is not `--acc` and carries none of its meaning. */
+  :root {
+    --promo-bg: #0a0906;
+    --promo-surface: #14110a;
+    --promo-line: rgba(255, 255, 255, 0.1);
+    --promo-line-soft: rgba(255, 255, 255, 0.05);
+    --promo-text: #f7f2e4;
+    --promo-muted: #a2977c;
+    --promo-accent: #fdb017;
+    --promo-accent-ink: #1c1300;
+    --promo-accent-soft: rgba(253, 176, 23, 0.12);
+    --promo-accent-mid: rgba(253, 176, 23, 0.5);
+    /* Illustration only: the drawn laptop's shell, deck and screen tints. */
+    --promo-shell: #242220;
+    --promo-deck: #1d1b19;
+    --promo-shell-alt: #b9bec3;
+    --promo-deck-alt: #a7adb3;
+    --promo-screen-1: #1d3648;
+    --promo-screen-2: #26232f;
+    --promo-screen-3: #28301a;
+    --promo-screen-4: #1c3a4d;
+    --promo-screen-5: #3f2424;
+    --promo-screen-6: #2b2b2b;
+  }
+
   /* A CONSTANT white, identical in every theme.
 
      Third-party artwork — manufacturer logos, payment marks, certification
