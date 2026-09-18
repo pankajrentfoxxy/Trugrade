@@ -1,20 +1,26 @@
 /**
- * The three claims, as pills, directly above the hero.
+ * The claims above the hero — each one a filter into `/search`.
  *
- * **Grades opens on hover into the three it means.** Each one is a real link
- * into `/search?grade=…`, using the facet values the API publishes — `A_PLUS`,
- * `A`, `B` — so the rail on the page it lands on shows that grade already
- * ticked. A pill that expands into nothing would be decoration; these go
- * somewhere.
+ * **Every pill goes somewhere the rail can show.** The hrefs are the query
+ * params `/public/search` actually reads, and each value is one the rail
+ * publishes, so the page a buyer lands on has that filter ticked rather than
+ * an unexplained, narrower list:
  *
- * The three links are in the DOM at all times, clipped rather than removed, so
- * the keyboard reaches them: tabbing in fires `:focus-within` and the pill
- * opens the same way hovering does. On a touch screen there is no hover at all,
- * so `@media (hover: none)` leaves it open permanently — a control that only
- * works with a mouse is not a control on a phone.
+ *   - `grade` — `A_PLUS`, `A`, `B`, the grade facet's own values.
+ *   - `smin` / `bmin` — score and battery floors, "at least this".
+ *   - `ship` — dispatch within N hours; 24 and 48 are two of the three limits
+ *     the ship facet publishes (24 / 48 / 72).
+ *   - `ram` — matched by exact value, not as a floor, so "16 GB and more" is
+ *     16 and 32 together: every size the RAM facet lists from 16 upwards.
  *
- * QC and Delivery are links too, into the score and dispatch filters `/search`
- * already carries. Every pill here goes somewhere the rail can show.
+ * **Grades opens on hover into the three it means.** The links are in the DOM
+ * at all times, clipped rather than removed, so tabbing reaches them and
+ * `:focus-within` opens the pill the same way hovering does. On a touch screen
+ * there is no hover at all, so `@media (hover: none)` leaves it open — a
+ * control that only works with a mouse is not a control on a phone.
+ *
+ * Numbers are mono with tabular figures, like every other number in the
+ * product.
  */
 
 /** `facets.grade` on `/public/search` — the values its rail filters on. */
@@ -24,11 +30,42 @@ const GRADES: readonly { code: string; label: string }[] = [
   { code: 'B', label: 'B' },
 ];
 
+/** A run of pill text; `mono` marks the part that is a number. */
+type Part = { text: string; mono?: boolean };
+
+const FILTERS: readonly { key: string; href: string; parts: readonly Part[] }[] = [
+  {
+    key: 'qc',
+    href: '/search?smin=90',
+    parts: [{ text: 'QC' }, { text: '> 90', mono: true }],
+  },
+  {
+    key: 'delivery',
+    href: '/search?ship=48',
+    parts: [{ text: 'Delivery' }, { text: '48 hr', mono: true }],
+  },
+  {
+    key: 'ram',
+    href: '/search?ram=16&ram=32',
+    parts: [{ text: '16 GB', mono: true }, { text: 'and more' }],
+  },
+  {
+    key: 'ready',
+    href: '/search?ship=24',
+    parts: [{ text: 'Ready in' }, { text: '24 hr', mono: true }],
+  },
+  {
+    key: 'battery',
+    href: '/search?bmin=90',
+    parts: [{ text: 'Battery' }, { text: '90+', mono: true }],
+  },
+];
+
 export function HomePills(): React.JSX.Element {
   return (
     <div className="hpills">
       <ul>
-        <li className="hpill hpill-grades">
+        <li className="hpill hpill-promo hpill-grades">
           <span>Grades</span>
           <span className="hpill-out">
             {GRADES.map((g) => (
@@ -38,25 +75,21 @@ export function HomePills(): React.JSX.Element {
             ))}
           </span>
         </li>
-        {/*
-          Both are real filters on `/public/search`: `smin` keeps a result
-          only if its score is at least the value, and `ship` keeps it only if
-          it dispatches within that many hours. 48 is one of the three limits
-          the ship facet publishes (24 / 48 / 72), so the rail on the page this
-          lands on shows it ticked rather than an unexplained narrower list.
-        */}
-        <li>
-          <a className="hpill hpill-promo" href="/search?smin=90">
-            <span>QC</span>
-            <b className="mono">&gt; 90</b>
-          </a>
-        </li>
-        <li>
-          <a className="hpill hpill-promo" href="/search?ship=48">
-            <span>Delivery</span>
-            <b className="mono">48 hr</b>
-          </a>
-        </li>
+        {FILTERS.map((f) => (
+          <li key={f.key}>
+            <a className="hpill hpill-promo" href={f.href}>
+              {f.parts.map((p) =>
+                p.mono ? (
+                  <b key={p.text} className="mono">
+                    {p.text}
+                  </b>
+                ) : (
+                  <span key={p.text}>{p.text}</span>
+                ),
+              )}
+            </a>
+          </li>
+        ))}
       </ul>
     </div>
   );

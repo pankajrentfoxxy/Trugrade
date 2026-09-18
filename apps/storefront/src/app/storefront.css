@@ -327,39 +327,51 @@ header,footer{width:100%;max-width:100%}
   text-align:center;color:var(--ink);background:var(--sheet-2)}
 .pc .cta:hover{background:var(--acc);color:var(--acc-on)}
 /* ---- SEARCH RESULT CARDS (rich list) ---- */
+/* ---- HOMEPAGE GROUND ----
+   The homepage runs on the near-white `--sheet-2` instead of the standard
+   `--ground` grey. Redefined as a variable rather than repainted section by
+   section: `.strip2`, `.shoptiles` and `.showcase` all paint `var(--ground)`,
+   so they follow this one line, and nothing outside the homepage changes. */
+.home{--ground:var(--sheet-2);background:var(--ground)}
+
 /* ---- HOMEPAGE CLAIM PILLS (above the hero) ---- */
-.hpills{background:var(--paper);padding:16px 20px 4px}
+/* `--sheet-2` is the near-white grey (#f7f8fa on the light theme). This used to
+   read `var(--paper)`, which no theme defines — so the band was transparent and
+   showed the page's darker `--ground` through it. Full width, edge to edge. */
+.hpills{background:var(--sheet-2);padding:16px 20px 14px;border-bottom:1px solid var(--rule-2)}
 .hpills ul{list-style:none;margin:0 auto;padding:0;max-width:1240px;
-  display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
-.hpill{display:inline-flex;align-items:baseline;gap:7px;
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px}
+/* One size for every pill: a fixed height and a shared minimum width wide
+   enough for the longest label, centred inside it. Grades is the one allowed to
+   outgrow it, and only while it is open. */
+.hpill{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
+  gap:7px;height:38px;min-width:164px;padding:0 18px;
   background:var(--sheet);border:1px solid var(--rule);border-radius:999px;
-  padding:9px 18px;font-size:13px;font-weight:600;color:var(--ink)}
+  font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap}
 .hpill b{font-weight:700;color:var(--acc-ink)}
-/* QC and Delivery wear the hero's own yellow — `--promo-accent` is the token
+/* Every pill wears the hero's own yellow — `--promo-accent` is the token
    `.phero-btn-primary` is painted with, so the two cannot drift apart. */
 .hpill-promo{cursor:pointer;border-color:var(--promo-accent);text-decoration:none;
   transition:background-color .15s ease,box-shadow .15s ease}
-.hpill-promo:hover{background:var(--promo-accent-soft);
+.hpill-promo:hover,.hpill-promo:focus-within{background:var(--promo-accent-soft);
   box-shadow:0 0 0 3px var(--promo-accent-soft)}
 .hpill-promo b{color:var(--promo-accent-ink)}
 
 /* Grades opens into A+ / A / B. The pill itself grows because the clipped
    group inside it does — animating max-width rather than width, since the
    natural width of three links is not a number this rule can know. */
-.hpill-grades{transition:border-color .2s ease}
-.hpill-grades:hover,.hpill-grades:focus-within{border-color:var(--acc)}
 .hpill-out{display:inline-flex;align-items:center;gap:6px;
   max-width:0;margin-left:0;opacity:0;overflow:hidden;
   transition:max-width .28s ease,margin-left .28s ease,opacity .18s ease}
 .hpill-grades:hover .hpill-out,.hpill-grades:focus-within .hpill-out{
   max-width:190px;margin-left:8px;opacity:1}
 .hpill-grade{display:inline-flex;align-items:center;justify-content:center;
-  min-width:30px;padding:3px 9px;border-radius:999px;
-  background:var(--sheet-2);border:1px solid var(--rule);
+  min-width:30px;height:24px;padding:0 9px;border-radius:999px;
+  background:var(--sheet);border:1px solid var(--promo-accent-mid);
   font-size:12px;font-weight:700;color:var(--ink);text-decoration:none;
   transition:background-color .15s ease,border-color .15s ease}
-.hpill-grade:hover,.hpill-grade:focus-visible{background:var(--acc);border-color:var(--acc);
-  color:var(--acc-on)}
+.hpill-grade:hover,.hpill-grade:focus-visible{background:var(--promo-accent);
+  border-color:var(--promo-accent);color:var(--promo-accent-ink)}
 /* No hover to open it with, so it stays open. */
 @media(hover:none){
   .hpill-out{max-width:190px;margin-left:8px;opacity:1}
@@ -367,9 +379,15 @@ header,footer{width:100%;max-width:100%}
 @media(prefers-reduced-motion:reduce){
   .hpill-out{transition:none}
 }
+/* Two equal columns on a phone. Grades runs the full width because it is
+   permanently open there and wider than a column; so does the last pill,
+   rather than sitting alone in the left half of a row. */
 @media(max-width:520px){
   .hpills{padding:12px 14px 2px}
-  .hpill{padding:8px 14px;font-size:12px}
+  .hpills ul{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .hpills li{display:flex}
+  .hpill{width:100%;min-width:0;height:36px;padding:0 12px;font-size:12px}
+  .hpills li.hpill-grades,.hpills li:last-child{grid-column:1 / -1}
 }
 
 /* Three across, and fixed at three rather than auto-filled: the search page's

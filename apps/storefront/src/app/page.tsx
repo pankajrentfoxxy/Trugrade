@@ -119,20 +119,27 @@ export default async function HomePage({
           the catalogue, and every other page is already inside it. */}
       {SHOW_BRAND_RAIL && <BrandRail brands={search?.facets?.brand} />}
 
-      {/* The three claims, centred, before the banner says anything else. */}
-      <HomePills />
-
-      {/* The banner, then the same machines the grid holds, one at a time,
-          with their measurements. Both are homepage-only: this is the way in. */}
-      <HeroBanner results={results} sellUrl={consoleSellRegisterUrl()} />
-
-      <HomeStrip />
-
-      <ShopTiles results={results} />
-
-      {results.length > 0 && <SpecShowcase items={results} />}
-
       {/*
+        Everything under the header sits on `.home`, which redefines `--ground`
+        as the near-white `--sheet-2` for this page only. The sections below
+        paint `var(--ground)` themselves, so they all lighten from this one
+        override — and every other page keeps the standard ground.
+      */}
+      <div className="home">
+        {/* The claims, centred, before the banner says anything else. */}
+        <HomePills />
+
+        {/* The banner, then the same machines the grid holds, one at a time,
+          with their measurements. Both are homepage-only: this is the way in. */}
+        <HeroBanner results={results} sellUrl={consoleSellRegisterUrl()} />
+
+        <HomeStrip />
+
+        <ShopTiles results={results} />
+
+        {results.length > 0 && <SpecShowcase items={results} />}
+
+        {/*
         The product grid is gone from this page.
 
         `/search` owns the catalogue and carries the rail, the result bar and
@@ -147,58 +154,59 @@ export default async function HomePage({
         sentence about nothing.
       */}
 
-      {/* 6 — UTILITY STRIP: verify a certificate, and bulk requirement.
+        {/* 6 — UTILITY STRIP: verify a certificate, and bulk requirement.
           `.wrap.strip` is one box: the wrap centres it, the strip grid puts
           the two cards side by side. A nested wrap used to be the only child
           of the grid, so they stacked. */}
-      <div className="wrap strip">
-        <div className="sbx">
-          <div className="qr" role="img" aria-label="Certificate QR" />
-          <div>
-            <h3>Verify a certificate</h3>
-            <p>
-              Holding a machine with a seal on it? Enter the certificate ID or the serial and read
-              the report it shipped with.
-            </p>
-            <form className="qform" action="/verify">
-              <label className="sr-only" htmlFor="cert">
-                Certificate ID or serial
-              </label>
-              <input id="cert" name="q" className="mono" placeholder="TG-CERT-… or serial" />
-              <button type="submit">Verify</button>
-            </form>
-          </div>
-        </div>
-        <div className="sbx">
-          <div>
-            <h3>Have a requirement list?</h3>
-            <p>
-              Send the specification, quantity and grade. We tell you what is available now, at a
-              landed price for your pincode, and source the rest.
-            </p>
-            <form className="qform" action="/bulk">
-              <label className="sr-only" htmlFor="req">
-                Requirement
-              </label>
-              <input id="req" name="q" placeholder="e.g. 40 × i5 / 16 GB / Grade A" />
-              <button type="submit">Start</button>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      {/* 7 — PROCESS. `.wrap.proc` is the centred four-column rail; a nested
-          wrap used to be the only grid child, so the steps stacked. */}
-      <div className="wrap proc">
-        {PROCESS.map(([title, body], i) => (
-          <div className="pstep" key={title}>
-            <div className="pstep-mark">
-              <span className="n mono">{String(i + 1).padStart(2, '0')}</span>
+        <div className="wrap strip">
+          <div className="sbx">
+            <div className="qr" role="img" aria-label="Certificate QR" />
+            <div>
+              <h3>Verify a certificate</h3>
+              <p>
+                Holding a machine with a seal on it? Enter the certificate ID or the serial and read
+                the report it shipped with.
+              </p>
+              <form className="qform" action="/verify">
+                <label className="sr-only" htmlFor="cert">
+                  Certificate ID or serial
+                </label>
+                <input id="cert" name="q" className="mono" placeholder="TG-CERT-… or serial" />
+                <button type="submit">Verify</button>
+              </form>
             </div>
-            <h3>{title}</h3>
-            <p>{body}</p>
           </div>
-        ))}
+          <div className="sbx">
+            <div>
+              <h3>Have a requirement list?</h3>
+              <p>
+                Send the specification, quantity and grade. We tell you what is available now, at a
+                landed price for your pincode, and source the rest.
+              </p>
+              <form className="qform" action="/bulk">
+                <label className="sr-only" htmlFor="req">
+                  Requirement
+                </label>
+                <input id="req" name="q" placeholder="e.g. 40 × i5 / 16 GB / Grade A" />
+                <button type="submit">Start</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        {/* 7 — PROCESS. `.wrap.proc` is the centred four-column rail; a nested
+          wrap used to be the only grid child, so the steps stacked. */}
+        <div className="wrap proc">
+          {PROCESS.map(([title, body], i) => (
+            <div className="pstep" key={title}>
+              <div className="pstep-mark">
+                <span className="n mono">{String(i + 1).padStart(2, '0')}</span>
+              </div>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </>
   );
