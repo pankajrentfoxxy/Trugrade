@@ -55,7 +55,6 @@
  * a crash, and the file is read in the browser before a byte of it is sent.
  */
 import type { Metadata } from 'next';
-import { CategoryStrip } from '../CategoryStrip';
 import { BulkIntake } from './BulkIntake';
 
 /** One organisation's requirement. Nothing about it is cacheable or indexable. */
@@ -82,7 +81,6 @@ export default async function BulkPage({
 
   return (
     <>
-      <CategoryStrip />
       <div className="body">
         <div className="wrap">
           {/* The homepage strip posts `?q=` and the comparison board links here

@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 /**
- * Scoped search with grouped suggestions — `09_FRONTEND_LOCKED.md` §5.
+ * Search with grouped suggestions — `09_FRONTEND_LOCKED.md` §5.
  *
  * Two things here are not cosmetic.
  *
@@ -15,18 +15,18 @@ import * as React from 'react';
  * is a different intent entirely: someone holding a sealed machine wants the
  * report it shipped with, not something to buy. Treating it as a product search
  * is exactly the small failure that makes people stop trusting a tool.
+ *
+ * **There is no scope selector.** It asked the reader to classify their own
+ * query before typing it, and the two answers that changed the destination —
+ * certificate and serial — are both readable straight off the term. The
+ * suggestion list still names every destination explicitly, so the inference is
+ * never the only way through.
  */
-type Scope = 'all' | 'brand' | 'config' | 'serial' | 'certificate';
-
-const SCOPES: ReadonlyArray<{ value: Scope; label: string }> = [
-  { value: 'all', label: 'All laptops' },
-  { value: 'brand', label: 'Brand' },
-  { value: 'config', label: 'Configuration' },
-  { value: 'serial', label: 'Serial / service tag' },
-  { value: 'certificate', label: 'Certificate ID' },
-];
-
-/** A certificate ID is recognisable, so intent can be inferred before the scope is set. */
+/**
+ * A certificate ID is recognisable on sight, which is the whole reason the
+ * scope selector could go: the one intent a buyer could not express by typing
+ * is inferred from the shape of what they typed.
+ */
 const CERT_PATTERN = /^(TG-)?CERT-[A-Z0-9-]{6,}$/i;
 
 interface Suggestion {
@@ -40,7 +40,6 @@ interface Suggestion {
 export function SearchBar(): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
-  const [scope, setScope] = React.useState<Scope>('all');
   const [active, setActive] = React.useState(-1);
   const boxRef = React.useRef<HTMLDivElement>(null);
 
@@ -82,7 +81,12 @@ export function SearchBar(): React.JSX.Element {
     if (!term) return lookup;
 
     return [
-      { group: 'Models', badge: 'MODEL', label: term, href: `/search?q=${encodeURIComponent(term)}` },
+      {
+        group: 'Models',
+        badge: 'MODEL',
+        label: term,
+        href: `/search?q=${encodeURIComponent(term)}`,
+      },
       {
         group: 'Configuration',
         badge: 'SPEC',
@@ -97,14 +101,12 @@ export function SearchBar(): React.JSX.Element {
     e.preventDefault();
     const term = q.trim();
     if (!term) return;
-    // Intent wins over the selected scope: someone who pastes a certificate ID
-    // into "All laptops" still wants the certificate.
-    if (scope === 'certificate' || CERT_PATTERN.test(term)) {
+    // A certificate ID is unambiguous, so it goes where it belongs without
+    // being asked. Anything else — a serial included, since a serial that
+    // matches no unit should land on a search result rather than a 404 — goes
+    // to the board, which the suggestion list lets the reader override.
+    if (CERT_PATTERN.test(term)) {
       window.location.href = `/verify?q=${encodeURIComponent(term)}`;
-      return;
-    }
-    if (scope === 'serial') {
-      window.location.href = `/unit/${encodeURIComponent(term)}`;
       return;
     }
     window.location.href = `/search?q=${encodeURIComponent(term)}`;
@@ -130,21 +132,6 @@ export function SearchBar(): React.JSX.Element {
   return (
     <div className={open ? 'sbox open' : 'sbox'} ref={boxRef}>
       <form className="srch" onSubmit={submit} role="search">
-        <label className="sr-only" htmlFor="sscope">
-          Search scope
-        </label>
-        <select
-          id="sscope"
-          value={scope}
-          onChange={(e) => setScope(e.target.value as Scope)}
-          aria-label="Search scope"
-        >
-          {SCOPES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
         <label className="sr-only" htmlFor="sinput">
           Search
         </label>
@@ -161,7 +148,22 @@ export function SearchBar(): React.JSX.Element {
           aria-autocomplete="list"
           aria-activedescendant={active >= 0 ? `sugg-${active}` : undefined}
         />
-        <button type="submit">Search</button>
+        {/* The label is the icon, so it needs one a screen reader can read. */}
+        <button type="submit" aria-label="Search">
+          <svg
+            viewBox="0 0 20 20"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="8.75" cy="8.75" r="5.75" />
+            <line x1="13.1" y1="13.1" x2="17.5" y2="17.5" />
+          </svg>
+        </button>
       </form>
 
       <div className="sugg" id="sugg-list" role="listbox" aria-label="Suggestions">

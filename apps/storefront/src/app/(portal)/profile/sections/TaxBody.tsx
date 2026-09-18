@@ -42,6 +42,14 @@ import type { StepBodyProps } from './step-body';
  *   prefill outright. It is confirmed here, not typed, and the cross-check is a
  *   warning that offers an edit.
  *
+ * **A GSTIN the portal has passed is read-only.** The legal name, constitution,
+ * PAN, billing address and state cross-check on this card are all the portal's
+ * answer about that one number; a typable box lets every one of them go stale
+ * against a number nobody checked. "Change the GSTIN" throws the answer away
+ * and asks for the check again, which is the honest version of an edit. A
+ * reopened card restores the stored PASS rather than unlocking itself, so
+ * fixing a typo in the billing city does not mean re-verifying the GSTIN.
+ *
  * No PAN is asked for or recorded — the draft carries an empty one on purpose,
  * so the server's PAN write (which needs the encryption key) never runs. The
  * PAN shown is read out of the GSTIN itself, labelled as the derivation it is.
@@ -76,6 +84,22 @@ function savedGstin(initial: Record<string, unknown>): string {
   const rows = initial.gstins;
   const first = Array.isArray(rows) ? (rows[0] as { gstin?: unknown } | undefined) : undefined;
   return typeof first?.gstin === 'string' ? first.gstin : '';
+}
+
+/**
+ * The PASS this card stored last time, so a reopened card is still verified.
+ *
+ * Without it, a buyer who comes back to fix a typo in the billing city is made
+ * to re-verify a GSTIN the portal already passed — and the field would unlock
+ * itself on every reopen, which is the thing the lock exists to prevent.
+ */
+function savedOutcome(initial: Record<string, unknown>): VerificationOutcomeView | null {
+  const rows = initial.gstins;
+  const first = Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined;
+  const outcome = first?.outcome;
+  if (typeof outcome !== 'object' || outcome === null) return null;
+  const view = outcome as VerificationOutcomeView;
+  return view.outcome === 'PASS' && view.resolved ? view : null;
 }
 
 /** The billing row already in the CONTACTS_ADDRESSES draft, if any. */
@@ -135,8 +159,10 @@ export function TaxBody({
 }: TaxBodyProps): React.JSX.Element {
   const [sub, setSub] = React.useState<1 | 2>(1);
   const [gstin, setGstin] = React.useState(() => savedGstin(initial));
-  const [verified, setVerified] = React.useState<VerificationOutcomeView | null>(null);
-  const [confirmed, setConfirmed] = React.useState(false);
+  const [verified, setVerified] = React.useState<VerificationOutcomeView | null>(() =>
+    savedOutcome(initial),
+  );
+  const [confirmed, setConfirmed] = React.useState(() => savedOutcome(initial) !== null);
   const [billing, setBilling] = React.useState<Postal>(
     () => savedBilling(contacts) ?? EMPTY_POSTAL,
   );
@@ -146,6 +172,7 @@ export function TaxBody({
   const [busy, setBusyState] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>();
   const verifyRef = React.useRef<() => void>(() => undefined);
+  const gstinRef = React.useRef<HTMLInputElement>(null);
   const retry = useRetryLadder(() => verifyRef.current());
 
   const setBusy = (next: boolean): void => {
@@ -166,6 +193,25 @@ export function TaxBody({
   const stateCode = stateCodeFromGstin(normalised);
   const taxpayer = verified?.outcome === 'PASS' ? (verified.resolved as GstinTaxpayer) : undefined;
   const pan = panFromGstin(normalised);
+
+  /**
+   * A GSTIN the portal has passed is not a field any more.
+   *
+   * Everything below it — the legal name, the constitution, the billing address
+   * and the state cross-check — is the portal's answer about *this* number.
+   * Leaving the box typable lets all of that go silently stale against a number
+   * nobody checked. Changing it is therefore a deliberate act that throws the
+   * answer away, not a keystroke.
+   */
+  const locked = Boolean(taxpayer);
+
+  const changeGstin = (): void => {
+    setVerified(null);
+    setConfirmed(false);
+    setError(undefined);
+    retry.clear('gstin');
+    gstinRef.current?.focus();
+  };
 
   const verify = async (): Promise<void> => {
     const invalid = validateGstin(gstin);
@@ -212,8 +258,12 @@ export function TaxBody({
   };
 
   const continueFromGstin = (): void => {
-    if (!verified || verified.outcome !== 'PASS' || !confirmed) {
-      setError('Verify your GSTIN and confirm the legal name before continuing.');
+    if (!verified || verified.outcome !== 'PASS') {
+      setError('Verify your GSTIN before continuing.');
+      return;
+    }
+    if (!confirmed) {
+      setError('Tick the box to confirm this is your registered business name.');
       return;
     }
     setError(undefined);
@@ -356,6 +406,7 @@ export function TaxBody({
         ) : null}
 
         <Input
+          ref={gstinRef}
           label="GSTIN"
           mono
           required
@@ -363,19 +414,35 @@ export function TaxBody({
           autoComplete="off"
           value={gstin}
           // Judged as it is typed; an empty box waits for Verify.
-          error={error ?? (gstin.trim() ? validateGstin(gstin) : undefined)}
+          error={locked ? undefined : (error ?? (gstin.trim() ? validateGstin(gstin) : undefined))}
+          verifyState={locked ? 'verified' : 'idle'}
+          verifyDetail={locked ? 'Checked against the GST portal.' : undefined}
           onChange={(e) => {
+            // `readOnly` stops a person typing; it does not stop a change event.
+            // The lock is the rule, so it is enforced here and not only painted.
+            if (locked) return;
             setGstin(e.target.value.toUpperCase());
             setVerified(null);
             setConfirmed(false);
             setError(undefined);
             retry.clear('gstin');
           }}
-          readOnly={busy}
+          readOnly={busy || locked}
           action={
-            <Button type="button" variant="secondary" loading={busy} onClick={() => void verify()}>
-              Verify
-            </Button>
+            locked ? (
+              <Button type="button" variant="ghost" onClick={changeGstin}>
+                Change the GSTIN
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                loading={busy}
+                onClick={() => void verify()}
+              >
+                Verify
+              </Button>
+            )
           }
         />
 
@@ -422,7 +489,10 @@ export function TaxBody({
               <input
                 type="checkbox"
                 checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
+                onChange={(e) => {
+                  setConfirmed(e.target.checked);
+                  if (e.target.checked) setError(undefined);
+                }}
               />
               This is our registered business name.
             </label>
@@ -434,6 +504,13 @@ export function TaxBody({
             <StatusPill tone="fail" label="Not verified" />
             <p className="text-body-sm text-ink-2">{verified.message}</p>
           </div>
+        ) : null}
+
+        {/* Locked, so the field's own error slot is gone — say it here instead. */}
+        {locked && error ? (
+          <p role="alert" className="text-body-sm text-fail">
+            {error}
+          </p>
         ) : null}
       </div>
     );

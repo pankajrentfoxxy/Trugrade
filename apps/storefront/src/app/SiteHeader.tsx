@@ -37,9 +37,7 @@ async function currentUser(): Promise<{ orgType: string; fullName?: string } | n
       headers: { cookie: header },
       cache: 'no-store',
     });
-    return res.ok
-      ? ((await res.json()) as { orgType: string; fullName?: string })
-      : null;
+    return res.ok ? ((await res.json()) as { orgType: string; fullName?: string }) : null;
   } catch {
     return null;
   }
@@ -49,6 +47,20 @@ import { SearchBar } from './SearchBar';
 import { AccountMenu } from './AccountMenu';
 import { AuthButtons } from './auth/AuthButtons';
 import { CartNavLink } from './CartNavLink';
+
+/**
+ * Parked chrome, not deleted chrome.
+ *
+ * The utility strip (the inspected counter, the delivery and GST claims, the
+ * verify / track / help / sell links) and the bulk-order button are switched
+ * off at the header's request, and switched off is all they are: every route
+ * below still resolves, and flipping one flag back to `true` restores the row
+ * exactly as it was. Flags rather than commented-out JSX so the markup stays
+ * type-checked and linted while it is dark — text parked in a comment rots
+ * silently, a gated element does not.
+ */
+const SHOW_UTILITY_BAR = false;
+const SHOW_BULK_ORDER = false;
 
 /**
  * Blocks 1 and 2 of `09_FRONTEND_LOCKED.md` §7 — the utility bar and the
@@ -87,58 +99,60 @@ export async function SiteHeader({
       <a className="skiplink" href="#content">
         Skip to the main content
       </a>
-      <div className="util">
-        <div className="wrap">
-          <div className="l">
-            {/*
+      {SHOW_UTILITY_BAR && (
+        <div className="util">
+          <div className="wrap">
+            <div className="l">
+              {/*
               A missing counter is not a zero. When the API did not answer, the
               claim is dropped rather than rendered as "0 laptops opened &
               tested", which would be a fabricated number and a worse one.
             */}
-            {inspected === null ? (
-              <span style={{ color: 'var(--on-chrome-3)' }}>Inspection count unavailable</span>
-            ) : (
-              <span>
-                <i className="blip" />
-                <b className="mono">{inspected.toLocaleString('en-IN')}</b> laptops opened &amp;
-                tested
-              </span>
-            )}
-            {/*
+              {inspected === null ? (
+                <span style={{ color: 'var(--on-chrome-3)' }}>Inspection count unavailable</span>
+              ) : (
+                <span>
+                  <i className="blip" />
+                  <b className="mono">{inspected.toLocaleString('en-IN')}</b> laptops opened &amp;
+                  tested
+                </span>
+              )}
+              {/*
               T43: these five addresses were `/delivery`, `/gst`, `/verify`,
               `/track` and `/help`, and every one of them was a 404 — on every
               page of the storefront, which is where the utility bar renders.
               Each now points at the document or board that actually answers the
               claim beside it, rather than at a route nobody built.
             */}
-            <a href="/legal/shipping" className="hide-sm">
-              Pan-India delivery
-            </a>
-            <a href="/legal/pricing-and-taxes" className="hide-sm">
-              GST invoice on every order
-            </a>
-          </div>
-          <div className="r">
-            <a href="/qc/verify" className="hide-md">
-              Verify a certificate
-            </a>
-            <a href="/orders" className="hide-md">
-              Track order
-            </a>
-            <a href="/legal/grievance" className="hide-md">
-              Help
-            </a>
-            <a
-              href={consoleSellRegisterUrl()}
-              className="util-promo"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Sell on {BRAND.name} &rarr;
-            </a>
+              <a href="/legal/shipping" className="hide-sm">
+                Pan-India delivery
+              </a>
+              <a href="/legal/pricing-and-taxes" className="hide-sm">
+                GST invoice on every order
+              </a>
+            </div>
+            <div className="r">
+              <a href="/qc/verify" className="hide-md">
+                Verify a certificate
+              </a>
+              <a href="/orders" className="hide-md">
+                Track order
+              </a>
+              <a href="/legal/grievance" className="hide-md">
+                Help
+              </a>
+              <a
+                href={consoleSellRegisterUrl()}
+                className="util-promo"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Sell on {BRAND.name} &rarr;
+              </a>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <nav className="head" aria-label="Trugrade">
         <div className="wrap">
@@ -155,36 +169,30 @@ export async function SiteHeader({
             </span>
           </a>
 
-          <a className="catbtn" href="/search">
-            <i aria-hidden="true">
-              <b />
-              <b />
-              <b />
-            </i>
-            <span className="catbtn-label">Browse laptops</span>
-          </a>
-
           <SearchBar />
 
           <div className="hact">
-            <ThemeToggle suppressed className="h-9 min-w-9 border-chrome-line-2" />
+            <ThemeToggle suppressed className="h-8 min-w-8 border-chrome-line-2" />
             {/* `Link`, not `a`: this is an internal route, and a plain anchor
                 makes every visit a full document load — which also means
                 `/bulk`'s own loading state can never render. */}
-            <Link className="hbtn hide-sm" href="/bulk">
-              <span>
-                <small>Bulk order</small>
-                <strong>Requirement</strong>
-              </span>
-            </Link>
-            {user ? (
-              <>
-                <CartNavLink />
-                <AccountMenu fullName={user.fullName} />
-              </>
-            ) : (
-              <AuthButtons />
+            {SHOW_BULK_ORDER && (
+              <Link className="hbtn hide-sm" href="/bulk">
+                <span>
+                  <small>Bulk order</small>
+                  <strong>Requirement</strong>
+                </span>
+              </Link>
             )}
+            {user ? (
+              <AccountMenu fullName={user.fullName} sellUrl={consoleSellRegisterUrl()} />
+            ) : (
+              <AuthButtons sellUrl={consoleSellRegisterUrl()} />
+            )}
+            {/* Last, so the cart is the rightmost control in both states —
+                the place every storefront puts it and the place a buyer's
+                hand goes without reading the row. */}
+            <CartNavLink signedIn={user !== null} />
           </div>
         </div>
       </nav>

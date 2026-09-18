@@ -46,6 +46,20 @@ export interface PortalState {
    */
   readiness: OrderReadiness | null;
   /**
+   * Whether a reviewer has verified this organisation — the rail's second gate.
+   *
+   * `readiness.orgStatus`, which is the server's answer and the one the API
+   * itself acts on; `VERIFIED` is reachable only through a reviewer. Read off
+   * the same response the banner already uses rather than a second endpoint,
+   * and never recomputed from the profile cards.
+   *
+   * `false` when the read was refused or failed, not just when the answer is
+   * no. A verification we could not confirm is not a verification, and the
+   * provider holds its skeleton until the read lands, so no screen ever asks
+   * this question before there is an answer to it.
+   */
+  orgVerified: boolean;
+  /**
    * Orders waiting on this person's signature, for the rail's badge.
    *
    * Zero when there is nothing and when the seat may not read approvals — the
@@ -98,6 +112,19 @@ export function PortalProvider({
   const [readiness, setReadiness] = React.useState<OrderReadiness | null>(null);
   const [approvalsWaiting, setApprovalsWaiting] = React.useState(0);
   const [approvals, setApprovals] = React.useState<ApprovalRow[]>([]);
+  /**
+   * Whether the reads below have come back at least once.
+   *
+   * The rail is drawn from them now, and a rail drawn before they land would
+   * either flash four padlocks at a verified buyer or four open doors at one we
+   * have not verified. Both are the screen saying something it does not yet
+   * know, so the frame waits on its own skeleton instead.
+   *
+   * Set once and never cleared: `reload()` re-runs the effect after a profile
+   * save, and blanking the whole portal back to a skeleton for that would be a
+   * worse answer than briefly showing the previous one.
+   */
+  const [orgKnown, setOrgKnown] = React.useState(false);
   const [token, setToken] = React.useState(0);
 
   React.useEffect(() => {
@@ -141,6 +168,7 @@ export function PortalProvider({
       setReadiness(r.ok ? r.data : null);
       setApprovalsWaiting(a.ok ? a.data.waitingOnYou : 0);
       setApprovals(a.ok ? a.data.approvals : []);
+      setOrgKnown(true);
     })();
     return () => {
       live = false;
@@ -165,6 +193,7 @@ export function PortalProvider({
             profile,
             onboarding,
             readiness,
+            orgVerified: readiness?.orgStatus === 'VERIFIED',
             approvalsWaiting,
             approvals,
             reload,
@@ -182,6 +211,6 @@ export function PortalProvider({
       </div>
     );
   }
-  if (!value) return <>{fallback}</>;
+  if (!value || !orgKnown) return <>{fallback}</>;
   return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>;
 }

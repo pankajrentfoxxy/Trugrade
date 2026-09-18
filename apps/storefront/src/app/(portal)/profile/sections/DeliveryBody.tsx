@@ -1,10 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Chip, Input } from '@trugrade/ui';
+import { Chip, Input } from '@trugrade/ui';
 import { completeStep, saveStep, type AccountHolderDetails } from '../../../register/api';
 import { PincodeLocalityFields } from '../../../register/PincodeLocalityFields';
-import { RECEIVING_DAYS } from '../../../register/picklists';
 import {
   isMobileBlank,
   toE164,
@@ -18,7 +17,7 @@ import {
 import type { StepBodyProps } from './step-body';
 
 /**
- * Delivery: one site, and who signs for it.
+ * Delivery: one site, and the window it receives in.
  *
  * **Three typed fields, against the twenty this card used to hold.** It was one
  * all-or-nothing step of five sub-steps — a procurement contact, a finance
@@ -27,13 +26,18 @@ import type { StepBodyProps } from './step-body';
  * bill genuinely need:
  *
  * - Name the site, the street, the pincode. City and state fill themselves from
- *   the pincode directory and are read-only.
- * - Who signs defaults to the account holder, because the person creating the
- *   account is that person until they say otherwise. A delivery OTP has to
- *   reach somebody, so this is never left blank.
- * - The receiving window defaults to Monday to Friday, 10:00 to 19:00, the way
- *   the supplier hub's collection window is one pre-selected chip. Three
- *   required fields with no defaults were three questions nobody needed asked.
+ *   the pincode directory and are read-only. Gate instructions sit directly
+ *   under them, because that is what they are — the last line of the address.
+ * - Who signs is the account holder, and the card neither asks it nor restates
+ *   it. The person who opened the account is the person a delivery OTP reaches;
+ *   naming somebody else is an edit to the address, not a question to open
+ *   with, and repeating their own name back at them was not an answer to
+ *   anything. It still travels with the site — `org_address` needs a contact —
+ *   and if the account is missing a usable name or mobile the card says which
+ *   card to go and fix rather than failing on a field that is not shown.
+ * - The window is one chip carrying its own hours, the four the supplier hub
+ *   already offers for collection. A chip that reads "Mon–Fri 10–6" makes two
+ *   time pickers under it redundant.
  *
  * The finance and IT contacts moved to the team screen, where people belong,
  * and neither blocks an order. The billing row written by the Tax card is
@@ -41,12 +45,43 @@ import type { StepBodyProps } from './step-body';
  * delivery together, and this is the card that completes the step.
  */
 
-const DEFAULT_DAYS = 'MON_FRI';
-const DEFAULT_OPENS_AT = '10:00';
-const DEFAULT_CLOSES_AT = '19:00';
+interface ReceivingWindow {
+  id: string;
+  label: string;
+  /** `RECEIVING_DAYS` on the promotion side, which writes the driver's line. */
+  days: string;
+  opensAt: string;
+  closesAt: string;
+}
 
-/** The picklist minus its "Select the days" placeholder — these are chips now. */
-const DAY_CHIPS = RECEIVING_DAYS.filter((d) => d.value !== '');
+/**
+ * The four windows, each carrying the hours its label promises.
+ *
+ * Days and hours still travel to the API as three separate answers because
+ * `org_address` has no columns for them — promotion folds them into
+ * `delivery_instructions` as a sentence. The chip is the question asked; those
+ * three fields are only how the answer is stored.
+ */
+const WINDOWS: readonly ReceivingWindow[] = [
+  {
+    id: 'MON_FRI_10_6',
+    label: 'Mon–Fri 10–6',
+    days: 'MON_FRI',
+    opensAt: '10:00',
+    closesAt: '18:00',
+  },
+  {
+    id: 'MON_SAT_10_6',
+    label: 'Mon–Sat 10–6',
+    days: 'MON_SAT',
+    opensAt: '10:00',
+    closesAt: '18:00',
+  },
+  { id: 'MON_SAT_9_8', label: 'Mon–Sat 9–8', days: 'MON_SAT', opensAt: '09:00', closesAt: '20:00' },
+  { id: 'ALL_DAYS', label: 'All days', days: 'ALL', opensAt: '09:00', closesAt: '20:00' },
+];
+
+const DEFAULT_WINDOW: ReceivingWindow = WINDOWS[0]!;
 
 export interface DeliveryBodyProps extends StepBodyProps {
   /** Saved CONTACTS_ADDRESSES answers: the billing row and any saved site. */
@@ -64,22 +99,28 @@ interface SiteValues {
   pincode: string;
   contactName: string;
   contactMobile: string;
-  landmark: string;
   gateInstructions: string;
-  days: string;
-  opensAt: string;
-  closesAt: string;
+  windowId: string;
 }
 
 const str = (row: Record<string, unknown>, key: string): string =>
   typeof row[key] === 'string' ? (row[key] as string) : '';
 
+/** Saved days and hours, read back as the chip that produces them. */
+function windowIdFrom(saved: Record<string, unknown>): string {
+  const match = WINDOWS.find(
+    (w) =>
+      w.days === str(saved, 'days') &&
+      w.opensAt === str(saved, 'opensAt') &&
+      w.closesAt === str(saved, 'closesAt'),
+  );
+  return (match ?? DEFAULT_WINDOW).id;
+}
+
 function readSite(initial: Record<string, unknown>, account: AccountHolderDetails): SiteValues {
   const rows = initial.delivery;
   const saved =
     (Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined) ?? {};
-  const savedName = str(saved, 'contactName');
-  const savedMobile = str(saved, 'contactMobile');
   return {
     label: str(saved, 'label'),
     line1: str(saved, 'line1'),
@@ -87,21 +128,14 @@ function readSite(initial: Record<string, unknown>, account: AccountHolderDetail
     city: str(saved, 'city'),
     state: str(saved, 'state'),
     pincode: str(saved, 'pincode'),
-    // Nothing saved yet: the account holder signs until somebody says otherwise.
-    contactName: savedName || account.fullName,
-    contactMobile: typeMobile(savedMobile || account.mobile),
-    landmark: str(saved, 'landmark'),
+    // Nothing saved yet: the account holder signs, because they are the person
+    // a delivery code can actually reach.
+    contactName: str(saved, 'contactName') || account.fullName,
+    contactMobile: typeMobile(str(saved, 'contactMobile') || account.mobile),
     gateInstructions: str(saved, 'gateInstructions'),
-    days: str(saved, 'days') || DEFAULT_DAYS,
-    opensAt: str(saved, 'opensAt') || DEFAULT_OPENS_AT,
-    closesAt: str(saved, 'closesAt') || DEFAULT_CLOSES_AT,
+    windowId: windowIdFrom(saved),
   };
 }
-
-/** Whether the site still names the account holder, unedited. */
-const usesAccountHolder = (site: SiteValues, account: AccountHolderDetails): boolean =>
-  site.contactName.trim() === account.fullName.trim() &&
-  toE164(site.contactMobile) === toE164(typeMobile(account.mobile));
 
 export function DeliveryBody({
   initial,
@@ -113,10 +147,6 @@ export function DeliveryBody({
   onSaved,
 }: DeliveryBodyProps): React.JSX.Element {
   const [site, setSite] = React.useState<SiteValues>(() => readSite(initial, accountHolder));
-  const [someoneElse, setSomeoneElse] = React.useState(
-    () => !usesAccountHolder(readSite(initial, accountHolder), accountHolder),
-  );
-  const [showWindow, setShowWindow] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | undefined>();
 
@@ -137,23 +167,45 @@ export function DeliveryBody({
     const city = validateCity(site.city);
     if (city) found.city = city;
     if (!site.state) found.state = 'The pincode decides the state. Check the pincode.';
-    const name = validateFullName(site.contactName);
-    if (name) found.contactName = 'Name the person who signs for the delivery.';
-    const mobile = isMobileBlank(site.contactMobile)
-      ? 'A delivery code goes to this number. Give one.'
-      : validateMobile(site.contactMobile);
-    if (mobile) found.contactMobile = mobile;
     return found;
+  };
+
+  /**
+   * The signatory is not a field on this card, so a bad one is not a red
+   * border — it is a sentence saying which card to go and fix.
+   */
+  const signatoryProblem = (): string | undefined => {
+    if (validateFullName(site.contactName)) {
+      return 'A delivery has to be signed for, and we use your own name. Fill in your full name on the Account card first.';
+    }
+    const mobile = isMobileBlank(site.contactMobile)
+      ? 'missing'
+      : (validateMobile(site.contactMobile) ?? '');
+    if (!mobile) return undefined;
+    return 'The delivery code goes to your mobile number, and your account does not have a usable one. Fix it on the Account card first.';
   };
 
   const save = async (): Promise<void> => {
     const found = check();
     setErrors(found);
     if (Object.keys(found).length > 0) return;
+    const signatory = signatoryProblem();
+    if (signatory) {
+      setError(signatory);
+      return;
+    }
     setError(undefined);
     onBusy(true);
 
-    const settled = { ...site, contactMobile: toE164(site.contactMobile) || site.contactMobile };
+    const chosen = WINDOWS.find((w) => w.id === site.windowId) ?? DEFAULT_WINDOW;
+    const { windowId: _windowId, ...typed } = site;
+    const settled = {
+      ...typed,
+      contactMobile: toE164(site.contactMobile) || site.contactMobile,
+      days: chosen.days,
+      opensAt: chosen.opensAt,
+      closesAt: chosen.closesAt,
+    };
     const saved = await saveStep(
       'CONTACTS_ADDRESSES',
       // Everything the Tax card wrote — the billing row and the named person —
@@ -180,8 +232,6 @@ export function DeliveryBody({
   React.useEffect(() => {
     registerSubmit(() => void saveRef.current());
   }, [registerSubmit]);
-
-  const windowLabel = `${DAY_CHIPS.find((d) => d.value === site.days)?.label ?? 'Monday to Friday'}, ${site.opensAt} to ${site.closesAt}`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,117 +272,34 @@ export function DeliveryBody({
         onFocus={noop}
         onBlur={noop}
       />
-
       {/*
-        Who signs, pre-filled and read-only. A delivery OTP has to reach a
-        person, and the person who opened the account is that person until they
-        name somebody else.
+        Gate instructions belong under the state the pincode settled: a rider
+        reads them as the last line of where they are going, not as a preference
+        filed somewhere else on the card.
       */}
-      {!someoneElse ? (
-        <div>
-          <p className="mb-1 block text-body-sm font-medium text-ink-2">Who signs for deliveries</p>
-          <p className="text-body-sm text-ink">
-            {site.contactName || 'You'}
-            {site.contactMobile ? (
-              <span className="ml-2 font-mono tnum text-ink-2">{site.contactMobile}</span>
-            ) : null}
-          </p>
-          <div className="mt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSomeoneElse(true);
-                patch({ contactName: '', contactMobile: typeMobile('') });
-              }}
-            >
-              Someone else signs
-            </Button>
-          </div>
-          {errors.contactName || errors.contactMobile ? (
-            <p role="alert" className="mt-2 text-body-sm text-fail">
-              {errors.contactName ?? errors.contactMobile}
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          <Input
-            label="Who signs for the delivery"
-            required
-            value={site.contactName}
-            onChange={(e) => patch({ contactName: e.target.value })}
-            error={errors.contactName}
-          />
-          <Input
-            label="Their mobile"
-            mono
-            type="tel"
-            inputMode="numeric"
-            maxLength={14}
-            required
-            value={site.contactMobile}
-            onChange={(e) => patch({ contactMobile: typeMobile(e.target.value) })}
-            error={errors.contactMobile}
-          />
-        </>
-      )}
+      <Input
+        label="Gate instructions"
+        placeholder="Deliveries to the basement dock only"
+        value={site.gateInstructions}
+        onChange={(e) => patch({ gateInstructions: e.target.value })}
+      />
 
       {/*
-        The window has a default, so it is a fact with an edit rather than three
-        empty required fields. Landmark and gate instructions live behind the
-        same disclosure: useful to a rider, never worth blocking an order over.
+        One chip, carrying its own hours. Four answers cover what a dock
+        actually keeps, and not one of them is an empty required field.
       */}
       <div>
-        <p className="mb-1 block text-body-sm font-medium text-ink-2">Receiving window</p>
-        <p className="text-body-sm text-ink">{windowLabel}</p>
-        {!showWindow ? (
-          <div className="mt-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setShowWindow(true)}>
-              Change window or add gate instructions
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              {DAY_CHIPS.map((d) => (
-                <Chip
-                  key={d.value}
-                  label={d.label}
-                  selected={site.days === d.value}
-                  onToggle={() => patch({ days: d.value })}
-                />
-              ))}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                label="Opens at"
-                type="time"
-                mono
-                value={site.opensAt}
-                onChange={(e) => patch({ opensAt: e.target.value })}
-              />
-              <Input
-                label="Closes at"
-                type="time"
-                mono
-                value={site.closesAt}
-                onChange={(e) => patch({ closesAt: e.target.value })}
-              />
-            </div>
-            <Input
-              label="Landmark"
-              value={site.landmark}
-              onChange={(e) => patch({ landmark: e.target.value })}
+        <p className="mb-2 block text-h3 text-ink">Receiving window</p>
+        <div className="flex flex-wrap gap-2">
+          {WINDOWS.map((w) => (
+            <Chip
+              key={w.id}
+              label={w.label}
+              selected={site.windowId === w.id}
+              onToggle={() => patch({ windowId: w.id })}
             />
-            <Input
-              label="Gate instructions"
-              value={site.gateInstructions}
-              onChange={(e) => patch({ gateInstructions: e.target.value })}
-            />
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
       {error ? (

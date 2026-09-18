@@ -1,5 +1,6 @@
 import type { OfferBoard, SkuDetail } from '../../../lib/api';
 import { specRows } from './spec-rows';
+import { storageShortLabel } from '../../search/storage-label';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
@@ -9,19 +10,7 @@ const GRADE_CODE: Record<string, string> = {
   B: 'B',
 };
 
-const STORAGE_SHORT: Record<string, string> = {
-  NVME_SSD: 'SSD',
-  SATA_SSD: 'SSD',
-  EMMC: 'eMMC',
-  HDD: 'HDD',
-};
-
 type ScoreTone = 'fail' | 'warn' | 'b' | 'a' | 'aplus';
-
-function storageShortLabel(storageType: string | undefined): string | null {
-  if (!storageType) return null;
-  return STORAGE_SHORT[storageType] ?? storageType.replace(/_/g, ' ');
-}
 
 function scoreBarTone(score: number, grade: string): ScoreTone {
   if (score < 60) return 'fail';
@@ -103,7 +92,11 @@ function SpecIcon({ kind }: { kind: 'cpu' | 'display' | 'supply' }): React.JSX.E
     return (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="7" y="7" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M9 4v3M12 4v3M15 4v3M9 17v3M12 17v3M15 17v3M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3" stroke="currentColor" strokeWidth="1.6" />
+        <path
+          d="M9 4v3M12 4v3M15 4v3M9 17v3M12 17v3M15 17v3M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        />
       </svg>
     );
   }
@@ -117,7 +110,11 @@ function SpecIcon({ kind }: { kind: 'cpu' | 'display' | 'supply' }): React.JSX.E
   }
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 21s7-4.35 7-10a7 7 0 1 0-14 0c0 5.65 7 10 7 10z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 21s7-4.35 7-10a7 7 0 1 0-14 0c0 5.65 7 10 7 10z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
       <circle cx="12" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );
@@ -221,7 +218,9 @@ export function ProductIdentityCard({
             <LaptopThumb />
           </div>
           <div className="pid-price">
-            <span className="mono">{fromPrice ? `₹${RUPEES.format(Number(fromPrice))}` : 'Not priced'}</span>
+            <span className="mono">
+              {fromPrice ? `₹${RUPEES.format(Number(fromPrice))}` : 'Not priced'}
+            </span>
             <small>from · before tax &amp; delivery</small>
           </div>
         </div>
@@ -230,8 +229,9 @@ export function ProductIdentityCard({
       <div className="pid-foot">
         <SpecIcon kind="supply" />
         <span>
-          <span className="mono">{sku.skuCode}</span> · HSN <span className="mono">{sku.hsnCode}</span> ·{' '}
-          <b className="mono">{board.supplyPoints}</b> supply point{board.supplyPoints === 1 ? '' : 's'}
+          <span className="mono">{sku.skuCode}</span> · HSN{' '}
+          <span className="mono">{sku.hsnCode}</span> · <b className="mono">{board.supplyPoints}</b>{' '}
+          supply point{board.supplyPoints === 1 ? '' : 's'}
           {cities.length > 0 ? <> · {cities.join(', ')}</> : null} ·{' '}
           <span className="mono">{board.unitsAvailable} sealed</span>
         </span>

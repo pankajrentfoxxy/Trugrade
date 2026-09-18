@@ -18,7 +18,6 @@
  */
 import type { Metadata } from 'next';
 import { getSearch } from '../../lib/api';
-import { CategoryStrip } from '../CategoryStrip';
 import { FilterRail } from '../FilterRail';
 import { Pager } from './Pager';
 import { ResultBar } from './ResultBar';
@@ -53,7 +52,6 @@ export default async function SearchPage({
 
   return (
     <>
-      <CategoryStrip query={query} />
 
       <div className="body">
         <div className="wrap">

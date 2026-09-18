@@ -306,23 +306,151 @@ describe('what the screen fills in for itself', () => {
     expect(screen.getByRole('button', { name: /Not this area/i })).toBeInTheDocument();
   });
 
-  it('names the account holder as the person who signs, read-only, without asking', () => {
-    render(<DeliveryBody {...shared} initial={{}} accountHolder={ACCOUNT} blockingReason={null} />);
-    expect(screen.getByText('Who signs for deliveries')).toBeInTheDocument();
-    expect(screen.getByText(ACCOUNT.fullName)).toBeInTheDocument();
-    // Shown as typed, which carries the '+91 ' prefix with its space.
-    expect(screen.getByText('+91 9876543210')).toBeInTheDocument();
-    // Editable only on request, so it is not one of the fields counted above.
-    expect(screen.queryByLabelText(/Who signs for the delivery/i)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Someone else signs' }));
-    expect(screen.getByLabelText(/Who signs for the delivery/i)).toBeInTheDocument();
+  it('sends the account holder as the signatory without asking or restating it', async () => {
+    let submit: () => void = () => undefined;
+    render(
+      <DeliveryBody
+        {...shared}
+        registerSubmit={(fn) => {
+          submit = fn;
+        }}
+        initial={{
+          delivery: [
+            {
+              label: 'Head office',
+              line1: 'Fourth Floor, 429',
+              city: 'GURGAON',
+              state: '06',
+              pincode: '122018',
+            },
+          ],
+        }}
+        accountHolder={ACCOUNT}
+        blockingReason={null}
+      />,
+    );
+    // Neither asked nor echoed back — the card says nothing about who signs.
+    expect(screen.queryByText(/Who signs/i)).toBeNull();
+    expect(screen.queryByLabelText(/Their mobile/i)).toBeNull();
+    expect(screen.queryByText(ACCOUNT.fullName)).toBeNull();
+
+    // It still reaches the API, because `org_address` needs a contact.
+    await act(async () => {
+      submit();
+    });
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
+    const [, answers] = mockSave.mock.calls[0]!;
+    expect((answers as { delivery: Record<string, unknown>[] }).delivery[0]).toMatchObject({
+      contactName: ACCOUNT.fullName,
+      contactMobile: '+919876543210',
+    });
   });
 
-  it('defaults the receiving window rather than asking three questions with no defaults', () => {
+  it('asks the receiving window as one chip carrying its hours, not three empty fields', () => {
     render(<DeliveryBody {...shared} initial={{}} accountHolder={ACCOUNT} blockingReason={null} />);
-    expect(screen.getByText('Monday to Friday, 10:00 to 19:00')).toBeInTheDocument();
+    // Pre-selected, so the window is a fact to change rather than a question.
+    expect(screen.getByRole('button', { name: 'Mon–Fri 10–6' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'All days' })).toBeInTheDocument();
     expect(screen.queryByLabelText(/Opens at/i)).toBeNull();
+    expect(screen.queryByLabelText(/Closes at/i)).toBeNull();
     expect(screen.queryByLabelText(/Receiving days/i)).toBeNull();
+  });
+
+  it('keeps gate instructions with the address, and stops asking for a landmark', () => {
+    render(<DeliveryBody {...shared} initial={{}} accountHolder={ACCOUNT} blockingReason={null} />);
+    expect(screen.getByLabelText(/Gate instructions/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Landmark/i)).toBeNull();
+  });
+
+  it('writes the hours the chosen chip promises, because the API has no chip', async () => {
+    let submit: () => void = () => undefined;
+    render(
+      <DeliveryBody
+        {...shared}
+        registerSubmit={(fn) => {
+          submit = fn;
+        }}
+        initial={{
+          delivery: [
+            {
+              label: 'Head office',
+              line1: 'Fourth Floor, 429',
+              city: 'GURGAON',
+              state: '06',
+              pincode: '122018',
+            },
+          ],
+        }}
+        accountHolder={ACCOUNT}
+        blockingReason={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Mon–Sat 9–8' }));
+    await act(async () => {
+      submit();
+    });
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
+    const [step, answers] = mockSave.mock.calls[0]!;
+    expect(step).toBe('CONTACTS_ADDRESSES');
+    const [site] = (answers as { delivery: Record<string, unknown>[] }).delivery;
+    expect(site).toMatchObject({ days: 'MON_SAT', opensAt: '09:00', closesAt: '20:00' });
+    // The chip itself is this card's state, never one of the saved answers.
+    expect(site).not.toHaveProperty('windowId');
+  });
+
+  it('locks a GSTIN the portal passed, and unlocks it only on a deliberate change', async () => {
+    render(
+      <TaxBody
+        {...shared}
+        initial={{}}
+        contacts={{}}
+        accountHolder={ACCOUNT}
+        blockingReason={null}
+      />,
+    );
+    const field = screen.getByLabelText(/GSTIN/i) as HTMLInputElement;
+    expect(field).not.toHaveAttribute('readonly');
+
+    await act(async () => {
+      fireEvent.change(field, { target: { value: GSTIN } });
+      fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    });
+    await screen.findByTestId('gstin-verified');
+
+    // Read-only, and there is no longer a Verify button to press again.
+    expect(field).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: 'Verify' })).toBeNull();
+    expect(screen.getByText(/Checked against the GST portal/i)).toBeInTheDocument();
+
+    // Typing at it is refused, rather than quietly staling the portal's answer.
+    fireEvent.change(field, { target: { value: '29AAHCT0310N1Z9' } });
+    expect(field.value).toBe(GSTIN);
+
+    // Changing it is deliberate: the answer is thrown away and re-asked.
+    fireEvent.click(screen.getByRole('button', { name: 'Change the GSTIN' }));
+    expect(field).not.toHaveAttribute('readonly');
+    expect(screen.queryByTestId('gstin-verified')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument();
+  });
+
+  it('keeps a reopened card verified, rather than re-asking for a check it has', () => {
+    render(
+      <TaxBody
+        {...shared}
+        initial={{
+          gstins: [{ gstin: GSTIN, confirmed: true, outcome: verifiedGst().data }],
+        }}
+        contacts={{}}
+        accountHolder={ACCOUNT}
+        blockingReason={null}
+      />,
+    );
+    expect(screen.getByLabelText(/GSTIN/i)).toHaveAttribute('readonly');
+    const block = screen.getByTestId('gstin-verified');
+    expect(within(block).getByRole('checkbox')).toBeChecked();
   });
 
   it('confirms the billing address the GST portal returned, rather than asking for it again', async () => {

@@ -57,14 +57,22 @@ export function AuthModal({
     <Modal
       open={open}
       onClose={onClose}
+      // Kept for `aria-labelledby` and drawn for screen readers only. The form
+      // underneath already says which of the two it is, in its own controls.
       title={mode === 'register' ? 'Create a buyer account' : 'Sign in'}
+      titleHidden
       description={
         mode === 'register'
           ? 'Your mobile number and a code. Your name, work email and company details come later, from your account.'
-          : 'A code to your mobile number or work email. There is no password.'
+          : undefined
       }
       size="lg"
       className="authmodal"
+      // Nothing here is lost by closing: the form is two fields deep and the
+      // header button reopens it in the state it started. Clicking the page
+      // behind it means 'not now', and the dialog should take the hint.
+      dismissOnBackdrop
+
     >
       <div className="authmodal__grid">
         <AuthArt />

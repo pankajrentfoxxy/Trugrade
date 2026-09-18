@@ -137,6 +137,7 @@ export function ProfileHub(): React.JSX.Element {
               </p>
               {onboarding.editable ? (
                 <Button
+                  className="profile-hub-action"
                   variant={done ? 'secondary' : 'primary'}
                   onClick={() => setOpen(section.id)}
                 >

@@ -5,11 +5,11 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
 import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
-import { Skeleton, ToastProvider } from '@trugrade/ui';
+import { HubAccountMenu, Skeleton, ToastProvider } from '@trugrade/ui';
 import { logout } from '../../register/api';
 import { PortalProvider, usePortal } from './PortalContext';
 import { ProfileBanner } from './ProfileBanner';
-import { activePortalEntry, mayOpen, portalGroups, type PortalNavEntry } from './nav';
+import { activePortalEntry, lockLabel, lockOn, portalGroups, type PortalNavEntry } from './nav';
 import { RailIcon, SearchIcon } from './rail-icons';
 
 /**
@@ -47,6 +47,7 @@ function Masthead(): React.JSX.Element {
   const [signingOut, setSigningOut] = React.useState(false);
 
   const monogram = initials(session.fullName);
+  const name = session.fullName?.trim() || null;
   const role = session.roles.map((r) => ROLE_LABEL[r]).find(Boolean) ?? null;
   const orgName =
     profile && profile.legalName !== 'Pending company details' ? profile.legalName : null;
@@ -65,7 +66,16 @@ function Masthead(): React.JSX.Element {
 
   return (
     <header className="hub-mast">
-      <Link href="/home" aria-label="Buyer portal home" className="hub-mast__brand">
+      {/*
+        The wordmark goes to the shop, not to `/home`.
+
+        It pointed at the portal's own Home, which is the screen the rail's
+        first entry opens and usually the screen you are already on — a brand
+        mark that does nothing. Everywhere else on the web it means "the front
+        of this site", and on the buyer side the front of the site is the
+        catalogue. The way back to the portal is the rail, which is always up.
+      */}
+      <Link href="/" aria-label="Trugrade home" className="hub-mast__brand">
         <span className="hub-mast__tile" aria-hidden="true">
           t
         </span>
@@ -117,24 +127,37 @@ function Masthead(): React.JSX.Element {
         ) : null}
       </form>
 
-      <div className="hub-mast__account">
-        <span className="hub-mast__avatar font-mono" aria-hidden="true">
-          {monogram || '—'}
-        </span>
-        <span className="hub-mast__who">
-          <span className="hub-mast__name">
-            {session.fullName?.trim() || (
-              <Link href="/profile" className="hub-link">
-                Add your name
-              </Link>
-            )}
-          </span>
-          {role ? <span className="hub-mast__role">{role}</span> : null}
-        </span>
-        <button type="button" className="hub-mast__out" onClick={signOut} disabled={signingOut}>
+      <HubAccountMenu
+        className="hub-mast__account"
+        monogram={monogram}
+        name={name}
+        role={role}
+        label={`${name ?? 'Your account'} — account menu`}
+      >
+        {/*
+          Shopping is the one thing the portal had no door to: every rail entry
+          is something already bought. A client transition, because `/` is this
+          same app — the portal's SurfaceSync puts the dark shop chrome back on
+          the way out.
+        */}
+        <Link className="hub-menu__item" role="menuitem" href="/">
+          Start purchasing
+        </Link>
+        {name ? null : (
+          <Link className="hub-menu__item" role="menuitem" href="/profile">
+            Add your name
+          </Link>
+        )}
+        <button
+          type="button"
+          className="hub-menu__item"
+          role="menuitem"
+          onClick={signOut}
+          disabled={signingOut}
+        >
           {signingOut ? 'Signing out…' : 'Sign out'}
         </button>
-      </div>
+      </HubAccountMenu>
     </header>
   );
 }
@@ -151,6 +174,12 @@ function Masthead(): React.JSX.Element {
  * `hub-rail__lock` and `hub-rail__count` were designed and styled in
  * `packages/ui/hub.css` and emitted by nobody on this side; the vendor shell
  * has used both for months.
+ *
+ * There are two reasons an entry is shut and they are different sentences. A
+ * permission is about the seat and will not change on its own. Verification is
+ * about the organisation and is somebody else's outstanding work, so the four
+ * screens behind it say what is being waited on rather than naming a grant the
+ * buyer has never heard of and cannot give themselves.
  */
 function Rail({
   active,
@@ -161,7 +190,7 @@ function Rail({
   counts: Readonly<Record<string, number>>;
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
-  const { session } = usePortal();
+  const { session, orgVerified } = usePortal();
   const groups = portalGroups();
 
   return (
@@ -185,22 +214,21 @@ function Rail({
           <div key={group} className="contents">
             <div className="hub-rail__group">{group}</div>
             {entries.map((n) => {
-              const allowed = mayOpen(n, session.permissions);
+              const lock = lockOn(n, { permissions: session.permissions, orgVerified });
               const waiting = counts[n.to];
-              const label = allowed
-                ? n.label
-                : `${n.label} — needs ${n.permission ?? 'a permission'}`;
+              const label = lock ? lockLabel(n, lock) : n.label;
               return (
                 <Link
                   key={n.to}
                   href={n.to as Route}
                   aria-current={n === active ? 'page' : undefined}
-                  aria-disabled={allowed ? undefined : true}
-                  title={allowed ? undefined : label}
+                  aria-disabled={lock ? true : undefined}
+                  title={lock ? label : undefined}
                   className="hub-rail__item"
-                  data-locked={allowed ? undefined : 'true'}
+                  data-locked={lock ? 'true' : undefined}
+                  data-lock={lock?.kind}
                   onClick={(e) => {
-                    if (!allowed) {
+                    if (lock) {
                       e.preventDefault();
                       return;
                     }
@@ -211,7 +239,13 @@ function Rail({
                     <RailIcon to={n.to} />
                   </span>
                   <span className="hub-rail__label">{n.label}</span>
-                  {!allowed ? (
+                  {/*
+                    The reason, for a screen reader. `title` is a hover tooltip
+                    and a padlock is `aria-hidden`, so without this the only
+                    thing announced is a link that does nothing when followed.
+                  */}
+                  {lock ? <span className="sr-only">{label}</span> : null}
+                  {lock ? (
                     <span className="hub-rail__lock" aria-hidden="true">
                       <LockIcon />
                     </span>
@@ -230,7 +264,7 @@ function Rail({
   );
 }
 
-/** The padlock on an entry this seat may not open. */
+/** The padlock on an entry that is shut, whichever of the two reasons shut it. */
 function LockIcon(): React.JSX.Element {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -346,18 +346,15 @@ export function OtpSignIn({
             {mode === 'register' ? (
               <>Already with us? {switchTo('sign-in', 'Sign in')}.</>
             ) : (
-              <>
-                New to Trugrade? {switchTo('register', 'Create a buyer account')} with your mobile
-                number.
-              </>
+              <>New to Trugrade? {switchTo('register', 'Sign up')}</>
             )}
           </p>
           <p className="text-body-sm text-ink-3">
             Selling refurbished laptops?{' '}
             <a className="hub-link" href={sellerRegisterUrl}>
               Apply to supply
-            </a>{' '}
-            on the supplier console.
+            </a>
+            .
           </p>
         </form>
       ) : (

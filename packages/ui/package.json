@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./globals.css": "./src/globals.css",
     "./tailwind": "./tailwind.config.ts",
-    "./hub.css": "./src/hub.css"
+    "./hub.css": "./src/hub.css",
+    "./profile-hub.css": "./src/profile-hub.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit",

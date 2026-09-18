@@ -43,7 +43,6 @@ import {
 } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { getUnitPassport, type PassportResult, type UnitPassport } from '../../../lib/api';
-import { CategoryStrip } from '../../CategoryStrip';
 import { Areas } from './Areas';
 import { Hardware, NotMeasured, WipeCertificate } from './panels';
 import { UnitIdentityCard } from './UnitIdentityCard';
@@ -89,7 +88,6 @@ export default async function UnitPassportPage({
 
   return (
     <>
-      <CategoryStrip query="" />
 
       <div className="body">
         <div className="wrap passport">
@@ -483,7 +481,6 @@ function Refusal({
 
   return (
     <>
-      <CategoryStrip query="" />
       <div className="body">
         <div className="wrap passport">
           <div className={panel.error ? 'empty err refusal' : 'empty refusal'}>

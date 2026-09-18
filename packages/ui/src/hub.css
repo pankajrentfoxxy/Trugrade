@@ -11,6 +11,8 @@
  * (`HubPageHeader`, `Panel`, `HubKpiRow`, `LedgerRow`, `PermissionGrid`) emit.
  */
 
+@import './profile-hub.css';
+
 .hub-frame {
   --hub-mast-h: 62px;
   min-height: 100dvh;
@@ -160,14 +162,59 @@
   color: var(--acc-ink);
 }
 
-.hub-mast__who {
+/**
+ * The account menu behind the avatar.
+ *
+ * The name, the seat and the way out used to sit open on the masthead, which
+ * spent a third of the bar on three things a buyer reads once. They live under
+ * the avatar now, beside the way back to the shop.
+ */
+.hub-menu {
+  position: relative;
+}
+
+.hub-menu__trigger {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--acc-ink);
+  cursor: pointer;
+}
+.hub-menu__trigger:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+.hub-menu__trigger:hover .hub-mast__avatar,
+.hub-menu__trigger[aria-expanded='true'] .hub-mast__avatar {
+  box-shadow: inset 0 0 0 1px var(--acc);
+}
+
+.hub-menu__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 232px;
+  padding: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow-2);
+}
+
+.hub-menu__who {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  padding: 8px 10px 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
 }
 
-.hub-mast__name {
+.hub-menu__name {
   font-size: 14.5px;
   font-weight: 600;
   line-height: 1.2;
@@ -177,29 +224,37 @@
   white-space: nowrap;
 }
 
-.hub-mast__role {
+.hub-menu__role {
   font-size: 12px;
   line-height: 1.2;
   color: var(--ink-3);
 }
 
-.hub-mast__out {
-  margin-left: 4px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--rule);
+.hub-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
   border-radius: var(--r);
-  background: var(--sheet);
+  background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
+  text-align: left;
+  text-decoration: none;
   color: var(--ink-2);
   cursor: pointer;
 }
-.hub-mast__out:hover:not(:disabled) {
+.hub-menu__item:hover:not(:disabled) {
   background: var(--sheet-2);
   color: var(--ink);
 }
-.hub-mast__out:disabled {
+.hub-menu__item:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+.hub-menu__item:disabled {
   cursor: default;
   color: var(--ink-4);
 }
@@ -930,9 +985,6 @@
   .hub-mast__search {
     display: none;
   }
-  .hub-mast__who {
-    display: none;
-  }
   .hub-rail-toggle {
     display: inline-flex;
     align-items: center;
@@ -991,106 +1043,4 @@
     border-left: 0;
     border-top: 1px solid var(--rule-2);
   }
-}
-.profile-hub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-}
-
-.profile-hub-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px 18px 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--sheet);
-  box-shadow: var(--shadow);
-}
-
-.profile-hub-card[data-done='true'] {
-  border-color: var(--pass-line);
-  background: var(--pass-wash);
-}
-
-.profile-hub-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.profile-hub-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--r);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--acc-wash);
-  color: var(--acc-ink);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.profile-hub-card[data-done='true'] .profile-hub-icon {
-  background: var(--pass);
-  color: var(--acc-on);
-}
-
-.profile-hub-summary {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-2);
-}
-
-.profile-hub-weight {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-3);
-}
-
-.profile-hub-readonly {
-  border: 1px dashed var(--rule);
-  background: var(--sheet-2);
-  color: var(--ink-2);
-}
-
-.profile-hub-found {
-  margin: 0;
-  font-size: 14px;
-  color: var(--pass);
-}
-
-.profile-hub-pass-block {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: var(--r);
-  border: 1px solid var(--pass-line);
-  background: var(--pass-wash);
-}
-
-.profile-hub-clauses {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 12px 14px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r);
-  background: var(--sheet-2);
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--ink-2);
-}
-
-.profile-hub-clauses ol {
-  margin: 0;
-  padding-left: 1.25rem;
-}
-
-.profile-hub-clauses li + li {
-  margin-top: 10px;
 }

@@ -25,10 +25,14 @@ const EVERY_REQUIRED_STEP = [
   'AGREEMENT',
 ];
 
-function onboarding(completeCodes: string[]): ResumableOnboarding {
+function onboarding(
+  completeCodes: string[],
+  status?: ResumableOnboarding['status'],
+): ResumableOnboarding {
   return {
     orgId: 'o1',
-    status: completeCodes.length >= EVERY_REQUIRED_STEP.length ? 'VERIFIED' : 'REGISTERED',
+    status:
+      status ?? (completeCodes.length >= EVERY_REQUIRED_STEP.length ? 'VERIFIED' : 'REGISTERED'),
     slaDueAt: null,
     slaBreached: false,
     decision: null,
@@ -110,12 +114,35 @@ describe('the profile completion bar', () => {
     expect(screen.queryByText('Your profile is complete. Listing is open.')).toBeNull();
   });
 
-  it('says listing is open only when every required section is done', () => {
-    draw(onboarding(EVERY_REQUIRED_STEP));
+  it('is gone once the profile is approved, for every seat', () => {
+    // It used to say "100% — Your profile is complete. Listing is open." above
+    // every screen, for good. The bar is a prompt; an approved supplier has
+    // nothing to be prompted about, and the rail still has Profile. It used to
+    // vanish only for the seats that could not act on it.
+    for (const roles of [['VENDOR_OWNER'], ['VENDOR_ADMIN'], ['VENDOR_VIEWER']]) {
+      const { container } = draw(onboarding(EVERY_REQUIRED_STEP), roles);
+      expect(container).toBeEmptyDOMElement();
+    }
+  });
 
+  it('is gone once the application has been submitted for review', () => {
+    // Waiting on us is not the supplier's work. The deadline is on the profile
+    // screen; it does not need a strip on top of Orders, Payouts and Listings.
+    for (const status of ['PROFILE_SUBMITTED', 'KYC_SUBMITTED', 'UNDER_REVIEW'] as const) {
+      const { container } = draw(onboarding(EVERY_REQUIRED_STEP, status));
+      expect(container).toBeEmptyDOMElement();
+    }
+  });
+
+  it('stays while a finished profile is still waiting to be SENT', () => {
+    // The one 100% state that keeps the bar: nobody has pressed submit, and the
+    // supplier is the one holding it up.
+    const ready = onboarding(EVERY_REQUIRED_STEP, 'REGISTERED');
+    ready.progress.isSubmittable = true;
+    draw(ready);
+
+    expect(screen.getByTestId('profile-banner')).toBeTruthy();
     expect(screen.getByText('100%')).toBeTruthy();
-    expect(screen.getByText('Your profile is complete. Listing is open.')).toBeTruthy();
-    expect(screen.getByTestId('profile-banner').className).toContain('hub-banner--done');
   });
 
   it('does not offer the action to a role that cannot take it', () => {
@@ -125,11 +152,5 @@ describe('the profile completion bar', () => {
 
     expect(screen.getByText('Next: Pickup address')).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Complete profile' })).toBeNull();
-  });
-
-  it('disappears for that role once there is nothing left to say', () => {
-    const { container } = draw(onboarding(EVERY_REQUIRED_STEP), ['VENDOR_VIEWER']);
-
-    expect(container).toBeEmptyDOMElement();
   });
 });

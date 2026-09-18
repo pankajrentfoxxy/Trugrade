@@ -9,7 +9,7 @@
  */
 
 import * as React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { Modal, ToastProvider, useToast } from './overlays';
@@ -53,6 +53,121 @@ describe('Modal', () => {
     );
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalled();
+  });
+
+  /*
+   * Clicking beside the card.
+   *
+   * A native <dialog> reports a click on its ::backdrop as a click on the
+   * dialog element, and so does a click on its own padding — so the component
+   * measures the pointer against the dialog's box instead of comparing
+   * targets. jsdom has no layout, so the box is supplied here; without it
+   * every rect is 0x0 and the component correctly refuses to guess.
+   */
+  const withBox = (box: { left: number; top: number; right: number; bottom: number }): void => {
+    jest
+      .spyOn(HTMLDialogElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({
+        ...box,
+        width: box.right - box.left,
+        height: box.bottom - box.top,
+        x: box.left,
+        y: box.top,
+        toJSON: () => ({}),
+      } as DOMRect);
+  };
+
+  afterEach(() => jest.restoreAllMocks());
+
+  describe('clicking outside the card', () => {
+    const OUTSIDE = { clientX: 5, clientY: 5 };
+    const INSIDE = { clientX: 200, clientY: 200 };
+
+    it('is ignored unless the modal asked for it', async () => {
+      const onClose = jest.fn();
+      withBox({ left: 100, top: 100, right: 500, bottom: 400 });
+      render(
+        <Modal open onClose={onClose} title="Invite a colleague">
+          <p>Body</p>
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog');
+      fireEvent.mouseDown(dialog, OUTSIDE);
+      fireEvent.click(dialog, OUTSIDE);
+      // The default, and the right one for a dialog holding a half-typed form.
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('closes a modal that opted in', async () => {
+      const onClose = jest.fn();
+      withBox({ left: 100, top: 100, right: 500, bottom: 400 });
+      render(
+        <Modal open onClose={onClose} title="Sign in" dismissOnBackdrop>
+          <p>Body</p>
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog');
+      fireEvent.mouseDown(dialog, OUTSIDE);
+      fireEvent.click(dialog, OUTSIDE);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves a click on the card itself alone', async () => {
+      const onClose = jest.fn();
+      withBox({ left: 100, top: 100, right: 500, bottom: 400 });
+      render(
+        <Modal open onClose={onClose} title="Sign in" dismissOnBackdrop>
+          <p>Body</p>
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog');
+      fireEvent.mouseDown(dialog, INSIDE);
+      fireEvent.click(dialog, INSIDE);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('does not close on a drag that began inside and ended outside', async () => {
+      // Selecting a label and releasing past the edge is one press and one
+      // release. Closing there throws away what was being read.
+      const onClose = jest.fn();
+      withBox({ left: 100, top: 100, right: 500, bottom: 400 });
+      render(
+        <Modal open onClose={onClose} title="Sign in" dismissOnBackdrop>
+          <p>Body</p>
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog');
+      fireEvent.mouseDown(dialog, INSIDE);
+      fireEvent.click(dialog, OUTSIDE);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('ignores a click with no pointer position, which is a keyboard activation', async () => {
+      const onClose = jest.fn();
+      withBox({ left: 100, top: 100, right: 500, bottom: 400 });
+      render(
+        <Modal open onClose={onClose} title="Sign in" dismissOnBackdrop>
+          <p>Body</p>
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog');
+      fireEvent.mouseDown(dialog, { clientX: 0, clientY: 0 });
+      fireEvent.click(dialog, { clientX: 0, clientY: 0 });
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  it('keeps its accessible name when the heading is drawn for screen readers only', () => {
+    render(
+      <Modal open onClose={() => {}} title="Sign in" titleHidden>
+        <p>Body</p>
+      </Modal>,
+    );
+    // The name survives; only the visible repetition goes. A dialog with no
+    // heading announces itself as "dialog" and nothing else.
+    const heading = screen.getByRole('heading', { name: 'Sign in' });
+    expect(heading).toHaveClass('sr-only');
+    expect(screen.getByRole('dialog', { name: 'Sign in' })).toBeTruthy();
   });
 
   it('offers a close control that names what it closes', async () => {

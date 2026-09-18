@@ -17,6 +17,10 @@ import { SubmitForReview, submitStage } from '../routes/vendor/profile/SubmitFor
  * It sits in the shell because the vendor does not finish onboarding on the
  * onboarding screen — they finish it when they discover, three screens deep,
  * that listing is locked. The bar has to be where they are.
+ *
+ * **It disappears the moment the profile leaves the supplier's hands** — sent
+ * for review, or approved. It is a prompt, not a status line, and a prompt with
+ * nothing to prompt is a strip above every screen that people learn to skip.
  */
 
 /** Roles that can actually act on a profile. Warehouse and Finance cannot. */
@@ -34,21 +38,25 @@ export function ProfileBanner({
 
   const pct = profileCompletionPct(onboarding);
   const next = nextIncompleteSection(null, onboarding);
-  const done = next === null;
   const canAct = roles.some((r) => CAN_COMPLETE.has(r));
-  const verified = onboarding.status === 'VERIFIED';
   const stage = submitStage(onboarding, roles);
 
-  // A member who cannot complete a profile is told about it only while it is
-  // still blocking them. Once the business is verified the bar is noise.
-  if (verified && !canAct) return null;
+  // Nothing is left for this supplier to do: the application is with us, or it
+  // has already been approved. The bar exists to get an unfinished profile
+  // finished, so once it is out of their hands it is a strip above every screen
+  // saying "you are done" — which is a strip that stops being read. The review
+  // deadline and the approval both still live on the profile screen. The buyer
+  // portal's bar has always disappeared the moment ordering opens; this matches
+  // it. A submission still waiting to be SENT keeps the bar: that is the one
+  // case where the supplier is the one holding it up.
+  if (onboarding.status === 'VERIFIED' || stage === 'in-review') return null;
 
-  // Complete is not the same as verified. A finished profile that is waiting on
-  // the supplier to submit it, or on us to review it, says so here — the bar used
-  // to read "Listing is open" while every listing screen was still padlocked.
+  // Complete is not the same as submitted. A finished profile that is waiting on
+  // the supplier to press the button says so here — the bar used to read
+  // "Listing is open" while every listing screen was still padlocked.
   // 'outstanding' keeps the bar: "Next: Pickup address" is the better guide here,
   // and the hub already spells out what the server still wants.
-  if (!verified && stage !== 'hidden' && stage !== 'outstanding') {
+  if (stage !== 'hidden' && stage !== 'outstanding') {
     return (
       <div className="hub-banner" data-testid="profile-banner">
         <span className="hub-banner__label">Profile completion</span>
@@ -59,10 +67,7 @@ export function ProfileBanner({
   }
 
   return (
-    <div
-      className={done ? 'hub-banner hub-banner--done' : 'hub-banner'}
-      data-testid="profile-banner"
-    >
+    <div className="hub-banner" data-testid="profile-banner">
       <span className="hub-banner__label">Profile completion</span>
       <span className="hub-banner__pill font-mono tnum">{pct}%</span>
       <span
@@ -76,11 +81,19 @@ export function ProfileBanner({
         <span className="hub-banner__fill" style={{ width: `${pct}%` }} />
       </span>
       <span className="hub-banner__next">
-        {done ? 'Your profile is complete. Listing is open.' : `Next: ${next.title}`}
+        {/*
+          "Listing is open" used to live here. It can no longer be true: a
+          verified supplier has no bar at all now, so every profile that reaches
+          this line still has something open — a server step the cards do not
+          cover, or a decision that went against them.
+        */}
+        {next
+          ? `Next: ${next.title}`
+          : 'Every section is filled in — the profile screen says where it stands.'}
       </span>
       {canAct ? (
         <Link className="hub-banner__cta" to="/vendor/profile">
-          {done ? 'View profile' : 'Complete profile'}
+          {next ? 'Complete profile' : 'View profile'}
         </Link>
       ) : null}
     </div>

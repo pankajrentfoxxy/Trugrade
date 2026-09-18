@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { BRAND } from '@trugrade/config/brand';
 import { logout } from './register/api';
 
 function initials(fullName: string | null | undefined): string {
@@ -12,10 +13,22 @@ function initials(fullName: string | null | undefined): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
+/**
+ * The signed-in account control and its menu.
+ *
+ * It carries the same four utility links as the signed-out flyout in
+ * `AuthButtons`. They used to live in the strip above the header; with that
+ * strip switched off, putting them only in the signed-out panel would mean a
+ * buyer who signs in loses the route to `Track order` and `Help` — which are
+ * exactly the two a signed-in buyer needs most.
+ */
 export function AccountMenu({
   fullName,
+  /** Resolved on the server — see the same prop on `AuthButtons`. */
+  sellUrl,
 }: {
   fullName?: string | null;
+  sellUrl: string;
 }): React.JSX.Element {
   const [signingOut, setSigningOut] = React.useState(false);
   const label = initials(fullName);
@@ -59,6 +72,26 @@ export function AccountMenu({
           <Link className="usermenu-item" href="/home" role="menuitem">
             Account
           </Link>
+          {/* See the note on the same link in `AuthButtons`. */}
+          <a className="usermenu-item" href="/qc/verify" role="menuitem">
+            Verify a certificate
+          </a>
+          <Link className="usermenu-item" href="/orders" role="menuitem">
+            Track order
+          </Link>
+          <Link className="usermenu-item" href="/legal/grievance" role="menuitem">
+            Help
+          </Link>
+          <a
+            className="usermenu-item"
+            href={sellUrl}
+            role="menuitem"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Sell on {BRAND.name} &rarr;
+          </a>
+          <div className="usermenu-sep" />
           <button
             type="button"
             className="usermenu-item"

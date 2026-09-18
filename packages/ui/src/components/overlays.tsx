@@ -28,6 +28,26 @@ export interface ModalProps {
   footer?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
+  /**
+   * Whether clicking the backdrop closes this modal. Off by default.
+   *
+   * Opt-in rather than automatic, because most modals in this product hold a
+   * half-finished form — the invite dialog, a bank change, a return — and a
+   * stray click beside one of those must not throw the typing away. A modal
+   * that asks for nothing, or asks for something the visitor can start again
+   * in one click, is the case this is for.
+   */
+  dismissOnBackdrop?: boolean;
+  /**
+   * Draw the heading for screen readers only.
+   *
+   * The heading is never dropped, only taken off the screen: it is what
+   * `aria-labelledby` points at, so a dialog without one announces itself as
+   * "dialog" and nothing more. For a modal whose own content already says what
+   * it is — a sign-in form, with a Send code button in it — the visible
+   * repetition is what goes.
+   */
+  titleHidden?: boolean;
 }
 
 /**
@@ -51,12 +71,47 @@ export function Modal({
   footer,
   children,
   className,
+  dismissOnBackdrop = false,
+  titleHidden = false,
 }: ModalProps): React.JSX.Element {
   const dialogRef = React.useRef<HTMLDialogElement>(null);
   const headingRef = React.useRef<HTMLHeadingElement>(null);
   // Two modals can be mounted at once (a confirm over a form). Fixed ids would
   // make `aria-labelledby` resolve to whichever mounted first.
   const id = React.useId();
+  /**
+   * Where the press that began this click landed.
+   *
+   * A click is only a backdrop click when it *started* on the backdrop.
+   * Selecting the text of a label and releasing the mouse past the card's edge
+   * is one press and one release, and without this it would close the dialog
+   * mid-sentence.
+   */
+  const pressedOutside = React.useRef(false);
+
+  /**
+   * Whether a pointer position is outside the card.
+   *
+   * Measured against the dialog's own box rather than by comparing targets: a
+   * native `<dialog>` reports a click on its ::backdrop as a click on the
+   * dialog element itself, and so does a click on any padding of its own, which
+   * is inside the card as far as the person clicking is concerned.
+   */
+  const isOutside = (event: { clientX: number; clientY: number }): boolean => {
+    const dialog = dialogRef.current;
+    if (!dialog) return false;
+    const box = dialog.getBoundingClientRect();
+    // A keyboard-triggered click reports 0,0 and no box; never treat that as
+    // a click on the backdrop.
+    if (box.width === 0 || box.height === 0) return false;
+    if (event.clientX === 0 && event.clientY === 0) return false;
+    return (
+      event.clientX < box.left ||
+      event.clientX > box.right ||
+      event.clientY < box.top ||
+      event.clientY > box.bottom
+    );
+  };
 
   React.useEffect(() => {
     const dialog = dialogRef.current;
@@ -91,6 +146,14 @@ export function Modal({
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
       }}
+      onMouseDown={(event) => {
+        if (dismissOnBackdrop) pressedOutside.current = isOutside(event);
+      }}
+      onClick={(event) => {
+        if (!dismissOnBackdrop) return;
+        if (pressedOutside.current && isOutside(event)) onClose();
+        pressedOutside.current = false;
+      }}
       className={cn(
         'w-[calc(100vw-32px)] rounded-lg border border-rule bg-sheet p-0 text-ink shadow-3',
         MODAL_WIDTH[size],
@@ -98,12 +161,12 @@ export function Modal({
       )}
     >
       <div className="tg-card flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className={cn('flex items-start gap-4', titleHidden ? 'justify-end' : 'justify-between')}>
           <h2
             id={`${id}-title`}
             ref={headingRef}
             tabIndex={-1}
-            className="font-sans text-h2 text-ink"
+            className={titleHidden ? 'sr-only' : 'font-sans text-h2 text-ink'}
           >
             {title}
           </h2>

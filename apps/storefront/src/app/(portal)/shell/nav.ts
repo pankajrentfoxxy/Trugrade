@@ -28,14 +28,50 @@ export interface PortalNavEntry {
    * is a compile error rather than a rail entry nothing ever satisfies.
    */
   permission?: Permission;
+  /**
+   * Opens only once a reviewer has verified the organisation.
+   *
+   * These are the screens that only mean something for an account we have
+   * actually onboarded. The condition is the server's own `orgStatus`, read
+   * from `GET /buyer/order-readiness` — `VERIFIED` is reachable only through a
+   * reviewer — `CheckoutService.orderReadiness` says so in its own comment —
+   * which is exactly what "verified by an admin" means. It is never recomputed
+   * from the profile cards: completeness and verification are different
+   * questions, and only one of them is ours to answer.
+   */
+  needsVerifiedOrg?: true;
 }
 
 export const PORTAL_NAV: readonly PortalNavEntry[] = [
   { to: '/home', label: 'Home', group: 'Today' },
-  { to: '/orders', label: 'Orders', group: 'Buy', permission: 'ordering.own.read' },
-  { to: '/approvals', label: 'Approvals', group: 'Buy', permission: 'ordering.own.read' },
-  { to: '/returns', label: 'Returns', group: 'After sale', permission: 'ordering.own.read' },
-  { to: '/warranty', label: 'Warranty', group: 'After sale', permission: 'ordering.own.read' },
+  {
+    to: '/orders',
+    label: 'Orders',
+    group: 'Buy',
+    permission: 'ordering.own.read',
+    needsVerifiedOrg: true,
+  },
+  {
+    to: '/approvals',
+    label: 'Approvals',
+    group: 'Buy',
+    permission: 'ordering.own.read',
+    needsVerifiedOrg: true,
+  },
+  {
+    to: '/returns',
+    label: 'Returns',
+    group: 'After sale',
+    permission: 'ordering.own.read',
+    needsVerifiedOrg: true,
+  },
+  {
+    to: '/warranty',
+    label: 'Warranty',
+    group: 'After sale',
+    permission: 'ordering.own.read',
+    needsVerifiedOrg: true,
+  },
   { to: '/addresses', label: 'Addresses', group: 'Account', permission: 'ordering.own.read' },
   // The team list is `identity.user.read` on the server, which a buyer,
   // approver, finance seat and viewer do not hold. The screen handles its own
@@ -44,9 +80,46 @@ export const PORTAL_NAV: readonly PortalNavEntry[] = [
   { to: '/profile', label: 'Profile', group: 'Account' },
 ];
 
-/** Whether this seat may open an entry. An entry with no permission is open to all. */
+/**
+ * Whether this seat's PERMISSIONS admit it to an entry. An entry with no
+ * permission is open to all.
+ *
+ * The permission question only. An entry can also be shut behind the
+ * organisation's verification, which is not a property of the seat — `lockOn`
+ * below is the whole answer.
+ */
 export const mayOpen = (entry: PortalNavEntry, permissions: readonly string[]): boolean =>
   entry.permission === undefined || permissions.includes(entry.permission);
+
+/** Why an entry is shut. Two different facts, so the rail says them differently. */
+export type NavLock = { kind: 'permission'; permission: Permission } | { kind: 'unverified' };
+
+/**
+ * Why this rail entry is shut, or `null` when it is open.
+ *
+ * Permission first. "This seat is not admitted" stays true whatever the
+ * organisation's status, so telling somebody to wait for a verification that
+ * will not open the screen for them anyway would be the wrong sentence.
+ *
+ * `orgVerified` is `false` when the answer is no AND when we could not read it
+ * — an unread verification is not a passing one. The shell holds its skeleton
+ * until that read lands, so this is never asked before there is an answer.
+ */
+export function lockOn(
+  entry: PortalNavEntry,
+  seat: { permissions: readonly string[]; orgVerified: boolean },
+): NavLock | null {
+  if (entry.permission !== undefined && !seat.permissions.includes(entry.permission))
+    return { kind: 'permission', permission: entry.permission };
+  if (entry.needsVerifiedOrg && !seat.orgVerified) return { kind: 'unverified' };
+  return null;
+}
+
+/** What the rail says about a shut entry, on hover and to a screen reader. */
+export const lockLabel = (entry: PortalNavEntry, lock: NavLock): string =>
+  lock.kind === 'permission'
+    ? `${entry.label} — needs ${lock.permission}`
+    : `${entry.label} — opens once we have verified your company details.`;
 
 /** Run-length grouped, so the rail reads as sections. */
 export function portalGroups(): [string, PortalNavEntry[]][] {

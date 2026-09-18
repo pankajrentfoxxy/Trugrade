@@ -33,7 +33,6 @@ import { RepresentativeImage, SidePanel } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { normalisePincode, type Grade } from '@trugrade/contracts';
 import { getOfferBoard, getSkuDetail, type OfferBoard, type SkuDetail } from '../../../lib/api';
-import { CategoryStrip } from '../../CategoryStrip';
 import { Board } from './Board';
 import { ProductCartScope } from './ProductCartScope';
 import { ProductIdentityCard } from './ProductIdentityCard';
@@ -102,7 +101,6 @@ export default async function ProductPage({
   if (board === null) {
     return (
       <>
-        <CategoryStrip query="" />
         <div className="body">
           <div className="wrap">
             <div className="empty err">
@@ -135,7 +133,6 @@ export default async function ProductPage({
 
   return (
     <>
-      <CategoryStrip query="" />
 
       <div className="body">
         <div className="wrap">

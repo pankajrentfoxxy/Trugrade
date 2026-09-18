@@ -197,6 +197,16 @@ describe('the ways in', () => {
     expect(shell).toContain('/orders?q=');
     expect(shell).toContain('Search the catalogue instead');
   });
+
+  it('leads back to the shop from the wordmark and from the account menu', () => {
+    // Every rail entry is something already bought. The portal had no door to
+    // the catalogue at all, and the wordmark pointed at the portal Home the
+    // rail's first entry already opens.
+    const shell = code('shell', 'PortalShell.tsx');
+    expect(shell).toContain('<Link href="/" aria-label="Trugrade home" className="hub-mast__brand">');
+    expect(shell).not.toContain('href="/home" aria-label="Buyer portal home"');
+    expect(shell).toContain('Start purchasing');
+  });
 });
 
 /* ==========================================================================

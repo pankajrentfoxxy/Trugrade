@@ -1,4 +1,5 @@
 import type { SearchResult } from '../../lib/api';
+import { storageShortLabel } from './storage-label';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
@@ -7,18 +8,6 @@ const GRADE_CODE: Record<string, string> = {
   A: 'A',
   B: 'B',
 };
-
-const STORAGE_SHORT: Record<string, string> = {
-  NVME_SSD: 'SSD',
-  SATA_SSD: 'SSD',
-  EMMC: 'eMMC',
-  HDD: 'HDD',
-};
-
-function storageShortLabel(storageType: string | undefined): string | null {
-  if (!storageType) return null;
-  return STORAGE_SHORT[storageType] ?? storageType.replace(/_/g, ' ');
-}
 
 /** Score bar fill: red / yellow, then green depth follows inspected grade. */
 type ScoreTone = 'fail' | 'warn' | 'b' | 'a' | 'aplus';
@@ -47,7 +36,15 @@ function LaptopThumb(): React.JSX.Element {
   );
 }
 
-function BatteryIcon({ min, max, compact = false }: { min: number; max: number; compact?: boolean }): React.JSX.Element {
+function BatteryIcon({
+  min,
+  max,
+  compact = false,
+}: {
+  min: number;
+  max: number;
+  compact?: boolean;
+}): React.JSX.Element {
   const fillPct = Math.min(100, Math.max(4, (min + max) / 2));
   const innerW = (24 * fillPct) / 100;
   const w = compact ? 24 : 34;
@@ -68,7 +65,11 @@ function SpecIcon({ kind }: { kind: 'cpu' | 'display' | 'supply' }): React.JSX.E
     return (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="7" y="7" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M9 4v3M12 4v3M15 4v3M9 17v3M12 17v3M15 17v3M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3" stroke="currentColor" strokeWidth="1.6" />
+        <path
+          d="M9 4v3M12 4v3M15 4v3M9 17v3M12 17v3M15 17v3M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        />
       </svg>
     );
   }
@@ -82,7 +83,11 @@ function SpecIcon({ kind }: { kind: 'cpu' | 'display' | 'supply' }): React.JSX.E
   }
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 21s7-4.35 7-10a7 7 0 1 0-14 0c0 5.65 7 10 7 10z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 21s7-4.35 7-10a7 7 0 1 0-14 0c0 5.65 7 10 7 10z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
       <circle cx="12" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );
@@ -170,7 +175,9 @@ export function SearchResultCard({ r }: { r: SearchResult }): React.JSX.Element 
             </div>
             <div className="pcc-detail">
               <SpecIcon kind="display" />
-              <span>{r.displayLine || <span className="pcc-notmeasured">Display not published</span>}</span>
+              <span>
+                {r.displayLine || <span className="pcc-notmeasured">Display not published</span>}
+              </span>
             </div>
           </div>
         </div>

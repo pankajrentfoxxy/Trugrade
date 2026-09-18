@@ -44,6 +44,37 @@ function stateName(code: string | null): string {
   return INDIAN_STATES.find((s) => s.code === code)?.name ?? code;
 }
 
+/**
+ * The PASS this card stored last time, so a reopened card is still verified.
+ *
+ * Without it the field would unlock itself every time the dialog opens, which
+ * is the thing the lock exists to prevent, and a supplier fixing their Udyam
+ * number would be made to re-verify a GSTIN the portal already passed.
+ */
+function savedOutcome(initial: Record<string, unknown>): VerificationOutcomeView | null {
+  const rows = initial.gstins;
+  const first = Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined;
+  const outcome = first?.outcome;
+  if (typeof outcome !== 'object' || outcome === null) return null;
+  const view = outcome as VerificationOutcomeView;
+  return view.outcome === 'PASS' && view.resolved ? view : null;
+}
+
+function readDraft(
+  initial: Record<string, unknown>,
+  initialConstitution: string | null,
+): BusinessGstDraft {
+  const restored = savedOutcome(initial);
+  return {
+    constitution:
+      initialConstitution ?? String(initial.constitution ?? initial.constitutionType ?? ''),
+    gstin: String(initial.primaryGstin ?? ''),
+    udyam: String((initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? ''),
+    verified: restored,
+    confirmed: restored !== null,
+  };
+}
+
 export interface BusinessGstSectionProps {
   open: boolean;
   onClose: () => void;
@@ -60,42 +91,48 @@ export function BusinessGstSection({
   initialConstitution,
 }: BusinessGstSectionProps): React.JSX.Element {
   const [step, setStep] = React.useState<1 | 2>(1);
-  const [draft, setDraft] = React.useState<BusinessGstDraft>(() => ({
-    constitution:
-      initialConstitution ?? String(initial.constitution ?? initial.constitutionType ?? ''),
-    gstin: String(initial.primaryGstin ?? ''),
-    udyam: String((initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? ''),
-    verified: null,
-    confirmed: false,
-  }));
+  const [draft, setDraft] = React.useState<BusinessGstDraft>(() =>
+    readDraft(initial, initialConstitution),
+  );
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>();
   const [focused, setFocused] = React.useState<string | null>(null);
   const [active, setActive] = React.useState<Partial<Record<string, boolean>>>({});
   const verifyRef = React.useRef<() => void>(() => undefined);
+  const gstinRef = React.useRef<HTMLInputElement>(null);
   verifyRef.current = () => void verify();
   const retry = useRetryLadder(() => verifyRef.current());
 
   React.useEffect(() => {
     if (!open) return;
     setStep(1);
-    setDraft({
-      constitution:
-        initialConstitution ?? String(initial.constitution ?? initial.constitutionType ?? ''),
-      gstin: String(initial.primaryGstin ?? ''),
-      udyam: String(
-        (initial.captured as { udyam_number?: string } | undefined)?.udyam_number ?? '',
-      ),
-      verified: null,
-      confirmed: false,
-    });
+    setDraft(readDraft(initial, initialConstitution));
     setError(undefined);
   }, [open, initial, initialConstitution]);
 
   const pan = panFromGstin(toGstin(draft.gstin));
   const stateCode = stateCodeFromGstin(toGstin(draft.gstin));
 
-  const gstError = liveFieldError('gstin', draft.gstin, validateGstin, focused, active) ?? error;
+  /**
+   * A GSTIN the portal has passed is not a field any more.
+   *
+   * The legal name, registered address, state and PAN shown under it are the
+   * portal's answer about *this* number, and `save` writes that legal name onto
+   * `organization.legal_name`. A typable box lets all of it go stale against a
+   * number nobody checked. Changing it throws the answer away on purpose.
+   */
+  const locked = draft.verified?.outcome === 'PASS' && Boolean(draft.verified.resolved);
+
+  const changeGstin = (): void => {
+    setDraft((d) => ({ ...d, verified: null, confirmed: false }));
+    setError(undefined);
+    retry.clear('gstin');
+    gstinRef.current?.focus();
+  };
+
+  const gstError = locked
+    ? undefined
+    : (liveFieldError('gstin', draft.gstin, validateGstin, focused, active) ?? error);
 
   const verify = async (): Promise<void> => {
     const msg = validateGstin(draft.gstin);
@@ -127,8 +164,12 @@ export function BusinessGstSection({
       setStep(2);
       return;
     }
-    if (!draft.verified || draft.verified.outcome !== 'PASS' || !draft.confirmed) {
-      setError('Verify your GSTIN and confirm the legal name before saving.');
+    if (!draft.verified || draft.verified.outcome !== 'PASS') {
+      setError('Verify your GSTIN before saving.');
+      return;
+    }
+    if (!draft.confirmed) {
+      setError('Tick the box to confirm this is your registered business name.');
       return;
     }
     const gstin = toGstin(draft.gstin);
@@ -154,6 +195,9 @@ export function BusinessGstSection({
                 key: 'primary',
                 gstin,
                 isPrimary: true,
+                // Stored so a reopened card knows this number was checked, and
+                // stays locked rather than asking for the same check again.
+                outcome: draft.verified,
                 confirmed: true,
                 deferred: false,
               },
@@ -219,15 +263,22 @@ export function BusinessGstSection({
       ) : (
         <div className="flex flex-col gap-4">
           <Input
+            ref={gstinRef}
             label="GSTIN"
             mono
             required
             value={draft.gstin}
             maxLength={15}
             error={gstError}
+            readOnly={busy || locked}
+            verifyState={locked ? 'verified' : 'idle'}
+            verifyDetail={locked ? 'Checked against the GST portal.' : undefined}
             onFocus={() => setFocused('gstin')}
             onBlur={() => setFocused(null)}
             onChange={(e) => {
+              // `readOnly` stops a person typing; it does not stop a change
+              // event. The lock is the rule, so it holds here, not just in paint.
+              if (locked) return;
               setActive((a) => ({ ...a, gstin: true }));
               setDraft((d) => ({
                 ...d,
@@ -238,16 +289,28 @@ export function BusinessGstSection({
               setError(undefined);
             }}
             action={
-              <Button
-                type="button"
-                variant="secondary"
-                loading={busy}
-                onClick={() => void verify()}
-              >
-                Verify
-              </Button>
+              locked ? (
+                <Button type="button" variant="ghost" onClick={changeGstin}>
+                  Change the GSTIN
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={busy}
+                  onClick={() => void verify()}
+                >
+                  Verify
+                </Button>
+              )
             }
           />
+          {/* Locked, so the field's own error slot is gone — say it here. */}
+          {locked && error ? (
+            <p className="text-body-sm text-fail" role="alert">
+              {error}
+            </p>
+          ) : null}
           {draft.verified && isProviderProblem(draft.verified) ? (
             <ProviderProblem
               view={draft.verified}
@@ -286,7 +349,10 @@ export function BusinessGstSection({
                 <input
                   type="checkbox"
                   checked={draft.confirmed}
-                  onChange={(e) => setDraft((d) => ({ ...d, confirmed: e.target.checked }))}
+                  onChange={(e) => {
+                    setDraft((d) => ({ ...d, confirmed: e.target.checked }));
+                    if (e.target.checked) setError(undefined);
+                  }}
                 />
                 This is our registered business name.
               </label>

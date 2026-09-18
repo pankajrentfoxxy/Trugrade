@@ -23,8 +23,9 @@ import { SubmitForReview, submitStage } from '../profile/SubmitForReview';
  * - Prepaid ordering is automatic. Until it opens, the missing things are named.
  * - Credit terms are reviewed, and that is said separately once prepaid is open.
  *
- * **It disappears the moment the buyer can order.** A strip that says "you are
- * done" is a strip that stops being read, and it is sitting above every screen.
+ * **It disappears the moment the buyer can order, and the moment the profile is
+ * with us for review.** A strip that says "you are done" or "wait" is a strip
+ * that stops being read, and it is sitting above every screen.
  *
  * Warn, never fail: outstanding work is not a verdict.
  */
@@ -58,8 +59,14 @@ export function ProfileBanner(): React.JSX.Element | null {
   const next = nextIncompleteSection(null, onboarding, session);
   const stage = submitStage(onboarding, session.roles);
 
-  // Everything is captured and the application is with us, or waiting to be
-  // sent. The submit control says which, and carries its own deadline.
+  // Submitted, and with us. Same rule as ordering being open: there is nothing
+  // here for the buyer to act on until we decide, so the strip goes rather than
+  // sitting above every screen repeating a deadline. The profile screen keeps
+  // the deadline, and the checkout refusal still names the block.
+  if (stage === 'in-review') return null;
+
+  // Everything is captured and waiting to be sent. The submit control says so,
+  // and carries its own deadline once it has been.
   if (stage !== 'hidden') {
     return (
       <div className="hub-banner" data-testid="profile-banner">

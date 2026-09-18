@@ -58,6 +58,18 @@ export function MemberDialog({
     edited.has(field) ? undefined : fieldErrors?.[field];
   const markEdited = (field: string): void => setEdited((prev) => new Set(prev).add(field));
 
+  /**
+   * Whether this form has been submitted yet.
+   *
+   * An empty required field is not a mistake until somebody tries to send it.
+   * Without this the dialog opened with all three fields already red and
+   * already telling the supplier off, on a form they had not typed a character
+   * into — and the one control that could clear them, "Send invite", silently
+   * did nothing. The same flag, spelt the same way, is what the buyer portal's
+   * own invite dialog uses.
+   */
+  const [touched, setTouched] = React.useState(false);
+
   const [draft, setDraft] = React.useState<MemberDialogDraft>({
     role: 'VENDOR_ADMIN',
     fullName: '',
@@ -69,6 +81,7 @@ export function MemberDialog({
 
   React.useEffect(() => {
     if (!open) return;
+    setTouched(false);
     if (mode === 'manage' && member) {
       setDraft({
         role: member.roles[0] ?? 'VENDOR_VIEWER',
@@ -137,6 +150,7 @@ export function MemberDialog({
           variant="primary"
           loading={busy}
           onClick={() => {
+            setTouched(true);
             const nameErr = validateFullName(draft.fullName);
             const emailErr = validateEmail(draft.email);
             const mobileErr = validateMobile(mobileDisplay);
@@ -200,7 +214,7 @@ export function MemberDialog({
           }}
           error={
             mode === 'invite'
-              ? (validateFullName(draft.fullName) ?? serverError('fullName'))
+              ? ((touched ? validateFullName(draft.fullName) : undefined) ?? serverError('fullName'))
               : undefined
           }
         />
@@ -215,7 +229,9 @@ export function MemberDialog({
             setDraft((d) => ({ ...d, email: e.target.value }));
           }}
           error={
-            mode === 'invite' ? (validateEmail(draft.email) ?? serverError('email')) : undefined
+            mode === 'invite'
+              ? ((touched ? validateEmail(draft.email) : undefined) ?? serverError('email'))
+              : undefined
           }
         />
         <Input
@@ -231,7 +247,9 @@ export function MemberDialog({
             setDraft((d) => ({ ...d, mobile: mobileSubscriberDigits(e.target.value) }));
           }}
           error={
-            mode === 'invite' ? (validateMobile(mobileDisplay) ?? serverError('mobile')) : undefined
+            mode === 'invite'
+              ? ((touched ? validateMobile(mobileDisplay) : undefined) ?? serverError('mobile'))
+              : undefined
           }
         />
 

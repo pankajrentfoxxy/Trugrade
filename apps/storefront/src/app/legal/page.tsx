@@ -11,7 +11,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BRAND, formatRegisteredOffice, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { getGrades, getLegalTerms } from '../../lib/api';
-import { CategoryStrip } from '../CategoryStrip';
 import { buildDocuments } from './documents';
 
 export const revalidate = 300;
@@ -30,7 +29,6 @@ export default async function LegalIndexPage(): Promise<React.JSX.Element> {
 
   return (
     <>
-      <CategoryStrip />
       {/* Same reading container as the documents themselves — see `[doc]/page.tsx`. */}
       <main className="mx-auto max-w-[920px] px-5 py-7">
         <header className="border-b border-rule pb-6">

@@ -1,14 +1,9 @@
+import { storageShortLabel } from '../app/search/storage-label';
+
 const GRADE_CODE: Record<string, string> = {
   A_PLUS: 'A+',
   A: 'A',
   B: 'B',
-};
-
-const STORAGE_SHORT: Record<string, string> = {
-  NVME_SSD: 'SSD',
-  SATA_SSD: 'SSD',
-  EMMC: 'eMMC',
-  HDD: 'HDD',
 };
 
 interface ParsedSpec {
@@ -29,9 +24,7 @@ export function parseSpecSummary(spec: string): ParsedSpec | null {
   let storageLabel: string | null = null;
   if (storageMatch) {
     const storageType = storageMatch[2];
-    const short = storageType
-      ? (STORAGE_SHORT[storageType] ?? storageType.replace(/_/g, ' '))
-      : null;
+    const short = storageShortLabel(storageType);
     storageLabel = short ? `${storageMatch[1]}GB ${short}` : `${storageMatch[1]}GB`;
   }
   return { cpu, ramLabel, storageLabel, screen };
@@ -73,7 +66,11 @@ export function SpecIcon({ kind }: { kind: 'cpu' | 'display' | 'supply' }): Reac
   }
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 21s7-4.35 7-10a7 7 0 1 0-14 0c0 5.65 7 10 7 10z" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 21s7-4.35 7-10a7 7 0 1 0-14 0c0 5.65 7 10 7 10z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
       <circle cx="12" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );

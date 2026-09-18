@@ -1,7 +1,18 @@
+/**
+ * The profile hub card grid — the section cards on the buyer's `/profile` and
+ * the supplier's `/vendor/profile`. One sheet, imported by both: the supplier
+ * console kept a byte-for-byte copy of this block until the "Fill now" buttons
+ * had to be realigned in two places at once.
+ *
+ * Tokens only; no hex.
+ */
+
 .profile-hub-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+  /* Cards in a row share a height so their actions can share a baseline. */
+  align-items: stretch;
 }
 
 .profile-hub-card {
@@ -27,6 +38,16 @@
   gap: 12px;
 }
 
+/*
+ * A two-line title ("Supplier agreement") or a summary that wraps used to push
+ * that card's action below its neighbours'. The action absorbs the card's spare
+ * height instead, so every button in a row sits on the same line whatever the
+ * text above it does.
+ */
+.profile-hub-action {
+  margin-top: auto;
+}
+
 .profile-hub-icon {
   width: 36px;
   height: 36px;
@@ -39,6 +60,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
+  flex: none;
 }
 
 .profile-hub-card[data-done='true'] .profile-hub-icon {

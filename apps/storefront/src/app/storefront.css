@@ -40,7 +40,9 @@ html[data-t="light"],
   --chrome-line: rgba(16, 19, 25, 0.08);
   --chrome-line-2: rgba(16, 19, 25, 0.14);
 }
-:root[data-t="light"] header .wm .g,
+:root[data-t="light"] header .wm .g {
+  color: var(--acc-ink);
+}
 :root[data-t="light"] footer .wm .g {
   color: var(--acc);
 }
@@ -76,7 +78,6 @@ html,body{overflow-x:clip}
 .wrap{max-width:1400px;margin:0 auto;padding:0 20px}
 .hide-sm{display:inline}
 .hide-md{display:inline}
-.hbtn-short{display:none}
 /* ---- QC motifs ---- */
 @keyframes sweep{0%{top:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100%;opacity:0}}
 .mk .b{stroke:currentColor;stroke-width:2.2;opacity:.34}
@@ -86,35 +87,44 @@ html,body{overflow-x:clip}
 .wm .g{color:var(--acc)}
 /* ============ UTILITY ============ */
 header,footer{width:100%;max-width:100%}
-.util{background:var(--chrome);border-bottom:1px solid var(--chrome-line);font-size:12px;color:var(--on-chrome)}
-.util .wrap{display:flex;align-items:center;min-height:34px;gap:18px}
+.util{background:var(--head);border-bottom:1px solid var(--head-line);font-size:12px;color:var(--on-head-2)}
+.util .wrap{display:flex;align-items:center;min-height:34px;gap:18px;padding:0 40px}
 .util .l,.util .r{display:flex;gap:18px;align-items:center}
 .util .r{margin-left:auto}
-.util a{color:var(--on-chrome)}
-.util a:hover{color:var(--on-chrome);opacity:.88}
-.util b{color:var(--on-chrome);font-weight:600}
-.util .util-promo{color:var(--on-chrome);font-weight:600}
-.util .util-promo:hover{color:var(--on-chrome);opacity:.88}
+.util a{color:var(--on-head-2)}
+.util a:hover{color:var(--on-head);opacity:1}
+.util b{color:var(--on-head);font-weight:600}
+.util .util-promo{color:var(--on-head);font-weight:600}
+.util .util-promo:hover{color:var(--on-head);opacity:.88}
 .util .blip{margin-right:6px}
 /* ============ HEADER ============ */
-.head{background:var(--chrome);color:var(--on-chrome);position:relative;z-index:30}
-.head .wrap{display:flex;align-items:center;gap:14px;min-height:62px;min-width:0}
-.brand{display:flex;align-items:center;gap:9px;flex:0 0 auto;color:var(--on-chrome)}
-.catbtn{display:flex;align-items:center;gap:9px;background:var(--chrome-3);border-radius:5px;padding:0 14px;
-  height:38px;font-size:13.5px;font-weight:600;flex:0 0 auto;color:var(--on-chrome)}
-.catbtn:hover{background:var(--chrome-2)}
-.catbtn i{display:flex;flex-direction:column;gap:2.5px}
-.catbtn i b{display:block;width:13px;height:1.8px;background:var(--acc);border-radius:1px}
+/* A working surface now, not chrome — white on light, sheet on dark. The
+   border is what separates it from the page: on the old dark bar the colour
+   change did that job on its own, and on white nothing does. */
+.head{background:var(--head);color:var(--on-head);position:relative;z-index:30;
+  border-bottom:1px solid var(--head-line-2)}
+.head .wrap{display:flex;align-items:center;justify-content:center;gap:14px;min-height:72px;
+  padding:14px 40px;min-width:0}
+.brand{display:flex;align-items:center;gap:9px;flex:0 0 auto;color:var(--on-head)}
 /* search */
-.sbox{flex:1;position:relative;min-width:0}
-.srch{display:flex;height:38px;background:var(--sheet);border:1px solid var(--rule);border-radius:5px;overflow:hidden}
-.srch select{border:0;background:var(--sheet-2);border-right:1px solid var(--rule);font-size:12.5px;
-  color:var(--ink-2);padding:0 9px;outline:none;flex:0 0 auto;max-width:136px}
-.srch input{flex:1;border:0;outline:none;padding:0 12px;font-size:13.5px;color:var(--ink);min-width:0;background:var(--sheet)}
+/* The field is held off the brand and the account controls rather than run
+   flush between them: at 1440px it is the widest thing in the header and
+   without the gutters it reads as the header rather than as one control in it. */
+.sbox{flex:1;position:relative;min-width:0;max-width:720px}
+.srch{display:flex;align-items:center;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:8px;overflow:hidden}
+/* Focus is an active state, which is one of the three things --acc is for. */
+.srch:focus-within{border-color:var(--acc)}
+.srch input{flex:1;border:0;outline:none;padding:11px 18px;font-size:13.5px;color:var(--ink);
+  min-width:0;background:transparent}
 .srch input::placeholder{color:var(--ink-4)}
-.srch button{background:var(--acc);color:var(--acc-on);font-weight:700;font-size:13px;padding:0 20px;flex:0 0 auto}
-.srch button:hover{background:var(--acc-dk)}
-.sugg{position:absolute;top:44px;left:0;right:0;background:var(--sheet);border:1px solid var(--rule);
+/* The submit sits inside the field as a plain icon, not as a filled block
+   beside it. The header already has its one primary action and it is Sign up;
+   a second amber slab here would make neither of them read as the answer. */
+.srch button{display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  align-self:stretch;padding:0 18px;background:transparent;color:var(--ink-3)}
+.srch button:hover{color:var(--ink)}
+.sugg{position:absolute;top:50px;left:0;right:0;background:var(--sheet);border:1px solid var(--rule);
   border-radius:7px;box-shadow:var(--shadow);overflow:hidden;display:none;z-index:40}
 .sbox.open .sugg{display:block}
 .sugg h6{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
@@ -128,37 +138,52 @@ header,footer{width:100%;max-width:100%}
   color:var(--acc-ink);flex:0 0 auto;font-weight:700}
 .sugg .div{border-top:1px solid var(--rule-2)}
 .hact{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-.hbtn{display:flex;align-items:center;height:38px;padding:0 12px;border-radius:5px;font-size:13px;
-  color:var(--on-chrome);white-space:nowrap}
-.hbtn:hover{background:var(--chrome-2)}
-.hbtn.solid{background:var(--acc);color:var(--acc-on);font-weight:700;padding:0 16px}
+.hbtn{display:flex;align-items:center;height:32px;padding:0 10px;border-radius:6px;font-size:12px;
+  color:var(--on-head);white-space:nowrap}
+.hbtn:hover{background:var(--head-2)}
+.hbtn.solid{background:var(--acc);color:var(--acc-on);font-weight:700;font-size:12.5px;padding:0 14px}
 .hbtn.solid:hover{background:var(--acc-dk)}
-.hbtn small{display:block;font-size:10px;color:var(--on-chrome-3);line-height:1.1}
-.hbtn strong{font-size:12.5px;font-weight:600;color:var(--on-chrome);line-height:1.2}
-.hcart{position:relative}
+.hbtn small{display:block;font-size:9px;color:var(--on-head-3);line-height:1.1}
+.hbtn strong{font-size:11.5px;font-weight:600;color:var(--on-head);line-height:1.2}
+.hcart{padding:0 10px;gap:6px}
+.hcart-ic{position:relative;display:flex;align-items:center;flex:0 0 auto}
 .hcart-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
   background:var(--acc);color:var(--acc-on);font-size:10px;font-weight:700;line-height:18px;text-align:center;
   pointer-events:none}
 .usermenu{position:relative;flex:0 0 auto}
-.uavatar{width:38px;height:38px;border-radius:999px;border:1px solid var(--chrome-line-2);
-  background:var(--chrome-2);color:var(--on-chrome);display:flex;align-items:center;
+.uavatar{width:32px;height:32px;border-radius:999px;border:1px solid var(--head-line-2);
+  background:var(--head-2);color:var(--on-head);display:flex;align-items:center;
   justify-content:center;font-size:12px;font-weight:700;cursor:pointer}
-.uavatar:hover,.usermenu:focus-within .uavatar{background:var(--chrome-3);color:var(--acc)}
+.uavatar:hover,.usermenu:focus-within .uavatar{background:var(--head-3);color:var(--acc-ink)}
 .usermenu-pop{position:absolute;top:100%;right:0;padding-top:6px;min-width:148px;opacity:0;
   visibility:hidden;pointer-events:none;transition:opacity .12s ease,visibility .12s ease;z-index:60}
 .usermenu:hover .usermenu-pop,.usermenu:focus-within .usermenu-pop{opacity:1;visibility:visible;
   pointer-events:auto}
-.usermenu-panel{background:var(--chrome-2);border:1px solid var(--chrome-line-2);border-radius:6px;
+.usermenu-panel{background:var(--head);border:1px solid var(--head-line-2);border-radius:6px;
   overflow:hidden;box-shadow:var(--shadow)}
 .usermenu-item{display:flex;align-items:center;width:100%;min-height:38px;padding:0 14px;
-  font-size:13px;font-weight:500;color:var(--on-chrome);text-align:left;background:none;border:0;
+  font-size:13px;font-weight:500;color:var(--on-head);text-align:left;background:none;border:0;
   cursor:pointer;text-decoration:none}
-.usermenu-item:hover{background:var(--chrome-3);color:var(--on-chrome)}
+.usermenu-item:hover{background:var(--head-2);color:var(--on-head)}
 .usermenu-item:disabled{opacity:.6;cursor:default}
 .usermenu-pop .usermenu-panel{display:flex;flex-direction:column}
-.tgl{width:38px;height:38px;border-radius:5px;border:1px solid var(--chrome-line-2);display:flex;
-  align-items:center;justify-content:center;color:var(--on-chrome);flex:0 0 auto}
-.tgl:hover{background:var(--chrome-2);color:var(--acc)}
+.usermenu-sep{height:1px;background:var(--head-line);flex:0 0 auto}
+/* Wide enough for "Verify a certificate" and for the prompt row to breathe;
+   the 148px default was sized for a two-item menu. */
+.authpop .usermenu-pop{min-width:236px}
+.authpop-trigger{gap:7px}
+.authpop-trigger svg{flex:0 0 auto}
+.authpop-trigger:hover,.authpop:focus-within .authpop-trigger{background:var(--head-2)}
+.authpop-top{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 12px 9px 14px;border-bottom:1px solid var(--head-line)}
+.authpop-top span{font-size:12px;color:var(--on-head-3);white-space:nowrap}
+/* The one amber thing in the panel, because it is the one action in it. */
+.authpop-cta{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:5px;
+  background:var(--acc);color:var(--acc-on);font-size:11.5px;font-weight:700;white-space:nowrap}
+.authpop-cta:hover{background:var(--acc-dk)}
+.tgl{width:38px;height:38px;border-radius:5px;border:1px solid var(--head-line-2);display:flex;
+  align-items:center;justify-content:center;color:var(--on-head);flex:0 0 auto}
+.tgl:hover{background:var(--head-2);color:var(--acc-ink)}
 .tgl .sun{display:none}
 :root[data-t="light"] .tgl .sun,:root[data-t="sand"] .tgl .sun{display:block}
 :root[data-t="light"] .tgl .moon,:root[data-t="sand"] .tgl .moon{display:none}
@@ -561,14 +586,17 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   .pgrid{grid-template-columns:repeat(2,1fr)}.strip,.sell{grid-template-columns:1fr}
   .sell{padding:20px}.fg{grid-template-columns:1fr 1fr}.fa{grid-column:1 / -1}.hide-sm{display:none}
   /* Header: brand + actions on row 1, search full width on row 2. */
-  .head .wrap{flex-wrap:wrap;height:auto;padding:10px 0;row-gap:10px}
+  .head .wrap{flex-wrap:wrap;height:auto;padding:10px 20px;row-gap:10px}
   .head .hact{margin-left:auto;flex-shrink:0}
-  .head .sbox{flex:1 1 100%;order:10;min-width:0}
+  /* Full-bleed on its own row, so the desktop gutters would only inset it. */
+  .head .sbox{flex:1 1 100%;order:10;min-width:0;max-width:none;margin:0}
   /* Utility bar: allow the promo to wrap under the count on narrow screens. */
-  .util .wrap{flex-wrap:wrap;height:auto;padding:8px 0;row-gap:6px}
+  .util .wrap{flex-wrap:wrap;height:auto;padding:8px 20px;row-gap:6px}
   .util .r{margin-left:auto;flex-wrap:wrap;row-gap:6px}}
 @media(max-width:640px){
   .wrap{padding:0 16px}
+  .head .wrap{padding:10px 16px}
+  .util .wrap{padding:8px 16px}
   .hide-md{display:none}
   .fg{grid-template-columns:1fr;gap:22px}
   .fa p{max-width:none}
@@ -576,19 +604,13 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   .pays{flex-wrap:wrap}
   .legal{overflow-wrap:anywhere}
   footer{padding:28px 0 16px}
-  /* Search: scope select is the widest fixed piece — hide it below tablet. */
-  .srch select{display:none}
-  .srch button{padding:0 14px;font-size:12px}
-  .catbtn{padding:0 10px;gap:0;min-width:38px;justify-content:center}
-  .catbtn-label{display:none}
+  .srch input{padding:10px 14px}
+  .srch button{padding:0 13px}
   .hbtn:not(.solid) small{display:none}
-  .hbtn:not(.solid) strong{font-size:13px;line-height:1.2}
-  .hbtn:not(.solid){padding:0 10px}
-  .hbtn.solid{padding:0 12px}
+  .hbtn:not(.solid) strong{font-size:12px;line-height:1.2}
+  .hbtn:not(.solid){padding:0 8px}
+  .hbtn.solid{padding:0 11px}
   .hact{gap:4px}}
-@media(max-width:480px){
-  .hbtn-long{display:none}
-  .hbtn-short{display:inline}}
 
 /* Additions for the data-backed page: states the reference mock never needed,
    because its data was illustrative and ours is read from the database. */
@@ -2312,55 +2334,18 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   font-weight:400;font-size:13px;color:var(--ink-3);letter-spacing:normal;
 }
 
-/* Light storefront header/footer — explicit surfaces on --storefront-chrome
-   (#283341). Bundled CSS order can re-apply light --chrome on .util/.head. */
-html[data-t="light"] header .util,
-html[data-t="light"] header nav.head,
+/* Light storefront FOOTER — explicit surface on --storefront-chrome
+   (#283341). Bundled CSS order can otherwise re-apply light --chrome to it.
+
+   The header is deliberately absent from this block now. It is a working
+   surface and paints itself from --head-* in every theme, so it needs no light
+   override at all — and every rule that used to live here for it was, by
+   definition, a rule forcing chrome onto something that must no longer have
+   any. The whole `.sugg` colour reset went with them: it existed only to undo
+   `header nav.head a`, which is gone. */
 html[data-t="light"] footer{
   background:var(--storefront-chrome);
   border-color:var(--storefront-chrome-line);
-  color:var(--storefront-on-chrome);
-}
-html[data-t="light"] header .util{
-  border-bottom:1px solid var(--storefront-chrome-line);
-}
-html[data-t="light"] header .util a,
-html[data-t="light"] header .util b,
-html[data-t="light"] header .util .util-promo,
-html[data-t="light"] header nav.head,
-html[data-t="light"] header nav.head .brand,
-html[data-t="light"] header nav.head a,
-html[data-t="light"] header .hbtn,
-html[data-t="light"] header .hbtn strong,
-html[data-t="light"] header .catbtn,
-html[data-t="light"] header .uavatar,
-html[data-t="light"] header .usermenu-item,
-html[data-t="light"] header .tgl{
-  color:var(--storefront-on-chrome);
-}
-html[data-t="light"] header .hbtn small{color:var(--storefront-on-chrome-3)}
-html[data-t="light"] header .hbtn:hover{background:var(--storefront-chrome-2)}
-html[data-t="light"] header .catbtn{
-  background:var(--storefront-chrome-3);
-  border:1px solid var(--storefront-chrome-line-2);
-}
-html[data-t="light"] header .catbtn:hover{background:var(--storefront-chrome-2)}
-html[data-t="light"] header .uavatar{
-  background:var(--storefront-chrome-2);
-  border-color:var(--storefront-chrome-line-2);
-}
-html[data-t="light"] header .uavatar:hover,
-html[data-t="light"] header .usermenu:focus-within .uavatar{
-  background:var(--storefront-chrome-3);
-  color:var(--storefront-on-chrome);
-}
-html[data-t="light"] header .usermenu-panel{
-  background:var(--storefront-chrome-2);
-  border-color:var(--storefront-chrome-line-2);
-  box-shadow:var(--shadow);
-}
-html[data-t="light"] header .usermenu-item:hover{
-  background:var(--storefront-chrome-3);
   color:var(--storefront-on-chrome);
 }
 html[data-t="light"] footer .fa .wm,
@@ -2385,10 +2370,255 @@ html[data-t="light"] footer .pays span{
  * ======================================================================== */
 .authmodal{max-width:860px}
 .authmodal__grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s6);align-items:stretch}
-.authart{display:flex;flex-direction:column;justify-content:flex-end;gap:var(--s3);padding:var(--s5);border-radius:var(--r-lg);background:var(--chrome);color:var(--on-chrome);min-height:360px}
-.authart__svg{width:100%;height:auto;max-height:220px;margin-bottom:auto}
-.authart__claim{margin:0;font-size:20px;line-height:1.2;color:var(--on-chrome);max-width:16ch}
-.authart__body{margin:0;font-size:13px;line-height:1.5;color:var(--on-chrome-2);max-width:36ch}
+/* The artwork panel. `overflow:hidden` is what gives the image the card's own
+   rounded corner — a border-radius on the panel alone would be painted over by
+   a square image sitting on top of it. */
+/* Rounded well past the card's own corner, so the picture reads as a panel set
+   into the dialog rather than a rectangle pasted onto it. Twice the largest
+   radius token, so it still moves with the theme's scale. */
+.authart{
+  position:relative;
+  overflow:hidden;
+  border-radius:calc(var(--r-xl) * 2);
+  background:var(--chrome);
+  min-height:0;
+}
+/* The supplied file is portrait (941x1672) and this slot is not, so it is
+   cropped rather than squashed, from the top: the headline is the half worth
+   keeping. A landscape crop of the same artwork would drop the cropping
+   entirely — swap the file and this rule needs no change. */
+/* Taken out of the flow on purpose. A 941x1672 file at `width:100%` is 600px
+   tall at this column width, and as a normal child that is what would decide
+   how tall the dialog is — the picture sizing the card instead of the four
+   controls beside it. Positioned, it fills whatever height the FORM asks for. */
+.authart__img{
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center top;
+}
 .authform{display:flex;flex-direction:column;justify-content:center;min-width:0}
 .authmodal .authform .hub-link,.authcard .hub-link{background:none;border:0;padding:0;font:inherit;color:var(--acc-ink);cursor:pointer;text-decoration:underline}
 @media (max-width:760px){.authmodal__grid{grid-template-columns:1fr}.authart{display:none}}
+
+/* ============ BRAND RAIL ============
+   The homepage's way in to the catalogue, straight under the header. Tiles are
+   wordmarks, not logos — see the note in `BrandRail.tsx`. */
+.brandrail{background:var(--head);border-bottom:1px solid var(--head-line-2)}
+.brandrail .wrap{padding:20px 40px}
+.tg-carousel{position:relative;display:flex;align-items:center;gap:10px;min-width:0}
+/* The track scrolls natively; the buttons are a convenience over the top. The
+   scrollbar is hidden because the arrows already say the rail moves. */
+/* The 2px padding keeps a focus ring off the scrollport edge; scroll-padding
+   matches it so snapping to the first tile still rests at scrollLeft 0. Without
+   it the track settles at 2 and the rail reports itself as already scrolled. */
+.tg-carousel-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x proximity;
+  scrollbar-width:none;min-width:0;flex:1;padding:2px;scroll-padding-inline:2px}
+.tg-carousel-track::-webkit-scrollbar{display:none}
+.tg-carousel-nav{display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:32px;height:32px;border-radius:999px;border:1px solid var(--head-line-2);
+  background:var(--head);color:var(--on-head-2)}
+.tg-carousel-nav:hover:not(:disabled){background:var(--head-2);color:var(--on-head)}
+.tg-carousel-nav:disabled{opacity:.35;cursor:default}
+
+.brandtile{display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:176px;height:150px;border:1px solid var(--rule);border-radius:10px;
+  background:var(--sheet);scroll-snap-align:start;padding:14px;
+  transition:border-color .12s ease,transform .12s ease}
+.brandtile:hover{border-color:var(--acc);transform:translateY(-2px)}
+/* The supplied marks are all dark-on-transparent, so they sit on a constant
+   white plate rather than straight on the tile. See the note in BrandRail.tsx:
+   on a near-black tile Apple's grey and Microsoft's grey wordmark all but
+   disappear, and inverting a brand's own mark is worse than not showing it. */
+.brandtile-plate{display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;background:var(--plate);border-radius:7px;padding:14px 16px}
+/* contain, so a logo of any aspect ratio drops in without being stretched. */
+.brandtile-logo{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
+.brandtile-fallback{font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--plate-ink)}
+
+@media(max-width:900px){
+  .brandrail .wrap{padding:12px 20px}
+  .tg-carousel-nav{display:none}}
+@media(max-width:640px){
+  .brandrail .wrap{padding:14px 16px}
+  .brandtile{width:140px;height:116px}
+  .brandtile-logo{width:96px;height:36px}}
+
+/* ============ HOME HERO, SHOP TILES & SPEC SHOWCASE ============
+   Homepage only. Every animation here is switched off wholesale at the bottom
+   under `prefers-reduced-motion` — see the note there. */
+
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes sweepdown{0%{transform:translateX(0);opacity:0}
+  10%{opacity:.9}90%{opacity:.9}100%{transform:translateX(300px);opacity:0}}
+@keyframes grow{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
+
+/* ---- hero ---------------------------------------------------------------
+   Chrome ground in BOTH themes, like the header and the footer — a hero that
+   flips reads as a different product in each theme.
+
+   Everything inside reads its colour from the --h-* set below, NOT from
+   --chrome/--on-chrome directly. Those two token families invert between
+   themes while this surface does not, which is exactly how the first cut ended
+   up with near-black headings on a near-black ground. One override point, one
+   place to get it wrong. */
+.hero2{
+  --h-bg:var(--chrome);
+  --h-ink:var(--on-chrome);
+  --h-ink-2:var(--on-chrome-2);
+  --h-ink-3:var(--on-chrome-3);
+  --h-line:var(--chrome-line);
+  --h-line-2:var(--chrome-line-2);
+  --h-s2:var(--chrome-2);
+  --h-s3:var(--chrome-3);
+  background:var(--h-bg);color:var(--h-ink);position:relative;overflow:hidden;
+  border-bottom:1px solid var(--h-line)}
+html[data-t="light"] .hero2{
+  --h-bg:var(--storefront-chrome);
+  --h-ink:var(--storefront-on-chrome);
+  --h-ink-2:var(--storefront-on-chrome-2);
+  --h-ink-3:var(--storefront-on-chrome-3);
+  --h-line:var(--storefront-chrome-line);
+  --h-line-2:var(--storefront-chrome-line-2);
+  --h-s2:var(--storefront-chrome-2);
+  --h-s3:var(--storefront-chrome-3)}
+
+.hero2-grid{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1.1fr);gap:36px;
+  align-items:center;padding-top:56px;padding-bottom:56px}
+.hero2-copy > *{animation:rise .55s cubic-bezier(.2,.7,.3,1) both}
+.hero2-copy > *:nth-child(2){animation-delay:.08s}
+.hero2-copy > *:nth-child(3){animation-delay:.16s}
+.hero2-copy > *:nth-child(4){animation-delay:.24s}
+.hero2-copy > *:nth-child(5){animation-delay:.32s}
+.hero2-kick{display:inline-flex;align-items:center;gap:8px;margin:0 0 18px;
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--h-ink-3);border:1px solid var(--h-line-2);
+  border-radius:999px;padding:7px 14px}
+.hero2 h1{margin:0;font-size:44px;line-height:1.08;letter-spacing:-.025em;
+  color:var(--h-ink);max-width:15ch}
+.hero2 h1 em{font-style:normal;color:var(--acc)}
+.hero2-sub{margin:18px 0 0;font-size:15px;line-height:1.6;color:var(--h-ink-2);max-width:50ch}
+.hero2-cta{display:flex;align-items:center;gap:20px;margin:28px 0 0;flex-wrap:wrap}
+.hero2-quiet{font-size:13.5px;color:var(--h-ink-3);text-decoration:underline;
+  text-underline-offset:4px}
+.hero2-quiet:hover{color:var(--h-ink)}
+.hero2-stats{display:flex;flex-wrap:wrap;gap:36px;margin:34px 0 0;padding-top:24px;
+  border-top:1px solid var(--h-line)}
+.hero2-stats div{display:flex;flex-direction:column;gap:4px}
+.hero2-stats dt{font-size:25px;font-weight:600;color:var(--h-ink);font-feature-settings:"tnum" 1}
+.hero2-stats dd{margin:0;font-size:12px;color:var(--h-ink-3)}
+.hero2-art{display:flex;justify-content:center;min-width:0}
+/* The artwork inherits the same set, so its gradients are always shaded
+   against the ground it actually sits on. */
+.la{width:100%;max-width:560px;height:auto;
+  --la-hi:var(--h-s3);--la-lo:var(--h-s2);
+  --la-glass-a:var(--h-s2);--la-glass-b:var(--h-bg)}
+.la-edge{stroke:var(--h-line-2);stroke-width:1.25}
+.la-bar{fill:var(--h-ink);opacity:.17;transform-origin:222px 0;
+  animation:grow .6s cubic-bezier(.2,.7,.3,1) both}
+.la-bar-2{animation-delay:.1s}
+.la-bar-3{animation-delay:.2s}
+.la-bar-4{animation-delay:.3s}
+.la-chip{fill:var(--acc);opacity:.92;transform-origin:410px 0;
+  animation:grow .5s cubic-bezier(.2,.7,.3,1) .44s both}
+.la-pad{fill:var(--h-ink);opacity:.12}
+.la-sweep{fill:var(--acc);opacity:0;animation:sweepdown 5s linear 1.3s infinite}
+
+/* ---- image strip: curved cards under the hero ---------------------------- */
+.strip2{background:var(--ground);padding:34px 0 10px}
+.strip2-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;
+  margin:0;padding:0;list-style:none}
+/* 2:3 to match the supplied artwork, so `cover` crops essentially nothing —
+   these are posters whose headings sit hard against the top and bottom. */
+.strip2-card{position:relative;aspect-ratio:2 / 3;overflow:hidden;border-radius:18px;
+  background:var(--sheet-2);border:1px solid var(--rule);
+  display:flex;align-items:center;justify-content:center;
+  animation:rise .55s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i) * 90ms);
+  transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease}
+.strip2-card:hover{border-color:var(--acc);transform:translateY(-4px);box-shadow:var(--shadow)}
+.strip2-card img{width:100%;height:100%;object-fit:cover;display:block;
+  transition:transform .5s cubic-bezier(.2,.7,.3,1)}
+.strip2-card:hover img{transform:scale(1.04)}
+/* A slot with no file yet: its number, not a gap. */
+.strip2-num{font-size:46px;font-weight:600;color:var(--ink-4);opacity:.45}
+
+@media(max-width:1000px){
+  .strip2-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){
+  .strip2-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .strip2-card{border-radius:14px}}
+
+/* ---- shop tiles ---------------------------------------------------------- */
+.shoptiles{background:var(--ground);padding:30px 0 6px}
+/* auto-fit, not a fixed 4: tiles whose filter has no stock are not rendered,
+   and a fixed four-column grid would leave holes where they would have been. */
+.shoptiles-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.shoptile{display:flex;flex-direction:column;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:12px;padding:20px;transition:border-color .13s ease,transform .13s ease}
+.shoptile:hover{border-color:var(--acc);transform:translateY(-2px)}
+.shoptile h3{margin:0;font-size:15px;letter-spacing:-.01em;color:var(--ink)}
+.shoptile p{margin:7px 0 16px;font-size:12.5px;line-height:1.5;color:var(--ink-3);flex:1}
+.shoptile-n{font-size:12.5px;color:var(--acc-ink);font-weight:600}
+.shoptile-n b{font-weight:700}
+
+.showcase{background:var(--ground);border-bottom:1px solid var(--rule-2);padding:34px 0 38px}
+.showcase-head h2{margin:0;font-size:20px;letter-spacing:-.01em;color:var(--ink)}
+.showcase-head p{margin:6px 0 20px;font-size:13px;color:var(--ink-3)}
+.showcase-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:28px;
+  background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:24px 26px}
+.showcase-id h3{margin:10px 0 0;font-size:20px;letter-spacing:-.01em;color:var(--ink)}
+/* Neutral. A+, A and B are all sellable; colour here would read as a verdict. */
+.showcase-grade{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--rule);
+  border-radius:4px;padding:4px 9px}
+.showcase-spec{margin:8px 0 0;font-size:13px;color:var(--ink-3);line-height:1.5}
+.showcase-price{margin:16px 0 0;font-size:22px;font-weight:600;color:var(--ink)}
+.showcase-price .sspec-den{font-family:inherit;font-size:12px;font-weight:400}
+.sspec{margin:0;display:grid;gap:0}
+.sspec-row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:baseline;
+  padding:10px 0;border-top:1px solid var(--rule-2);
+  animation:rise .42s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i) * 55ms)}
+.sspec-row:first-child{border-top:0;padding-top:0}
+.sspec dt{font-size:12.5px;color:var(--ink-3)}
+.sspec dd{margin:0;font-size:13.5px;color:var(--ink)}
+.sspec-den{color:var(--ink-3);font-weight:400}
+/* A missing measurement never renders as a passing one. */
+.sspec-missing{color:var(--ink-4)}
+.showcase-dots{display:flex;gap:7px;justify-content:center;margin-top:18px}
+.showcase-dot{width:7px;height:7px;border-radius:999px;background:var(--rule);padding:0;
+  transition:background .15s ease,width .15s ease}
+.showcase-dot.on{width:22px;background:var(--acc)}
+.showcase-dot:hover{background:var(--ink-4)}
+
+@media(max-width:900px){
+  .hero2-grid{grid-template-columns:minmax(0,1fr);gap:24px;padding-top:34px;padding-bottom:34px}
+  .hero2-art{order:-1}
+  .la{max-width:380px}
+  .hero2 h1{font-size:32px;max-width:none}
+  .hero2-stats{gap:24px;margin-top:26px;padding-top:20px}
+  .showcase-panel{grid-template-columns:minmax(0,1fr);gap:20px}}
+@media(max-width:640px){
+  .hero2 h1{font-size:27px}
+  .hero2-sub{font-size:14px}
+  .hero2-stats dt{font-size:20px}
+  .sspec-row{grid-template-columns:minmax(0,1fr);gap:2px}}
+
+/* `09_FRONTEND_LOCKED.md` §9 and the same rule the rest of the system obeys:
+   nothing on this page moves for a reader who has asked the platform for no
+   motion. Every element stays exactly where the animation would have left it —
+   visible, laid out, fully usable — rather than being hidden by a `both` fill
+   whose keyframes never ran. */
+@media (prefers-reduced-motion: reduce){
+  .hero2-copy > *,
+  .la-bar,.la-chip,.sspec-row{animation:none;transform:none}
+  .hero2-copy > *,.la-chip,.sspec-row{opacity:1}
+  .la-bar{opacity:.16}
+  .la-sweep{animation:none;opacity:0}
+  .showcase-dot,.shoptile,.strip2-card,.strip2-card img{transition:none}
+  .shoptile:hover,.strip2-card:hover{transform:none}
+  .strip2-card:hover img{transform:none}
+  .strip2-card{animation:none;opacity:1;transform:none}
+}

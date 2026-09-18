@@ -162,6 +162,8 @@ const STATE: PortalState = {
     mobile: '+919876543210',
   },
   profile: null,
+  // The org above is REGISTERED, so a reviewer has not been near it yet.
+  orgVerified: false,
   approvalsWaiting: 4,
   approvals: [],
   readiness: {

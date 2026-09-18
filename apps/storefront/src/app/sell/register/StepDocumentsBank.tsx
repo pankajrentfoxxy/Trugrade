@@ -13,9 +13,11 @@ import {
 import { DocumentChecklist, missingDocuments } from '../../register/DocumentChecklist';
 import { ACCOUNT_TYPES, VENDOR_DOCUMENTS } from '../../register/picklists';
 import {
+  ACCOUNT_NUMBER_MAX_DIGITS,
   blockIfscKey,
   toAccountNumber,
   toIfsc,
+  typeAccountNumber,
   typeIfsc,
   validateAccountHolderName,
   validateAccountNumber,
@@ -569,11 +571,11 @@ export function StepDocumentsBank({
             required
             inputMode="numeric"
             autoComplete="off"
-            maxLength={18}
+            maxLength={ACCOUNT_NUMBER_MAX_DIGITS}
             value={accountNumber}
             onChange={(e) => {
               clearError('accountNumber');
-              setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 18));
+              setAccountNumber(typeAccountNumber(e.target.value));
               invalidate({ accountLast4: '' });
             }}
             onBlur={() => {

@@ -16,8 +16,10 @@ import {
   useRetryLadder,
 } from '../../../../../../storefront/src/app/register/verification';
 import {
+  ACCOUNT_NUMBER_MAX_DIGITS,
   toAccountNumber,
   toIfsc,
+  typeAccountNumber,
   typeIfsc,
   validateAccountNumber,
   validateIfsc,
@@ -276,13 +278,15 @@ export function BankSection({
             mono
             required
             inputMode="numeric"
+            autoComplete="off"
+            maxLength={ACCOUNT_NUMBER_MAX_DIGITS}
             value={draft.account}
             error={liveFieldError('account', draft.account, validateAccountNumber, focused, active)}
             onFocus={() => setFocused('account')}
             onBlur={() => setFocused(null)}
             onChange={(e) => {
               setActive((a) => ({ ...a, account: true }));
-              setDraft((d) => ({ ...d, account: toAccountNumber(e.target.value), verified: null }));
+              setDraft((d) => ({ ...d, account: typeAccountNumber(e.target.value), verified: null }));
             }}
           />
           <Input
@@ -290,6 +294,8 @@ export function BankSection({
             mono
             required
             inputMode="numeric"
+            autoComplete="off"
+            maxLength={ACCOUNT_NUMBER_MAX_DIGITS}
             value={draft.confirmAccount}
             error={liveFieldError(
               'confirm',
@@ -303,7 +309,7 @@ export function BankSection({
             onBlur={() => setFocused(null)}
             onChange={(e) => {
               setActive((a) => ({ ...a, confirm: true }));
-              setDraft((d) => ({ ...d, confirmAccount: toAccountNumber(e.target.value) }));
+              setDraft((d) => ({ ...d, confirmAccount: typeAccountNumber(e.target.value) }));
             }}
           />
           {draft.verified && isProviderProblem(draft.verified) ? (

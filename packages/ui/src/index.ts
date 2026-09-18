@@ -2,6 +2,7 @@ export { cn } from './lib/cn';
 export { Mark, Wordmark, Logo } from './brand/Mark';
 export { ToleranceBand, type ToleranceBandProps } from './components/ToleranceBand';
 export { Evidence, type EvidenceProps } from './components/Evidence';
+export { Carousel, type CarouselProps } from './components/carousel';
 export {
   Button,
   type ButtonProps,
@@ -181,6 +182,8 @@ export {
   KPI_SUB_MAX,
   InfoPopover,
   type InfoPopoverProps,
+  HubAccountMenu,
+  type HubAccountMenuProps,
   PermissionGrid,
   type PermissionGridProps,
   type PermissionMark,

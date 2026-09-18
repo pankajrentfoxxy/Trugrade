@@ -1,5 +1,4 @@
 import { Skeleton } from '@trugrade/ui';
-import { CategoryStrip } from '../../CategoryStrip';
 
 /**
  * The loading state, in the shape of the thing that is loading.
@@ -16,7 +15,6 @@ import { CategoryStrip } from '../../CategoryStrip';
 export default function Loading(): React.JSX.Element {
   return (
     <>
-      <CategoryStrip query="" />
       <div className="body">
         <div className="wrap">
           <div className="recskel" aria-hidden="true">

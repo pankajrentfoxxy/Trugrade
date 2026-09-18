@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { HubKpiRow, KPI_SUB_MAX, InfoPopover, PermissionGrid } from './hub';
+import { HubAccountMenu, HubKpiRow, KPI_SUB_MAX, InfoPopover, PermissionGrid } from './hub';
 
 describe('HubKpiRow', () => {
   it('caps sub at 40 characters so a paragraph cannot sneak in', () => {
@@ -67,5 +67,73 @@ describe('PermissionGrid', () => {
       <PermissionGrid rows={rows} columns={columns} highlightRole="Auditor" />,
     );
     expect(container.querySelectorAll('.bg-acc-wash')).toHaveLength(0);
+  });
+});
+
+describe('HubAccountMenu', () => {
+  const menu = (): React.JSX.Element => (
+    <HubAccountMenu monogram="DV" name="Deepak Verma" role="Account owner" label="Deepak Verma — account menu">
+      <a className="hub-menu__item" role="menuitem" href="/">
+        Start purchasing
+      </a>
+      <button type="button" className="hub-menu__item" role="menuitem">
+        Sign out
+      </button>
+    </HubAccountMenu>
+  );
+
+  it('keeps the name, the seat and the way out behind the avatar', async () => {
+    const user = userEvent.setup();
+    render(menu());
+    expect(screen.queryByRole('menu')).toBeNull();
+    // Nothing on the bar but the initials.
+    expect(screen.queryByText('Sign out')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Deepak Verma — account menu' }));
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.getByText('Deepak Verma')).toBeTruthy();
+    expect(screen.getByText('Account owner')).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Start purchasing' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy();
+  });
+
+  it('closes on Escape and hands focus back to the avatar', async () => {
+    const user = userEvent.setup();
+    render(menu());
+    const trigger = screen.getByRole('button', { name: 'Deepak Verma — account menu' });
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('opens onto the first item from the arrows, and walks them', async () => {
+    const user = userEvent.setup();
+    render(menu());
+    screen.getByRole('button', { name: 'Deepak Verma — account menu' }).focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Start purchasing' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toHaveFocus();
+    // Round, so the last item is one key from the first.
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Start purchasing' })).toHaveFocus();
+  });
+
+  it('leaves focus on the avatar when a mouse opened it', async () => {
+    const user = userEvent.setup();
+    render(menu());
+    const trigger = screen.getByRole('button', { name: 'Deepak Verma — account menu' });
+    await user.click(trigger);
+    // A ring on the top item would read as a choice already made.
+    expect(trigger).toHaveFocus();
+  });
+
+  it('closes when an item is chosen, rather than hanging over the screen', async () => {
+    const user = userEvent.setup();
+    render(menu());
+    await user.click(screen.getByRole('button', { name: 'Deepak Verma — account menu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

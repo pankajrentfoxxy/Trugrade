@@ -51,7 +51,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { getGrades, getLegalTerms } from '../../../lib/api';
-import { CategoryStrip } from '../../CategoryStrip';
 import { LEGAL_SLUGS, buildDocuments, type LegalDocument } from '../documents';
 
 export const revalidate = 300;
@@ -103,7 +102,6 @@ export default async function LegalDocumentPage({
 
   return (
     <>
-      <CategoryStrip />
       {/*
         Not `.wrap`. That container is 1400px, which is right for a data board
         and wrong for prose: a legal document set across it is 100 characters a

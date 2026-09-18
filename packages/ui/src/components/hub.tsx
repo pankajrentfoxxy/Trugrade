@@ -274,3 +274,153 @@ export function PermissionGrid({
     </div>
   );
 }
+
+/* ==========================================================================
+ * HubAccountMenu
+ * ======================================================================== */
+
+export interface HubAccountMenuProps {
+  /** Initials in the avatar. Empty draws the neutral person glyph instead. */
+  monogram?: string;
+  /** Who is signed in, at the head of the open menu. */
+  name?: React.ReactNode;
+  /** The seat this person holds, under the name. */
+  role?: React.ReactNode;
+  /** The trigger's accessible name — the menu carries it too. */
+  label: string;
+  /** The destinations: anything carrying `hub-menu__item` and `role="menuitem"`. */
+  children: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * The avatar in the masthead and what it opens.
+ *
+ * Routing stays with the caller — an app passes its own links as children, so
+ * this package never learns the router. Escape closes and returns focus, an
+ * outside click closes, the arrows walk the items, and activating one closes
+ * the menu rather than leaving it hanging over the screen behind it.
+ */
+export function HubAccountMenu({
+  monogram,
+  name,
+  role,
+  label,
+  children,
+  className,
+}: HubAccountMenuProps): React.JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const btn = React.useRef<HTMLButtonElement>(null);
+  const panel = React.useRef<HTMLDivElement>(null);
+  /** Whether the arrows opened it, which decides where focus starts. */
+  const byArrow = React.useRef(false);
+
+  const itemsIn = (): HTMLElement[] =>
+    panel.current
+      ? Array.from(
+          panel.current.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])'),
+        )
+      : [];
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+    // Only an arrow puts focus on the first item. Doing it on every open rings
+    // the top item for somebody who opened the menu with a mouse, which reads
+    // as a choice already made rather than as where the keyboard is.
+    if (byArrow.current) itemsIn()[0]?.focus();
+    byArrow.current = false;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setOpen(false);
+      btn.current?.focus();
+    };
+    const onDown = (e: MouseEvent): void => {
+      const t = e.target as Node;
+      if (btn.current?.contains(t) || panel.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open]);
+
+  const step = (by: number): void => {
+    const list = itemsIn();
+    if (list.length === 0) return;
+    const at = list.indexOf(document.activeElement as HTMLElement);
+    const next = at < 0 ? 0 : (at + by + list.length) % list.length;
+    list[next]?.focus();
+  };
+
+  return (
+    <div className={cn('hub-menu', className)}>
+      <button
+        ref={btn}
+        type="button"
+        className="hub-menu__trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            byArrow.current = true;
+            setOpen(true);
+          }
+        }}
+      >
+        <span className="hub-mast__avatar font-mono" aria-hidden="true">
+          {monogram ? monogram : <PersonIcon />}
+        </span>
+      </button>
+      {open ? (
+        <div
+          ref={panel}
+          className="hub-menu__panel"
+          role="menu"
+          aria-label={label}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              step(1);
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              step(-1);
+            }
+          }}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('[role="menuitem"]')) setOpen(false);
+          }}
+        >
+          {name || role ? (
+            <div className="hub-menu__who">
+              {name ? <span className="hub-menu__name">{name}</span> : null}
+              {role ? <span className="hub-menu__role">{role}</span> : null}
+            </div>
+          ) : null}
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Stands in for initials nobody has given us yet. */
+function PersonIcon(): React.JSX.Element {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

@@ -48,7 +48,6 @@
  * renders rather than a crash.
  */
 import type { Metadata } from 'next';
-import { CategoryStrip } from '../CategoryStrip';
 import { CartScreen } from './CartScreen';
 
 /** A cart is one person's. Nothing about it is cacheable or indexable. */
@@ -62,7 +61,6 @@ export const metadata: Metadata = {
 export default function CartPage(): React.JSX.Element {
   return (
     <>
-      <CategoryStrip />
       <div className="body">
         <div className="wrap cartpage">
           <CartScreen />

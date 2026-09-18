@@ -1,5 +1,6 @@
 import {
   ADDRESS_LINE1,
+  BANK_ACCOUNT_NUMBER,
   CIN,
   LLPIN,
   TAN,
@@ -562,6 +563,27 @@ export function blockIfscKey(e: {
 
 /** VR-023 — same pattern as `@trugrade/contracts`. */
 const ACCOUNT_NUMBER_PATTERN = /^[0-9]{9,18}$/;
+
+/**
+ * VR-023's own upper bound, read off the rule rather than retyped, so the field
+ * and the server cannot drift apart if the rule ever moves.
+ */
+export const ACCOUNT_NUMBER_MAX_DIGITS = BANK_ACCOUNT_NUMBER.max ?? 18;
+
+/**
+ * An account number as typed: digits only, never longer than the rule allows.
+ *
+ * The same principle as `typeIfsc` — the field cannot hold what it will not
+ * accept. Without it the console's Bank account dialog took a 59-digit number
+ * happily and only argued about it afterwards, which is a long red sentence
+ * about something the field should never have let happen.
+ *
+ * Pair it with `maxLength`, as the registration wizard already did: this is that
+ * rule lifted out of the wizard so the two screens cannot say different things
+ * about the same field.
+ */
+export const typeAccountNumber = (value: string): string =>
+  value.replace(/\D/g, '').slice(0, ACCOUNT_NUMBER_MAX_DIGITS);
 
 /** VR-021 — fifth character is the digit zero, not the letter O. */
 const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;

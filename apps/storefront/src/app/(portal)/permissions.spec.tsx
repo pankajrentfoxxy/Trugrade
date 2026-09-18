@@ -15,7 +15,7 @@
 import { permissionsFor, type Role } from '@trugrade/contracts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PORTAL_NAV, mayOpen } from './shell/nav';
+import { PORTAL_NAV, lockLabel, lockOn, mayOpen } from './shell/nav';
 
 const CUSTOMER_ROLES = [
   'CUSTOMER_OWNER',
@@ -115,6 +115,88 @@ describe('the rail', () => {
   it('lets an owner open everything', () => {
     const owner = held('CUSTOMER_OWNER');
     expect(PORTAL_NAV.filter((n) => !mayOpen(n, owner))).toEqual([]);
+  });
+});
+
+/* ==========================================================================
+ * 1b. The second gate: a reviewer has to have verified the organisation
+ *
+ * Permission answers "is this seat admitted". It does not answer "is this
+ * account open for business", and the four screens below only mean something
+ * for one that is. `VERIFIED` is reachable only through a reviewer, so this is
+ * the rail's reading of an admin's decision — taken from the server's
+ * `orgStatus`, never recomputed from the profile cards.
+ * ======================================================================== */
+
+describe('the entries that wait on verification', () => {
+  const seat = (role: string, orgVerified: boolean) => ({
+    permissions: held(role),
+    orgVerified,
+  });
+  const lockedFor = (role: string, orgVerified: boolean): string[] =>
+    PORTAL_NAV.filter((n) => lockOn(n, seat(role, orgVerified))).map((n) => n.label);
+
+  it('is exactly the four the buyer side asked for', () => {
+    expect(PORTAL_NAV.filter((n) => n.needsVerifiedOrg).map((n) => n.label)).toEqual([
+      'Orders',
+      'Approvals',
+      'Returns',
+      'Warranty',
+    ]);
+  });
+
+  it('shuts all four for an owner whose organisation is not verified yet', () => {
+    // Every permission a customer can hold, and still shut: this gate is about
+    // the organisation, not the seat.
+    expect(lockedFor('CUSTOMER_OWNER', false)).toEqual([
+      'Orders',
+      'Approvals',
+      'Returns',
+      'Warranty',
+    ]);
+  });
+
+  it('leaves the rest of the rail alone', () => {
+    // Home, Addresses and Profile are how an unverified buyer finishes the very
+    // work the verification is waiting on. Locking those would be a trap.
+    for (const label of ['Home', 'Addresses', 'Profile']) {
+      expect(lockedFor('CUSTOMER_OWNER', false)).not.toContain(label);
+    }
+  });
+
+  it('opens them the moment the organisation is verified', () => {
+    expect(lockedFor('CUSTOMER_OWNER', true)).toEqual([]);
+    expect(lockedFor('CUSTOMER_BUYER', true)).toEqual(['Team']);
+  });
+
+  it('says what is being waited on, not the name of a grant', () => {
+    const orders = PORTAL_NAV.find((n) => n.label === 'Orders')!;
+    const lock = lockOn(orders, seat('CUSTOMER_BUYER', false))!;
+    expect(lock.kind).toBe('unverified');
+    // A buyer cannot give themselves a verification and has never heard of
+    // `ordering.own.read`. The sentence names the thing that is outstanding.
+    expect(lockLabel(orders, lock)).toBe(
+      'Orders — opens once we have verified your company details.',
+    );
+  });
+
+  it('names the permission first when a seat would be refused either way', () => {
+    // A viewer in a verified org cannot open Team on any account status, so
+    // telling them to wait for a verification would be the wrong sentence —
+    // and the verification they waited for would not open it.
+    const team = PORTAL_NAV.find((n) => n.label === 'Team')!;
+    const lock = lockOn(team, seat('CUSTOMER_VIEWER', false))!;
+    expect(lock).toEqual({ kind: 'permission', permission: 'identity.user.read' });
+  });
+
+  it('treats a verification it could not read as no verification', () => {
+    // `orgVerified` is false for a refused or failed readiness read as well as
+    // for a real no. A missing value never renders as a passing one.
+    for (const role of CUSTOMER_ROLES) {
+      expect(lockedFor(role, false)).toEqual(
+        expect.arrayContaining(['Orders', 'Approvals', 'Returns', 'Warranty']),
+      );
+    }
   });
 });
 

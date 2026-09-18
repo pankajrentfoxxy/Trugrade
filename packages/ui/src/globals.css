@@ -21,8 +21,10 @@
  *   2. Grades are neutral. A+, A and B are all sellable — neutral chip, neutral
  *      border, ink text. Green and red are reserved for PASS and FAIL. A
  *      position on a scale is not a verdict.
- *   3. Header and footer never change between themes. The dark chrome is the
- *      brand; only working surfaces flip.
+ *   3. The FOOTER never changes between themes — the dark chrome is the
+ *      brand. The storefront TOPBAR is the one deliberate exception: it was
+ *      dark chrome in both themes and is now a working surface, so it flips
+ *      (--head-* below). Everything else still obeys the original rule.
  *   4. No literal hex outside this block.
  */
 
@@ -268,7 +270,40 @@
     --shadow-2: 0 6px 24px rgba(42, 36, 28, 0.13), 0 18px 60px rgba(42, 36, 28, 0.13);
   }
 
+  /* The storefront TOPBAR, as of the header rework.
+     -----------------------------------------------
+     It used to be dark chrome in both themes. It is now a working surface and
+     flips with the theme — white on light, the sheet colour on dark — which is
+     a deliberate, single-surface exception to rule 3 above. The footer is NOT
+     part of it and keeps its chrome.
+
+     These are aliases, not new colours. Every theme (slate, olive, sand
+     included) therefore gets a topbar already matched to its own surfaces, no
+     new hex enters the system, and a change to a surface token cannot leave the
+     topbar behind. Note the line tokens follow the chrome convention — plain is
+     the subtler of the two, -2 the stronger — which is the reverse of how
+     --rule and --rule-2 are ordered, hence the crossover. */
+  /* A CONSTANT white, identical in every theme.
+
+     Third-party artwork — manufacturer logos, payment marks, certification
+     badges — arrives in its own fixed palette and cannot be re-coloured by us.
+     Most of it is dark-on-transparent, so on a dark working surface it either
+     disappears or has to be inverted, and inverting a brand's mark is worse
+     than not showing it. This is the plate such artwork sits on. It is NOT a
+     surface token: nothing of ours should be painted with it. */
   :root {
+    --plate: #ffffff;
+    /* Ink for text placed ON that plate. Constant for the same reason. */
+    --plate-ink: #3c444f;
+    --head: var(--sheet);
+    --head-2: var(--sheet-2);
+    --head-3: var(--sheet-3);
+    --on-head: var(--ink);
+    --on-head-2: var(--ink-2);
+    --on-head-3: var(--ink-3);
+    --head-line: var(--rule-2);
+    --head-line-2: var(--rule);
+
     --s1: 4px;
     --s2: 8px;
     --s3: 12px;

@@ -30,7 +30,7 @@ import {
   sectionSummary,
   type ProfileSectionId,
 } from './sections.config';
-import './profile-hub.css';
+import '@trugrade/ui/profile-hub.css';
 
 /**
  * ARCHETYPE C — Record cards that open Archetype F dialogs.
@@ -182,6 +182,7 @@ export function ProfileHub(): React.JSX.Element {
               </p>
               {onboarding?.editable ? (
                 <Button
+                  className="profile-hub-action"
                   variant={done ? 'secondary' : 'primary'}
                   onClick={() => setOpen(section.id)}
                 >
