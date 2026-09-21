@@ -1159,4 +1159,7 @@
   --sl-lap-edge: #3b2f0c;
   --sl-accent-glow-90: rgba(253, 176, 23, 0.9);
   --sl-line-32: rgba(58, 44, 8, 0.32);
+  /* Password reset only: the dashed path and the lock's shadow. */
+  --sl-accent-50: rgba(253, 176, 23, 0.5);
+  --sl-black-45: rgba(0, 0, 0, 0.45);
 }

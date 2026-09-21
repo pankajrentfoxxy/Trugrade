@@ -27,7 +27,7 @@ import {
   validateSignupPassword,
 } from './signup-validation';
 import '../auth/auth-split.css';
-import './signup-split.css';
+import '../auth/auth-wizard.css';
 
 /**
  * ARCHETYPE F — Focus. One-minute supplier signup; business details come later.
@@ -35,7 +35,7 @@ import './signup-split.css';
  * The approved split-screen mock. LEFT: a laptop gets the Trugrade treatment
  * on loop — the scan beam sweeps it, six check-dots pop around it, the A+ seal
  * stamps on, a payout pill rises — and beneath it the four supplier promises
- * tick themselves in. All CSS, in `signup-split.css`, and hidden from assistive
+ * tick themselves in. All CSS, in `auth-wizard.css`, and hidden from assistive
  * technology. RIGHT: the wizard the four progress bars count.
  *
  * The mock's wizard was mobile → code → details → done. The real one has one

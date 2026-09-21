@@ -79,6 +79,9 @@ describe('the password-reset steps always have a way back', () => {
     fireEvent.change(screen.getByLabelText(/New password/), {
       target: { value: 'Qzv7$mKplWxR2b' },
     });
+    fireEvent.change(screen.getByLabelText(/Confirm password/), {
+      target: { value: 'Qzv7$mKplWxR2b' },
+    });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Set this password' }));
     });

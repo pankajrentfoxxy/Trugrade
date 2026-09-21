@@ -1,16 +1,18 @@
 /**
- * Supplier signup — the parts of the approved mock that sign-in does not
- * share. `auth/auth-split.css` draws the split, the brand panel, the fields,
+ * The supplier wizards — signup and password reset — beyond what sign-in
+ * shares. `auth/auth-split.css` draws the split, the brand panel, the fields,
  * the OTP boxes and the buttons; this file adds the scan-and-seal scene, the
  * promises checklist, the progress bars, the +91 mobile group, the password
- * hint and the done card. Scoped under `.signup-split`, tokens from
+ * hint and the done card. Shared rules are scoped under `.auth-split`, the signup scene under
+ * `.signup-split`; tokens from
  * `packages/ui/src/globals.css`.
  */
 
-.signup-split {
+.auth-split {
   --sl-cycle: 8s;
 }
-.signup-split .split {
+.signup-split .split,
+.reset-split .split {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
 }
 
@@ -382,7 +384,7 @@
   }
 }
 
-.signup-split .left-foot {
+.auth-split .left-foot {
   position: relative;
   font-family: var(--sl-mono);
   font-size: 0.66rem;
@@ -392,22 +394,22 @@
 }
 
 /* ---- right: the wizard ---- */
-.signup-split .panel {
+.auth-split .panel {
   width: min(480px, 100%);
 }
-.signup-split .prog {
+.auth-split .prog {
   display: flex;
   gap: 8px;
   margin-bottom: 26px;
 }
-.signup-split .seg {
+.auth-split .seg {
   flex: 1;
   height: 5px;
   border-radius: 999px;
   background: var(--sl-line);
   overflow: hidden;
 }
-.signup-split .seg i {
+.auth-split .seg i {
   display: block;
   height: 100%;
   width: 0;
@@ -415,21 +417,21 @@
   border-radius: 999px;
   transition: width 0.45s ease;
 }
-.signup-split .seg.done i {
+.auth-split .seg.done i {
   width: 100%;
 }
-.signup-split .seg.cur i {
+.auth-split .seg.cur i {
   width: 45%;
 }
-.signup-split .right .panel h2 {
+.auth-split .right .panel h2 {
   font-size: clamp(1.45rem, 2.4vw, 1.8rem);
 }
-.signup-split .stepbox {
+.auth-split .stepbox {
   margin-top: 24px;
 }
 
 /* +91 mobile group */
-.signup-split .mob {
+.auth-split .mob {
   display: flex;
   align-items: stretch;
   background: var(--sl-surface);
@@ -440,14 +442,14 @@
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
-.signup-split .mob:focus-within {
+.auth-split .mob:focus-within {
   border-color: var(--sl-accent);
   box-shadow: 0 0 0 3px var(--sl-accent-ring);
 }
-.signup-split .mob.bad {
+.auth-split .mob.bad {
   border-color: var(--sl-accent-deep);
 }
-.signup-split .mob .cc {
+.auth-split .mob .cc {
   display: flex;
   align-items: center;
   padding: 0 14px;
@@ -458,7 +460,7 @@
   background: var(--sl-surface-2);
   border-right: 1px solid var(--sl-line);
 }
-.signup-split .mob input {
+.auth-split .mob input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -471,46 +473,46 @@
   font-variant-numeric: tabular-nums;
   color: var(--sl-text);
 }
-.signup-split .mob input::placeholder {
+.auth-split .mob input::placeholder {
   color: var(--sl-line-32);
 }
 
-.signup-split .go:hover:not([disabled]) {
+.auth-split .go:hover:not([disabled]) {
   transform: translateY(-1px);
   box-shadow: 0 8px 22px var(--sl-accent-glow-40);
 }
-.signup-split .go[disabled] {
+.auth-split .go[disabled] {
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
-.signup-split .links {
+.auth-split .links {
   margin-top: 18px;
   text-align: center;
   display: block;
 }
-.signup-split .links button {
+.auth-split .links button {
   color: var(--sl-accent-deep);
   font-weight: 700;
   text-decoration: underline;
 }
-.signup-split .sent-line {
+.auth-split .sent-line {
   font-size: 0.84rem;
   margin-bottom: 14px;
 }
 
 /* password rules, as the mock's hint line */
-.signup-split .hint {
+.auth-split .hint {
   font-size: 0.74rem;
   color: var(--sl-muted);
   margin-top: 7px;
 }
-.signup-split .hint.ok {
+.auth-split .hint.ok {
   color: var(--sl-accent-deep);
   font-weight: 700;
 }
-.signup-split .rules {
+.auth-split .rules {
   list-style: none;
   margin: 7px 0 0;
   padding: 0;
@@ -520,30 +522,30 @@
   font-size: 0.74rem;
   color: var(--sl-muted);
 }
-.signup-split .rules li[data-met='true'] {
+.auth-split .rules li[data-met='true'] {
   color: var(--sl-accent-deep);
   font-weight: 700;
 }
-.signup-split .rules li[data-met='true']::before {
+.auth-split .rules li[data-met='true']::before {
   content: '✓ ';
 }
-.signup-split .meter {
+.auth-split .meter {
   display: flex;
   gap: 5px;
   margin-top: 9px;
 }
-.signup-split .meter span {
+.auth-split .meter span {
   flex: 1;
   height: 4px;
   border-radius: 999px;
   background: var(--sl-line);
 }
-.signup-split .meter span[data-on='true'] {
+.auth-split .meter span[data-on='true'] {
   background: var(--sl-accent);
 }
 
 /* done step */
-.signup-split .done-badge {
+.auth-split .done-badge {
   width: 54px;
   height: 54px;
   border-radius: 15px;
@@ -553,27 +555,27 @@
   justify-content: center;
   box-shadow: 0 10px 26px var(--sl-accent-glow-45);
 }
-.signup-split .done-badge svg {
+.auth-split .done-badge svg {
   width: 26px;
   height: 26px;
   stroke: var(--sl-accent-ink);
 }
-.signup-split .right .done h2 {
+.auth-split .right .done h2 {
   margin-top: 16px;
 }
-.signup-split .next-box {
+.auth-split .next-box {
   margin-top: 20px;
   background: var(--sl-surface);
   border: 1px solid var(--sl-line);
   border-radius: 14px;
   padding: 16px 18px;
 }
-.signup-split .next-box h4 {
+.auth-split .next-box h4 {
   margin: 0;
   font-size: 0.86rem;
   font-weight: 800;
 }
-.signup-split .next-chips {
+.auth-split .next-chips {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
@@ -581,7 +583,7 @@
   margin: 11px 0 0;
   padding: 0;
 }
-.signup-split .nchip {
+.auth-split .nchip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -592,7 +594,7 @@
   border-radius: 999px;
   padding: 6px 11px 6px 7px;
 }
-.signup-split .nchip i {
+.auth-split .nchip i {
   font-style: normal;
   font-family: var(--sl-mono);
   font-size: 0.58rem;
@@ -602,17 +604,17 @@
   border-radius: 5px;
   padding: 2.5px 5px;
 }
-.signup-split .next-box p {
+.auth-split .next-box p {
   font-size: 0.76rem;
   color: var(--sl-muted);
   margin-top: 11px;
 }
-.signup-split .next-box p b {
+.auth-split .next-box p b {
   color: var(--sl-text);
 }
 
 /* a refusal at the last step: the same card as the mock's error voice */
-.signup-split .refusal {
+.auth-split .refusal {
   margin-top: 16px;
   display: flex;
   flex-direction: column;
@@ -625,17 +627,17 @@
   line-height: 1.5;
   color: var(--sl-text);
 }
-.signup-split .refusal .row {
+.auth-split .refusal .row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
 }
-.signup-split .refusal .mono {
+.auth-split .refusal .mono {
   font-family: var(--sl-mono);
   font-variant-numeric: tabular-nums;
 }
-.signup-split .refusal .ghost {
+.auth-split .refusal .ghost {
   padding: 0;
 }
 
@@ -678,7 +680,7 @@
 
 /* Not yet valid: drawn like the mock's disabled button, but still pressable so
    a press names what is missing instead of doing nothing. */
-.signup-split .go[aria-disabled='true'] {
+.auth-split .go[aria-disabled='true'] {
   opacity: 0.45;
   transform: none;
   box-shadow: none;
@@ -686,7 +688,7 @@
 
 /* The headline under the logo. The hub surface styles `h1` dark for its own
    pages; on this panel it is the mock's uppercase claim in the panel's ink. */
-.auth-split.signup-split .left h1 {
+.auth-split aside.left h1 {
   position: relative;
   margin-top: 22px;
   font-size: clamp(1.4rem, 2.2vw, 1.9rem);
@@ -697,6 +699,6 @@
   max-width: 22ch;
   color: var(--sl-on-ink);
 }
-.auth-split.signup-split .left h1 span {
+.auth-split aside.left h1 span {
   color: var(--sl-accent);
 }
