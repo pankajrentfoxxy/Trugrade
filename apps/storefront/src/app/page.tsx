@@ -6,7 +6,6 @@ import { BrandRail } from './BrandRail';
 import { HeroBanner } from './HeroBanner';
 import { HomePills } from './HomePills';
 import { HomeStrip } from './HomeStrip';
-import { ShopTiles } from './ShopTiles';
 import { SpecShowcase } from './SpecShowcase';
 import { SiteHeader } from './SiteHeader';
 
@@ -135,7 +134,16 @@ export default async function HomePage({
 
         <HomeStrip />
 
-        <ShopTiles results={results} />
+        {/*
+          The "ways to shop" tiles are gone from this page.
+
+          They were four filters into `/search` — top grade, score 90+, battery
+          90%+, ready in 24 h — which is the same four the claim pills above the
+          hero now carry, pointing at the same query strings. Two rows of the
+          same links is one row too many, and the pills are the ones a reader
+          meets first. `ShopTiles` itself is untouched and still counts its own
+          stock, so it can go back anywhere that does not already have the pills.
+        */}
 
         {results.length > 0 && <SpecShowcase items={results} />}
 
@@ -159,54 +167,79 @@ export default async function HomePage({
           the two cards side by side. A nested wrap used to be the only child
           of the grid, so they stacked. */}
         <div className="wrap strip">
-          <div className="sbx">
-            <div className="qr" role="img" aria-label="Certificate QR" />
-            <div>
-              <h3>Verify a certificate</h3>
-              <p>
-                Holding a machine with a seal on it? Enter the certificate ID or the serial and read
-                the report it shipped with.
-              </p>
-              <form className="qform" action="/verify">
-                <label className="sr-only" htmlFor="cert">
-                  Certificate ID or serial
-                </label>
-                <input id="cert" name="q" className="mono" placeholder="TG-CERT-… or serial" />
-                <button type="submit">Verify</button>
-              </form>
+          <section className="sbx">
+            <div className="sbx-head">
+              <span className="sbx-ic">
+                <span className="qr" role="img" aria-label="Certificate QR" />
+              </span>
+              <div>
+                <h3>Verify a certificate</h3>
+                <p>
+                  Holding a machine with a seal on it? Enter the certificate ID or the serial and
+                  read the report it shipped with.
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="sbx">
-            <div>
-              <h3>Have a requirement list?</h3>
-              <p>
-                Send the specification, quantity and grade. We tell you what is available now, at a
-                landed price for your pincode, and source the rest.
-              </p>
-              <form className="qform" action="/bulk">
-                <label className="sr-only" htmlFor="req">
-                  Requirement
-                </label>
-                <input id="req" name="q" placeholder="e.g. 40 × i5 / 16 GB / Grade A" />
-                <button type="submit">Start</button>
-              </form>
+            <form className="qform" action="/verify">
+              <label className="sr-only" htmlFor="cert">
+                Certificate ID or serial
+              </label>
+              <input id="cert" name="q" className="mono" placeholder="TG-CERT-… or serial" />
+              <button type="submit">Verify</button>
+            </form>
+          </section>
+          <section className="sbx">
+            <div className="sbx-head">
+              <span className="sbx-ic">
+                {/* The requirement list itself: three ticked lines. */}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M8 6h13M8 12h13M8 18h13" />
+                  <path d="m3.2 6 1 1 1.8-2M3.2 12l1 1 1.8-2M3.2 18l1 1 1.8-2" />
+                </svg>
+              </span>
+              <div>
+                <h3>Have a requirement list?</h3>
+                <p>
+                  Send the specification, quantity and grade. We tell you what is available now, at
+                  a landed price for your pincode, and source the rest.
+                </p>
+              </div>
             </div>
-          </div>
+            <form className="qform" action="/bulk">
+              <label className="sr-only" htmlFor="req">
+                Requirement
+              </label>
+              <input id="req" name="q" placeholder="e.g. 40 × i5 / 16 GB / Grade A" />
+              <button type="submit">Start</button>
+            </form>
+          </section>
         </div>
 
         {/* 7 — PROCESS. `.wrap.proc` is the centred four-column rail; a nested
           wrap used to be the only grid child, so the steps stacked. */}
-        <div className="wrap proc">
+        <ol className="wrap proc">
           {PROCESS.map(([title, body], i) => (
-            <div className="pstep" key={title}>
+            <li className="pstep" key={title}>
               <div className="pstep-mark">
                 <span className="n mono">{String(i + 1).padStart(2, '0')}</span>
+                {/* The rail to the next step. Its fill is the `<i>`, which
+                    draws left to right as the sequence reaches this step. */}
+                <span className="pline" aria-hidden="true">
+                  <i />
+                </span>
               </div>
               <h3>{title}</h3>
               <p>{body}</p>
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </>
   );

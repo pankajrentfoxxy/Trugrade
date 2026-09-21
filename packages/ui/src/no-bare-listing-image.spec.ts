@@ -57,8 +57,7 @@ describe('no component renders a buyer-facing photograph without the caption', (
   it.each(files.map((f) => [f.slice(UI_SRC.length + 1), f]))(
     '%s uses RepresentativeImage rather than a bare <img>',
     (relative, full) => {
-      if (relative.endsWith(CAPTION_OWNER) || relative.endsWith(NOT_A_PRODUCT_PHOTOGRAPH))
-        return;
+      if (relative.endsWith(CAPTION_OWNER) || relative.endsWith(NOT_A_PRODUCT_PHOTOGRAPH)) return;
       const source = readFileSync(full, 'utf8');
 
       // Inline SVG is fine — logos, marks, the score ring. A raster <img> in a
@@ -77,9 +76,37 @@ describe('no component renders a buyer-facing photograph without the caption', (
     expect(source).toContain('unit passport');
   });
 
+  /**
+   * The rule changed shape, deliberately, and this is the new one.
+   *
+   * A gallery of six frames of one grade put the same sentence under all six,
+   * and a sentence repeated six times is a sentence nobody reads. So the
+   * disclosure may now be carried ONCE for a set — but it can still never be
+   * absent. `captionedBy` takes the id of the element carrying it, and a
+   * figure that uses it is pointed at that element with `aria-describedby`.
+   *
+   * The distinction this test defends: an id names something that must exist
+   * and must say the words; a boolean names nothing and can be `false`.
+   */
   it('has no prop that could switch the caption off', () => {
     const source = readFileSync(join(UI_SRC, 'components', CAPTION_OWNER), 'utf8');
     expect(source).not.toMatch(/hideCaption|showCaption|withCaption|noCaption/);
+    // The escape hatch is an id, never a flag.
+    expect(source).not.toMatch(/captionedBy\?\s*:\s*boolean/);
+    expect(source).toContain('captionedBy?: string;');
+  });
+
+  it('makes the set-level disclosure say the same thing the caption says', () => {
+    const source = readFileSync(join(UI_SRC, 'components', CAPTION_OWNER), 'utf8');
+    expect(source).toContain('export function RepresentativeImageDisclosure');
+    // Same claim, same escape route for the buyer.
+    expect(source).toContain('not of the machine you will receive');
+    expect(source).toContain('unit passport');
+  });
+
+  it('points every uncaptioned figure at the sentence that replaced it', () => {
+    const source = readFileSync(join(UI_SRC, 'components', CAPTION_OWNER), 'utf8');
+    expect(source).toContain('aria-describedby={captionedBy}');
   });
 
   /**

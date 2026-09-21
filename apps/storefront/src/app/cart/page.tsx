@@ -2,7 +2,7 @@
  * ARCHETYPE C — Record. Identity header + evidence panel + actions side panel.
  * DENSITY: comfortable (set on `<html>` in the root layout).
  *
- * The cart. One named cart is one record: the header is its identity, the lines
+ * The cart. The buyer's one cart is one record: the header is its identity, the lines
  * grouped by dispatch point are the evidence, and the panel on the right is
  * where the money and the one action live. It is not archetype B — there is no
  * filter rail, nothing to sort, and the rows are the record's contents rather
@@ -29,7 +29,7 @@
  * the hold happens and where the buyer will see it.
  *
  * **3. Availability is re-read every time the screen opens.** `GET
- * /api/buyer/carts/:id` counts through `v_sellable_unit` at the moment of the
+ * /api/buyer/cart` counts through `v_sellable_unit` at the moment of the
  * call, so "3 of the 5 units you selected are still available" is measured, not
  * remembered. A buyer must never reach checkout believing they hold units that
  * are gone — and when a line is short, the fix is one click and checkout stays
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
 export default function CartPage(): React.JSX.Element {
   return (
     <>
-      <div className="body">
+      <div className="body cartbody">
         <div className="wrap cartpage">
           <CartScreen />
         </div>

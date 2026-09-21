@@ -212,10 +212,7 @@ const CODE_PATTERN = /^[A-Z]{1,2}$/;
  */
 const CITY_PATTERN = /^[\p{L} '-]{2,28}$/u;
 
-export function assertSupplyPointOnly(offer: {
-  supplyPointCode: string;
-  city: string;
-}): void {
+export function assertSupplyPointOnly(offer: { supplyPointCode: string; city: string }): void {
   if (!CODE_PATTERN.test(offer.supplyPointCode)) {
     throw new Error(
       'supplyPointCode must be the anonymised label (one or two capital letters). ' +
@@ -239,6 +236,15 @@ function batteryRange(range: SupplyPointOffer['batteryHealthPct']): string {
 
 /** 14 days is the warning window from Phase 5 Task 4. */
 const QC_EXPIRY_WARNING_DAYS = 14;
+
+/**
+ * "Ships in 48 h" under a column headed "Dispatch" says "dispatch" twice. The
+ * full commitment stays on the cell's `title` so nothing is lost to anyone
+ * who wants the whole sentence.
+ */
+function dispatchShort(commitment: string): string {
+  return commitment.replace(/^\s*ships?\s+in\s+/i, '').trim() || commitment;
+}
 
 function QualityCell({ quality }: { quality: QualityHeadline }): React.JSX.Element {
   if (quality.kind === 'NEW_SUPPLIER') {
@@ -378,6 +384,7 @@ function OfferAction({
         </span>
       ) : (
         <Button
+          className="offer-add"
           variant={emphasis ? 'primary' : 'secondary'}
           size="sm"
           loading={cartBusy}
@@ -517,7 +524,7 @@ function PriceBreakupMenu({
       <button
         ref={triggerRef}
         type="button"
-        className="text-body-sm text-acc-ink underline underline-offset-4"
+        className="offer-breakup text-body-sm text-acc-ink underline underline-offset-4"
         aria-expanded={open}
         aria-controls={menuId}
         onClick={toggle}
@@ -531,11 +538,7 @@ function PriceBreakupMenu({
   );
 }
 
-function PriceCell({
-  offer,
-  lowestLanded,
-  itcExplainerHref,
-}: OfferRowProps): React.JSX.Element {
+function PriceCell({ offer, lowestLanded, itcExplainerHref }: OfferRowProps): React.JSX.Element {
   return (
     <span className="flex flex-col gap-2">
       <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
@@ -570,25 +573,36 @@ export function OfferRow({
 
   return (
     <tr className="border-b border-rule-2 align-top last:border-b-0">
-      <th scope="row" className="tg-cell text-left font-medium text-ink">
-        {supplyPointLabel(offer.supplyPointCode, offer.city)}
+      <th scope="row" className="tg-cell text-left">
+        <span className="flex flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2">
+            {/* Split rather than re-formatted: `supplyPointLabel` stays the one
+                place that decides what a supply point is called, so the name
+                here cannot drift from the name everywhere else. */}
+            <span className="font-semibold text-ink">
+              {supplyPointLabel(offer.supplyPointCode, offer.city).split(' · ')[0]}
+            </span>
+            {lowestLanded && <span className="offer-lowest">Lowest</span>}
+          </span>
+          <span className="text-body-sm font-normal text-ink-2">
+            {offer.city} · {offer.quality.unitsInspected} unit
+            {offer.quality.unitsInspected === 1 ? '' : 's'} inspected
+          </span>
+        </span>
       </th>
       <td className="tg-cell">
-        <PriceCell offer={offer} lowestLanded={lowestLanded} itcExplainerHref={itcExplainerHref} />
-      </td>
-      <td className="tg-cell">
-        <QualityCell quality={offer.quality} />
-      </td>
-      <td className="tg-cell">
-        <GradeBadge grade={offer.grade} />
+        {/* `lowestLanded` is the pill in the row header now, not a line here. */}
+        <PriceCell offer={offer} itcExplainerHref={itcExplainerHref} />
       </td>
       <td className="tg-cell tnum text-ink">{batteryRange(offer.batteryHealthPct)}</td>
       <td className="tg-cell tnum text-ink">{offer.totalWarrantyMonths} months</td>
       <td className="tg-cell tnum text-ink">{offer.unitsAvailable}</td>
-      <td className="tg-cell">
+      <td className="offer-qc tg-cell">
         <QcExpiry offer={offer} />
       </td>
-      <td className="tg-cell text-ink">{offer.dispatchCommitment}</td>
+      <td className="tg-cell tnum text-ink" title={offer.dispatchCommitment}>
+        {dispatchShort(offer.dispatchCommitment)}
+      </td>
       <td className="tg-cell">
         <OfferAction
           offer={offer}
@@ -645,9 +659,7 @@ export function OfferCard({
         <div className="shrink-0 text-right">
           <span className="flex flex-col items-end gap-2">
             <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
-            {lowestLanded ? (
-              <span className="text-body-sm text-ink-2">Lowest landed</span>
-            ) : null}
+            {lowestLanded ? <span className="text-body-sm text-ink-2">Lowest landed</span> : null}
             <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
           </span>
         </div>
@@ -677,11 +689,17 @@ export function OfferCard({
   );
 }
 
+/*
+ * Quality and Grade are not columns any more.
+ *
+ * Grade went because the board only ever shows ONE grade — the page picks it
+ * above the table, so a column repeating "A+" down every row carried no
+ * information. Quality's sample size moved into the supply point cell, which
+ * is where the reader was already looking to decide who they are buying from.
+ */
 const OFFER_COLUMNS = [
   'Supply point',
   'Landed price',
-  'Quality, this model',
-  'Grade',
   'Battery health',
   'Total warranty',
   'Units available',
@@ -750,7 +768,9 @@ export function OfferGrid({
     onAdd: onAdd ? (quantity: number) => onAdd(offer, quantity) : undefined,
     cartQty: cartQtyFor?.(offer) ?? null,
     cartBusy: cartBusyFor?.(offer) ?? false,
-    onCartQtyChange: onCartQtyChange ? (quantity: number) => onCartQtyChange(offer, quantity) : undefined,
+    onCartQtyChange: onCartQtyChange
+      ? (quantity: number) => onCartQtyChange(offer, quantity)
+      : undefined,
     itcExplainerHref,
   });
 
@@ -800,10 +820,7 @@ export function OfferGrid({
 
       {showCards ? (
         <ul
-          className={cn(
-            'obrd-cards flex flex-col gap-4',
-            layout === 'responsive' && 'md:hidden',
-          )}
+          className={cn('obrd-cards flex flex-col gap-4', layout === 'responsive' && 'md:hidden')}
         >
           {offers.map((offer) => (
             <li key={`${offer.supplyPointCode}-${offer.city}-${offer.grade}`}>

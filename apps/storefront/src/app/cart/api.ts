@@ -1,6 +1,10 @@
 /**
- * The browser half of the cart — `/api/buyer/carts`, through the same-origin
+ * The browser half of the cart — `/api/buyer/cart`, through the same-origin
  * rewrite so the `httpOnly` refresh cookie stays first-party.
+ *
+ * One cart per buyer. The session identifies it, so no call here carries a cart
+ * id: the first read makes the cart, and after an order converts it the next
+ * read makes the next one.
  *
  * These are authenticated buyer routes, so every call can come back 401. That
  * is not an error state on this screen: it is a signed-out visitor, and the
@@ -16,16 +20,6 @@
  * exists to render here. Nothing in this file widens them.
  */
 import { call, type ApiResult } from '../register/api';
-
-
-/** One of the buyer's open carts, as the list endpoint returns it. */
-export interface CartSummary {
-  id: string;
-  name: string;
-  lineCount: number;
-  /** ISO 8601. `CartSummary.updatedAt` is a `Date` before serialisation. */
-  updatedAt: string;
-}
 
 export interface CartLine {
   itemId: string;
@@ -60,7 +54,6 @@ export interface DispatchGroup {
 
 export interface CartView {
   id: string;
-  name: string;
   dispatchGroups: DispatchGroup[];
   itemCount: number;
   /**
@@ -79,35 +72,17 @@ const json = (method: string, body?: unknown): RequestInit => ({
   body: body === undefined ? undefined : JSON.stringify(body),
 });
 
-export const listCarts = (): Promise<ApiResult<CartSummary[]>> =>
-  call<CartSummary[]>('/api/buyer/carts', json('GET'));
-
-export const createCart = (name: string): Promise<ApiResult<CartSummary>> =>
-  call<CartSummary>('/api/buyer/carts', json('POST', { name }));
-
 /** The re-check. There is no second "revalidate" route: reading the cart is it. */
-export const viewCart = (cartId: string): Promise<ApiResult<CartView>> =>
-  call<CartView>(`/api/buyer/carts/${cartId}`, json('GET'));
+export const getCart = (): Promise<ApiResult<CartView>> =>
+  call<CartView>('/api/buyer/cart', json('GET'));
 
 /**
  * Add or re-quantify one offer. The quantity **replaces**, so sending the same
  * request twice is not the same as ordering twice — which is what makes the
  * `?listing=&qty=` hand-off from the comparison board safe to replay on reload.
  */
-export const setCartLine = (
-  cartId: string,
-  listingId: string,
-  qty: number,
-): Promise<ApiResult<CartView>> =>
-  call<CartView>(`/api/buyer/carts/${cartId}/items`, json('POST', { listingId, qty }));
+export const setCartLine = (listingId: string, qty: number): Promise<ApiResult<CartView>> =>
+  call<CartView>('/api/buyer/cart/items', json('POST', { listingId, qty }));
 
-export const removeCartLine = (cartId: string, itemId: string): Promise<ApiResult<CartView>> =>
-  call<CartView>(`/api/buyer/carts/${cartId}/items/${itemId}`, json('DELETE'));
-
-/**
- * `cartNameSchema` is `z.string().trim().min(1).max(60)` and lives in the API's
- * own DTO file, which the storefront cannot import — so the limit is restated
- * here and the mismatch is reported rather than hidden. It belongs in
- * `@trugrade/contracts` beside every other shared constant.
- */
-export const CART_NAME_MAX = 60;
+export const removeCartLine = (itemId: string): Promise<ApiResult<CartView>> =>
+  call<CartView>(`/api/buyer/cart/items/${itemId}`, json('DELETE'));

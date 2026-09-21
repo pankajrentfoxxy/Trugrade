@@ -119,12 +119,11 @@ export function HeroBanner({
 
   return (
     <section className="phero">
-      <div className="phero-glow phero-glow-a" aria-hidden="true" />
-      <div className="phero-glow phero-glow-b" aria-hidden="true" />
-      <span className="phero-speck" aria-hidden="true" />
-      <span className="phero-speck" aria-hidden="true" />
-      <span className="phero-speck" aria-hidden="true" />
-      <span className="phero-speck" aria-hidden="true" />
+      {/*
+        The two blurred glow washes and the drifting specks are gone with the
+        black panel. Both were there to stop a large dark field reading as
+        flat; on a light one they are amber smudges over white.
+      */}
 
       <div className="phero-top">
         <div className={deals.length > 0 ? 'phero-copy has-deals' : 'phero-copy'}>

@@ -38,10 +38,16 @@ import { SkuImportService } from '../../src/modules/catalog/internal/sku-import.
 import { SkuRepository } from '../../src/modules/catalog/internal/sku.repository';
 import { SkuRequestService } from '../../src/modules/catalog/internal/sku-request.service';
 import { ListingService } from '../../src/modules/listing';
+import { MarginRuleRepository } from '../../src/modules/listing/internal/margin-rule.repository';
+import { PricingService } from '../../src/modules/listing/internal/pricing.service';
 import { ListingRepository } from '../../src/modules/listing/internal/listing.repository';
 import { SerialService } from '../../src/modules/listing/internal/serial.service';
 import { PlatformService } from '../../src/modules/platform';
+import { ReturnsService } from '../../src/modules/platform/internal/returns.service';
+import { WarrantyService } from '../../src/modules/platform/internal/warranty.service';
 import { CartService } from '../../src/modules/ordering/internal/cart.service';
+import { HoldService } from '../../src/modules/ordering/internal/hold.service';
+import { RedisService, LockService } from '../../src/shared/redis/redis.service';
 import { CatalogLookup } from '../../src/modules/ordering/internal/catalog-lookup';
 import { RfqIntakeService } from '../../src/modules/ordering/internal/rfq-intake.service';
 import {
@@ -109,15 +115,26 @@ beforeAll(async () => {
         },
         inject: [AppConfig],
       },
-      // Ordering's own three.
+      // Ordering's own, plus the hold the cart asks about before it lets a
+      // line change (one cart per buyer means a held cart is read-only).
       CartService,
+      HoldService,
+      RedisService,
+      LockService,
       CatalogLookup,
       RfqIntakeService,
       // The two barrels ordering legitimately depends on...
       ListingService,
       ListingRepository,
       SerialService,
+      // `ListingService` prices through `PricingService` since the supplier hub.
+      PricingService,
+      MarginRuleRepository,
       PlatformService,
+      // `PlatformService` reaches warranty and returns for order screens; the cart
+      // never calls either, so they are stubbed rather than wired end to end.
+      { provide: WarrantyService, useValue: {} },
+      { provide: ReturnsService, useValue: {} },
       // ...and catalog, which `CatalogLookup` resolves out of the container
       // rather than through a module import, because catalog imports ordering.
       CatalogService,
@@ -268,7 +285,7 @@ describe('cart', () => {
     const noida = await makeSupply({ city: 'Noida', qty: 2, unitPrice: 39500 });
 
     const view = await asBuyer(async () => {
-      const cart = await carts.create('Q3 laptop refresh');
+      const cart = await carts.current();
       await carts.addLine(cart.id, gurugram.listingId, 3);
       return carts.addLine(cart.id, noida.listingId, 5);
     });
@@ -303,7 +320,7 @@ describe('cart', () => {
     const supply = await makeSupply({ city: 'Gurugram', qty: 1 });
 
     const before = await asBuyer(async () => {
-      const cart = await carts.create('Overnight');
+      const cart = await carts.current();
       return carts.addLine(cart.id, supply.listingId, 1);
     });
     expect(before.dispatchGroups[0]!.lines[0]!.qtyAvailable).toBe(1);
@@ -335,33 +352,38 @@ describe('cart', () => {
     expect(after.goodsTotal).toBe('0.00');
   });
 
-  it('keeps parallel named carts apart and refuses a duplicate name', async () => {
+  it('keeps one cart per buyer, and the database holds the rule too', async () => {
     const supply = await makeSupply({ city: 'Gurugram', qty: 2 });
 
-    const { finance, ops } = await asBuyer(async () => {
-      const finance = await carts.create('Finance dept');
-      const ops = await carts.create('Ops dept');
-      await carts.addLine(finance.id, supply.listingId, 1);
-      return { finance, ops };
+    const { first, second } = await asBuyer(async () => {
+      const first = await carts.current();
+      await carts.addLine(first.id, supply.listingId, 1);
+      // A second read is the same cart, lines and all — not a fresh one.
+      const second = await carts.current();
+      return { first, second };
     });
+    expect(second.id).toBe(first.id);
 
-    const open = await asBuyer(() => carts.listOpen());
-    expect(open.map((c) => c.name).sort()).toEqual(['Finance dept', 'Ops dept']);
-    expect(open.find((c) => c.id === finance.id)!.lineCount).toBe(1);
-    expect(open.find((c) => c.id === ops.id)!.lineCount).toBe(0);
+    const view = await asBuyer(() => carts.currentView());
+    expect(view.id).toBe(first.id);
+    expect(view.itemCount).toBe(1);
 
-    // `uq_cart_active_name` indexes lower(btrim(name)), so the collision is on
-    // the name a person would read, not on the bytes they typed.
-    await expect(asBuyer(() => carts.create('  finance dept  '))).rejects.toThrow(
-      /already have an open cart/i,
-    );
+    // `uq_cart_one_open_per_buyer`: a second OPEN cart for the same person is
+    // refused by the index, whatever code tries to write it.
+    await expect(
+      raw.$executeRaw`
+        INSERT INTO ordering.cart (buyer_org_id, user_id, status)
+        VALUES (${buyerOrgId}::uuid, ${buyerUserId}::uuid, 'OPEN')`,
+      // Prisma reports the unique violation by its SQLSTATE and key, not by the
+      // index name, so that is what is matched.
+    ).rejects.toThrow(/23505|already exists/);
   });
 
   it('replaces the quantity on a second add rather than accumulating', async () => {
     const supply = await makeSupply({ city: 'Gurugram', qty: 5 });
 
     const view = await asBuyer(async () => {
-      const cart = await carts.create('Repeat');
+        const cart = await carts.current();
       await carts.addLine(cart.id, supply.listingId, 2);
       return carts.addLine(cart.id, supply.listingId, 4);
     });
@@ -377,14 +399,14 @@ describe('cart', () => {
 
     await expect(
       asBuyer(async () => {
-        const cart = await carts.create('Paused');
+        const cart = await carts.current();
         return carts.addLine(cart.id, supply.listingId, 1);
       }),
     ).rejects.toThrow();
   });
 
   it('does not let one buyer read another buyer organisation cart', async () => {
-    const mine = await asBuyer(() => carts.create('Mine'));
+    const mine = await asBuyer(() => carts.current());
 
     const otherOrgId = await makeOrganization({ org_type: 'BUYER', legal_name: 'Rival Ltd' }, raw);
     const otherUserId = await makeUser(otherOrgId, {}, raw);

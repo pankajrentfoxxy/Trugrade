@@ -648,31 +648,121 @@ tr.best td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .tnote{padding:11px 16px;background:var(--sheet-2);border-top:1px solid var(--rule-2);font-size:12.5px;color:var(--ink-2)}
 .tnote b{color:var(--ink)}
 /* ---- STRIP + PROCESS + SELL ---- */
-.strip{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:28px}
-.sbx{background:var(--sheet);border:1px solid var(--rule);border-radius:7px;padding:18px;display:flex;gap:16px;align-items:center}
-.sbx > :not(.qr){flex:1;min-width:0}
-.sbx h3,.sbx h4{font-size:15px;margin-bottom:5px}
-.sbx p{margin:0 0 11px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
-.qform{display:flex;gap:6px;flex-wrap:wrap}
-.qform input{background:var(--sheet-2);border:1px solid var(--rule);border-radius:4px;padding:8px 10px;
-  font-size:12.5px;color:var(--ink);outline:none;flex:1;min-width:90px}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));
+  gap:22px;margin-top:28px;align-items:start}
+/* The buyer tools, as panels: a soft icon tile beside the heading, then the
+   field and its button on one rounded row. The panel lifts on focus rather
+   than on hover — it is a form, and the moment that matters is the one where
+   somebody is typing into it. */
+.sbx{background:var(--sheet);border:1px solid var(--rule);border-radius:20px;padding:24px;
+  display:flex;flex-direction:column;
+  transition:border-color .3s ease,box-shadow .3s ease}
+.sbx:focus-within{border-color:var(--promo-accent-mid);box-shadow:0 14px 36px rgb(0 0 0 / .1)}
+.sbx-head{display:flex;gap:16px;align-items:flex-start}
+.sbx-ic{flex:0 0 auto;width:52px;height:52px;border-radius:14px;
+  background:var(--sheet-2);border:1px solid var(--rule-2);
+  display:flex;align-items:center;justify-content:center}
+.sbx-ic svg{width:24px;height:24px;stroke:var(--promo-accent);fill:none}
+.sbx-ic .qr{width:26px;height:26px}
+.sbx h3,.sbx h4{font-size:17px;font-weight:700;margin:0 0 5px}
+.sbx p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.5}
+.qform{display:flex;gap:10px;margin-top:18px}
+.qform input{background:var(--sheet-2);border:1px solid var(--rule);border-radius:12px;padding:13px 15px;
+  font-size:14px;color:var(--ink);outline:none;flex:1;min-width:0;
+  transition:border-color .2s ease,box-shadow .2s ease}
 .qform input::placeholder{color:var(--ink-4)}
-.qform button{background:var(--acc);color:var(--acc-on);font-weight:700;font-size:12.5px;padding:8px 14px;border-radius:4px}
-.proc{margin-top:28px;background:var(--sheet);border:1px solid var(--rule);border-radius:7px;
-  display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
-.pstep{padding:20px 18px 22px;overflow:visible}
-.pstep-mark{display:flex;align-items:center;margin-bottom:10px;position:relative}
-.pstep .n{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--acc-ink);background:var(--acc-wash);
-  display:inline-block;padding:2px 7px;border-radius:3px;font-weight:700;letter-spacing:.08em;flex-shrink:0;z-index:1}
-/* The rail that joins one step number to the next. Light uses --rule so it
-   stays a divider; dark uses --acc so the line is visible on --sheet. */
-.pstep:not(:last-child) .pstep-mark::after{content:"";flex:1;height:1px;margin-left:10px;margin-right:-18px;
-  background:var(--rule)}
-:root[data-t='dark'] .pstep:not(:last-child) .pstep-mark::after,
-:root[data-t='slate'] .pstep:not(:last-child) .pstep-mark::after,
-:root[data-t='olive'] .pstep:not(:last-child) .pstep-mark::after{background:var(--acc)}
-.pstep h3,.pstep h4{font-size:14px;margin:0 0 5px;color:var(--ink)}
-.pstep p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.qform input:focus{border-color:var(--promo-accent);box-shadow:0 0 0 3px var(--promo-accent-soft)}
+.qform button{flex:0 0 auto;background:var(--promo-accent);color:var(--promo-accent-ink);
+  font-weight:800;font-size:13px;letter-spacing:.05em;text-transform:uppercase;
+  padding:0 22px;border-radius:12px;
+  transition:transform .2s ease,box-shadow .2s ease}
+.qform button:hover{transform:translateY(-1px);box-shadow:0 8px 20px var(--promo-accent-mid)}
+@media(max-width:520px){
+  .qform{flex-direction:column}
+  .qform button{padding:13px 0}
+}
+/* ---- PROCESS STRIP ----
+   Four steps, and the sequence walks them: each number lights in turn and the
+   rail to the next one draws across. The amber is rule 1's third meaning — an
+   ACTIVE state — and it is the only colour on the strip.
+
+   `--warn` for the resting number: on the light theme it is the deep amber
+   (#9a620a) chosen to pass contrast as text, which is exactly this job. Raw
+   `--promo-accent` as a text colour on a pale ground would not. */
+.proc{margin-top:28px;list-style:none;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:20px;padding:clamp(22px,3vw,34px) clamp(20px,3vw,38px);
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(20px,3vw,44px)}
+.pstep{overflow:visible;animation:stepPulse 8s ease-in-out infinite}
+.pstep:nth-child(1),.pstep:nth-child(1) .n{animation-delay:0s}
+.pstep:nth-child(2),.pstep:nth-child(2) .n{animation-delay:2s}
+.pstep:nth-child(3),.pstep:nth-child(3) .n{animation-delay:4s}
+.pstep:nth-child(4),.pstep:nth-child(4) .n{animation-delay:6s}
+.pstep-mark{display:flex;align-items:center;gap:14px;margin-bottom:0;position:relative}
+.pstep .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;
+  min-width:38px;height:27px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:7px;background:var(--promo-accent-soft);color:var(--warn);
+  font-weight:700;letter-spacing:.06em;flex-shrink:0;z-index:1;
+  animation:numPulse 8s ease-in-out infinite}
+.pline{flex:1;height:2px;border-radius:999px;background:var(--rule);position:relative;overflow:hidden}
+.pline i{position:absolute;inset:0;border-radius:999px;background:var(--promo-accent);
+  transform:scaleX(0);transform-origin:left center;animation:lineDraw 8s ease-in-out infinite}
+.pstep:nth-child(1) .pline i{animation-delay:.5s}
+.pstep:nth-child(2) .pline i{animation-delay:2.5s}
+.pstep:nth-child(3) .pline i{animation-delay:4.5s}
+.pstep:last-child .pline{display:none}
+.pstep h3,.pstep h4{margin:16px 0 0;font-size:17px;font-weight:700;color:inherit;
+  transition:color .3s ease}
+.pstep p{margin-top:8px;font-size:14px;color:var(--ink-2);line-height:1.6;max-width:34ch}
+
+/* The wave passes left to right; a step that has been reached stays softly on
+   rather than snapping back to grey. */
+@keyframes stepPulse{
+  0%{color:var(--ink-3)}
+  4%,20%{color:var(--ink)}
+  32%,88%{color:var(--ink-2)}
+  100%{color:var(--ink-3)}
+}
+@keyframes numPulse{
+  0%{background:var(--promo-accent-soft);color:var(--warn);box-shadow:none;transform:scale(1)}
+  4%{background:var(--promo-accent);color:var(--promo-accent-ink);
+    box-shadow:0 5px 16px var(--promo-accent-mid);transform:scale(1.08)}
+  20%{background:var(--promo-accent);color:var(--promo-accent-ink);
+    box-shadow:0 5px 16px var(--promo-accent-mid);transform:scale(1)}
+  32%,88%,100%{background:var(--promo-accent-soft);color:var(--warn);box-shadow:none}
+}
+@keyframes lineDraw{
+  0%{transform:scaleX(0);opacity:1}
+  17%{transform:scaleX(1);opacity:1}
+  88%{transform:scaleX(1);opacity:.4}
+  97%,100%{transform:scaleX(1);opacity:0}
+}
+/* Hovering holds the sequence still and spotlights the step under the cursor,
+   so a reader can stop the loop to finish a sentence. */
+.proc:hover .pstep,.proc:hover .n,.proc:hover .pline i{animation-play-state:paused}
+.pstep:hover{color:var(--ink)}
+.pstep:hover .n{background:var(--promo-accent);color:var(--promo-accent-ink);
+  box-shadow:0 5px 16px var(--promo-accent-mid)}
+
+@media(max-width:1080px){
+  .proc{grid-template-columns:1fr 1fr;row-gap:30px}
+  .pline{display:none}
+  .pstep p{max-width:none}
+}
+@media(max-width:600px){
+  .proc{grid-template-columns:1fr;row-gap:8px}
+  .pstep{display:grid;grid-template-columns:38px 1fr;column-gap:16px;padding:14px 0}
+  .pstep:not(:last-child){border-bottom:1px dashed var(--rule-2)}
+  .pstep-mark{grid-row:1 / span 2;align-items:flex-start}
+  .pstep h3{margin-top:2px}
+}
+/* Everything lit and still: a sequence that draws itself is the kind of motion
+   this setting exists to stop. */
+@media(prefers-reduced-motion:reduce){
+  .pstep,.pstep .n,.pline i{animation:none}
+  .pstep{color:var(--ink)}
+  .pstep .n{background:var(--promo-accent);color:var(--promo-accent-ink)}
+  .pline i{transform:none;opacity:1}
+}
 .sell{margin-top:28px;background:var(--chrome);border-radius:7px;padding:38px;overflow:hidden;
   display:grid;grid-template-columns:1fr 1fr;gap:38px;align-items:center;color:var(--on-chrome)}
 .sell h2{font-size:25px;color:var(--on-chrome);max-width:15ch;line-height:1.18}
@@ -767,30 +857,152 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
 .fhead .clr:disabled { opacity: .4; cursor: default; }
 .ftag { cursor: pointer; }
 
-/* Sign in and registration. Two columns on desktop: the form, and a dark panel
-   that says what the product is, because a bare auth page gives someone who
-   arrived from a link no idea what they are signing into. */
-.authwrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; }
-.authcard { padding: var(--s8) var(--s7); max-width: 460px; margin-inline: auto; width: 100%; align-self: center; }
-/* The wordmark on a WORKING surface, not on the dark chrome.
-   `.brand` is `--on-chrome` and `.wm .g` is raw `--acc`, both of which are right
-   in the header and wrong here: in light theme "tru" rendered near-white on the
-   paper ground and was simply invisible, and 09_FRONTEND_LOCKED §2 says never to
-   use raw --acc as a text colour on a light surface. */
-.authcard .brand { color: var(--ink); }
-.authcard .wm .g { color: var(--acc-ink); }
-.authwrap.solo { grid-template-columns: 1fr; }
-.authwrap.solo .authcard { max-width: 760px; }
-.authcard h1 { margin: var(--s5) 0 var(--s2); font-size: 26px; }
-.authlede { color: var(--ink-2); margin: 0 0 var(--s6); max-width: 46ch; }
-.authside { background: var(--chrome); color: var(--on-chrome); padding: var(--s8) var(--s7); display: flex; flex-direction: column; justify-content: center; }
-.authside h2 { color: var(--on-chrome); max-width: 18ch; font-size: 30px; }
-.authside p { color: var(--on-chrome-2); max-width: 44ch; margin-top: var(--s4); }
-/* The form itself is `packages/ui` components — Input, Button, OtpInput. What
-   was here was a second, smaller set of field styles that only these two pages
-   used, which is how one product ends up with two input designs. */
-@media (max-width: 900px) { .authwrap { grid-template-columns: 1fr; } .authside { display: none; } }
-@media (max-width: 700px) { .authcard { padding: var(--s7) var(--s5); } }
+/* ==========================================================================
+ * Sign in and registration — ARCHETYPE F.
+ *
+ * The supplied sign-in design, kept exactly: Archivo, a white 22px card on a
+ * cream ground, a near-black brand panel with an amber pill, 12px fields on
+ * the cream second surface, an uppercase amber button, a dashed foot. Like
+ * the cart and checkout it is one surface's own language, constant in both
+ * themes, and it is drawn from the `--cream-*` / `--promo-*` tokens those
+ * screens already use — no literal colour is introduced here.
+ *
+ * The form is still `packages/ui` — Input, Button, OtpInput, Tabs. `.auth-ui`
+ * dresses those components in the design's shapes; it never rebuilds them.
+ * Numbers stay IBM Plex Mono with tabular figures; Archivo is for words.
+ * ========================================================================== */
+.authwrap{min-height:100vh;display:grid;place-items:center;padding:var(--s7) var(--s5);background:var(--cream-surface-2)}
+.auth-ui{
+  --au-bg:var(--cream-surface);--au-2:var(--cream-surface-2);
+  --au-line:var(--cream-line);--au-line-soft:var(--cream-line-soft);--au-hover:var(--cream-line-hover);
+  --au-text:var(--cream-text);--au-muted:var(--cream-muted);
+  --au-acc:var(--cream-accent);--au-acc-ink:var(--cream-accent-ink);--au-acc-soft:var(--cream-accent-soft);
+  --au-acc-deep:var(--cream-accent-deep);--au-glow:var(--cream-accent-glow);
+  --au-ink:var(--promo-surface);--au-ink-deep:var(--promo-bg);--au-ink-text:var(--promo-text);
+  --au-ink-muted:var(--promo-muted);--au-ink-line:var(--promo-line);
+  font-family:"Archivo","Segoe UI",system-ui,-apple-system,sans-serif;color:var(--au-text);
+  -webkit-font-smoothing:antialiased}
+.auth-ui button,.auth-ui input{font-family:inherit}
+.authcard{width:min(880px,100%);display:grid;grid-template-columns:340px minmax(0,1fr);
+  background:var(--au-bg);border-radius:22px;overflow:hidden;box-shadow:0 40px 100px var(--cream-shadow)}
+.authwrap.solo .authcard{grid-template-columns:1fr;width:min(760px,100%)}
+.authmain{position:relative;padding:30px 34px 26px;min-width:0;display:flex;flex-direction:column}
+.authtop{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);margin-bottom:16px}
+.authmain .brand{color:var(--au-text)}
+.authmain .wm{font-family:inherit;font-weight:800;font-size:1.05rem;letter-spacing:0}
+.authmain .wm .g{color:var(--au-acc-deep)}
+.authback{font-size:.78rem;font-weight:600;color:var(--au-muted);white-space:nowrap;border-radius:9px;padding:6px 8px;
+  transition:background-color .2s ease,color .2s ease}
+.authback:hover{background:var(--au-hover);color:var(--au-text)}
+.authmain h1{margin:0 0 4px;font-size:1.25rem;font-weight:800;letter-spacing:-.01em;color:var(--au-text)}
+.authlede{color:var(--au-muted);margin:0 0 8px;font-size:.84rem;line-height:1.5;max-width:50ch}
+
+/* ---- the brand panel ------------------------------------------------------
+   Near-black ink with a faint dot grid fading out from the top, the pill, the
+   headline with its amber second line, three bullets, and the render floating
+   off the bottom edge. */
+.authpanel{position:relative;overflow:hidden;background:var(--au-ink);color:var(--au-ink-text);
+  padding:28px 26px 0;display:flex;flex-direction:column;min-width:0;isolation:isolate}
+.authpanel::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background-image:radial-gradient(var(--au-ink-line) 1px,transparent 1px);background-size:26px 26px;
+  -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 20%,var(--au-ink) 20%,transparent 80%);
+  mask-image:radial-gradient(ellipse 90% 70% at 50% 20%,var(--au-ink) 20%,transparent 80%)}
+.authpanel-save{align-self:flex-start;font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--au-acc);color:var(--au-acc-ink);border-radius:999px;padding:6px 12px}
+.authpanel-title{margin:14px 0 0;font-size:1.55rem;font-weight:800;line-height:1.1;text-transform:uppercase;
+  letter-spacing:-.01em;color:var(--au-ink-text)}
+.authpanel-title span{color:var(--au-acc)}
+.authpanel-list{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:11px}
+.authpanel-list li{display:flex;gap:10px;font-size:.8rem;line-height:1.45;color:var(--au-ink-muted)}
+.authpanel-list li b{display:block;color:var(--au-ink-text);font-size:.82rem;font-weight:700}
+.authpanel-list svg{flex:none;width:17px;height:17px;margin-top:1px;color:var(--au-acc)}
+.authpanel-art{margin:auto -10px -26px;padding-top:18px}
+.authpanel-art img{display:block;width:100%;height:auto;
+  filter:drop-shadow(0 14px 18px var(--au-ink-deep));animation:authfloat 6s ease-in-out infinite}
+@keyframes authfloat{0%,100%{translate:0 0}50%{translate:0 -7px}}
+
+/* ---- tabs ---- */
+.auth-ui [role="tablist"]{gap:4px;border-bottom:1px solid var(--au-line)}
+.auth-ui [role="tab"]{min-height:0;padding:10px 16px 12px;font-size:.9rem;font-weight:700;color:var(--au-muted);
+  background:none;border-radius:0;border-bottom:2.5px solid transparent;margin-bottom:-1px;
+  transition:color .2s ease,border-color .2s ease}
+.auth-ui [role="tab"]:hover{color:var(--au-text);background:none}
+.auth-ui [role="tab"][aria-selected="true"]{color:var(--au-text);border-bottom:2.5px solid var(--au-acc)}
+.auth-ui [role="tabpanel"]{padding-top:22px}
+
+/* ---- fields ---- */
+.auth-ui label{font-size:.82rem;font-weight:700;color:var(--au-text)}
+.auth-ui label > span{color:var(--au-acc-deep)}
+/* White inside, the cream line as the outline — the fill stays the card's own
+   surface so a field never reads as a filled-in state before anything is typed. */
+.auth-ui input:not([type="checkbox"]):not([type="radio"]){height:auto;background:var(--au-bg);border:1px solid var(--au-line);
+  border-radius:12px;color:var(--au-text);padding:13px 15px;font-size:.92rem;
+  transition:border-color .2s ease,box-shadow .2s ease}
+.auth-ui input::placeholder{color:var(--au-muted);opacity:.7}
+.auth-ui input:focus{border-color:var(--au-acc);box-shadow:0 0 0 3px var(--au-acc-soft)}
+.auth-ui input:focus-visible{outline-color:var(--au-acc)}
+.auth-ui input[aria-invalid="true"]{border-color:var(--au-acc-deep)}
+.auth-ui input.pr-12{padding-right:44px}
+.auth-ui .text-fail{color:var(--au-acc-deep)}
+.auth-ui p.text-fail{font-size:.76rem;font-weight:600}
+.auth-ui .text-ink{color:var(--au-text)}
+.auth-ui .text-ink-2,.auth-ui .text-ink-3{color:var(--au-muted)}
+.auth-ui .text-body-sm{font-size:.8rem}
+.auth-ui .text-body{font-size:.86rem}
+.auth-ui .font-mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+/* The password tab's refusal, in the design's field shape. */
+.auth-ui p[role="alert"].border-fail{border:1px solid var(--au-acc-deep);background:var(--au-2);border-radius:12px;color:var(--au-text)}
+
+/* ---- buttons ---- */
+.auth-ui button.bg-acc,.auth-ui .authgo{display:inline-flex;align-items:center;justify-content:center;gap:12px;
+  height:auto;padding:13px 26px;border-radius:12px;background:var(--au-acc);color:var(--au-acc-ink);
+  font-weight:800;font-size:.85rem;letter-spacing:.05em;text-transform:uppercase;
+  transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease}
+.auth-ui button.bg-acc:hover,.auth-ui .authgo:hover{background:var(--au-acc);transform:translateY(-1px);box-shadow:0 8px 22px var(--au-glow)}
+.auth-ui button.bg-acc[aria-disabled="true"],.auth-ui button.bg-acc:disabled{opacity:.55;transform:none;box-shadow:none}
+.auth-ui button.bg-sheet-2{height:auto;padding:12px 20px;border-radius:12px;background:var(--au-2);
+  border:1px solid var(--au-line);color:var(--au-text);font-weight:700;font-size:.85rem}
+/* Resend / Change: the design's inline text buttons. */
+.auth-ui button.bg-transparent{height:auto;padding:0;background:none;font-size:.78rem;font-weight:700;
+  color:var(--au-acc-deep);text-decoration:underline;text-underline-offset:3px}
+.auth-ui button.bg-transparent:hover{background:none;color:var(--au-text)}
+.auth-ui button.bg-transparent:disabled,.auth-ui button.bg-transparent[aria-disabled="true"]{
+  opacity:1;color:var(--au-muted);text-decoration:none;font-weight:600;cursor:default}
+.auth-ui .hub-link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--au-acc-deep);
+  cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* ---- the six code boxes ---- */
+.auth-ui [data-testid="otp-input"]{gap:9px}
+.auth-ui [data-testid="otp-input"] input[type="text"]{width:46px;height:52px;padding:0;text-align:center;
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.15rem;font-weight:700;
+  background:var(--au-bg);border:1px solid var(--au-line);border-radius:11px}
+.auth-ui .authsent b{color:var(--au-text);font-weight:700}
+
+/* ---- the lines under the form ---- */
+/* The primary action, centred, with the one link that belongs to it beneath. */
+.auth-ui .authcta{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:4px}
+.auth-ui .authcta .hub-link{font-size:.8rem}
+.auth-ui .authfoot{margin-top:22px;padding-top:16px;border-top:1px dashed var(--au-line);
+  font-size:.8rem;color:var(--au-muted);display:grid;gap:6px}
+.auth-ui .authfoot a,.auth-ui .authfoot .hub-link{color:var(--au-acc-deep);font-weight:700;text-decoration:underline}
+
+/* ---- signed in ---- */
+.authdone{display:flex;flex-direction:column;align-items:flex-start;padding-top:26px}
+.authdone-badge{width:52px;height:52px;border-radius:14px;background:var(--au-acc);color:var(--au-acc-ink);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 10px 26px var(--au-glow)}
+.authdone-badge svg{width:25px;height:25px}
+.authdone h2{font-size:1.25rem;font-weight:800;margin:14px 0 0;color:var(--au-text)}
+.authdone p{font-size:.86rem;color:var(--au-muted);margin:6px 0 0}
+.authdone .authgo{margin-top:18px}
+
+@media (max-width:760px){
+  .authwrap{padding:var(--s4);align-items:start}
+  .authcard{grid-template-columns:1fr}
+  .authpanel{padding-bottom:0}
+  .authpanel-art{max-width:250px;margin:14px auto -20px}
+  .authmain{padding:24px 22px 22px}
+}
+@media (prefers-reduced-motion:reduce){.authpanel-art img{animation:none}}
 
 /* ==========================================================================
  * T11 — /search. Additions the reference mock never needed.
@@ -1326,129 +1538,175 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 
 /* ==========================================================================
  * T15 — the cart, `/cart`. Archetype C.
- * The record chrome (.rec/.evid/.sidep/.facts/.tbl) is T12's and is reused
- * unchanged; only what a cart has and a product page does not is below.
+ * The supplied cart design (`cart-page.html`): white ground, one yellow, flat
+ * cards, Archivo. Its palette is the `--cream-*` block in globals.css, scoped
+ * to `.cartbody` so nothing else on the storefront picks it up. The site header
+ * and footer above and below it keep their own chrome.
  * ========================================================================== */
-.cartpage>[data-testid="record-header"]{margin-top:20px}
-/* Lines on the left; order summary sticky on the right. */
-.cartlayout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start;margin-top:16px}
-.cartlayout-lead{grid-column:1;min-width:0;display:flex;flex-direction:column;gap:20px}
-.cartlayout-lead .carttop{margin-top:0}
-.cartlayout-side{grid-column:2;grid-row:1;position:sticky;top:14px}
-.cartlayout-lines{min-width:0;display:flex;flex-direction:column;gap:28px}
-@media(max-width:1000px){
-  .cartlayout{grid-template-columns:1fr}
-  .cartlayout-side{grid-column:1;grid-row:1;position:static;order:-1}
-  .cartlayout-lead{order:1}
-}
-/* The named carts. `.gsel` is the grade selector's row; a cart chip carries a
-   line count in the same slot the grade chips carry a unit count. */
-.carttop{display:flex;justify-content:flex-start;margin-top:16px}
-.cartsw{margin-top:0;justify-content:flex-start;flex-wrap:wrap}
-.cartwarn{margin:0 0 12px}
-.cartsw .chipf{display:inline-flex;flex-direction:row;align-items:baseline;gap:6px;padding:8px 12px;
-  line-height:1.3;white-space:nowrap;text-align:left;cursor:pointer}
-.cartsw .chipf .c{font-size:11px;color:var(--ink-4);font-variant-numeric:tabular-nums}
-.cartsw .chipf.on .c{color:var(--acc-on)}
-.cartsw .chipf:disabled{cursor:default;opacity:.6}
-.cartsw .cartnew{font-weight:600;color:var(--ink)}
-.cartsw .cartnew:hover{border-color:var(--acc)}
-.cartname{display:flex;gap:6px;align-items:center}
-.cartname input{height:38px;min-width:200px;background:var(--sheet-2);border:1px solid var(--rule);
-  border-radius:5px;padding:0 10px;font-size:13px;color:var(--ink)}
-.cartname input::placeholder{color:var(--ink-4)}
-.cartname input:focus{border-color:var(--acc);outline:none}
+.cartbody{background:var(--cream-surface);color:var(--cream-text);
+  font-family:"Archivo","Inter",system-ui,sans-serif;padding:24px 0 90px}
+.cartbody .wrap{max-width:1320px}
+.cartbody b{color:inherit}
+.cartbody button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+.cartbody button:disabled{cursor:not-allowed}
+
+/* The design's text field and its small yellow button, reused wherever the
+   page needs a field or a secondary action. */
+.cartbody .field{flex:1;min-width:0;background:var(--cream-surface-2);border:1px solid var(--cream-line);
+  border-radius:10px;color:var(--cream-text);padding:9px 12px;font-size:.84rem;outline:none;
+  transition:border-color .2s ease,box-shadow .2s ease}
+.cartbody .field::placeholder{color:var(--cream-muted)}
+.cartbody .field:focus{border-color:var(--cream-accent);box-shadow:0 0 0 3px var(--cream-accent-soft)}
+.cartbody .mini{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:10px;
+  background:var(--cream-accent);color:var(--cream-accent-ink);font-weight:800;font-size:.72rem;letter-spacing:.05em;
+  text-transform:uppercase;text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}
+.cartbody .mini:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px var(--cream-accent-glow)}
+.cartbody .mini:disabled{opacity:.6}
+
 /* A refusal from one action. Neutral ground with a rule the colour of the
    verdict — a filled red panel over a cart reads as "your cart is broken". */
-.cartnotice{margin:14px 0 0;padding:11px 14px;border:1px solid var(--rule);border-left-width:3px;
-  border-radius:5px;background:var(--sheet);font-size:13px;line-height:1.55;color:var(--ink-2)}
+.cartnotice{margin:0 0 16px;padding:11px 14px;border:1px solid var(--cream-line);border-left-width:3px;
+  border-radius:10px;background:var(--cream-surface);font-size:.84rem;line-height:1.55;color:var(--cream-text)}
 .cartnotice.fail{border-left-color:var(--fail)}
-/* ---- the lines ---------------------------------------------------------- */
-.cartlines{padding:0}
-.cartline-cards{margin:0;padding:0;list-style:none}
-.cartline-cards>li+li{border-top:1px solid var(--rule-2)}
-.cartline-card{padding:14px 16px;background:transparent}
-.cartline-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 18px;align-items:start}
-.cartline-main{min-width:0}
-.cartline-title{display:block;margin:0 0 8px;font-size:16px;font-weight:600;line-height:1.25;color:var(--ink)}
-.cartline-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-bottom:10px;font-size:12px;color:var(--ink-2)}
-.cartline-grade{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;
-  border:1px solid var(--rule)}
-.cartline-grade.tone-aplus{background:var(--pass);border-color:var(--pass);color:var(--sheet)}
-.cartline-grade.tone-a{background:var(--pass-light);border-color:var(--pass-light);color:var(--ink)}
-.cartline-grade.tone-b{background:var(--score-bar-warn-wash,var(--sheet-2));
-  border-color:var(--score-bar-warn,var(--warn));color:var(--ink)}
-.cartline-quick{display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:8px;font-size:13px;color:var(--ink-2)}
-.cartline-quick span{display:inline-flex;align-items:center;gap:6px}
-.cartline-quick svg{color:var(--ink-3);flex:0 0 auto}
-.cartline-details{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
-.cartline-detail{display:flex;align-items:flex-start;gap:8px}
-.cartline-detail svg{color:var(--ink-3);flex:0 0 auto;margin-top:1px}
-.cartline-fallback{margin:0 0 10px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
-.cartline-pass{display:flex;flex-direction:column;gap:5px;margin-bottom:0;font-size:13px;font-weight:500;color:var(--pass)}
-.cartline-pass-row{display:inline-flex;align-items:center;gap:7px}
-.cartline-pass svg{flex:0 0 auto;color:var(--pass)}
-.cartline-avail{margin-top:10px}
-.cartline-aside{display:flex;flex-direction:column;align-items:flex-end;gap:12px;flex-shrink:0;min-width:148px}
-.cartline-price{text-align:right;white-space:nowrap}
-.cartline-price .mono{display:block;font-size:18px;font-weight:700;color:var(--ink);line-height:1.15}
-.cartline-price small{display:block;margin-top:3px;font-size:10px;color:var(--ink-4);line-height:1.35}
-.cartline-field-label{display:block;margin-bottom:4px;font-family:"IBM Plex Mono",monospace;font-size:10px;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
-.cartline-qty-block{display:flex;flex-direction:column;align-items:flex-end;width:100%}
-.cartline-unit{text-align:right}
-.cartline-unit .mono{font-size:14px;font-weight:600;color:var(--ink)}
-.cartline-foot{display:flex;justify-content:flex-end;padding-top:10px;margin-top:10px;border-top:1px solid var(--rule-2)}
-.checkoutline-card{border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
-.checkoutline-serials{margin:0;padding:12px 16px 14px;border-top:1px solid var(--rule-2)}
-.checkoutline-serial-list{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0;padding:0;list-style:none}
-.checkoutline-serial{display:inline-block;padding:4px 8px;border:1px solid var(--rule);border-radius:4px;
-  background:var(--sheet-2);font-size:12px;color:var(--ink-2);text-decoration:none}
-.checkoutline-serial:hover{color:var(--ink);border-color:var(--acc)}
-.lgrade{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
-.lgrade .lmeta{font-size:10.5px;color:var(--ink-4)}
-.lavail{display:flex;flex-direction:column;gap:4px;min-width:210px;max-width:34ch;
-  white-space:normal}
-.avail{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-/* A shortfall is a fact, not an alarm: --warn outlines it, nothing flashes and
-   nothing counts down. */
-.avail.short{color:var(--warn)}
-.lavail .lmeta{font-size:11px;color:var(--ink-4);line-height:1.45;white-space:normal}
-.lavail .ulink{align-self:flex-start;font-size:11.5px;background:none;border:0;padding:0;
-  cursor:pointer;text-align:left}
-.lavail .ulink:disabled{opacity:.5;cursor:default}
-/* The Update button stacks under the field rather than beside it: appearing
-   beside it widens the column the moment a digit is typed, and the table starts
-   scrolling sideways under the cursor. */
-.qtycell{display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:100%}
-.qtystepper{display:inline-flex;align-items:stretch;height:38px;border:1px solid var(--rule);border-radius:5px;
-  background:var(--sheet-2);overflow:hidden}
-.qtystep{display:flex;align-items:center;justify-content:center;min-width:36px;padding:0 10px;
-  font-size:16px;line-height:1;color:var(--ink-2);background:transparent}
-.qtystep:hover:not(:disabled){background:var(--sheet-3);color:var(--ink)}
-.qtystep:disabled{opacity:.45;cursor:not-allowed}
-.qtystepper input{width:52px;height:100%;border:0;border-left:1px solid var(--rule);border-right:1px solid var(--rule);
-  background:transparent;padding:0 6px;font-size:13.5px;color:var(--ink);text-align:center;
-  font-variant-numeric:tabular-nums;-moz-appearance:textfield}
-.qtystepper input::-webkit-outer-spin-button,.qtystepper input::-webkit-inner-spin-button{
-  -webkit-appearance:none;margin:0}
-.qtystepper input:focus{outline:none}
-.qtycell input:focus{border-color:var(--acc);outline:none}
-.cartlines .money small{color:var(--ink-4);font-variant-numeric:tabular-nums}
-/* ---- the panel ---------------------------------------------------------- */
-.cartgo{width:100%;justify-content:center;margin-top:4px}
-.cartmore{width:100%;justify-content:center;margin-top:8px}
-.checked{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
-.checked .ulink{background:none;border:0;padding:0;cursor:pointer;font-size:11px}
-.checked .ulink:disabled{opacity:.5;cursor:default}
-.sidep .facts .notmeasured{font-size:12px}
-@media(max-width:640px){
-  .cartsw{gap:6px}
-  .cartname input{min-width:150px}
-  .cartline-body{grid-template-columns:1fr}
-  .cartline-aside{align-items:stretch;min-width:0}
-  .cartline-price,.cartline-unit{text-align:left}
-  .cartline-qty-block{align-items:flex-start}
+
+/* ---- lines on the left; summary rail sticky on the right ----------------- */
+.cartlayout{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:26px;align-items:start}
+.cartlayout-lead{min-width:0}
+.cartlayout-side{min-width:0}
+.ct-title{font-size:1.35rem;font-weight:800;letter-spacing:-.01em;color:var(--cream-text);margin:0}
+.ct-title span{font-weight:600;font-size:.9rem;color:var(--cream-muted)}
+
+/* ---- groups ---- */
+.grp{margin-top:18px}
+.grp-h{display:flex;align-items:baseline;gap:10px;padding:0 4px 9px;flex-wrap:wrap}
+.grp-h b{font-size:.95rem;font-weight:800}
+.grp-h small{font-size:.76rem;color:var(--cream-muted);font-weight:600}
+.grp-card{background:var(--cream-surface);border:1px solid var(--cream-line);border-radius:16px;overflow:hidden}
+.grp-card.skel{padding:18px}
+
+/* ---- cart item ---- */
+.ci{display:grid;grid-template-columns:104px minmax(0,1fr) auto;gap:16px;padding:18px;position:relative}
+.ci+.ci{border-top:1px solid var(--cream-line-soft)}
+.ci[aria-busy="true"]{opacity:.7}
+/* A short line is a fact, not an alarm: the design's own deep yellow marks it. */
+.ci.short{box-shadow:inset 3px 0 0 var(--cream-accent)}
+.ci-img{width:104px;height:82px;background:var(--cream-surface-2);border:1px solid var(--cream-line-soft);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;padding:8px;color:var(--cream-muted)}
+.ci-img svg{width:92%;height:auto;filter:drop-shadow(0 6px 8px var(--cream-shadow))}
+.ci-body{min-width:0}
+.ci-name{font-size:1rem;font-weight:700;padding-right:34px;margin:0;color:var(--cream-text)}
+.ci-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:7px}
+.gr{font-size:.68rem;font-weight:800;padding:4px 9px;border-radius:7px;background:var(--cream-accent);color:var(--cream-accent-ink);
+  white-space:nowrap}
+.gr.gA{background:var(--cream-accent-soft);color:var(--cream-accent-deep);border:1.5px solid var(--cream-accent);padding:2.5px 8px}
+.ci-spec{font-size:.78rem;color:var(--cream-muted);font-weight:500}
+.ci-tags{display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:.76rem;font-weight:600;color:var(--cream-muted)}
+.ci-tags span{display:inline-flex;align-items:center;gap:5px}
+.ci-tags svg{width:13px;height:13px;color:var(--cream-accent-deep)}
+.ci-tags .low{color:var(--cream-accent-deep);font-weight:700}
+.ci-note{display:flex;flex-direction:column;gap:4px;margin-top:9px;font-size:.76rem;line-height:1.5;color:var(--cream-muted);max-width:46ch}
+.ci-short{color:var(--cream-accent-deep);font-weight:700}
+.ci-fix{align-self:flex-start;color:var(--cream-accent-deep);font-weight:700;text-decoration:underline;text-underline-offset:2px;padding:0}
+.ci-fix:disabled{opacity:.5}
+
+.ci-buy{text-align:right;padding-right:34px;display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+.ci-each{font-size:.72rem;color:var(--cream-muted);font-weight:600}
+.ci-each b{color:var(--cream-text);font-size:.85rem}
+.qtycell{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--cream-line);border-radius:10px;overflow:hidden;background:var(--cream-surface)}
+.qty button{width:28px;height:30px;font-weight:800;color:var(--cream-muted);display:flex;align-items:center;justify-content:center}
+.qty button:hover:not(:disabled){background:var(--cream-accent-soft);color:var(--cream-accent-deep)}
+.qty button:disabled{opacity:.35}
+.qty input{width:36px;height:30px;text-align:center;font-weight:700;font-size:.88rem;border:0;background:transparent;
+  color:var(--cream-text);padding:0;-moz-appearance:textfield;outline:none;font-variant-numeric:tabular-nums}
+.qty input::-webkit-outer-spin-button,.qty input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.qty:focus-within{border-color:var(--cream-accent);box-shadow:0 0 0 3px var(--cream-accent-soft)}
+.ci-total{font-size:1.05rem;font-weight:800;color:var(--cream-text);font-variant-numeric:tabular-nums}
+.ci-total small{display:block;font-size:.66rem;font-weight:500;color:var(--cream-muted)}
+.ci-x{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;color:var(--cream-muted);transition:background-color .2s ease,color .2s ease}
+.ci-x:hover:not(:disabled){background:var(--cream-line-hover);color:var(--cream-text)}
+.ci-x:disabled{opacity:.45}
+.ci-x svg{width:14px;height:14px;stroke:currentColor}
+.ci-spin{width:13px;height:13px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:ci-spin .7s linear infinite}
+@keyframes ci-spin{to{transform:rotate(360deg)}}
+
+/* ---- empty and error ---- */
+.cempty{background:var(--cream-surface);border:1px dashed var(--cream-line);border-radius:16px;padding:56px 20px;
+  text-align:center;margin-top:18px}
+.cempty b{font-size:1rem;font-weight:800}
+.cempty p{color:var(--cream-muted);margin:6px auto 0;font-size:.9rem;max-width:56ch}
+.cempty .mini{margin-top:16px}
+.cempty.err{border-style:solid}
+
+/* ---- summary rail ---- */
+.sum{position:sticky;top:78px;background:var(--cream-surface);border:1px solid var(--cream-line);border-radius:18px;padding:20px}
+.sum h2{font-size:1.02rem;font-weight:800;margin:0;color:var(--cream-text)}
+.sum-sub{font-size:.76rem;color:var(--cream-muted);margin:3px 0 0}
+.sum .skel{margin-top:14px}
+.sum-rows{list-style:none;margin:14px 0 0;padding:0}
+.sum-rows li{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;
+  border-bottom:1px dashed var(--cream-line-soft);font-size:.86rem}
+.sum-rows li small{display:block;font-size:.68rem;color:var(--cream-muted);font-weight:500}
+.sum-rows li b{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sum-rows li b.pending{font-weight:600;color:var(--cream-muted);font-size:.78rem;white-space:normal;text-align:right}
+.sum-rows li.total{border-bottom:none;padding-top:12px}
+.sum-rows li.total span{font-weight:800}
+.sum-rows li.total b{font-size:1.2rem;font-weight:800;color:var(--cream-accent-deep)}
+.sum-rows li.total small{text-align:right}
+.sum-note{margin:6px 0 0;font-size:.72rem;line-height:1.5;color:var(--cream-muted)}
+.sum-note.blocked{margin-top:10px;color:var(--cream-accent-deep);font-weight:600}
+/* The one primary action: the design's `.co`. `CheckoutGate` renders it as
+   `a.pill.acc.cartgo`; the blocked twin is the shared Button with the same
+   class, and this rule outranks both their own paints. */
+.cartbody .sum .cartgo{display:flex;align-items:center;justify-content:center;width:100%;margin-top:16px;padding:14px 0;
+  border-radius:12px;border:0;background:var(--cream-accent);color:var(--cream-accent-ink);font-weight:800;font-size:.86rem;
+  letter-spacing:.05em;text-transform:uppercase;text-decoration:none;box-shadow:none;transition:transform .2s ease,box-shadow .2s ease}
+.cartbody .sum .cartgo:hover:not([aria-disabled="true"]){transform:translateY(-1px);box-shadow:0 10px 24px var(--cream-accent-glow);
+  background:var(--cream-accent);color:var(--cream-accent-ink)}
+.cartbody .sum .cartgo[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
+.cartbody .sum .cartgo>span{color:inherit}
+.cartbody .sum .cartmore{display:flex;align-items:center;justify-content:center;width:100%;margin-top:10px;padding:13px 0;
+  border-radius:12px;border:1px solid var(--cream-line);background:transparent;color:var(--cream-text);font-weight:700;
+  font-size:.84rem;text-decoration:none;transition:border-color .2s ease,color .2s ease}
+.cartbody .sum .cartmore:hover{border-color:var(--cream-accent);color:var(--cream-accent-deep);background:transparent}
+.avail-line{margin:13px 0 0;font-size:.74rem;color:var(--cream-muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.avail-line b{font-variant-numeric:tabular-nums}
+.avail-line button{color:var(--cream-accent-deep);font-weight:700;text-decoration:underline;padding:0}
+.avail-line button:disabled{opacity:.5}
+.hold-note{margin:12px 0 0;padding:10px 12px;border:1px solid var(--cream-accent-mid);background:var(--cream-accent-soft);
+  border-radius:10px;font-size:.75rem;line-height:1.55;color:var(--cream-text)}
+.hold-note b{color:var(--cream-accent-deep)}
+
+/* ---- toast: the design's dark pill, centred at the bottom ---------------- */
+/* `ToastProvider` paints a bottom-right stack; on this page it is moved to the
+   design's position and colours. The provider's semantics (roles, dismiss,
+   undo) are untouched. */
+.cartbody [role="region"][aria-label="Notifications"]{left:50%;right:auto;bottom:26px;transform:translateX(-50%);
+  width:auto;max-width:calc(100vw - 32px);align-items:center}
+.cartbody [role="region"][aria-label="Notifications"]>div{flex-direction:row;align-items:center;gap:14px;
+  background:var(--cream-accent-ink);color:var(--cream-on-dark);border:0;border-radius:12px;padding:12px 18px;
+  font-size:.85rem;font-weight:600;box-shadow:0 10px 24px var(--cream-shadow)}
+.cartbody [role="region"][aria-label="Notifications"] p{color:var(--cream-on-dark);font-weight:600;margin:0}
+.cartbody [role="region"][aria-label="Notifications"]>div>div{gap:14px}
+.cartbody [role="region"][aria-label="Notifications"] button{color:var(--cream-accent);font-weight:800;text-transform:uppercase;
+  font-size:.76rem;letter-spacing:.05em;text-decoration:none;min-height:0;min-width:0;margin:0;padding:0;background:none}
+.cartbody [role="region"][aria-label="Notifications"] button:hover{color:var(--cream-accent);text-decoration:underline}
+
+/* ---- responsive ---- */
+@media(max-width:980px){
+  .cartlayout{grid-template-columns:1fr}
+  .sum{position:static}
+}
+@media(max-width:560px){
+  .ci{grid-template-columns:78px minmax(0,1fr)}
+  .ci-img{width:78px;height:64px}
+  .ci-buy{grid-column:1 / -1;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;text-align:left}
+  .qtycell{align-items:flex-start}
+  .ci-total{text-align:right}
+}
+@media(prefers-reduced-motion:reduce){
+  .cartbody *{animation:none!important;transition:none!important}
 }
 
 /* ==========================================================================
@@ -1466,27 +1724,272 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
    ledger. */
 .checkoutrail > p:last-child,.nodraft > p:last-child{display:none}
 
-/* Checkout thank-you — centred terminal after place(). */
-.chdone{max-width:560px;margin:var(--s7) auto var(--s8);padding:0 var(--s4)}
-.chdone-card{display:flex;flex-direction:column;align-items:center;gap:var(--s5);
-  border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--sheet);
-  padding:var(--s7) var(--s6);text-align:center}
-.chdone-mark{display:flex;align-items:center;justify-content:center;width:56px;height:56px;
-  border:2px solid var(--pass);border-radius:50%;color:var(--pass);font-size:26px;line-height:1;
-  font-weight:600}
-.chdone-lede{max-width:46ch;margin:0;font-size:13.5px;line-height:1.65;color:var(--ink-2)}
-.chdone-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s4);
-  width:100%;margin:0;padding:var(--s5) 0 0;border-top:1px solid var(--rule-2)}
-.chdone-fact{display:flex;flex-direction:column;gap:var(--s1)}
-.chdone-fact dt{font-family:var(--font-mono);font-size:10.5px;font-weight:500;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
-.chdone-fact dd{margin:0;font-size:14px;color:var(--ink)}
-.chdone-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--s3);width:100%;
-  padding-top:var(--s2)}
-@media (max-width:520px){
-  .chdone-facts{grid-template-columns:1fr;gap:var(--s3);text-align:left}
-  .chdone-actions{flex-direction:column}
-  .chdone-actions .pill{justify-content:center;width:100%}
+/* ==========================================================================
+ * /checkout — the supplied five-step design, on the product's own surfaces
+ * ========================================================================== */
+/* The design arrived in a cream-and-amber language of its own: Archivo, 12–16px
+   radii, #FDB017. Its type, its accent and its layout are kept exactly; its
+   cream is not. The `.ck` block maps every colour it used onto the working-
+   surface tokens, so the page flips with the theme like the cart beside it.
+   The amber is `--promo-accent` — the hero banner's constant, not `--acc` —
+   and means the same three things here: the primary action, a measured value,
+   an active state. `--ck-acc-deep` is the amber as TEXT: on a dark sheet the
+   accent itself reads, on white it does not, so light themes swap in the deep
+   shade. Numbers stay IBM Plex Mono with tabular figures; Archivo is for words. */
+.ck{
+  --ck-acc:var(--promo-accent);
+  --ck-acc-on:var(--promo-accent-ink);
+  --ck-acc-soft:var(--promo-accent-soft);
+  --ck-acc-mid:var(--promo-accent-mid);
+  --ck-acc-deep:var(--promo-accent);
+  --ck-muted:var(--ink-2);
+  /* The design's own two stacks, exactly as its stylesheet declares them, and
+     re-declared as the shared tokens so every component rendered inside the
+     flow — Stepper, PriceBreakup, Input, StatusPill, toast — picks them up
+     without a per-class override. Archivo for words; the system mono stack
+     for every number, as the design does. */
+  --font-sans:"Archivo","Segoe UI",system-ui,-apple-system,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  font-family:var(--font-sans);color:var(--ink);
+  -webkit-font-smoothing:antialiased}
+:root[data-t="light"] .ck,:root[data-t="sand"] .ck{--ck-acc-deep:var(--promo-accent-deep)}
+.ck .font-sans,.ck button,.ck input,.ck summary{font-family:var(--font-sans)}
+/* The design sets a number inside a sentence — a pincode in an address, the
+   total in the agreement line — in Archivo, and reserves the mono stack for
+   labelled figures: step numbers, the kicker, the hold, the price rows, the
+   GSTIN. `.tnum` here keeps tabular figures but inherits the face. */
+.ck .tnum{font-family:inherit;font-variant-numeric:tabular-nums}
+.ck .mono,.ck .font-mono,.ck-mono,.ck .ck-order-id,.ck .ck-hold-t,.ck .ck-steps-sum-n{
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* ---- the page: stepper / step / rail ------------------------------------- */
+.ck-wrap{max-width:1360px;margin:0 auto;padding:24px clamp(16px,4vw,48px) 90px;display:grid;
+  grid-template-columns:240px minmax(0,1fr) 330px;gap:24px;align-items:start}
+.ck-terminal{max-width:1360px;margin:0 auto;padding:40px clamp(16px,4vw,48px) 90px}
+.ck-main{min-width:0}
+.ck-skel-steps{height:300px;width:100%}
+
+/* ---- the stepper ---------------------------------------------------------- */
+/* The shared `StepRail`, restyled. Each row of its `Stepper` is
+   [sr-only position][number + label][tick], with the summary as the next
+   sibling; the row is laid on a 26px / 1fr / 18px grid so the number box, the
+   title and the tick line up down the rail and the summary sits under the
+   title. `.checkoutrail` (above) still hides the save-state line. */
+.ck-steps-mobile{display:none}
+.ck-steps-desktop{display:block}
+.ck .ck-steps{position:sticky;top:20px;max-height:none;overflow:visible;gap:0;padding:18px;
+  background:var(--sheet);border:1px solid var(--rule);border-radius:16px;box-shadow:none}
+.ck .ck-steps.inline{position:static;border:0;padding:0;background:transparent}
+.ck .ck-steps > div:first-child{gap:3px}
+.ck .ck-steps > div:first-child h2{font-size:16px;font-weight:800;color:var(--ink);line-height:1.2}
+.ck .ck-steps > div:first-child p{font-size:10.9px;letter-spacing:.08em;color:var(--ck-muted)}
+.ck .ck-steps nav{margin-top:14px}
+.ck .ck-steps nav ol{gap:0}
+.ck .ck-steps nav li{display:flex;flex-direction:column;gap:0;padding:9px 0;color:var(--ck-muted)}
+.ck .ck-steps nav li > :first-child{display:grid;grid-template-columns:26px minmax(0,1fr) 18px;column-gap:9px;
+  align-items:start;width:100%;font-size:14px;font-weight:700;line-height:1.35;text-decoration:none;
+  text-align:left;background:none;border:0;padding:0;color:inherit}
+.ck .ck-steps nav li > :first-child > span:nth-child(2){display:contents}
+.ck .ck-steps nav li > :first-child > span:nth-child(2) > span:first-child{
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:700;
+  width:26px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  background:var(--sheet-2);color:var(--ck-muted);margin-top:0}
+.ck .ck-steps nav li > :first-child > span:nth-child(2) > span:last-child{padding-top:2px}
+.ck .ck-steps nav li > :first-child > span:nth-child(3){grid-column:3;width:17px;height:17px;margin-top:3px;
+  color:var(--ck-acc-deep)}
+.ck .ck-steps nav li > :first-child > span:nth-child(3) svg{width:17px;height:17px}
+.ck .ck-steps nav li > [aria-current="step"]{color:var(--ink)}
+.ck .ck-steps nav li > [aria-current="step"] > span:nth-child(2) > span:first-child{
+  background:var(--ck-acc);color:var(--ck-acc-on)}
+.ck .ck-steps nav li > button{color:var(--ink);cursor:pointer}
+.ck .ck-steps nav li > button:hover > span:nth-child(2) > span:last-child{color:var(--ck-acc-deep)}
+.ck .ck-steps nav li > :first-child + span{padding-left:35px;margin-top:2px;font-size:11.5px;font-weight:500;
+  color:var(--ck-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Under 1120px the rail folds into one row above the step. */
+.ck-steps-sum{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;padding:12px 14px;
+  background:var(--sheet);border:1px solid var(--rule);border-radius:14px;font-size:14px;font-weight:700;
+  color:var(--ink);min-width:0}
+.ck-steps-sum::-webkit-details-marker{display:none}
+.ck-steps-sum-n{font-family:var(--font-mono);font-size:11.5px;font-weight:700;width:26px;height:22px;
+  border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--ck-acc);
+  color:var(--ck-acc-on);flex:0 0 auto}
+.ck-steps-sum-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ck-steps-sum-k{font-family:var(--font-mono);font-size:10.9px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ck-muted);font-weight:500;white-space:nowrap}
+.ck-steps-sum-all{margin-left:auto;font-size:12.5px;color:var(--ck-acc-deep);font-weight:600;white-space:nowrap}
+.ck-steps-mobile[open] .ck-steps-sum{border-radius:14px 14px 0 0}
+.ck-steps-mobile-body{padding:14px;border:1px solid var(--rule);border-top:0;border-radius:0 0 14px 14px;
+  background:var(--sheet)}
+
+/* ---- the step ------------------------------------------------------------ */
+.ck-kicker{font-family:var(--font-mono);font-size:11.2px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ck-muted);margin:0}
+.ck-kicker b{color:var(--ck-acc-deep)}
+.ck-h1{font-size:24.8px;font-weight:800;letter-spacing:-.01em;margin:6px 0 0;color:var(--ink);line-height:1.2}
+.ck-lede{font-size:14px;color:var(--ck-muted);margin:7px 0 0;max-width:62ch;line-height:1.55}
+.ck-lede b{color:var(--ink);font-weight:700}
+.ck-notice{margin:14px 0 0;padding:11px 14px;border:1px solid var(--rule);border-left:3px solid var(--fail);
+  border-radius:5px;background:var(--sheet);font-size:13px;line-height:1.55;color:var(--ink-2)}
+.ck-flbl{font-size:15.2px;font-weight:700;margin:18px 0 7px;color:var(--ink)}
+.ck-err{margin:8px 0 0;font-size:12.8px;color:var(--fail);line-height:1.5}
+.ck-blocked{margin:10px 0 0;font-size:13px;color:var(--ck-muted);line-height:1.55}
+
+/* One radio, drawn as a card. The real input is visually hidden — never
+   `display:none`, which would take it out of the tab order — and the ring is
+   the card's `::before`. Active is amber: the third thing the accent is for. */
+.ck-opts{margin:18px 0 0;padding:0;border:0;min-width:0;display:grid;gap:12px}
+.ck-flbl + .ck-opts{margin-top:0}
+.ck-opt{display:block;position:relative;text-align:left;width:100%;background:var(--sheet);
+  border:1px solid var(--rule);border-radius:14px;padding:15px 17px 15px 46px;cursor:pointer;
+  transition:border-color .2s ease,background-color .2s ease}
+.ck-opt::before{content:"";position:absolute;left:16px;top:18px;width:17px;height:17px;border-radius:50%;
+  border:2px solid var(--ink-4);background:var(--sheet)}
+.ck-opt.on{border-color:var(--ck-acc);background:var(--ck-acc-soft)}
+.ck-opt.on::before{border-color:var(--ck-acc-deep);background:var(--ck-acc-deep);
+  box-shadow:inset 0 0 0 3.5px var(--sheet)}
+.ck-opt:hover:not(.off){border-color:var(--ck-acc)}
+.ck-opt:focus-within{outline:2px solid var(--ck-acc);outline-offset:2px}
+.ck-opt.off{opacity:.55;cursor:not-allowed;background:var(--sheet-2)}
+.ck-opt-in{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);
+  white-space:nowrap;border:0}
+.ck-opt b{font-size:15.2px;font-weight:700;display:inline-block;color:var(--ink)}
+.ck-opt small{display:block;font-size:12.8px;color:var(--ck-muted);margin-top:4px;line-height:1.5}
+.ck-opt .ck-mono{font-size:12.2px;color:var(--ck-acc-deep);font-weight:700}
+.ck-opt > .ck-opt-in + .ck-mono{display:block;margin-bottom:2px}
+.ck-opt small.ck-opt-contact{margin-top:5px;color:var(--ck-acc-deep)}
+.ck-tag{display:inline-block;margin-left:8px;vertical-align:1px;font-size:9.6px;font-weight:800;
+  letter-spacing:.08em;text-transform:uppercase;background:var(--ck-acc);color:var(--ck-acc-on);
+  border-radius:999px;padding:3px 8px}
+
+/* Receiving details, and what you are agreeing to: one table shape. */
+.ck-recv,.ck-agree{margin-top:16px;background:var(--sheet);border:1px solid var(--rule);border-radius:14px;
+  overflow:hidden}
+.ck-recv h3,.ck-agree h3{font-size:14.4px;font-weight:800;padding:14px 17px 4px;margin:0;color:var(--ink)}
+.ck-agree h3{font-size:14.7px;padding:15px 18px 6px}
+.ck-facts{margin:0;padding:0}
+.ck-fact{display:grid;grid-template-columns:150px minmax(0,1fr);gap:0 12px;padding:9px 17px;font-size:13.4px;
+  border-top:1px solid var(--rule-2)}
+.ck-fact dt{color:var(--ck-muted);font-weight:600}
+.ck-fact dd{margin:0;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.ck-fact dd.dim{color:var(--ink-4);font-weight:500}
+.ck-facts.right .ck-fact{grid-template-columns:170px minmax(0,1fr);padding:10px 18px;font-size:13.8px}
+.ck-facts.right dd{text-align:right;font-weight:700}
+.ck-recv-note{padding:10px 17px 14px;margin:0;font-size:11.8px;color:var(--ck-muted);line-height:1.55}
+.ck-unresolved{padding-bottom:14px}
+.ck-unresolved p{padding:0 18px;margin:8px 0 0;font-size:13.4px;color:var(--ck-muted);line-height:1.55}
+.ck-unresolved p.dim{color:var(--ink-4)}
+.ck-approval{margin-top:18px;padding:15px 18px;background:var(--sheet);border:1px solid var(--warn-line);
+  border-radius:14px}
+.ck-approval p{margin:8px 0 0;font-size:13.4px;line-height:1.55;color:var(--ck-muted)}
+.ck-approval .ck-approval-why,.ck-approval b{color:var(--ink)}
+.ck-seller{margin-top:14px;font-size:13px;color:var(--ck-muted);line-height:1.6;max-width:62ch}
+.ck-seller b{color:var(--ink)}
+
+/* The PO reference fields — the shared `Input`, in the design's field shape. */
+.ck-ref > div{gap:7px;margin-top:18px}
+.ck-ref label{font-size:12.8px;font-weight:700;color:var(--ink)}
+.ck-ref label small{font-weight:500;color:var(--ck-muted);font-size:inherit}
+.ck .ck-field{width:100%;max-width:520px;height:auto;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:12px;color:var(--ink);padding:12px 14px;font-size:14.4px;outline:none;
+  transition:border-color .2s ease,box-shadow .2s ease}
+.ck .ck-field::placeholder{color:var(--ink-4);font-family:var(--font-mono);font-size:13px;
+  text-transform:none;letter-spacing:0}
+.ck .ck-field:focus{border-color:var(--ck-acc);box-shadow:0 0 0 3px var(--ck-acc-soft)}
+
+/* Back · Continue · leave. One amber thing on the screen. */
+.ck-nav{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:26px}
+.ck .ck-back{height:auto;font-weight:700;font-size:14px;color:var(--ck-muted);padding:12px 6px;
+  background:none;border-radius:8px}
+.ck .ck-back:hover{color:var(--ink);background:none}
+.ck .ck-next,.ck .ck-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:auto;
+  padding:13px 26px;border-radius:12px;background:var(--ck-acc);color:var(--ck-acc-on);font-weight:800;
+  font-size:13.6px;letter-spacing:.05em;text-transform:uppercase;text-decoration:none;border:0;cursor:pointer;
+  transition:transform .2s ease,box-shadow .2s ease}
+.ck .ck-next:hover,.ck .ck-btn:hover{background:var(--ck-acc);color:var(--ck-acc-on);transform:translateY(-1px);
+  box-shadow:0 8px 22px var(--ck-acc-mid)}
+.ck .ck-next[aria-disabled="true"]{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+.ck-leave{font-size:12.8px;font-weight:600;color:var(--ck-muted);text-decoration:underline;
+  text-underline-offset:2px;background:none;border:0;padding:0;cursor:pointer}
+.ck-leave:hover{color:var(--ck-acc-deep)}
+
+/* ---- the rail: hold, money, why ------------------------------------------ */
+.ck-rail{display:grid;gap:16px;position:sticky;top:20px}
+.ck-hold{background:var(--sheet);border:1px solid var(--ck-acc-mid);border-radius:16px;padding:16px 18px}
+.ck-hold small{display:block;font-family:var(--font-mono);font-size:10.2px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ck-muted)}
+.ck-hold-t{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:27px;font-weight:700;
+  color:var(--ck-acc-deep);margin-top:3px;line-height:1.1}
+.ck-hold-t.urgent{color:var(--warn)}
+.ck-hold-t.expired{color:var(--ink-4)}
+.ck-hold p{font-size:11.8px;color:var(--ck-muted);margin:6px 0 0;line-height:1.55}
+.ck-costs{background:var(--sheet);border:1px solid var(--rule);border-radius:16px;padding:18px}
+.ck-costs.unpriced{border-color:var(--fail-line)}
+.ck-costs h3{font-size:15.2px;font-weight:800;margin:0;color:var(--ink)}
+.ck-costs-wait,.ck-tax-note{margin:10px 0 0;font-size:11.8px;color:var(--ck-muted);line-height:1.5}
+.ck-costs-rows{margin:10px 0 0;padding:0}
+.ck-costs-rows > div,.ck .ck-pb dl > div{display:flex;justify-content:space-between;gap:10px;align-items:baseline;
+  padding:8px 0;border-bottom:1px dashed var(--rule-2);border-top:0;font-size:13.4px}
+.ck-costs-rows dt,.ck .ck-pb dt{color:var(--ink);font-weight:500;font-size:13.4px}
+.ck .ck-pb dt span{display:block;font-size:10.5px;color:var(--ck-muted);font-weight:500;margin-top:1px}
+.ck-costs-rows dd,.ck .ck-pb dd{margin:0;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
+.ck-costs-rows dd.dim{color:var(--ink-4);font-family:inherit;font-weight:500}
+.ck .ck-pb{background:transparent;border:0;padding:0;border-radius:0;margin-top:10px}
+.ck .ck-pb dl{gap:0}
+.ck .ck-pb dl > div:last-child{border-bottom:0;padding-top:11px}
+.ck .ck-pb dl > div:last-child dt{font-weight:800}
+.ck .ck-pb dl > div:last-child dd{font-size:16.8px;color:var(--ck-acc-deep)}
+.ck .ck-pb > p{margin:10px 0 0;font-size:11.8px;color:var(--ck-muted);line-height:1.5}
+.ck .ck-pb > p b{color:var(--ck-acc-deep)}
+.ck .ck-why{position:static;max-height:none;background:var(--sheet-2);border:1px solid var(--rule-2);
+  border-radius:16px;padding:16px 18px;gap:8px;box-shadow:none}
+.ck .ck-why h2{font-size:13px;font-weight:800;color:var(--ink)}
+.ck .ck-why dl{gap:10px}
+.ck .ck-why dl > div{border-left:2px solid var(--ck-acc);padding-left:12px}
+.ck .ck-why dt{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.5}
+.ck .ck-why dd{margin:2px 0 0;font-size:12.5px;color:var(--ck-muted);line-height:1.6}
+
+/* ---- the states that are not a step ------------------------------------- */
+.ck .ck-empty{border:1px dashed var(--rule);border-radius:16px;background:var(--sheet);padding:40px 24px;
+  text-align:center;max-width:640px;margin:0 auto;gap:10px}
+.ck-terminal .ck-empty{margin-top:0}
+.ck-main .ck-empty{margin-top:18px}
+.ck .ck-empty.err{border-style:solid}
+.ck .ck-empty h3{font-size:18px;font-weight:800;color:var(--ink);margin:0}
+.ck .ck-empty p{max-width:56ch;margin:0 auto;font-size:14px;color:var(--ck-muted);line-height:1.55}
+.ck .ck-empty .ck-btn{margin-top:8px}
+.ck-empty-act{padding-top:8px}
+.ck-done{max-width:640px}
+.ck-done-badge{width:58px;height:58px;border-radius:16px;background:var(--ck-acc);display:flex;align-items:center;
+  justify-content:center;box-shadow:0 10px 28px var(--ck-acc-mid);margin-bottom:16px}
+.ck-done-badge svg{width:28px;height:28px;stroke:var(--ck-acc-on)}
+.ck-done .ck-h1{margin-top:12px}
+.ck-done .ck-lede{margin-top:10px}
+.ck-order-id{color:var(--ck-acc-deep);font-weight:700}
+.ck-done .ck-nav{margin-top:22px}
+
+/* ---- narrow --------------------------------------------------------------- */
+@media (max-width:1120px){
+  .ck-wrap{grid-template-columns:minmax(0,1fr) 320px}
+  .ck-steps-slot{grid-column:1 / -1}
+  .ck-steps-desktop{display:none}
+  .ck-steps-mobile{display:block}
+  .ck-skel-steps{grid-column:1 / -1;height:52px}
+}
+@media (max-width:820px){
+  .ck-wrap{grid-template-columns:1fr;padding-bottom:60px}
+  .ck-rail{position:static}
+  .ck-fact,.ck-facts.right .ck-fact{grid-template-columns:1fr;gap:2px}
+  .ck-facts.right dd{text-align:left}
+  .ck-h1{font-size:22px}
+  .ck-nav{gap:10px}
+  .ck .ck-next,.ck .ck-btn{width:100%}
+  .ck-leave{width:100%;text-align:center}
+  .ck-steps-sum-k{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .ck-opt,.ck .ck-next,.ck .ck-btn,.ck .ck-field{transition:none}
+  .ck .ck-next:hover,.ck .ck-btn:hover{transform:none}
 }
 
 /* Product page — fixed cart hand-off after an add. */
@@ -2496,41 +2999,32 @@ html[data-t="light"] footer .pays span{
 /* ==========================================================================
  * Auth dialog — the header's sign-in and sign-up, over the page
  * ======================================================================== */
-.authmodal{max-width:860px}
-.authmodal__grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:var(--s6);align-items:stretch}
-/* The artwork panel. `overflow:hidden` is what gives the image the card's own
-   rounded corner — a border-radius on the panel alone would be painted over by
-   a square image sitting on top of it. */
-/* Rounded well past the card's own corner, so the picture reads as a panel set
-   into the dialog rather than a rectangle pasted onto it. Twice the largest
-   radius token, so it still moves with the theme's scale. */
-.authart{
-  position:relative;
-  overflow:hidden;
-  border-radius:calc(var(--r-xl) * 2);
-  background:var(--chrome);
-  min-height:0;
+/* The same card as the pages, as the dialog: the brand panel flush to the left
+   edge for the full height, the form beside it, the close control floated over
+   the form's corner. The shared Modal's own padding and heading row are what
+   the overrides below take out of the way — the dialog element and its
+   `.tg-card` body are the only two boxes between the backdrop and the grid. */
+.authmodal{max-width:880px;border:0;border-radius:22px;overflow:hidden;background:var(--cream-surface);
+  box-shadow:0 40px 100px var(--cream-shadow)}
+.authmodal > .tg-card{padding:0;gap:0;position:relative;background:var(--cream-surface)}
+.authmodal > .tg-card > div:first-child{position:absolute;top:14px;right:14px;z-index:1}
+.authmodal > .tg-card > div:first-child button{width:32px;height:32px;padding:0;border-radius:9px;
+  color:var(--cream-muted);background:none;font-size:15px}
+.authmodal > .tg-card > div:first-child button:hover{background:var(--cream-line-hover);color:var(--cream-text)}
+/* The register description is the dialog's `aria-describedby`; it is read,
+   not drawn, because the form beneath says the same thing in its own hint. */
+.authmodal > .tg-card > p{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.authmodal__grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:0;align-items:stretch}
+.authmodal .authpanel{border-radius:0;min-height:0}
+.authform{display:flex;flex-direction:column;justify-content:flex-start;min-width:0;padding:30px 34px 26px}
+/* Room for the close control on the tab row. */
+.authform [role="tablist"]{padding-right:40px}
+@media (max-width:760px){
+  .authmodal{max-height:94vh;overflow-y:auto}
+  .authmodal__grid{grid-template-columns:1fr}
+  .authmodal .authpanel-art{max-width:250px;margin:14px auto -20px}
+  .authform{padding:24px 22px 22px}
 }
-/* The supplied file is portrait (941x1672) and this slot is not, so it is
-   cropped rather than squashed, from the top: the headline is the half worth
-   keeping. A landscape crop of the same artwork would drop the cropping
-   entirely — swap the file and this rule needs no change. */
-/* Taken out of the flow on purpose. A 941x1672 file at `width:100%` is 600px
-   tall at this column width, and as a normal child that is what would decide
-   how tall the dialog is — the picture sizing the card instead of the four
-   controls beside it. Positioned, it fills whatever height the FORM asks for. */
-.authart__img{
-  position:absolute;
-  inset:0;
-  display:block;
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  object-position:center top;
-}
-.authform{display:flex;flex-direction:column;justify-content:center;min-width:0}
-.authmodal .authform .hub-link,.authcard .hub-link{background:none;border:0;padding:0;font:inherit;color:var(--acc-ink);cursor:pointer;text-decoration:underline}
-@media (max-width:760px){.authmodal__grid{grid-template-columns:1fr}.authart{display:none}}
 
 /* ============ BRAND RAIL ============
    The homepage's way in to the catalogue, straight under the header. Tiles are
@@ -2755,18 +3249,31 @@ html[data-t="light"] .hero2{
    Its own warm-black / amber language — see the --promo-* note in globals.css.
    Dark in both themes and deliberately not theme-reactive. Every animation in
    this block is switched off at its foot under prefers-reduced-motion. */
+/*
+  The hero runs light, on a flat surface.
+
+  Two overrides do the whole job. `--promo-*` is redefined here so every rule
+  below — cards, rails, chips, the drawn laptop — follows without being touched
+  individually. `--po-ink` is the second: every overlay in this block was
+  written as white at some alpha over black, and on a light ground the same
+  lift is ink at that same alpha, so those became `rgb(var(--po-ink) / a)`.
+
+  No gradients. The dot-grid `::before` and the two blurred glow washes are
+  gone rather than recoloured — both existed to give a black panel depth, and
+  neither has anything to do on a white one.
+*/
 .phero{position:relative;width:100%;display:flex;flex-direction:column;justify-content:center;
   padding:clamp(18px,3vh,32px) clamp(20px,5vw,72px) clamp(16px,2.4vh,28px);
+  --promo-bg:var(--sheet);
+  --promo-text:var(--ink);
+  --promo-muted:var(--ink-2);
+  --promo-line:var(--rule);
+  --promo-line-soft:var(--rule-2);
+  --promo-surface:var(--sheet-2);
+  --po-ink:16 19 25;
   background:var(--promo-bg);color:var(--promo-text);
+  border-bottom:1px solid var(--rule);
   font-family:"Archivo","Inter",system-ui,sans-serif;overflow:hidden;isolation:isolate}
-.phero::before{content:"";position:absolute;inset:0;
-  background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);
-  background-size:34px 34px;
-  -webkit-mask-image:radial-gradient(ellipse 75% 70% at 55% 38%,#000 20%,transparent 75%);
-  mask-image:radial-gradient(ellipse 75% 70% at 55% 38%,#000 20%,transparent 75%);z-index:-2}
-.phero-glow{position:absolute;border-radius:50%;filter:blur(110px);z-index:-3;pointer-events:none}
-.phero-glow-a{width:540px;height:540px;right:-140px;top:-180px;background:rgba(253,176,23,.1)}
-.phero-glow-b{width:600px;height:600px;left:-240px;bottom:-280px;background:rgba(253,176,23,.05)}
 .phero-speck{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--promo-accent);
   opacity:.4;z-index:-1;pointer-events:none;animation:pheroDrift 14s ease-in-out infinite}
 .phero-speck:nth-of-type(1){left:12%;top:22%}
@@ -2780,7 +3287,7 @@ html[data-t="light"] .hero2{
 .phero-tagline{display:inline-flex;align-items:center;gap:10px;font-size:.78rem;font-weight:600;
   letter-spacing:.14em;text-transform:uppercase;color:var(--promo-muted);
   border:1px solid var(--promo-line);border-radius:999px;padding:7px 14px;margin:0 0 18px;
-  background:rgba(255,255,255,.03)}
+  background:rgb(var(--po-ink) / .03)}
 .phero-dot{width:7px;height:7px;border-radius:50%;background:var(--promo-accent);
   box-shadow:0 0 10px var(--promo-accent-mid);animation:pheroBlink 2.4s ease-in-out infinite}
 @keyframes pheroBlink{0%,100%{opacity:1}50%{opacity:.35}}
@@ -2799,13 +3306,13 @@ html[data-t="light"] .hero2{
 .phero-btn-primary:hover,.phero-btn-primary:focus-visible{transform:translateY(-2px);
   box-shadow:0 12px 38px rgba(253,176,23,.42)}
 .phero-btn-primary:hover .phero-arrow{transform:translateX(5px)}
-.phero-btn-ghost{border:1px solid rgba(255,255,255,.24);color:var(--promo-text)}
-.phero-btn-ghost:hover,.phero-btn-ghost:focus-visible{background:rgba(255,255,255,.06);
+.phero-btn-ghost{border:1px solid rgb(var(--po-ink) / .24);color:var(--promo-text)}
+.phero-btn-ghost:hover,.phero-btn-ghost:focus-visible{background:rgb(var(--po-ink) / .06);
   border-color:var(--promo-accent);transform:translateY(-2px)}
 .phero-btn:focus-visible{outline:2px solid var(--promo-accent);outline-offset:3px}
 .phero-brands{margin:14px 0 0;font-size:.74rem;font-weight:500;letter-spacing:.05em;
-  color:rgba(255,255,255,.34)}
-.phero-brands b{color:rgba(255,255,255,.58);font-weight:600}
+  color:rgb(var(--po-ink) / .34)}
+.phero-brands b{color:rgb(var(--po-ink) / .58);font-weight:600}
 
 /* ---- 9:16 deal cards: one active, a neighbour scaled back either side ----
    Same height as the stage beside it so the two columns sit level. The card
@@ -2820,25 +3327,25 @@ html[data-t="light"] .hero2{
   transition:transform .65s cubic-bezier(.35,.1,.25,1),opacity .65s ease,border-color .3s ease,
     box-shadow .3s ease}
 .phero-deal.is-active{transform:translateX(-50%) scale(1);opacity:1;z-index:3;pointer-events:auto;
-  border-color:rgba(253,176,23,.4);box-shadow:0 26px 60px rgba(0,0,0,.55)}
+  border-color:var(--promo-accent-mid);box-shadow:0 22px 50px rgb(var(--po-ink) / .16)}
 .phero-deal.is-prev{transform:translateX(calc(-50% - 74%)) scale(.84);opacity:.32;z-index:2}
 .phero-deal.is-next{transform:translateX(calc(-50% + 74%)) scale(.84);opacity:.32;z-index:2}
 .phero-deal-photo{position:relative;height:42%;flex:none;background:var(--promo-bg);
   border-bottom:1px solid var(--promo-line-soft);display:flex;align-items:center;
   justify-content:center;overflow:hidden}
 .phero-deal-img{width:84%;height:auto;object-fit:contain;
-  filter:drop-shadow(0 10px 12px rgba(0,0,0,.5));animation:pheroFloat 6s ease-in-out infinite}
+  filter:drop-shadow(0 8px 10px rgb(var(--po-ink) / .18));animation:pheroFloat 6s ease-in-out infinite}
 .phero-deal-shell{width:70%}
 .phero-deal-shell .phero-wordmark{font-size:.7rem;letter-spacing:.14em}
 .phero-dgrade{position:absolute;top:11px;left:11px;z-index:2;font-weight:800;font-size:.78rem;
   min-width:32px;height:27px;padding:0 8px;display:inline-flex;align-items:center;
   justify-content:center;border-radius:8px}
 .phero-dgrade.phero-grade-aplus{box-shadow:0 0 14px rgba(253,176,23,.4)}
-.phero-dgrade.phero-grade-b{background:rgba(255,255,255,.04);
-  border-color:rgba(255,255,255,.28)}
+.phero-dgrade.phero-grade-b{background:rgb(var(--po-ink) / .04);
+  border-color:rgb(var(--po-ink) / .28)}
 .phero-deal-ship{position:absolute;top:11px;right:11px;z-index:2;display:inline-flex;
   align-items:center;gap:4px;font-size:.66rem;font-weight:700;color:var(--promo-accent);
-  background:rgba(10,9,6,.8);border:1px solid rgba(253,176,23,.4);padding:5px 8px;
+  background:var(--sheet);border:1px solid var(--promo-accent-mid);padding:5px 8px;
   border-radius:999px}
 .phero-deal-ship svg{width:10px;height:10px;fill:var(--promo-accent)}
 .phero-deal-body{flex:1;display:flex;flex-direction:column;padding:13px 15px 15px;min-height:0}
@@ -2856,8 +3363,8 @@ html[data-t="light"] .hero2{
 .phero-deal-qc-label b i{font-style:normal;color:var(--promo-muted);font-weight:600;
   font-size:.64rem}
 .phero-deal-missing{font-style:normal;letter-spacing:0;text-transform:none;font-weight:500;
-  color:rgba(255,255,255,.34)}
-.phero-deal-track{display:block;height:5px;border-radius:999px;background:rgba(255,255,255,.1);
+  color:rgb(var(--po-ink) / .34)}
+.phero-deal-track{display:block;height:5px;border-radius:999px;background:rgb(var(--po-ink) / .1);
   overflow:hidden}
 .phero-deal-fill{display:block;height:100%;border-radius:999px;background:var(--promo-accent)}
 .phero-deal-price{margin-top:auto;padding-top:10px;display:flex;align-items:baseline;gap:6px}
@@ -2894,7 +3401,7 @@ html[data-t="light"] .hero2{
   box-shadow:0 0 26px rgba(253,176,23,.4)}
 .phero-grade-a{color:var(--promo-accent);border:1.5px solid var(--promo-accent);
   background:var(--promo-accent-soft)}
-.phero-grade-b{color:var(--promo-muted);border:1.5px solid rgba(255,255,255,.26)}
+.phero-grade-b{color:var(--promo-muted);border:1.5px solid rgb(var(--po-ink) / .26)}
 .phero-condition{font-size:.95rem;font-weight:600;color:var(--promo-text)}
 .phero-condition small{display:block;font-size:.78rem;font-weight:500;color:var(--promo-muted);
   margin-top:2px}
@@ -2905,7 +3412,7 @@ html[data-t="light"] .hero2{
   filter:drop-shadow(0 16px 22px rgba(0,0,0,.5))}
 .phero-laptop{width:100%;filter:drop-shadow(0 16px 22px rgba(0,0,0,.5))}
 .phero-lid{aspect-ratio:16/9.6;border-radius:12px 12px 3px 3px;padding:7px 7px 9px;
-  background:var(--promo-shell);border:1px solid rgba(255,255,255,.14)}
+  background:var(--promo-shell);border:1px solid rgb(var(--po-ink) / .14)}
 .phero-screen{width:100%;height:100%;border-radius:7px;display:flex;align-items:center;
   justify-content:center;overflow:hidden;position:relative;background:var(--promo-screen-1)}
 .phero-screen[data-tint="1"]{background:var(--promo-screen-2)}
@@ -2913,26 +3420,26 @@ html[data-t="light"] .hero2{
 .phero-screen[data-tint="3"]{background:var(--promo-screen-4)}
 .phero-screen[data-tint="4"]{background:var(--promo-screen-5)}
 .phero-screen[data-tint="5"]{background:var(--promo-screen-6)}
-.phero-wordmark{font-weight:800;letter-spacing:.2em;font-size:1.05rem;color:rgba(255,255,255,.92);
+.phero-wordmark{font-weight:800;letter-spacing:.2em;font-size:1.05rem;color:rgb(var(--po-ink) / .92);
   text-transform:uppercase;white-space:nowrap}
 .phero-deck{height:13px;margin:0 -4.5%;border-radius:2px 2px 9px 9px;background:var(--promo-deck);
-  border:1px solid rgba(255,255,255,.12);border-top:none;position:relative}
+  border:1px solid rgb(var(--po-ink) / .12);border-top:none;position:relative}
 .phero-deck::after{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);
-  width:16%;height:4px;border-radius:0 0 5px 5px;background:rgba(255,255,255,.16)}
+  width:16%;height:4px;border-radius:0 0 5px 5px;background:rgb(var(--po-ink) / .16)}
 .phero-laptop.is-silver .phero-lid{background:var(--promo-shell-alt);
-  border-color:rgba(255,255,255,.45)}
+  border-color:rgb(var(--po-ink) / .45)}
 .phero-laptop.is-silver .phero-deck{background:var(--promo-deck-alt);
-  border-color:rgba(255,255,255,.4)}
+  border-color:rgb(var(--po-ink) / .4)}
 .phero-laptop.is-silver .phero-deck::after{background:rgba(0,0,0,.24)}
 .phero-meta{display:flex;align-items:center;gap:12px;opacity:0;transform:translateY(10px);
   transition:opacity .6s ease .35s,transform .6s ease .35s}
 .phero-slide.is-on .phero-meta{opacity:1;transform:translateY(0)}
 .phero-model{font-weight:700;font-size:1.02rem;color:var(--promo-text)}
 .phero-chip{font-size:.78rem;font-weight:600;letter-spacing:.05em;color:var(--promo-muted);
-  border:1px solid var(--promo-line);background:rgba(255,255,255,.04);border-radius:999px;
+  border:1px solid var(--promo-line);background:rgb(var(--po-ink) / .04);border-radius:999px;
   padding:6px 12px}
 .phero-nav{display:flex;gap:8px;justify-content:center;margin-top:18px}
-.phero-nav button{width:34px;height:5px;border-radius:999px;background:rgba(255,255,255,.15);
+.phero-nav button{width:34px;height:5px;border-radius:999px;background:rgb(var(--po-ink) / .15);
   overflow:hidden;position:relative;padding:0;border:0}
 .phero-nav button::after{content:"";position:absolute;inset:0;background:var(--promo-accent);
   transform:scaleX(0);transform-origin:left center}
@@ -2944,7 +3451,7 @@ html[data-t="light"] .hero2{
 .phero-chain{list-style:none;display:flex;align-items:stretch;margin:0;padding:0}
 .phero-step{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;
   padding:9px 10px 10px;border-radius:12px;border:1px solid var(--promo-line-soft);
-  background:rgba(255,255,255,.02);color:rgba(255,255,255,.42);
+  background:rgb(var(--po-ink) / .02);color:rgb(var(--po-ink) / .42);
   animation:pheroNode 8s ease-in-out infinite}
 .phero-step:nth-of-type(1){animation-delay:0s}
 .phero-step:nth-of-type(3){animation-delay:2s}
@@ -2959,12 +3466,12 @@ html[data-t="light"] .hero2{
 .phero-step:nth-of-type(7) .phero-step-icon{animation-delay:6s}
 .phero-step-icon svg{width:17px;height:17px;stroke:currentColor}
 .phero-step-copy{display:flex;flex-direction:column;align-items:center;gap:4px}
-.phero-step-num{font-size:.72rem;font-weight:700;letter-spacing:.16em;color:rgba(255,255,255,.32)}
+.phero-step-num{font-size:.72rem;font-weight:700;letter-spacing:.16em;color:rgb(var(--po-ink) / .32)}
 .phero-step-title{font-size:.82rem;font-weight:700;color:var(--promo-text)}
 .phero-step-desc{font-size:.82rem;color:var(--promo-muted);line-height:1.4}
 .phero-link{flex:0 0 clamp(28px,4.5vw,72px);display:flex;align-items:flex-start;padding:0 2px;
   margin-top:24.5px}
-.phero-track{width:100%;height:3px;border-radius:999px;background:rgba(255,255,255,.12);
+.phero-track{width:100%;height:3px;border-radius:999px;background:rgb(var(--po-ink) / .12);
   position:relative;display:block}
 .phero-fill{position:absolute;inset:0;border-radius:999px;background:var(--promo-accent);
   box-shadow:0 0 14px rgba(253,176,23,.6);transform:scaleX(0);transform-origin:left center;
@@ -2973,14 +3480,14 @@ html[data-t="light"] .hero2{
 .phero-link:nth-of-type(4) .phero-fill{animation-delay:2.55s}
 .phero-link:nth-of-type(6) .phero-fill{animation-delay:4.55s}
 @keyframes pheroNode{
-  0%{border-color:var(--promo-line-soft);background:rgba(255,255,255,.02);
-    color:rgba(255,255,255,.42)}
+  0%{border-color:var(--promo-line-soft);background:rgb(var(--po-ink) / .02);
+    color:rgb(var(--po-ink) / .42)}
   4%,20%{border-color:var(--promo-accent);background:var(--promo-accent-soft);
     color:var(--promo-accent)}
   34%,86%{border-color:rgba(253,176,23,.3);background:rgba(253,176,23,.05);
     color:rgba(253,176,23,.65)}
-  100%{border-color:var(--promo-line-soft);background:rgba(255,255,255,.02);
-    color:rgba(255,255,255,.42)}}
+  100%{border-color:var(--promo-line-soft);background:rgb(var(--po-ink) / .02);
+    color:rgb(var(--po-ink) / .42)}}
 @keyframes pheroIcon{
   0%{transform:scale(1);border-color:var(--promo-line)}
   6%{transform:scale(1.1);border-color:var(--promo-accent)}
@@ -3033,3 +3540,243 @@ html[data-t="light"] .hero2{
     color:var(--promo-accent)}
   .phero-fill{transform:none;opacity:1}
 }
+
+/* ---- PRODUCT DETAIL — ARCHETYPE C (Record) ----
+   Identity and the two actions stay put on the left while the evidence — the
+   supply-point board, the specification, the condition frames — scrolls on the
+   right. The decision the panel carries is the one everything else is evidence
+   for, so it does not scroll away from the evidence. */
+.pdp{display:grid;grid-template-columns:390px minmax(0,1fr);gap:26px;align-items:start;
+  padding-top:22px;padding-bottom:44px}
+
+/* ---- left: the sticky panel ---- */
+.pv{position:sticky;top:78px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:18px;padding:20px}
+.pv-img{position:relative;background:var(--sheet-2);border:1px solid var(--rule-2);
+  border-radius:14px;padding:30px 18px 24px;display:flex;justify-content:center;color:var(--ink-3)}
+.pv-draw{width:80%;height:auto}
+.pv-grade{position:absolute;top:12px;left:12px;font-weight:800;font-size:13px;
+  padding:6px 12px;border-radius:9px;background:var(--promo-accent);color:var(--promo-accent-ink)}
+.pv-seal{position:absolute;top:12px;right:12px;font-size:11px;font-weight:700;
+  padding:6px 10px;border-radius:999px;background:var(--sheet);border:1px solid var(--rule);
+  color:var(--ink-2)}
+.pv-actions{display:flex;gap:10px;margin-top:16px}
+.pvbtn{flex:1;padding:14px 0;border-radius:12px;font-weight:800;font-size:12.5px;
+  letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease}
+.pvbtn svg{width:16px;height:16px;flex:0 0 auto}
+.pvbtn-cart{background:var(--promo-accent);color:var(--promo-accent-ink)}
+.pvbtn-cart svg{stroke:var(--promo-accent-ink)}
+.pvbtn-buy{background:var(--ink);color:var(--sheet)}
+.pvbtn-buy svg{stroke:var(--sheet)}
+.pvbtn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 20px rgb(0 0 0 / .18)}
+.pvbtn:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
+.pvbtn:disabled{opacity:.55;cursor:wait;transform:none;box-shadow:none}
+.pv-from{margin:9px 0 0;font-size:11.5px;color:var(--ink-3);line-height:1.5}
+.pv-blocked{margin:16px 0 0;padding:12px 13px;border:1px dashed var(--rule);border-radius:10px;
+  background:var(--sheet-2);font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.pv-trust{margin:14px 0 0;padding-top:13px;border-top:1px dashed var(--rule);
+  font-size:12px;color:var(--ink-2);line-height:1.6}
+.pv-trust b{color:var(--ink);font-weight:600}
+.pv-facts{margin:13px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.pv-facts dt{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3)}
+.pv-facts dd{margin:3px 0 0;font-size:13px;font-weight:700;color:var(--ink)}
+.pv-facts .denom{font-weight:500;color:var(--ink-3);font-size:11px}
+
+/* ---- right: the record ---- */
+.det{min-width:0}
+.det-title{margin:0;font-size:clamp(1.35rem,2.2vw,1.7rem);font-weight:800;
+  letter-spacing:-.01em;color:var(--ink)}
+.meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:10px}
+.dchip{font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--sheet);color:var(--ink-2)}
+/* The selected grade only. Amber is an ACTIVE STATE here, which is one of the
+   three things it is allowed to mean — not a ranking of A+ above B. */
+.dchip.hl{border-color:var(--promo-accent-mid);background:var(--promo-accent-soft);color:var(--warn)}
+
+.price-blk{margin-top:16px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:16px;padding:18px 20px}
+.price-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px}
+.price-now{font-size:1.9rem;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.price-off{font-size:14px;font-weight:700;color:var(--warn)}
+.price-note{margin:5px 0 0;font-size:12px;color:var(--ink-2);line-height:1.55}
+.pin-line{display:flex;gap:9px;margin-top:14px;max-width:420px}
+.pin-line .field{flex:1;min-width:0;background:var(--sheet-2);border:1px solid var(--rule);
+  border-radius:11px;color:var(--ink);padding:10px 13px;font-size:14px;outline:none;
+  transition:border-color .2s ease,box-shadow .2s ease}
+.pin-line .field::placeholder{color:var(--ink-4)}
+.pin-line .field:focus{border-color:var(--promo-accent);box-shadow:0 0 0 3px var(--promo-accent-soft)}
+.mini{flex:0 0 auto;padding:0 16px;border-radius:11px;cursor:pointer;
+  background:var(--promo-accent);color:var(--promo-accent-ink);
+  font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;
+  transition:transform .2s ease,box-shadow .2s ease}
+.mini:hover{transform:translateY(-1px);box-shadow:0 6px 16px var(--promo-accent-mid)}
+.deliver{margin:10px 0 0;font-size:13px;color:var(--ink-2);line-height:1.55}
+.deliver b{color:var(--ink)}
+
+.sec-t{margin:24px 0 11px;font-size:16px;font-weight:800;color:var(--ink)}
+.sec-sub{margin-left:8px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
+
+.grades{display:flex;flex-wrap:wrap;gap:10px}
+.gpill{display:block;text-align:left;text-decoration:none;
+  border:1px solid var(--rule);background:var(--sheet);border-radius:12px;padding:11px 16px;
+  transition:border-color .2s ease,background-color .2s ease}
+.gpill b{display:block;font-size:14px;font-weight:800;color:var(--ink)}
+.gpill small{display:block;margin-top:2px;font-size:11px;font-weight:600;color:var(--ink-3)}
+.gpill:hover{border-color:var(--promo-accent-mid)}
+.gpill.on{border-color:var(--promo-accent);background:var(--promo-accent-soft)}
+.gpill.on b{color:var(--warn)}
+.gpill:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
+
+/* `contain: paint` as well as `overflow: hidden`. Hidden clips what is
+   PAINTED, but the board's sticky first column still reported its full 1377px
+   up to the root, which gave the document ~186px of empty horizontal scroll
+   with nothing in it. Paint containment stops that propagating; the board
+   still scrolls inside its own card. */
+.tbl-wrap{background:var(--sheet);border:1px solid var(--rule);border-radius:16px;
+  overflow:hidden;contain:paint}
+.tbl-wrap .empty{border:none;border-radius:0}
+
+/* ---- accordions: specification, condition frames ---- */
+.det .acc{margin-top:22px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:16px;overflow:hidden}
+.det .acc>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+  padding:16px 20px;font-size:14px;font-weight:800;color:var(--ink)}
+.det .acc>summary::-webkit-details-marker{display:none}
+.det .acc>summary svg{width:16px;height:16px;flex:0 0 auto;margin-left:auto;stroke:var(--ink-3);
+  transition:transform .3s ease}
+.det .acc[open]>summary svg{transform:rotate(180deg)}
+.acc-count{font-size:11px;font-weight:600;color:var(--ink-3)}
+.acc-b{border-top:1px solid var(--rule-2)}
+.acc-b-pad{padding:16px 20px}
+.spec{margin:0}
+.spec>div{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;
+  padding:11px 20px;border-bottom:1px solid var(--rule-2)}
+.spec>div:last-child{border-bottom:none}
+.spec dt{font-size:13px;font-weight:600;color:var(--ink-2)}
+.spec dd{margin:0;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+
+@media(max-width:960px){
+  .pdp{grid-template-columns:1fr;gap:18px}
+  .pv{position:static}
+}
+@media(prefers-reduced-motion:reduce){
+  .pvbtn,.mini,.det .acc>summary svg{transition:none}
+}
+
+/* The board carries ten columns into a ~940px record column, so it scrolls
+   sideways. The supply point sticks to the left edge while it does: a price
+   the reader cannot attribute to a source is not a comparison. */
+.tbl-wrap .tg-cell{padding:11px 13px}
+.tbl-wrap thead th{white-space:nowrap}
+.tbl-wrap th:first-child{position:sticky;left:0;z-index:2;background:var(--sheet)}
+.tbl-wrap tbody th:first-child{box-shadow:1px 0 0 var(--rule-2)}
+.tbl-wrap .overflow-x-auto{scrollbar-width:thin}
+
+/* Both tables are wider than a phone. Clamp the scroller so the BOARD scrolls
+   inside its own card instead of widening the document, and let the long mono
+   values in the specification wrap rather than push the page sideways. */
+.tbl-wrap .obrd,.tbl-wrap .overflow-x-auto{min-width:0;max-width:100%}
+@media(max-width:960px){
+  .pdp{grid-template-columns:minmax(0,1fr)}
+  .spec>div{grid-template-columns:minmax(0,1fr);gap:3px}
+}
+
+/* The set's one disclosure, above the frames. It replaces the six identical
+   captions that used to sit under each photograph. */
+.gal-disclosure{margin:0 0 14px;padding:11px 13px;border:1px solid var(--rule-2);
+  border-radius:10px;background:var(--sheet-2);font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+
+/* The board's "Lowest" marker, in the supply point cell rather than under the
+   price. Amber here is a measured value — the cheapest landed row — and not a
+   verdict on the supplier. */
+.offer-lowest{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;
+  font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  background:var(--promo-accent);color:var(--promo-accent-ink)}
+/* The row's add button, painted to match the panel's primary action. */
+.tbl-wrap .offer-add{background:var(--promo-accent);color:var(--promo-accent-ink);
+  border-color:transparent}
+.tbl-wrap .offer-add:hover:not(:disabled){filter:brightness(1.06)}
+
+/* The global `th` rule is written for COLUMN headers — 9.5px uppercase mono —
+   and a row header is not one. Here it is the supply point's NAME, so it opts
+   back out into ordinary sentence case. */
+.tbl-wrap tbody th[scope='row']{font-family:inherit;font-size:13.5px;font-weight:700;
+  letter-spacing:normal;text-transform:none;color:var(--ink)}
+.tbl-wrap tbody th[scope='row'] .text-body-sm{font-size:12px;font-weight:500;
+  letter-spacing:normal;text-transform:none;color:var(--ink-2)}
+/* Wide enough for the name and the Lowest pill to sit on one line, which is
+   where the pill belongs — it qualifies the supply point, not the row below. */
+.tbl-wrap tbody th[scope='row']{min-width:212px}
+
+/* Every cell starts at the top of its row, not floating in the middle of it.
+   The global `td { vertical-align: middle }` is written for short one-line
+   rows; a board row is three lines tall in the supply point and the inspection
+   columns, and a value centred against those reads as belonging to neither. */
+.tbl-wrap tbody td,.tbl-wrap tbody th{vertical-align:top}
+/* The break-up is a footnote to the price, so it is sized like one — the same
+   12px muted line the city sits on under the supply point. */
+.tbl-wrap .offer-breakup{font-size:12px;font-weight:500;color:var(--ink-3);
+  text-underline-offset:3px}
+.tbl-wrap .offer-breakup:hover{color:var(--ink)}
+
+/* The inspection dates were breaking mid-date — "31 Aug" above "2026" — which
+   turned a two-fact cell into four lines and set the height of the whole row.
+   Neither date wraps now. */
+.tbl-wrap .offer-qc{white-space:nowrap}
+
+/* ---- THE SIGNED-OUT BASKET (/cart) ----
+   Kept in the browser until there is an account to attach it to. It is not a
+   cart yet, so it has no checkout button — the one action is to sign in. */
+.gcart{max-width:860px;margin:0 auto;padding:26px 0 48px}
+.gcart-head h1{margin:0;font-size:clamp(1.3rem,2.2vw,1.6rem);font-weight:800;color:var(--ink)}
+.gcart-head p{margin:6px 0 0;font-size:13px;color:var(--ink-2)}
+.gcart-head b{color:var(--ink)}
+.gcart-lines{list-style:none;margin:18px 0 0;padding:0;background:var(--sheet);
+  border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+.gcart-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;
+  align-items:start;gap:16px;padding:16px 20px;border-bottom:1px solid var(--rule-2)}
+.gcart-line:last-child{border-bottom:none}
+.gcart-line-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.gcart-line-main b{font-size:14px;font-weight:700;color:var(--ink)}
+.gcart-spec{font-size:12px;color:var(--ink-2)}
+.gcart-src{font-size:12px;color:var(--ink-3)}
+.gcart-line-qty{display:inline-flex;align-items:stretch;height:34px;
+  border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--sheet)}
+.gcart-line-qty button{width:30px;font-weight:800;color:var(--ink-2);cursor:pointer}
+.gcart-line-qty button:hover{background:var(--promo-accent-soft);color:var(--warn)}
+.gcart-line-qty output{display:flex;align-items:center;justify-content:center;width:34px;
+  border-inline:1px solid var(--rule);font-size:13px;font-weight:700;color:var(--ink)}
+.gcart-line-money{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}
+.gcart-line-money span{font-size:14px;font-weight:700;color:var(--ink)}
+.gcart-line-money small{font-size:11px;color:var(--ink-3)}
+.gcart-remove{align-self:center;font-size:12px;color:var(--ink-3);text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer}
+.gcart-remove:hover{color:var(--ink)}
+.gcart-foot{margin-top:18px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:16px;padding:18px 20px}
+.gcart-total{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.gcart-total span{font-size:13px;color:var(--ink-2)}
+.gcart-total b{font-size:1.4rem;font-weight:800;color:var(--ink)}
+.gcart-note{margin:10px 0 0;font-size:12px;line-height:1.6;color:var(--ink-2)}
+.gcart-actions{display:flex;align-items:center;gap:14px;margin-top:16px}
+.gcart-actions .pvbtn{flex:0 0 auto;padding:13px 22px;text-decoration:none}
+.gcart-clear{font-size:12.5px;color:var(--ink-3);text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer}
+.gcart-clear:hover{color:var(--ink)}
+@media(max-width:640px){
+  .gcart{padding:18px 14px 40px}
+  .gcart-line{grid-template-columns:minmax(0,1fr) auto;row-gap:10px}
+  .gcart-line-money{grid-column:1 / -1;align-items:flex-start}
+  .gcart-remove{grid-column:1 / -1;justify-self:start}
+}
+
+/* The "View cart" dock, in the same amber as the panel's Add to cart and the
+   board's. It is the hand-off from that action, so it is the same action's
+   colour rather than the teal system accent. */
+.cartdock-link.acc{background:var(--promo-accent);color:var(--promo-accent-ink);
+  border-color:transparent}
+.cartdock-link.acc:hover{filter:brightness(1.06)}
+.cartdock-count{background:var(--promo-accent-ink);color:var(--promo-accent)}

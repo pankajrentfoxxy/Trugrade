@@ -301,6 +301,9 @@
     --promo-muted: #a2977c;
     --promo-accent: #fdb017;
     --promo-accent-ink: #1c1300;
+    /* The amber as TEXT on a white sheet. #fdb017 itself fails contrast there,
+       so light themes read this shade instead; dark themes keep the accent. */
+    --promo-accent-deep: #b07a00;
     --promo-accent-soft: rgba(253, 176, 23, 0.12);
     --promo-accent-mid: rgba(253, 176, 23, 0.5);
     /* Illustration only: the drawn laptop's shell, deck and screen tints. */
@@ -314,6 +317,30 @@
     --promo-screen-4: #1c3a4d;
     --promo-screen-5: #3f2424;
     --promo-screen-6: #2b2b2b;
+  }
+
+  /* ---- Cream cart palette -------------------------------------------------
+     The supplied cart design, on a white ground, with the same #fdb017 yellow as the
+     promo hero, flat, no gradients. Like the promo palette it is one surface's
+     own language, constant in both themes, and nothing outside the cart route
+     (the `.cartbody` wrapper) should reach for it. Literal hex is allowed here and
+     nowhere else. */
+  :root {
+    --cream-surface: #ffffff;
+    --cream-surface-2: #f8efd8;
+    --cream-line: rgba(58, 44, 8, 0.14);
+    --cream-line-soft: rgba(58, 44, 8, 0.08);
+    --cream-line-hover: rgba(58, 44, 8, 0.06);
+    --cream-text: #2a2105;
+    --cream-muted: #86754c;
+    --cream-accent: #fdb017;
+    --cream-accent-ink: #2a2105;
+    --cream-accent-soft: rgba(253, 176, 23, 0.16);
+    --cream-accent-mid: rgba(253, 176, 23, 0.5);
+    --cream-accent-glow: rgba(253, 176, 23, 0.35);
+    --cream-accent-deep: #b07a00;
+    --cream-shadow: rgba(58, 44, 8, 0.25);
+    --cream-on-dark: #ffffff;
   }
 
   /* A CONSTANT white, identical in every theme.

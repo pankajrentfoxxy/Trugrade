@@ -146,17 +146,21 @@ function resetCarts() {
   );
 }
 
-async function makeCart(request, name, lines) {
-  const created = await request.post(`${SHOP}/api/buyer/carts`, { data: { name } });
-  if (!created.ok()) throw new Error(`create ${name}: ${created.status()}`);
-  const { id } = await created.json();
+/** One cart per buyer: empty it, then add the lines this shot needs. */
+async function makeCart(request, _name, lines) {
+  const current = await request.get(`${SHOP}/api/buyer/cart`);
+  if (!current.ok()) throw new Error(`read cart: ${current.status()}`);
+  const view = await current.json();
+  for (const line of view.dispatchGroups.flatMap((g) => g.lines)) {
+    await request.delete(`${SHOP}/api/buyer/cart/items/${line.itemId}`);
+  }
   for (const [listingId, qty] of lines) {
-    const added = await request.post(`${SHOP}/api/buyer/carts/${id}/items`, {
+    const added = await request.post(`${SHOP}/api/buyer/cart/items`, {
       data: { listingId, qty },
     });
-    if (!added.ok()) throw new Error(`add to ${name}: ${added.status()} ${await added.text()}`);
+    if (!added.ok()) throw new Error(`add: ${added.status()} ${await added.text()}`);
   }
-  return id;
+  return view.id;
 }
 
 /* ------------------------------------------------------------------ the run */
@@ -176,21 +180,10 @@ async function states(browser, theme) {
   await go(page, '/cart');
   await capture(page, `T15-no-carts-${theme}`, [600]);
 
-  // 2 — a named cart with nothing in it.
-  const empty = await makeCart(context.request, 'Q3 refresh', []);
-  await go(page, `/cart?cart=${empty}`);
-  await capture(page, `T15-empty-cart-${theme}`, [600]);
-
   // 3 — one line, from one dispatch point.
   const one = await makeCart(context.request, 'Delhi office', [[OFFERS.delhiW, 3]]);
-  await go(page, `/cart?cart=${one}`);
+  await go(page, `/cart`);
   await capture(page, `T15-one-line-${theme}`, [900, 600]);
-
-  // 4 — TWO NAMED CARTS. The switcher, with a line count on each.
-  await capture(page, `T15-two-carts-${theme}`, []);
-  await page.locator('.cartsw .chipf', { hasText: 'Q3 refresh' }).click();
-  await page.waitForTimeout(700);
-  await capture(page, `T15-cart-switched-${theme}`, []);
 
   // 5 — THE SCREEN. Five supply points in one cart: New Delhi twice, Gurugram,
   // Sonipat and Noida. One order, one invoice, five places the machines leave
@@ -202,7 +195,7 @@ async function states(browser, theme) {
     [OFFERS.sonipatV, 3],
     [OFFERS.noidaF, 5],
   ]);
-  await go(page, `/cart?cart=${many}`);
+  await go(page, `/cart`);
   await capture(page, `T15-multi-supply-point-${theme}`, [900, 600]);
 
   // 6 — a line whose availability has dropped. Palwal holds three; the cart
@@ -211,7 +204,7 @@ async function states(browser, theme) {
     [OFFERS.delhiW, 2],
     [OFFERS.palwalB, 5],
   ]);
-  await go(page, `/cart?cart=${short}`);
+  await go(page, `/cart`);
   await capture(page, `T15-reduced-availability-${theme}`, [900, 600]);
   await page
     .locator('.cartlines table tbody tr', { hasText: 'still available' })
@@ -223,13 +216,6 @@ async function states(browser, theme) {
   // `OfferGrid.onAdd` builds. This is the add path end to end.
   await go(page, `/cart?listing=${OFFERS.noidaF}&qty=2`);
   await capture(page, `T15-added-from-board-${theme}`, []);
-
-  // 8 — naming a new cart, and the refusal when the name is already taken.
-  await page.getByRole('button', { name: 'New cart' }).click();
-  await page.locator('#cartname').fill('Q3 refresh');
-  await page.getByRole('button', { name: 'Create' }).click();
-  await page.waitForTimeout(700);
-  await capture(page, `T15-duplicate-cart-name-${theme}`, []);
 
   await context.close();
 }
@@ -250,7 +236,7 @@ async function unavailable(browser, theme) {
   ]);
   sql(`UPDATE listing.listing SET status = 'PAUSED' WHERE id = '${OFFERS.gurugramL}'`);
   try {
-    await go(page, `/cart?cart=${cart}`);
+    await go(page, `/cart`);
     await capture(page, `T15-line-unavailable-${theme}`, [900, 600]);
   } finally {
     sql(`UPDATE listing.listing SET status = 'ACTIVE' WHERE id = '${OFFERS.gurugramL}'`);
@@ -261,7 +247,7 @@ async function unavailable(browser, theme) {
 /** The client read, caught in flight: the API answers, slowly. */
 async function loading(browser, theme) {
   const { context, page } = await open(browser, theme);
-  await page.route('**/api/buyer/carts', async (route) => {
+  await page.route('**/api/buyer/cart', async (route) => {
     await new Promise((r) => setTimeout(r, 6000));
     await route.continue();
   });

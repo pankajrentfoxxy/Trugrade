@@ -9,15 +9,17 @@ import {
   Skeleton,
   StatusPill,
   StepRail,
+  ToastProvider,
   WhyRail,
+  useToast,
   type PriceLine,
   type Step,
   type WhyRailItem,
 } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { Money } from '@trugrade/contracts';
-import type { ApiFailure } from '../register/api';
-import { Countdown } from './Countdown';
+import { setSessionLostHandler, type ApiFailure } from '../register/api';
+import { HoldCard, useHold } from './Countdown';
 import {
   abandonCheckout,
   confirmCheckout,
@@ -37,6 +39,12 @@ import {
  * one of them can come back 401 — a signed-out visitor is a state this screen
  * renders, not an error — and because the hold is a live deadline that has to
  * tick.
+ *
+ * The screen is drawn in the supplied checkout design's language — Archivo,
+ * the promo amber, 14–16px radii — on the product's own surfaces. Every class
+ * below is `ck-*` and lives in `storefront.css`; the palette is the `.ck` block
+ * there, which maps the design's cream onto `--sheet` / `--ink` so the page
+ * flips with the theme like every other working surface.
  */
 
 /* ==========================================================================
@@ -70,6 +78,8 @@ const rupees = (decimal: string): string => Money.parse(decimal).format();
 
 const machines = (n: number): string => `${n} machine${n === 1 ? '' : 's'}`;
 
+const units = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
+
 /**
  * What went wrong, in the server's words where it had any.
  *
@@ -92,7 +102,21 @@ function cartIdFromUrl(): string | null {
  * The screen
  * ======================================================================== */
 
+/**
+ * The toast is the "tax head just changed" note when a delivery site is
+ * picked. The provider is mounted here because the storefront's root layout
+ * has none — the portal shell has its own.
+ */
 export function CheckoutFlow(): React.JSX.Element {
+  return (
+    <ToastProvider>
+      <Flow />
+    </ToastProvider>
+  );
+}
+
+function Flow(): React.JSX.Element {
+  const toast = useToast();
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [session, setSession] = React.useState<CheckoutSession | null>(null);
   const [step, setStep] = React.useState<StepCode>('BILLING');
@@ -106,6 +130,8 @@ export function CheckoutFlow(): React.JSX.Element {
   const [paymentMode, setPaymentMode] = React.useState<PaymentMode | null>(null);
   const [poNumber, setPoNumber] = React.useState('');
   const [costCentre, setCostCentre] = React.useState('');
+  /** The furthest step reached. Completed steps are clickable back to. */
+  const [reached, setReached] = React.useState(0);
 
   const cartId = React.useRef<string | null>(null);
 
@@ -117,12 +143,26 @@ export function CheckoutFlow(): React.JSX.Element {
     setPaymentMode((v) => v ?? (next.selection.paymentMode as PaymentMode | null));
   }, []);
 
+  const onExpired = React.useCallback(() => setPhase({ k: 'expired' }), []);
+  const hold = useHold(
+    phase.k === 'ready' && session ? session.holdExpiresAt : null,
+    onExpired,
+  );
+
   /* ---------------------------------------------------------------- boot */
 
   React.useEffect(() => {
     let live = true;
     const id = cartIdFromUrl();
     cartId.current = id;
+
+    // Checkout is outside the portal shell, so nothing else registers the
+    // session-lost handler — and without one, `call` never settles a dead
+    // session's request and the skeleton stays on screen for good. Here, a
+    // lost session is the signed-out state, which has its own path in.
+    setSessionLostHandler(() => {
+      if (live) setPhase({ k: 'signed-out' });
+    });
 
     if (!id) {
       setPhase({
@@ -164,9 +204,9 @@ export function CheckoutFlow(): React.JSX.Element {
    * produces — not the ones the previous selection did.
    */
   const requote = React.useCallback(
-    async (selection: Partial<Record<string, string>>): Promise<boolean> => {
+    async (selection: Partial<Record<string, string>>): Promise<CheckoutSession | null> => {
       const id = cartId.current;
-      if (!id) return false;
+      if (!id) return null;
       setBusy('quote');
       const next = await quoteCheckout(id, {
         gstProfileId: gstProfileId ?? undefined,
@@ -178,23 +218,31 @@ export function CheckoutFlow(): React.JSX.Element {
       setBusy(null);
       if (next.ok) {
         setSession(next.data);
-        return true;
+        return next.data;
       }
       if (next.status === 412) {
         setPhase({ k: 'expired' });
-        return false;
+        return null;
       }
       setNotice(problem(next));
-      return false;
+      return null;
     },
     [gstProfileId, billingAddressId, deliveryAddressId, paymentMode],
   );
 
-  const onExpired = React.useCallback(() => setPhase({ k: 'expired' }), []);
-
   /* -------------------------------------------------------------- actions */
 
   const index = STEPS.findIndex((s) => s.code === step);
+
+  const goTo = (i: number): void => {
+    const target = STEPS[i];
+    if (!target) return;
+    setNotice(null);
+    setFieldErrors({});
+    setStep(target.code);
+    setReached((r) => Math.max(r, i));
+    window.scrollTo({ top: 0 });
+  };
 
   const goNext = async (): Promise<void> => {
     setNotice(null);
@@ -233,15 +281,23 @@ export function CheckoutFlow(): React.JSX.Element {
       if (!(await requote({ paymentMode }))) return;
     }
 
-    const next = STEPS[index + 1];
-    if (next) setStep(next.code);
+    goTo(index + 1);
   };
 
-  const goBack = (): void => {
-    setNotice(null);
-    setFieldErrors({});
-    const previous = STEPS[index - 1];
-    if (previous) setStep(previous.code);
+  const goBack = (): void => goTo(index - 1);
+
+  /** A delivery site was picked: re-quote now, and say what it did to the tax. */
+  const chooseSite = async (id: string): Promise<void> => {
+    setDelivery(id);
+    const next = await requote({ deliveryAddressId: id });
+    if (!next?.breakUp || next.breakUp.grandTotal === null) return;
+    toast({
+      tone: 'info',
+      title: next.breakUp.tax.interState
+        ? 'Inter-state — one IGST line'
+        : `Intra-state — split into CGST + ${next.breakUp.tax.stateTaxLabel}`,
+      durationMs: 2600,
+    });
   };
 
   /**
@@ -275,6 +331,7 @@ export function CheckoutFlow(): React.JSX.Element {
 
     if (placed.ok) {
       setPhase({ k: 'placed', order: placed.data });
+      window.scrollTo({ top: 0 });
       return;
     }
     if (placed.status === 401) {
@@ -290,17 +347,28 @@ export function CheckoutFlow(): React.JSX.Element {
   const leave = async (): Promise<void> => {
     const id = cartId.current;
     if (id) await abandonCheckout(id);
-    window.location.href = `/cart?cart=${id ?? ''}`;
+    window.location.href = '/cart';
   };
 
   /* --------------------------------------------------------------- render */
 
   if (phase.k === 'loading') return <CheckoutSkeleton />;
-  if (phase.k === 'signed-out') return <SignedOut />;
-  if (phase.k === 'refused') return <Refused message={phase.message} />;
-  if (phase.k === 'error') return <Failed message={phase.message} />;
-  if (phase.k === 'expired') return <Expired cartId={cartId.current} />;
-  if (phase.k === 'placed') return <Placed order={phase.order} />;
+  if (phase.k === 'signed-out') return <Terminal><SignedOut /></Terminal>;
+  if (phase.k === 'refused') return <Terminal><Refused message={phase.message} /></Terminal>;
+  if (phase.k === 'error') return <Terminal><Failed message={phase.message} /></Terminal>;
+  if (phase.k === 'expired') return <Terminal><Expired cartId={cartId.current} /></Terminal>;
+  if (phase.k === 'placed') {
+    return (
+      <Terminal>
+        <Placed
+          order={phase.order}
+          paidBy={session?.paymentModes.find((m) => m.mode === paymentMode)?.label ?? null}
+          site={session?.deliverySites.find((d) => d.id === deliveryAddressId) ?? null}
+          poNumber={poNumber.trim()}
+        />
+      </Terminal>
+    );
+  }
   if (!session) return <CheckoutSkeleton />;
 
   /**
@@ -324,145 +392,203 @@ export function CheckoutFlow(): React.JSX.Element {
     label: s.title,
     status: i < index ? 'complete' : i === index ? 'current' : 'upcoming',
     summary: i < index ? summaries[s.code] : undefined,
+    // Only a step already passed through can be jumped back to; the rail is
+    // navigation, not a shortcut past the validation each step carries.
+    onNavigate: i < index && i <= reached ? () => goTo(i) : undefined,
   }));
 
+  const title = STEPS[index]!.title;
+
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px]">
-      {/* --- the step rail ------------------------------------------------ */}
-      <div className="lg:contents">
-        <details className="rounded-lg border border-rule bg-sheet lg:hidden">
-          <summary className="flex cursor-pointer list-none items-center gap-3 p-4 text-body-sm font-medium text-ink">
-            {STEPS[index]!.title}
-            <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Step <span className="tnum">{index + 1}</span> of{' '}
-              <span className="tnum">{STEPS.length}</span>
-            </span>
-            <span className="ml-auto text-body-sm text-acc-ink">All steps</span>
-          </summary>
-          <div className="border-t border-rule-2 p-4">
-            <StepRail steps={rail} label="Checkout" className="checkoutrail static max-h-none" />
+    <div className="ck">
+      <div className="ck-wrap">
+        {/* --- the step rail ---------------------------------------------- */}
+        <div className="ck-steps-slot">
+          <details className="ck-steps-mobile">
+            <summary className="ck-steps-sum">
+              <span className="ck-steps-sum-n tnum">{String(index + 1).padStart(2, '0')}</span>
+              <span className="ck-steps-sum-t">{title}</span>
+              <span className="ck-steps-sum-k">
+                Step <span className="tnum">{index + 1}</span> of{' '}
+                <span className="tnum">{STEPS.length}</span>
+              </span>
+              <span className="ck-steps-sum-all">All steps</span>
+            </summary>
+            <div className="ck-steps-mobile-body">
+              <StepRail steps={rail} label="Checkout" className="checkoutrail ck-steps inline" />
+            </div>
+          </details>
+          <div className="ck-steps-desktop">
+            <StepRail steps={rail} label="Checkout" className="checkoutrail ck-steps" />
           </div>
-        </details>
-        <div className="max-lg:hidden">
-          <StepRail steps={rail} label="Checkout" className="checkoutrail" />
         </div>
-      </div>
 
-      {/* --- the one step ------------------------------------------------- */}
-      <main className="flex flex-col gap-5 lg:max-w-[74ch]">
-        <header className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline gap-3">
-            <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Step <span className="tnum">{index + 1}</span> of{' '}
-              <span className="tnum">{STEPS.length}</span>
-            </span>
-            <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              <span className="tnum">{session.unitsHeld}</span> held
-            </span>
-          </div>
-          <h1 className="text-h1 text-ink">{STEPS[index]!.title}</h1>
-        </header>
-
-        {notice && (
-          <p role="alert" className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-fail">
-            {notice}
+        {/* --- the one step ------------------------------------------------- */}
+        <main className="ck-main" id="content">
+          <p className="ck-kicker">
+            Step{' '}
+            <b>
+              <span className="tnum">{index + 1}</span> of <span className="tnum">{STEPS.length}</span>
+            </b>{' '}
+            · <span className="tnum">{session.unitsHeld}</span> held
           </p>
-        )}
+          <h1 className="ck-h1">{title}</h1>
 
-        {step === 'BILLING' && (
-          <BillingStep
-            session={session}
-            gstProfileId={gstProfileId}
-            billingAddressId={billingAddressId}
-            errors={fieldErrors}
-            onGst={setGst}
-            onBilling={setBilling}
-          />
-        )}
-        {step === 'DELIVERY' && (
-          <DeliveryStep
-            session={session}
-            deliveryAddressId={deliveryAddressId}
-            errors={fieldErrors}
-            onSelect={(id) => {
-              setDelivery(id);
-              void requote({ deliveryAddressId: id });
-            }}
-          />
-        )}
-        {step === 'REFERENCE' && (
-          <ReferenceStep
-            session={session}
-            poNumber={poNumber}
-            costCentre={costCentre}
-            errors={fieldErrors}
-            onPo={setPoNumber}
-            onCostCentre={setCostCentre}
-          />
-        )}
-        {step === 'PAYMENT' && (
-          <PaymentStep
-            session={session}
-            paymentMode={paymentMode}
-            errors={fieldErrors}
-            onSelect={setPaymentMode}
-          />
-        )}
-        {step === 'CONFIRM' && (
-          <ConfirmStep
-            session={session}
-            gstProfileId={gstProfileId}
-            deliveryAddressId={deliveryAddressId}
-            paymentMode={paymentMode}
-            poNumber={poNumber}
-          />
-        )}
-
-        {/* --- the one primary action on the screen ------------------------ */}
-        <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-5">
-          {index > 0 && (
-            <Button variant="ghost" onClick={goBack} disabled={busy !== null}>
-              Back
-            </Button>
+          {notice && (
+            <p role="alert" className="ck-notice">
+              {notice}
+            </p>
           )}
-          {step === 'CONFIRM' ? (
-            <Button
-              variant="primary"
-              loading={busy === 'confirm'}
-              onClick={() => void place()}
-              disabledReason={blockedReason ?? undefined}
-            >
-              {session.approval ? 'Send for approval' : 'Place this order'}
-            </Button>
-          ) : (
-            <Button variant="primary" loading={busy === 'quote'} onClick={() => void goNext()}>
-              Continue
-            </Button>
-          )}
-          <button
-            type="button"
-            className="text-body-sm text-ink-3 underline underline-offset-2 hover:text-ink"
-            onClick={() => void leave()}
-          >
-            Leave checkout and release the hold
-          </button>
-        </div>
-        {/* `Button`'s `disabledReason` reaches a pointer as a `title` tooltip and
-            nothing else — unreachable by touch and by keyboard, which is the
-            exact failure the payment step refuses one line below. So the reason
-            is said on the screen as well. */}
-        {step === 'CONFIRM' && blockedReason && (
-          <p className="text-body-sm text-ink-3">{blockedReason}</p>
-        )}
-      </main>
 
-      {/* --- the why rail, the countdown and the money -------------------- */}
-      <aside className="flex flex-col gap-4 max-xl:static lg:col-span-2 xl:col-span-1">
-        <Countdown expiresAt={session.holdExpiresAt} onExpired={onExpired} />
-        <BreakUpPanel breakUp={session.breakUp} />
-        <WhyRail items={whyFor(step, session)} className="static max-h-none" />
-      </aside>
+          {step === 'BILLING' && (
+            <BillingStep
+              session={session}
+              gstProfileId={gstProfileId}
+              billingAddressId={billingAddressId}
+              errors={fieldErrors}
+              onGst={setGst}
+              onBilling={setBilling}
+            />
+          )}
+          {step === 'DELIVERY' && (
+            <DeliveryStep
+              session={session}
+              deliveryAddressId={deliveryAddressId}
+              errors={fieldErrors}
+              onSelect={(id) => void chooseSite(id)}
+            />
+          )}
+          {step === 'REFERENCE' && (
+            <ReferenceStep
+              session={session}
+              poNumber={poNumber}
+              costCentre={costCentre}
+              errors={fieldErrors}
+              onPo={setPoNumber}
+              onCostCentre={setCostCentre}
+            />
+          )}
+          {step === 'PAYMENT' && (
+            <PaymentStep
+              session={session}
+              paymentMode={paymentMode}
+              errors={fieldErrors}
+              onSelect={setPaymentMode}
+            />
+          )}
+          {step === 'CONFIRM' && (
+            <ConfirmStep
+              session={session}
+              gstProfileId={gstProfileId}
+              deliveryAddressId={deliveryAddressId}
+              paymentMode={paymentMode}
+              poNumber={poNumber}
+              costCentre={costCentre}
+            />
+          )}
+
+          {/* --- the one primary action on the screen ------------------------ */}
+          <div className="ck-nav">
+            {index > 0 && (
+              <Button variant="ghost" className="ck-back" onClick={goBack} disabled={busy !== null}>
+                Back
+              </Button>
+            )}
+            {step === 'CONFIRM' ? (
+              <Button
+                variant="primary"
+                className="ck-next"
+                loading={busy === 'confirm'}
+                onClick={() => void place()}
+                disabledReason={blockedReason ?? undefined}
+              >
+                {session.approval ? 'Send for approval' : 'Place this order'}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                className="ck-next"
+                loading={busy === 'quote'}
+                onClick={() => void goNext()}
+              >
+                Continue
+              </Button>
+            )}
+            <button type="button" className="ck-leave" onClick={() => void leave()}>
+              Leave checkout and release the hold
+            </button>
+          </div>
+          {/* `Button`'s `disabledReason` reaches a pointer as a `title` tooltip and
+              nothing else — unreachable by touch and by keyboard, which is the
+              exact failure the payment step refuses one line below. So the reason
+              is said on the screen as well. */}
+          {step === 'CONFIRM' && blockedReason && <p className="ck-blocked">{blockedReason}</p>}
+        </main>
+
+        {/* --- the hold, the money and the why rail -------------------------- */}
+        <aside className="ck-rail">
+          <HoldCard hold={hold} />
+          <BreakUpPanel
+            breakUp={session.breakUp}
+            unitsHeld={session.unitsHeld}
+            site={session.deliverySites.find((d) => d.id === deliveryAddressId) ?? null}
+          />
+          <WhyRail items={whyFor(step, session)} className="ck-why static max-h-none" />
+        </aside>
+      </div>
     </div>
+  );
+}
+
+/** The frame around every state that is not a step. */
+function Terminal({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="ck">
+      <main className="ck-terminal" id="content">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+/* ==========================================================================
+ * The option card — one radio, drawn as the design draws it
+ * ======================================================================== */
+
+/**
+ * A real `<input type="radio">` under a drawn card: the input carries the
+ * keyboard and screen-reader behaviour, the card carries the look. The ring is
+ * the card's `::before`; the input itself is visually hidden, never `display:
+ * none`, so it stays in the tab order.
+ */
+function Option({
+  name,
+  value,
+  checked,
+  disabled = false,
+  onSelect,
+  children,
+}: {
+  name: string;
+  value: string;
+  checked: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className={`ck-opt${checked ? ' on' : ''}${disabled ? ' off' : ''}`}>
+      <input
+        type="radio"
+        className="ck-opt-in"
+        name={name}
+        value={value}
+        checked={checked}
+        disabled={disabled}
+        onChange={onSelect}
+      />
+      {children}
+    </label>
   );
 }
 
@@ -488,10 +614,11 @@ function BillingStep({
   if (session.gstProfiles.length === 0) {
     return (
       <EmptyState
+        className="ck-empty"
         title="No GSTIN on your account yet"
         body="We invoice a registered business, so we need the GSTIN this order should be billed to. Add one in Account → Tax details and come straight back — the hold is still running."
         action={
-          <a className="pill acc" href="/profile">
+          <a className="ck-btn" href="/profile">
             Add a GSTIN
           </a>
         }
@@ -500,52 +627,42 @@ function BillingStep({
   }
 
   return (
-    <section className="flex flex-col gap-5" aria-label="GSTIN and billing">
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-h3 text-ink">Bill this order to</legend>
-        <p className="text-body-sm text-ink-2">
-          This decides the entity on the invoice and the input credit you can claim. It does{' '}
-          <b>not</b> decide whether the tax is IGST or CGST + SGST — that follows where the machines
-          are delivered, which is the next step.
-        </p>
-        {session.gstProfiles.map((profile) => (
-          <label
-            key={profile.id}
-            className={
-              profile.id === gstProfileId
-                ? 'flex cursor-pointer gap-3 rounded border border-acc bg-sheet-2 p-4'
-                : 'flex cursor-pointer gap-3 rounded border border-rule bg-sheet p-4'
-            }
-          >
-            <input
-              type="radio"
-              name="gstProfileId"
-              className="mt-1"
-              value={profile.id}
-              checked={profile.id === gstProfileId}
-              onChange={() => onGst(profile.id)}
-            />
-            <span className="flex flex-col gap-1">
-              <span className="font-mono text-data tnum text-ink">{profile.gstin}</span>
-              <span className="text-body-sm text-ink-2">{profile.legalName}</span>
-              <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                {profile.registrationType}
-                {profile.isPrimary ? ' · primary' : ''}
-              </span>
-            </span>
-          </label>
-        ))}
-        {errors.gstProfileId && (
-          <p role="alert" className="text-body-sm text-fail">
-            {errors.gstProfileId}
-          </p>
-        )}
-      </fieldset>
+    <section className="ck-step" aria-label="GSTIN and billing">
+      <p className="ck-lede">
+        This sets the entity on the invoice and the input credit you claim. It does <b>not</b> set
+        IGST vs CGST + SGST — the delivery site does that, next.
+      </p>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-h3 text-ink">Billing address</legend>
+      <fieldset className="ck-opts">
+        <legend className="sr-only">Bill this order to</legend>
+        {session.gstProfiles.map((profile) => (
+          <Option
+            key={profile.id}
+            name="gstProfileId"
+            value={profile.id}
+            checked={profile.id === gstProfileId}
+            onSelect={() => onGst(profile.id)}
+          >
+            <span className="ck-mono">{profile.gstin}</span>
+            <b>{profile.legalName}</b>
+            <small>
+              {profile.registrationType.charAt(0) + profile.registrationType.slice(1).toLowerCase()}
+              {profile.isPrimary ? ' · Primary' : ''}
+            </small>
+          </Option>
+        ))}
+      </fieldset>
+      {errors.gstProfileId && (
+        <p role="alert" className="ck-err">
+          {errors.gstProfileId}
+        </p>
+      )}
+
+      <p className="ck-flbl">Billing address</p>
+      <fieldset className="ck-opts">
+        <legend className="sr-only">Billing address</legend>
         {session.billingAddresses.map((address) => (
-          <SiteRadio
+          <SiteOption
             key={address.id}
             name="billingAddressId"
             site={address}
@@ -554,18 +671,18 @@ function BillingStep({
             detail={false}
           />
         ))}
-        {errors.billingAddressId && (
-          <p role="alert" className="text-body-sm text-fail">
-            {errors.billingAddressId}
-          </p>
-        )}
       </fieldset>
+      {errors.billingAddressId && (
+        <p role="alert" className="ck-err">
+          {errors.billingAddressId}
+        </p>
+      )}
     </section>
   );
 }
 
 /* ==========================================================================
- * Step 3 — delivery site
+ * Step 2 — delivery site
  * ======================================================================== */
 
 function DeliveryStep({
@@ -584,10 +701,11 @@ function DeliveryStep({
   if (session.deliverySites.length === 0) {
     return (
       <EmptyState
+        className="ck-empty"
         title="No delivery site on your account yet"
         body="Add the site these machines should be delivered to, with the person who will receive them. A B2B delivery that arrives at a closed loading dock is a failed delivery, so the contact and the gate note matter."
         action={
-          <a className="pill acc" href="/addresses">
+          <a className="ck-btn" href="/addresses">
             Add a delivery site
           </a>
         }
@@ -596,16 +714,11 @@ function DeliveryStep({
   }
 
   return (
-    <section className="flex flex-col gap-5" aria-label="Delivery site">
-      <p className="text-body-sm text-ink-2">
-        Where the machines are delivered decides the tax split — the place of supply under s.10(1)(a)
-        is where the movement terminates, not where you are registered. The split is shown on the
-        right the moment you choose.
-      </p>
-      <fieldset className="flex flex-col gap-3">
+    <section className="ck-step" aria-label="Delivery site">
+      <fieldset className="ck-opts">
         <legend className="sr-only">Choose a delivery site</legend>
         {session.deliverySites.map((site) => (
-          <SiteRadio
+          <SiteOption
             key={site.id}
             name="deliveryAddressId"
             site={site}
@@ -616,7 +729,7 @@ function DeliveryStep({
         ))}
       </fieldset>
       {errors.deliveryAddressId && (
-        <p role="alert" className="text-body-sm text-fail">
+        <p role="alert" className="ck-err">
           {errors.deliveryAddressId}
         </p>
       )}
@@ -625,7 +738,7 @@ function DeliveryStep({
   );
 }
 
-function SiteRadio({
+function SiteOption({
   name,
   site,
   checked,
@@ -639,38 +752,20 @@ function SiteRadio({
   detail: boolean;
 }): React.JSX.Element {
   return (
-    <label
-      className={
-        checked
-          ? 'flex cursor-pointer gap-3 rounded border border-acc bg-sheet-2 p-4'
-          : 'flex cursor-pointer gap-3 rounded border border-rule bg-sheet p-4'
-      }
-    >
-      <input
-        type="radio"
-        name={name}
-        className="mt-1"
-        value={site.id}
-        checked={checked}
-        onChange={() => onSelect(site.id)}
-      />
-      <span className="flex flex-col gap-1">
-        <span className="flex flex-wrap items-baseline gap-2">
-          <span className="text-body-sm font-medium text-ink">{site.label ?? site.city}</span>
-          {site.isDefault && <StatusPill tone="neutral" label="Default" />}
-        </span>
-        <span className="text-body-sm text-ink-2">
-          {site.line1}
-          {site.line2 ? `, ${site.line2}` : ''}, {site.city}, {site.state}{' '}
-          <span className="font-mono tnum">{site.pincode}</span>
-        </span>
-        {detail && (
-          <span className="text-label text-ink-3">
-            {site.contactName} · <span className="font-mono tnum">{site.contactMobile}</span>
-          </span>
-        )}
-      </span>
-    </label>
+    <Option name={name} value={site.id} checked={checked} onSelect={() => onSelect(site.id)}>
+      <b>{site.label ?? site.city}</b>
+      {site.isDefault && <span className="ck-tag">Default</span>}
+      <small>
+        {site.line1}
+        {site.line2 ? `, ${site.line2}` : ''}, {site.city}, {site.state}{' '}
+        <span className="tnum">{site.pincode}</span>
+      </small>
+      {detail && (
+        <small className="ck-mono ck-opt-contact">
+          {site.contactName} · <span className="tnum">{site.contactMobile}</span>
+        </small>
+      )}
+    </Option>
   );
 }
 
@@ -685,52 +780,34 @@ function SiteRadio({
  */
 function ReceivingDetails({ site }: { site: DeliverySite }): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-rule bg-sheet p-4 dark:border-acc">
-      <h3 className="text-h3 text-ink">Receiving at {site.label ?? site.city}</h3>
-      <dl className="mt-3 flex flex-col gap-2">
+    <div className="ck-recv">
+      <h3>Receiving at {site.label ?? site.city}</h3>
+      <dl className="ck-facts">
         <Fact label="Contact" value={site.contactName} />
-        <Fact label="Mobile" value={site.contactMobile} mono />
+        <Fact label="Mobile" value={site.contactMobile} />
         <Fact label="Landmark" value={site.landmark} />
-        <Fact label="Gate and dock" value={site.gateInstructions} />
+        <Fact label="Gate & dock" value={site.gateInstructions} />
         <Fact label="Receiving hours" value={site.receivingHours} />
       </dl>
-      <p className="mt-3 text-label text-ink-3">
-        Anything missing here can be added in Account → Addresses. Receiving hours are not something
-        we hold yet, so the carrier will call the contact above before arriving.
+      <p className="ck-recv-note">
+        Missing details can be added in Account → Addresses. Receiving hours are not something we
+        hold yet, so the carrier calls the contact above before arriving.
       </p>
     </div>
   );
 }
 
-function Fact({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string | null;
-  mono?: boolean;
-}): React.JSX.Element {
+function Fact({ label, value }: { label: string; value: string | null }): React.JSX.Element {
   return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-body-sm text-ink-3">{label}</dt>
-      <dd
-        className={
-          value === null
-            ? 'text-body-sm text-ink-4'
-            : mono
-              ? 'font-mono text-data tnum text-ink'
-              : 'text-body-sm text-ink'
-        }
-      >
-        {value ?? 'Not recorded'}
-      </dd>
+    <div className="ck-fact">
+      <dt>{label}</dt>
+      <dd className={value === null ? 'dim' : 'tnum'}>{value ?? 'Not recorded'}</dd>
     </div>
   );
 }
 
 /* ==========================================================================
- * Step 4 — the buyer's own PO reference
+ * Step 3 — the buyer's own PO reference
  * ======================================================================== */
 
 function ReferenceStep({
@@ -749,35 +826,45 @@ function ReferenceStep({
   onCostCentre: (v: string) => void;
 }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-5" aria-label="Your purchase-order reference">
-      <p className="text-body-sm text-ink-2">
-        This is <b>your</b> reference, from your own procurement system. It prints on our invoice, so
-        your finance team can match it. It is not a purchase order we raise.
-      </p>
+    <section className="ck-step ck-ref" aria-label="Your purchase-order reference">
       {/* `Input`, not a hand-rolled field: it owns the label/hint/error wiring,
           the focus ring and the mono branch, and a second copy of those in an
           app is how the two drift. `mono` because a PO reference is an
           identifier that gets read back digit by digit against an invoice. */}
       <Input
         id="po"
-        label={session.poRequired ? 'PO reference' : 'PO reference (optional)'}
+        label={
+          session.poRequired ? (
+            'PO reference'
+          ) : (
+            <>
+              PO reference <small>(optional)</small>
+            </>
+          )
+        }
         mono
         required={session.poRequired}
         value={poNumber}
         maxLength={40}
         placeholder="PO/2026/00417"
         error={errors.buyerPoNumber}
-        className={errors.buyerPoNumber ? undefined : 'dark:border-acc'}
+        className="ck-field"
+        autoComplete="off"
         onChange={(e) => onPo(e.target.value)}
       />
 
       <Input
         id="cc"
-        label="Cost centre (optional)"
+        label={
+          <>
+            Cost centre <small>(optional)</small>
+          </>
+        }
         value={costCentre}
         maxLength={60}
         placeholder="IT — Delhi office"
-        className="dark:border-acc"
+        className="ck-field"
+        autoComplete="off"
         onChange={(e) => onCostCentre(e.target.value)}
       />
     </section>
@@ -785,7 +872,7 @@ function ReferenceStep({
 }
 
 /* ==========================================================================
- * Step 5 — payment mode
+ * Step 4 — payment mode
  * ======================================================================== */
 
 function PaymentStep({
@@ -800,40 +887,27 @@ function PaymentStep({
   onSelect: (mode: PaymentMode) => void;
 }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-5" aria-label="How you are paying">
-      <fieldset className="flex flex-col gap-3">
+    <section className="ck-step" aria-label="How you are paying">
+      <fieldset className="ck-opts">
         <legend className="sr-only">Choose a payment method</legend>
         {session.paymentModes.map((option) => (
-          <label
+          <Option
             key={option.mode}
-            className={
-              !option.allowed
-                ? 'flex gap-3 rounded border border-rule-2 bg-sheet-2 p-4 opacity-80'
-                : option.mode === paymentMode
-                  ? 'flex cursor-pointer gap-3 rounded border border-acc bg-sheet-2 p-4'
-                  : 'flex cursor-pointer gap-3 rounded border border-rule bg-sheet p-4'
-            }
+            name="paymentMode"
+            value={option.mode}
+            checked={option.mode === paymentMode}
+            disabled={!option.allowed}
+            onSelect={() => onSelect(option.mode)}
           >
-            <input
-              type="radio"
-              name="paymentMode"
-              className="mt-1"
-              value={option.mode}
-              disabled={!option.allowed}
-              checked={option.mode === paymentMode}
-              onChange={() => onSelect(option.mode)}
-            />
-            <span className="flex flex-col gap-1">
-              <span className="text-body-sm font-medium text-ink">{option.label}</span>
-              {/* A control that is off says why, on the screen — not in a title
-                  attribute, which is unreachable by touch and by keyboard. */}
-              {option.reason && <span className="text-body-sm text-ink-3">{option.reason}</span>}
-            </span>
-          </label>
+            <b>{option.label}</b>
+            {/* A control that is off says why, on the screen — not in a title
+                attribute, which is unreachable by touch and by keyboard. */}
+            {option.reason && <small>{option.reason}</small>}
+          </Option>
         ))}
       </fieldset>
       {errors.paymentMode && (
-        <p role="alert" className="text-body-sm text-fail">
+        <p role="alert" className="ck-err">
           {errors.paymentMode}
         </p>
       )}
@@ -842,7 +916,7 @@ function PaymentStep({
 }
 
 /* ==========================================================================
- * Step 6 — confirm
+ * Step 5 — confirm
  * ======================================================================== */
 
 function ConfirmStep({
@@ -851,12 +925,14 @@ function ConfirmStep({
   deliveryAddressId,
   paymentMode,
   poNumber,
+  costCentre,
 }: {
   session: CheckoutSession;
   gstProfileId: string | null;
   deliveryAddressId: string | null;
   paymentMode: PaymentMode | null;
   poNumber: string;
+  costCentre: string;
 }): React.JSX.Element {
   const gst = session.gstProfiles.find((g) => g.id === gstProfileId) ?? null;
   const site = session.deliverySites.find((s) => s.id === deliveryAddressId) ?? null;
@@ -864,38 +940,39 @@ function ConfirmStep({
   const tax = session.breakUp?.tax;
   /** No total means no priced lane, which means nothing was actually split. */
   const priced = session.breakUp?.grandTotal != null;
+  const po = poNumber.trim();
+  const cc = costCentre.trim();
 
   return (
-    <section className="flex flex-col gap-5" aria-label="Confirm">
+    <section className="ck-step" aria-label="Confirm">
       {session.approval && (
-        <div className="rounded-lg border border-rule bg-sheet-2 p-4">
+        <div className="ck-approval">
           <StatusPill tone="warn" label="Needs approval" />
-          <p className="mt-2 text-body-sm text-ink">{session.approval.reason}</p>
-          <p className="mt-2 text-body-sm text-ink-2">
+          <p className="ck-approval-why">{session.approval.reason}</p>
+          <p className="ck-approval-what">
             Placing it sends it to <b>{session.approval.approverName}</b>. These exact machines stay
             held for you while they decide, nothing is charged, and no supplier is committed until
-            they approve. If nobody answers within{' '}
-            <span className="font-mono tnum">24</span> hours the hold releases and the machines go
-            back on sale.
+            they approve. If nobody answers within <span className="tnum">24</span> hours the hold
+            releases and the machines go back on sale.
           </p>
         </div>
       )}
 
-      <div className="rounded-lg border border-rule bg-sheet p-4">
-        <h2 className="text-h3 text-ink">What you are agreeing to</h2>
-        <dl className="mt-3 flex flex-col gap-2">
+      <div className="ck-agree">
+        <h3>What you are agreeing to</h3>
+        <dl className="ck-facts right">
           <Fact label="Machines" value={machines(session.unitsHeld)} />
           <Fact label="Billed to" value={gst ? `${gst.legalName} · ${gst.gstin}` : null} />
           <Fact
             label="Delivered to"
-            value={site ? `${site.label ?? site.city}, ${site.city} ${site.pincode}` : null}
+            value={site ? `${site.label ?? site.city}, ${site.pincode}` : null}
           />
           {/* An optional field left blank is not a value we failed to record.
               "Not recorded" is the sentence for receiving hours — a thing we
               should hold and do not — and using it here would read as a gap. */}
           <Fact
             label="Your PO reference"
-            value={poNumber.trim() || 'None — your organisation does not require one'}
+            value={po ? (cc ? `${po} · ${cc}` : po) : 'None — your organisation does not require one'}
           />
           <Fact label="Paying by" value={mode?.label ?? null} />
         </dl>
@@ -907,12 +984,12 @@ function ConfirmStep({
           settled one AND the wrong pair of heads: 06 against 29 is inter-state
           and could only ever be IGST. */}
       {tax && !priced && (
-        <div className="rounded-lg border border-rule bg-sheet p-4">
-          <h2 className="text-h3 text-ink">The tax split is not resolved yet</h2>
-          <p className="mt-2 text-body-sm text-ink-2">
+        <div className="ck-agree ck-unresolved">
+          <h3>The tax split is not resolved yet</h3>
+          <p>
             The place of supply is {tax.placeOfSupplyState} (
-            <span className="font-mono tnum">{tax.placeOfSupplyStateCode}</span>) against our
-            registration in state <span className="font-mono tnum">{tax.ourStateCode}</span>, so this
+            <span className="tnum">{tax.placeOfSupplyStateCode}</span>) against our
+            registration in state <span className="tnum">{tax.ourStateCode}</span>, so this
             would be{' '}
             {tax.ourStateCode === tax.placeOfSupplyStateCode
               ? 'CGST and SGST'
@@ -920,16 +997,22 @@ function ConfirmStep({
             — but we cannot deliver there, so there is no taxable value to split and no total to
             agree to. Choose a site we can reach and the resolved split appears here.
           </p>
-          <p className="mt-3 text-body-sm text-ink-4">Not resolved</p>
+          <p className="dim">Not resolved</p>
         </div>
       )}
 
-      <p className="text-body-sm text-ink-2">
-        {BRAND.legalEntity} is the seller on this order. We buy these exact serial numbers on your
-        behalf and invoice you for them; there is one invoice and one seller.{' '}
-        {priced
-          ? 'Placing the order is your agreement to the total on the right — nothing is added to it afterwards.'
-          : 'There is no total to agree to until we can price delivery, so this order cannot be placed as it stands.'}
+      <p className="ck-seller">
+        <b>{BRAND.legalEntity}</b> is the seller: we buy these exact serials on your behalf — one
+        invoice, one seller.{' '}
+        {priced ? (
+          <>
+            Placing the order is agreement to{' '}
+            <b className="tnum">{rupees(session.breakUp!.grandTotal!)}</b>; nothing is added
+            afterwards.
+          </>
+        ) : (
+          'There is no total to agree to until we can price delivery, so this order cannot be placed as it stands.'
+        )}
       </p>
     </section>
   );
@@ -947,14 +1030,22 @@ function ConfirmStep({
  * with what is above it. Revealing a charge only at the end is drip pricing,
  * which the CCPA Dark Patterns Guidelines 2023 name outright.
  */
-function BreakUpPanel({ breakUp }: { breakUp: BreakUp | null }): React.JSX.Element {
+function BreakUpPanel({
+  breakUp,
+  unitsHeld,
+  site,
+}: {
+  breakUp: BreakUp | null;
+  unitsHeld: number;
+  site: DeliverySite | null;
+}): React.JSX.Element {
   if (!breakUp) {
     return (
-      <div className="rounded-lg border border-rule bg-sheet-2 p-4">
-        <h2 className="text-h3 text-ink">What this costs</h2>
-        <p className="mt-2 text-body-sm text-ink-2">
-          Freight and the GST split need a delivery site. Choose one and the whole break-up —
-          goods, freight, tax by head and the total — appears here. There is no third charge.
+      <div className="ck-costs">
+        <h3>What this costs</h3>
+        <p className="ck-costs-wait">
+          Freight and the GST split need a delivery site. Choose one and the whole break-up — goods,
+          freight, tax by head and the total — appears here. There is no third charge.
         </p>
       </div>
     );
@@ -962,26 +1053,32 @@ function BreakUpPanel({ breakUp }: { breakUp: BreakUp | null }): React.JSX.Eleme
 
   if (breakUp.freight === null || breakUp.grandTotal === null) {
     return (
-      <div className="rounded-lg border border-fail bg-sheet-2 p-4" role="status">
-        <h2 className="text-h3 text-ink">We cannot price delivery to that site</h2>
-        <dl className="mt-2 flex items-baseline justify-between gap-4">
-          <dt className="text-body-sm text-ink-2">Goods</dt>
-          <dd className="font-mono text-data tnum text-ink-2">{rupees(breakUp.goods)}</dd>
+      <div className="ck-costs unpriced" role="status">
+        <h3>We cannot price delivery to that site</h3>
+        <dl className="ck-costs-rows">
+          <div>
+            <dt>Goods</dt>
+            <dd className="tnum">{rupees(breakUp.goods)}</dd>
+          </div>
+          <div>
+            <dt>Freight</dt>
+            {/* Never a zero standing in for "we could not price it": that is a
+                price misrepresentation under CP e-Comm r.6(5). */}
+            <dd className="dim">Not priced</dd>
+          </div>
         </dl>
-        <dl className="mt-1 flex items-baseline justify-between gap-4">
-          <dt className="text-body-sm text-ink-2">Freight</dt>
-          {/* Never a zero standing in for "we could not price it": that is a
-              price misrepresentation under CP e-Comm r.6(5). */}
-          <dd className="text-body-sm text-ink-4">Not priced</dd>
-        </dl>
-        <p className="mt-3 text-body-sm text-ink-2">{breakUp.freightUnpricedReason}</p>
+        <p className="ck-tax-note">{breakUp.freightUnpricedReason}</p>
       </div>
     );
   }
 
   const lines: PriceLine[] = [
-    { label: 'Machines', amount: Money.parse(breakUp.goods) },
-    { label: 'Freight', amount: Money.parse(breakUp.freight), note: 'to your delivery pincode' },
+    { label: 'Machines', amount: Money.parse(breakUp.goods), note: units(unitsHeld) },
+    {
+      label: 'Freight',
+      amount: Money.parse(breakUp.freight),
+      note: site ? `to ${site.pincode}` : 'to your delivery pincode',
+    },
   ];
   if (breakUp.tax.interState) {
     lines.push({
@@ -1000,17 +1097,19 @@ function BreakUpPanel({ breakUp }: { breakUp: BreakUp | null }): React.JSX.Eleme
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <h2 className="text-h3 text-ink">What this costs</h2>
+    <div className="ck-costs">
+      <h3>What this costs</h3>
       <PriceBreakup
+        className="ck-pb"
         lines={lines}
         valuationMethod="REGULAR"
         taxNote={
           <>
-            Every charge on this order is here. Nothing is added at the end.{' '}
+            Delivering to <b>{breakUp.tax.placeOfSupplyState}</b> —{' '}
             {breakUp.tax.interState
-              ? 'Inter-state supply, so the whole tax is IGST.'
-              : `Intra-state supply, so it splits into CGST and ${breakUp.tax.stateTaxLabel}.`}
+              ? 'inter-state, so the whole tax is IGST.'
+              : `Intra-state supply, so it splits into CGST and ${breakUp.tax.stateTaxLabel}.`}{' '}
+            Every charge on this order is here. Nothing is added at the end.
           </>
         }
       />
@@ -1027,56 +1126,43 @@ function whyFor(step: StepCode, session: CheckoutSession): WhyRailItem[] {
     case 'BILLING':
       return [
         {
-          term: 'Why the GSTIN matters',
-          explanation: 'It decides the legal entity on the invoice and the input tax credit you can claim. A wrong one is expensive to correct after an invoice exists and free to change now.',
-        },
-        {
-          term: 'It does not decide the tax head',
-          explanation: 'IGST versus CGST + SGST follows where the goods are delivered — s.10(1)(a) puts the place of supply where the movement terminates — not where you are registered.',
+          term: 'The GSTIN sets the invoice entity',
+          explanation:
+            'and the input credit you claim — free to change now, expensive after an invoice exists. It does not set the tax head; delivery does (next step).',
         },
       ];
     case 'DELIVERY':
       return [
         {
-          term: 'Place of supply',
-          explanation: 'The delivery state is what splits the tax. Choosing a site in our own state gives CGST + SGST; anywhere else gives IGST. The resolved split is on this screen before you confirm.',
-        },
-        {
-          term: 'Gate and dock notes',
-          explanation: 'A pallet that arrives at a closed loading dock is a failed delivery and a second freight charge. The contact and the gate note go to the driver.',
+          term: 'Place of supply, s.10(1)(a)',
+          explanation:
+            'The delivery state splits the tax — our state gives CGST + SGST, anywhere else IGST. The gate note goes to the driver: a pallet at a closed dock is a failed delivery and a second freight charge.',
         },
       ];
     case 'REFERENCE':
       return [
         {
-          term: 'Your PO reference',
+          term: session.poRequired ? 'Required by your organisation' : 'Optional',
           explanation: session.poRequired
-            ? 'Your organisation has set this as required. It prints on our invoice so your finance team can match it against your own purchase order.'
-            : 'Optional here. It prints on our invoice, and many Indian corporates will not process one without it.',
-        },
-        {
-          term: 'Cost centre',
-          explanation: 'Carried through to the invoice and your order history, so a rollout across three departments can be split afterwards.',
+            ? 'Your PO reference prints on our invoice so your finance team can match it against your own purchase order. The cost centre carries into order history.'
+            : 'Your PO reference prints on our invoice so your finance team can match it — many corporates won’t process one without it. The cost centre carries into order history.',
         },
       ];
     case 'PAYMENT':
       return [
         {
-          term: 'Why some are off',
-          explanation: 'Payment methods come from your organisation and from your own buying policy. A junior buyer can often pay now but not draw on the company credit line — the reason is on each one.',
+          term: 'Methods follow your buying policy',
+          explanation:
+            'A junior buyer can often pay now but not draw on the company credit line — the reason is on each one that’s off.',
         },
       ];
     case 'CONFIRM':
       return [
         {
-          term: 'Who you are buying from',
-          explanation: `${BRAND.legalEntity} is the seller. We buy these serial numbers on your behalf and invoice you. One seller, one invoice, whatever number of warehouses they leave from.`,
-        },
-        {
-          term: 'What happens next',
+          term: 'One seller, one invoice',
           explanation: session.approval
-            ? 'It goes to your approver. The machines stay held, nothing is charged, and no supplier is committed until they say yes.'
-            : 'The serial numbers become yours, we raise the purchase orders, and the machines are picked and dispatched.',
+            ? `${BRAND.legalEntity} buys these exact serials on your behalf. Placing the order sends it to your approver — the machines stay held, nothing is charged, and no supplier is committed until they say yes.`
+            : `${BRAND.legalEntity} buys these exact serials on your behalf. Placing the order is agreement to the total on the right — nothing is added after.`,
         },
       ];
     default:
@@ -1090,14 +1176,21 @@ function whyFor(step: StepCode, session: CheckoutSession): WhyRailItem[] {
 
 export function CheckoutSkeleton(): React.JSX.Element {
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px]">
-      <Skeleton className="h-64 w-full rounded-lg" />
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-8 w-2/3 rounded" />
-        <Skeleton className="h-40 w-full rounded-lg" />
-        <Skeleton className="h-40 w-full rounded-lg" />
+    <div className="ck">
+      <div className="ck-wrap" aria-busy="true">
+        <Skeleton className="ck-skel-steps rounded-2xl" />
+        <div className="ck-main">
+          <Skeleton className="h-3 w-32 rounded" />
+          <Skeleton className="mt-3 h-8 w-2/3 rounded" />
+          <Skeleton className="mt-5 h-24 w-full rounded-2xl" />
+          <Skeleton className="mt-3 h-24 w-full rounded-2xl" />
+          <Skeleton className="mt-3 h-24 w-full rounded-2xl" />
+        </div>
+        <div className="ck-rail">
+          <Skeleton className="h-28 w-full rounded-2xl" />
+          <Skeleton className="h-56 w-full rounded-2xl" />
+        </div>
       </div>
-      <Skeleton className="h-56 w-full rounded-lg" />
     </div>
   );
 }
@@ -1109,10 +1202,11 @@ function SignedOut(): React.JSX.Element {
       : `${window.location.pathname}${window.location.search}`;
   return (
     <EmptyState
+      className="ck-empty"
       title="Sign in to check out"
       body="An order belongs to your organisation, so we need to know who is placing it. Signing in brings you straight back here with your cart intact — nothing has been held yet."
       action={
-        <a className="pill acc" href={`/sign-in?next=${encodeURIComponent(next)}`}>
+        <a className="ck-btn" href={`/sign-in?next=${encodeURIComponent(next)}`}>
           Sign in
         </a>
       }
@@ -1124,10 +1218,11 @@ function SignedOut(): React.JSX.Element {
 function Refused({ message }: { message: string }): React.JSX.Element {
   return (
     <EmptyState
+      className="ck-empty"
       title="Checkout cannot start yet"
       body={message}
       action={
-        <a className="pill acc" href="/cart">
+        <a className="ck-btn" href="/cart">
           Back to your cart
         </a>
       }
@@ -1138,10 +1233,11 @@ function Refused({ message }: { message: string }): React.JSX.Element {
 function Expired({ cartId }: { cartId: string | null }): React.JSX.Element {
   return (
     <EmptyState
+      className="ck-empty"
       title="The hold ran out"
       body="Those machines have gone back on sale, and nothing has been ordered or charged. Your cart is untouched — start checkout again and we will hold whatever is still there."
       action={
-        <a className="pill acc" href={`/checkout?cart=${cartId ?? ''}`}>
+        <a className="ck-btn" href={`/checkout?cart=${cartId ?? ''}`}>
           Start checkout again
         </a>
       }
@@ -1151,12 +1247,12 @@ function Expired({ cartId }: { cartId: string | null }): React.JSX.Element {
 
 function Failed({ message }: { message: string }): React.JSX.Element {
   return (
-    <div className="empty err" role="alert">
+    <div className="ck-empty err" role="alert">
       <h3>We could not open checkout</h3>
       <p>{message}</p>
       <p>Nothing has been ordered, nothing has been charged, and your cart is unchanged.</p>
-      <p className="retry">
-        <button type="button" className="pill acc" onClick={() => window.location.reload()}>
+      <p className="ck-empty-act">
+        <button type="button" className="ck-btn" onClick={() => window.location.reload()}>
           Try again
         </button>
       </p>
@@ -1170,52 +1266,57 @@ function Failed({ message }: { message: string }): React.JSX.Element {
  * The full break-up and serial list live on the order screen only; repeating them
  * here is two places for the same figures to disagree.
  */
-function Placed({ order }: { order: OrderConfirmation }): React.JSX.Element {
+function Placed({
+  order,
+  paidBy,
+  site,
+  poNumber,
+}: {
+  order: OrderConfirmation;
+  paidBy: string | null;
+  site: DeliverySite | null;
+  poNumber: string;
+}): React.JSX.Element {
   const awaiting = order.status === 'AWAITING_APPROVAL';
-  const units = order.units || order.serials.length;
+  const count = order.units || order.serials.length;
 
   return (
-    <div className="chdone" role="status" aria-live="polite">
-      <div className="chdone-card">
-        <div className="chdone-mark" aria-hidden="true">
-          ✓
-        </div>
-        <StatusPill
-          tone={awaiting ? 'warn' : 'info'}
-          label={awaiting ? 'Awaiting approval' : 'Order placed'}
-        />
-        <h1 className="text-h1 text-ink">
-          {awaiting
-            ? 'Thank you — we have sent this for approval'
-            : 'Thank you for ordering from us'}
-        </h1>
-        <p className="chdone-lede">
-          {awaiting
-            ? `${BRAND.name} has your request. Nothing is charged until your approver signs off, and stock stays held while they decide.`
-            : `Your order is with ${BRAND.legalEntity}. Serial numbers are named when a machine is attached to this order, and your GST invoice will follow.`}
-        </p>
-        <dl className="chdone-facts">
-          <div className="chdone-fact">
-            <dt>Order number</dt>
-            <dd className="font-mono tnum">{order.orderNumber}</dd>
-          </div>
-          <div className="chdone-fact">
-            <dt>Machines</dt>
-            <dd className="font-mono tnum">{machines(units)}</dd>
-          </div>
-          <div className="chdone-fact">
-            <dt>Landed price</dt>
-            <dd className="font-mono tnum">{rupees(order.grandTotal)}</dd>
-          </div>
-        </dl>
-        <div className="chdone-actions">
-          <a className="pill acc" href={`/orders/${order.orderNumber}`}>
-            View your order
-          </a>
-          <a className="pill wire chdonewire" href="/">
-            Browse laptops
-          </a>
-        </div>
+    <div className="ck-done" role="status" aria-live="polite">
+      <div className="ck-done-badge" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m4.5 12.5 5 5L19.5 7" />
+        </svg>
+      </div>
+      <StatusPill
+        tone={awaiting ? 'warn' : 'info'}
+        label={awaiting ? 'Awaiting approval' : 'Order placed'}
+      />
+      <h1 className="ck-h1">
+        {awaiting ? 'Sent for approval. The machines stay held.' : 'Order placed. The machines are yours.'}
+      </h1>
+      <p className="ck-lede">
+        Order <span className="ck-order-id tnum">{order.orderNumber}</span> ·{' '}
+        <span className="tnum">{rupees(order.grandTotal)}</span> · {machines(count)}
+        {paidBy ? <> · {paidBy}</> : null}
+      </p>
+      <p className="ck-lede">
+        {awaiting
+          ? `${BRAND.name} has your request. Nothing is charged until your approver signs off, and stock stays held while they decide.`
+          : `Your order is with ${BRAND.legalEntity} — we now raise the purchase orders, the machines are picked, and dispatch follows${site ? ` to ${site.label ?? site.city}` : ''}. Serial numbers are named when a machine is attached to this order, and your GST invoice ${poNumber ? `carries your reference ${poNumber}` : 'follows'}.`}
+      </p>
+      <div className="ck-nav">
+        <a className="ck-btn" href={`/orders/${order.orderNumber}`}>
+          View your order
+        </a>
+        <a className="ck-leave" href="/">
+          Back to marketplace
+        </a>
       </div>
     </div>
   );

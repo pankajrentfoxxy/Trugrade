@@ -22,6 +22,7 @@ export {
   type RateLimitNoticeProps,
   Skeleton,
   RepresentativeImage,
+  RepresentativeImageDisclosure,
   type RepresentativeImageProps,
 } from './components/primitives';
 export { CommissionReadout, type CommissionReadoutProps } from './components/CommissionReadout';

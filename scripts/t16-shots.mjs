@@ -212,17 +212,19 @@ async function resetCarts() {
   );
 }
 
-async function makeCart(request, name, lines) {
-  const created = await request.post(`${SHOP}/api/buyer/carts`, { data: { name } });
-  if (!created.ok()) throw new Error(`create ${name}: ${created.status()}`);
-  const { id } = await created.json();
-  for (const [listingId, qty] of lines) {
-    const added = await request.post(`${SHOP}/api/buyer/carts/${id}/items`, {
-      data: { listingId, qty },
-    });
-    if (!added.ok()) throw new Error(`add to ${name}: ${added.status()} ${await added.text()}`);
+/** One cart per buyer: empty it, then add the lines this run needs. */
+async function makeCart(request, _name, lines) {
+  const current = await request.get(`${SHOP}/api/buyer/cart`);
+  if (!current.ok()) throw new Error(`read cart: ${current.status()}`);
+  const view = await current.json();
+  for (const line of view.dispatchGroups.flatMap((g) => g.lines)) {
+    await request.delete(`${SHOP}/api/buyer/cart/items/${line.itemId}`);
   }
-  return id;
+  for (const [listingId, qty] of lines) {
+    const added = await request.post(`${SHOP}/api/buyer/cart/items`, { data: { listingId, qty } });
+    if (!added.ok()) throw new Error(`add: ${added.status()} ${await added.text()}`);
+  }
+  return view.id;
 }
 
 /** The real "Leave checkout" route. Never leave a hold behind. */

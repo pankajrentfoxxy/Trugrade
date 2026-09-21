@@ -58,9 +58,7 @@ export function SupplyPointPicker({
     initialSelected ? offerKey(initialSelected) : null,
   );
   /** Kept mounted through the close animation so the panel can collapse smoothly. */
-  const [shownOffer, setShownOffer] = React.useState<SupplyPointOfferRow | null>(
-    initialSelected,
-  );
+  const [shownOffer, setShownOffer] = React.useState<SupplyPointOfferRow | null>(initialSelected);
 
   React.useEffect(() => {
     const sp = searchParams.get('sp');

@@ -5,15 +5,15 @@ import { useRouter } from 'next/navigation';
 import { Modal } from '@trugrade/ui';
 import { consoleHomeUrl } from '../../lib/console-url';
 import { OtpSignIn } from '../sign-in/OtpSignIn';
-import { AuthArt } from './AuthArt';
+import { AuthBrandPanel } from './AuthBrandPanel';
 
 /**
  * Signing in, or signing up, without leaving the page.
  *
  * The header's two buttons open this over whatever the visitor was looking
- * at: the art on the left, the same passwordless form as `/sign-in` and
- * `/register` on the right, and a link between the two that flips the form
- * in place. A returning buyer stays exactly where they were once the code
+ * at: the brand panel on the left, the same passwordless form as `/sign-in`
+ * and `/register` on the right, and a link between the two that flips the
+ * form in place. A returning buyer stays exactly where they were once the code
  * lands — the header simply re-reads the cookie — while a brand-new
  * organisation goes to its portal home, because there is nothing on the
  * shop it can do yet.
@@ -74,8 +74,8 @@ export function AuthModal({
       dismissOnBackdrop
 
     >
-      <div className="authmodal__grid">
-        <AuthArt />
+      <div className="authmodal__grid auth-ui">
+        <AuthBrandPanel />
         {open ? (
           <OtpSignIn
             key={mode}

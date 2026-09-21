@@ -2,8 +2,8 @@
  * ARCHETYPE D — Flow. Step rail + one step + "why we ask" rail.
  * DENSITY: comfortable (set on `<html>` in the root layout).
  *
- * Checkout. Six steps: review what is held, GSTIN and billing, delivery site,
- * your PO reference, how you are paying, confirm.
+ * Checkout. Five steps: GSTIN and billing, delivery site, your PO reference,
+ * how you are paying, confirm.
  *
  * Five rules shape everything on it.
  *
@@ -49,6 +49,9 @@
  * The screen is a client component: every call is authenticated against the
  * buyer's session cookie, a signed-out visitor is a state it renders rather than
  * a crash, and the hold has to tick.
+ *
+ * The flow draws its own page grid (the `.ck` block in `storefront.css`), so
+ * unlike `/cart` it is not wrapped in `.body > .wrap`.
  */
 import type { Metadata } from 'next';
 import { CheckoutFlow } from './CheckoutFlow';
@@ -62,11 +65,5 @@ export const metadata: Metadata = {
 };
 
 export default function CheckoutPage(): React.JSX.Element {
-  return (
-    <div className="body">
-      <div className="wrap">
-        <CheckoutFlow />
-      </div>
-    </div>
-  );
+  return <CheckoutFlow />;
 }

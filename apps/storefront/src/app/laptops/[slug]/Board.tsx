@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { OfferGrid, type SupplyPointOffer } from '@trugrade/ui';
-import { MARGIN_ITC_LABEL, Money, type Grade } from '@trugrade/contracts';
+import { MARGIN_ITC_LABEL, Money, supplyPointLabel, type Grade } from '@trugrade/contracts';
 import type { SupplyPointOfferRow } from '../../../lib/api';
 import { useProductCart } from '../../../lib/use-product-cart';
 
@@ -16,11 +16,17 @@ export function Board({
   rows,
   caption,
   pool,
+  sku,
+  spec,
   layout = 'cards',
 }: {
   rows: readonly SupplyPointOfferRow[];
   caption: string;
   pool: 'REGULAR' | 'MARGIN';
+  /** "Dell Latitude 5420" — what a signed-out basket calls this line. */
+  sku: string;
+  /** "i5-1135G7 · 16 GB · 512 GB NVMe SSD · 14"" */
+  spec: string;
   layout?: 'responsive' | 'cards' | 'table';
 }): React.JSX.Element {
   const { qtyFor, busyListingId, addListing, updateListingQty } = useProductCart();
@@ -86,7 +92,18 @@ export function Board({
         onAdd={(offer, quantity) => {
           const row = resolveRow(offer);
           if (!row) return;
-          void addListing(row.listingId, quantity);
+          // The snapshot is only read when the visitor is signed out. It is
+          // what `/cart` renders from, because no endpoint that could name a
+          // listing for them is reachable without a session.
+          void addListing(row.listingId, quantity, {
+            listingId: row.listingId,
+            title: sku,
+            specSummary: spec,
+            grade: row.grade,
+            unitPrice: row.landedPrice,
+            supplyPoint: supplyPointLabel(row.supplyPointCode, row.city),
+            dispatch: row.dispatchCommitment,
+          });
         }}
         onCartQtyChange={(offer, quantity) => {
           const row = resolveRow(offer);

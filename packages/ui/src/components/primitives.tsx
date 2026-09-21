@@ -673,6 +673,22 @@ export interface RepresentativeImageProps {
    * the misrepresentation risk, so the caption widens with the anchor.
    */
   match?: 'SKU' | 'MODEL' | 'SERIES' | 'PLACEHOLDER';
+  /**
+   * The id of an element that carries the disclosure for a WHOLE SET of frames.
+   *
+   * Six frames of one grade meant six identical captions under six photographs,
+   * and a sentence repeated six times is a sentence nobody reads by the second.
+   * Naming an element here moves the disclosure to that element and drops the
+   * per-image caption — it does not remove it. Every figure is still pointed at
+   * the sentence through `aria-describedby`, so a screen reader announces it
+   * per image exactly as before.
+   *
+   * It is an id and never a boolean on purpose: there is no value you can pass
+   * that means "no disclosure anywhere", which is exactly what a boolean flag
+   * would have allowed. The caller has to produce the sentence to be let out of
+   * repeating it.
+   */
+  captionedBy?: string;
   className?: string;
 }
 
@@ -681,6 +697,17 @@ const MATCH_QUALIFIER: Record<NonNullable<RepresentativeImageProps['match']>, st
   SKU: null,
   MODEL: 'This photograph is of another unit of the same model, in this grade.',
   SERIES: 'This photograph is of another model in the same range, in this grade.',
+  PLACEHOLDER: null,
+};
+
+/** The same admission, for a set of frames rather than one. */
+const MATCH_QUALIFIER_PLURAL: Record<
+  NonNullable<RepresentativeImageProps['match']>,
+  string | null
+> = {
+  SKU: null,
+  MODEL: 'They are of other units of the same model, in this grade.',
+  SERIES: 'They are of other models in the same range, in this grade.',
   PLACEHOLDER: null,
 };
 
@@ -705,6 +732,7 @@ export function RepresentativeImage({
   grade,
   passportHref,
   match = 'SKU',
+  captionedBy,
   className,
 }: RepresentativeImageProps): React.JSX.Element {
   const passport = passportHref ? (
@@ -741,17 +769,71 @@ export function RepresentativeImage({
   const qualifier = MATCH_QUALIFIER[match];
 
   return (
-    <figure className={cn('flex flex-col gap-3', className)} data-testid="representative-image">
+    <figure
+      className={cn('flex flex-col gap-3', className)}
+      data-testid="representative-image"
+      aria-describedby={captionedBy}
+    >
       <img
         src={src}
         alt={alt}
         className="w-full rounded-lg border border-rule bg-sheet-2 object-cover"
       />
-      <figcaption className="text-body-sm text-ink-2">
-        Representative image of Grade {GRADE_LABEL[grade]} condition.{' '}
-        {qualifier ? `${qualifier} ` : ''}
-        {passport}
-      </figcaption>
+      {/* The set carries the sentence, so this frame does not repeat it. The
+          figure still points at it, so nothing is lost to a screen reader. */}
+      {captionedBy ? null : (
+        <figcaption className="text-body-sm text-ink-2">
+          Representative image of Grade {GRADE_LABEL[grade]} condition.{' '}
+          {qualifier ? `${qualifier} ` : ''}
+          {passport}
+        </figcaption>
+      )}
     </figure>
+  );
+}
+
+/**
+ * The disclosure for a SET of representative frames — the sentence that lets a
+ * gallery stop repeating itself under every photograph.
+ *
+ * It exists so that `captionedBy` cannot be satisfied by a caller writing
+ * their own, softer sentence. The wording is the same one the per-image caption
+ * uses, built from the same pieces, and the `id` it takes is the one every
+ * figure in the set points at.
+ */
+export function RepresentativeImageDisclosure({
+  id,
+  grade,
+  match = 'SKU',
+  count,
+  passportHref,
+  className,
+}: {
+  id: string;
+  grade: Grade;
+  match?: RepresentativeImageProps['match'];
+  /** How many frames the sentence is speaking for. */
+  count: number;
+  passportHref?: string;
+  className?: string;
+}): React.JSX.Element {
+  const qualifier = match ? (count === 1 ? MATCH_QUALIFIER : MATCH_QUALIFIER_PLURAL)[match] : null;
+  return (
+    <p id={id} className={cn('text-body-sm text-ink-2', className)}>
+      {count === 1 ? 'This photograph is' : `All ${count} photographs are`} representative of Grade{' '}
+      {GRADE_LABEL[grade]} condition, not of the machine you will receive.{' '}
+      {qualifier ? `${qualifier} ` : ''}
+      {passportHref ? (
+        <>
+          Your unit&rsquo;s actual inspection report and photographs are on its{' '}
+          <a href={passportHref} className="text-acc-ink underline underline-offset-2">
+            unit passport
+          </a>
+          .
+        </>
+      ) : (
+        <>Your unit&rsquo;s actual inspection report and photographs are on the unit passport.</>
+      )}
+    </p>
   );
 }

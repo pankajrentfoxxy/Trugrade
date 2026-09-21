@@ -96,9 +96,18 @@ function safeNext(): string | null {
   }
 }
 
+/**
+ * How long the "Welcome back" confirmation stays before the page leaves.
+ *
+ * Long enough to be read as a sentence, short enough that nobody reaches for
+ * the mouse. Without it the confirmation is a one-frame flash on localhost and
+ * a code box going grey everywhere else.
+ */
+const CONFIRMATION_MS = 800;
+
 /** Leave without leaving this screen in history — back must not return here. */
 const leave = (url: string): void => {
-  window.location.replace(url);
+  window.setTimeout(() => window.location.replace(url), CONFIRMATION_MS);
 };
 
 /* ==========================================================================
@@ -111,7 +120,13 @@ type Stage =
   /** A code has been asked for. It may or may not have been sent — see the note. */
   | { k: 'code'; sentTo: string; devCode: string | null }
   /** The server refused the sign-in outright, in its own words. */
-  | { k: 'refused'; message: string };
+  | { k: 'refused'; message: string }
+  /**
+   * The code was accepted and the page is on its way out. Shown for the
+   * moment between the cookie landing and the navigation, so the last thing
+   * on screen is a confirmation rather than a code box going grey.
+   */
+  | { k: 'done'; sentTo: string; created: boolean };
 
 interface Wait {
   message: string;
@@ -233,6 +248,14 @@ export function OtpSignIn({
     // A brand-new organisation gets its onboarding rows now, so the profile
     // page has steps to show the moment it opens. Idempotent server-side.
     if (result.data.created) await startOnboarding();
+    // The confirmation is drawn BEFORE the caller is told, not gated on a
+    // click: a page replaces its own location on the next line, and a dialog
+    // closes itself, so anything that waited for a button would never fire.
+    setStage({
+      k: 'done',
+      sentTo: stage.k === 'code' ? stage.sentTo : target,
+      created: result.data.created,
+    });
     onSignedIn(safeNext() ?? '/home', { created: result.data.created });
   };
 
@@ -271,7 +294,13 @@ export function OtpSignIn({
   // first digit.
   const content = (
     <>
-      {stage.k === 'refused' ? (
+      {stage.k === 'done' ? (
+        <SignedIn
+          sentTo={stage.sentTo}
+          created={stage.created}
+          continueTo={safeNext() ?? '/home'}
+        />
+      ) : stage.k === 'refused' ? (
         <div className="flex flex-col gap-4">
           <p role="alert" className="text-body text-ink">
             {stage.message}
@@ -331,7 +360,7 @@ export function OtpSignIn({
             />
           ) : null}
 
-          <div>
+          <div className="authcta">
             <Button
               type="submit"
               variant="primary"
@@ -342,26 +371,27 @@ export function OtpSignIn({
             </Button>
           </div>
 
-          <p className="text-body-sm text-ink-3">
-            {mode === 'register' ? (
-              <>Already with us? {switchTo('sign-in', 'Sign in')}.</>
-            ) : (
-              <>New to Trugrade? {switchTo('register', 'Sign up')}</>
-            )}
-          </p>
-          <p className="text-body-sm text-ink-3">
-            Selling refurbished laptops?{' '}
-            <a className="hub-link" href={sellerRegisterUrl}>
-              Apply to supply
-            </a>
-            .
-          </p>
+          <div className="authfoot">
+            <span>
+              {mode === 'register' ? (
+                <>Already with us? {switchTo('sign-in', 'Sign in')}</>
+              ) : (
+                <>New to Trugrade? {switchTo('register', 'Create a buyer account')}</>
+              )}
+            </span>
+            <span>
+              Selling refurbished laptops?{' '}
+              <a className="hub-link" href={sellerRegisterUrl}>
+                Apply to supply
+              </a>
+            </span>
+          </div>
         </form>
       ) : (
         <div className="flex flex-col gap-5">
-          <p className="text-body text-ink-2">
-            If <span className="font-mono">{stage.sentTo}</span> is on a buyer account, a six-digit
-            code is on its way. It is good for five minutes.
+          <p className="authsent text-body-sm text-ink-2">
+            If <b className="font-mono">{stage.sentTo}</b> is on a buyer account, a six-digit code
+            is on its way. It is good for five minutes.
           </p>
           <OtpInput
             label="Six-digit code"
@@ -419,7 +449,9 @@ export function OtpSignIn({
   );
 
   const body =
-    mode === 'sign-in' ? (
+    // Once signed in, the tabs go: a way to sign in another way, drawn above a
+    // confirmation that you already have, is a contradiction.
+    mode === 'sign-in' && stage.k !== 'done' ? (
       <Tabs
         label="How to sign in"
         value={method}
@@ -434,7 +466,10 @@ export function OtpSignIn({
             panel:
               method === 'password' ? (
                 <PasswordSignIn
-                  onSignedIn={() => onSignedIn(safeNext() ?? '/home', { created: false })}
+                  onSignedIn={(who) => {
+                    setStage({ k: 'done', sentTo: who, created: false });
+                    onSignedIn(safeNext() ?? '/home', { created: false });
+                  }}
                   register={switchTo('register', 'Create a buyer account')}
                 />
               ) : null,
@@ -465,7 +500,8 @@ function PasswordSignIn({
   onSignedIn,
   register,
 }: {
-  onSignedIn: () => void;
+  /** Handed the identifier that signed in, for the confirmation to name. */
+  onSignedIn: (identifier: string) => void;
   register: React.ReactNode;
 }): React.JSX.Element {
   const [identifier, setIdentifier] = React.useState('');
@@ -489,7 +525,7 @@ function PasswordSignIn({
     setBusy(true);
     const result = await login(classify(typed).value, password);
     if (result.ok) {
-      onSignedIn();
+      onSignedIn(classify(typed).value);
       return;
     }
     setBusy(false);
@@ -548,7 +584,7 @@ function PasswordSignIn({
         />
       ) : null}
 
-      <div>
+      <div className="authcta">
         <Button
           type="submit"
           variant="primary"
@@ -557,16 +593,52 @@ function PasswordSignIn({
         >
           Sign in
         </Button>
-      </div>
-
-      <p className="text-body-sm text-ink-3">
         <a className="hub-link" href="/forgot-password">
           Forgotten your password?
-        </a>{' '}
-        Signed up with just your mobile? You have no password yet — use the OTP tab, or set one from
-        here once your account has a work email.
-      </p>
-      <p className="text-body-sm text-ink-3">New to Trugrade? {register}.</p>
+        </a>
+      </div>
+      <div className="authfoot">
+        <span>New to Trugrade? {register}</span>
+      </div>
     </form>
+  );
+}
+
+/**
+ * The moment after the code lands.
+ *
+ * A statement of what just happened, and the design's "Continue" as a real
+ * link to where the page is already going: the navigation is in flight from
+ * the caller after a short hold, so the link is for whoever reaches it first,
+ * and it goes to the same place. `role="status"` so a screen reader hears it
+ * before the route changes under it.
+ */
+function SignedIn({
+  sentTo,
+  created,
+  continueTo,
+}: {
+  sentTo: string;
+  created: boolean;
+  continueTo: string;
+}): React.JSX.Element {
+  return (
+    <div className="authdone" role="status" data-testid="signed-in">
+      <span className="authdone-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m4.5 12.5 5 5L19.5 7" />
+        </svg>
+      </span>
+      <h2>{created ? 'Your account is open.' : 'Welcome back.'}</h2>
+      <p>
+        Signed in as <span className="font-mono">{sentTo}</span> &mdash;{' '}
+        {created
+          ? 'your company profile picks up from your account.'
+          : 'your carts, holds and order rooms are waiting.'}
+      </p>
+      <a className="authgo" href={continueTo}>
+        {created ? 'Continue to your account' : 'Continue to marketplace'}
+      </a>
+    </div>
   );
 }

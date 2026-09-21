@@ -289,8 +289,12 @@ describe('OfferGrid — what the buyer is deciding on', () => {
 
   it('labels the lowest landed price neutrally, and only that one', () => {
     render(<OfferGrid offers={OFFERS} caption={CAPTION} />);
-    // One per rendering (table + card), and never worded as scarcity.
-    expect(screen.getAllByText('Lowest landed')).toHaveLength(2);
+    // Still one per rendering and still never worded as scarcity — but the two
+    // renderings mark it differently now. The table puts a pill beside the
+    // supply point, because that is the thing being chosen; the card keeps the
+    // line under the price, where it has the room.
+    expect(screen.getAllByText('Lowest')).toHaveLength(1);
+    expect(screen.getAllByText('Lowest landed')).toHaveLength(1);
   });
 
   it('flags an inspection expiring inside the 14-day window', () => {
@@ -334,7 +338,9 @@ describe('OfferGrid — what the buyer is deciding on', () => {
   });
 
   it('offers no cart button for a supply point with nothing sellable', () => {
-    render(<OfferGrid offers={[offer({ unitsAvailable: 0 })]} caption={CAPTION} onAdd={() => {}} />);
+    render(
+      <OfferGrid offers={[offer({ unitsAvailable: 0 })]} caption={CAPTION} onAdd={() => {}} />,
+    );
     expect(screen.queryByRole('button', { name: /Add .* to cart/ })).not.toBeInTheDocument();
     expect(screen.getAllByText('No units available').length).toBeGreaterThan(0);
   });
@@ -353,9 +359,7 @@ describe('OfferGrid — what the buyer is deciding on', () => {
   });
 
   it('has no axe violations', async () => {
-    const { container } = render(
-      <OfferGrid offers={OFFERS} caption={CAPTION} onAdd={() => {}} />,
-    );
+    const { container } = render(<OfferGrid offers={OFFERS} caption={CAPTION} onAdd={() => {}} />);
     expect(await axe(container)).toHaveNoViolations();
   });
 
@@ -371,9 +375,7 @@ describe('OfferGrid — what the buyer is deciding on', () => {
 
 describe('OfferGrid — add to cart actions', () => {
   it('styles every add button as the primary action when the board can add to cart', () => {
-    const { container } = render(
-      <OfferGrid offers={OFFERS} caption={CAPTION} onAdd={() => {}} />,
-    );
+    const { container } = render(<OfferGrid offers={OFFERS} caption={CAPTION} onAdd={() => {}} />);
     const table = container.querySelector('table')!;
     const adds = within(table).getAllByRole('button', { name: /Add .* to cart/ });
     expect(adds.length).toBeGreaterThan(1);

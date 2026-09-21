@@ -21,7 +21,6 @@ import {
   addCartItemSchema,
   approvalDecisionSchema,
   approvalListQuerySchema,
-  createCartSchema,
   orderListQuerySchema,
   deliveryIndexSchema,
   documentIdSchema,
@@ -31,7 +30,6 @@ import {
   type AddCartItemDto,
   type ApprovalDecisionDto,
   type ApprovalListQueryDto,
-  type CreateCartDto,
   type OrderListQueryDto,
   type RequirementIntakeDto,
   type SealCheckDto,
@@ -50,7 +48,7 @@ import {
   type ApprovalInboxView,
   type ApprovalRecordView,
 } from './internal/approval.service';
-import { CartService, type CartSummary, type CartView } from './internal/cart.service';
+import { CartService, type CartView } from './internal/cart.service';
 import {
   CheckoutService,
   type CheckoutSessionView,
@@ -112,38 +110,23 @@ export class OrderingController {
   ) {}
 
   // -------------------------------------------------------------------------
-  // Carts
+  // The cart
   // -------------------------------------------------------------------------
 
   /**
-   * A named cart. Multiple open ones per person is the feature, not an accident:
-   * a procurement head sourcing for three departments at once needs three, and
-   * `uq_cart_active_name` is what keeps them distinguishable.
-   */
-  @Post('carts')
-  @RequirePermissions('ordering.cart.write')
-  create(@Body(new ZodValidationPipe(createCartSchema)) body: CreateCartDto): Promise<CartSummary> {
-    return this.carts.create(body.name);
-  }
-
-  @Get('carts')
-  @RequirePermissions('ordering.own.read')
-  list(): Promise<CartSummary[]> {
-    return this.carts.listOpen();
-  }
-
-  /**
-   * The cart, with availability checked at the moment of the call.
+   * One cart per buyer. The session identifies it, so there is no id in the
+   * path and no "create": the first read makes it, and after an order converts
+   * it the next read makes the next one.
    *
    * A GET that reads live state rather than a stored total, because the stored
    * total is wrong the instant somebody else buys the last machine — and a cart
    * that quietly keeps offering a unit whose QC expired overnight is the failure
    * this endpoint exists to prevent.
    */
-  @Get('carts/:cartId')
+  @Get('cart')
   @RequirePermissions('ordering.own.read')
-  view(@Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string): Promise<CartView> {
-    return this.carts.view(cartId);
+  cart(): Promise<CartView> {
+    return this.carts.currentView();
   }
 
   /**
@@ -153,25 +136,21 @@ export class OrderingController {
    * which happened. The body is the whole cart either way, so the page can
    * re-render from one response.
    */
-  @Post('carts/:cartId/items')
+  @Post('cart/items')
   @HttpCode(200)
   @RequirePermissions('ordering.cart.write')
-  addItem(
-    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
-    @Body(new ZodValidationPipe(addCartItemSchema)) body: AddCartItemDto,
-  ): Promise<CartView> {
-    return this.carts.addLine(cartId, body.listingId, body.qty);
+  addItem(@Body(new ZodValidationPipe(addCartItemSchema)) body: AddCartItemDto): Promise<CartView> {
+    return this.carts.addToCart(body.listingId, body.qty);
   }
 
   /** 200 and the updated cart, not 204: the totals and the shortfalls both moved. */
-  @Delete('carts/:cartId/items/:itemId')
+  @Delete('cart/items/:itemId')
   @HttpCode(200)
   @RequirePermissions('ordering.cart.write')
   removeItem(
-    @Param('cartId', new ZodValidationPipe(uuidSchema)) cartId: string,
     @Param('itemId', new ZodValidationPipe(uuidSchema)) itemId: string,
   ): Promise<CartView> {
-    return this.carts.removeLine(cartId, itemId);
+    return this.carts.removeFromCart(itemId);
   }
 
   // -------------------------------------------------------------------------

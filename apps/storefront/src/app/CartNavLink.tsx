@@ -2,14 +2,14 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { listCarts } from './cart/api';
-import { CART_UPDATED, readActiveCartId, type CartUpdateDetail } from '../lib/cart-state';
+import { getCart } from './cart/api';
+import { CART_UPDATED, type CartUpdateDetail } from '../lib/cart-state';
 
 /**
  * The header's cart control, with a live line count.
  *
  * The header is a server component and cannot know the count after an add, so
- * this client island reads the buyer's carts and listens for updates from the
+ * this client island reads the buyer's cart and listens for updates from the
  * cart screen and the comparison board hand-off.
  *
  * It renders signed out as well as signed in. A cart that appears only after
@@ -22,21 +22,14 @@ import { CART_UPDATED, readActiveCartId, type CartUpdateDetail } from '../lib/ca
 export function CartNavLink({ signedIn }: { signedIn: boolean }): React.JSX.Element {
   const [count, setCount] = React.useState<number | null>(null);
 
-  const applyCount = React.useCallback((carts: readonly { id: string; lineCount: number }[]) => {
-    const active = readActiveCartId();
-    const cart = active ? carts.find((c) => c.id === active) : carts[0];
-    setCount(cart?.lineCount ?? 0);
-  }, []);
-
   React.useEffect(() => {
     if (!signedIn) return undefined;
     let live = true;
 
     void (async () => {
-      const result = await listCarts();
+      const result = await getCart();
       if (!live) return;
-      if (result.ok) applyCount(result.data);
-      else setCount(0);
+      setCount(result.ok ? result.data.itemCount : 0);
     })();
 
     const onUpdate = (event: Event): void => {
@@ -49,7 +42,7 @@ export function CartNavLink({ signedIn }: { signedIn: boolean }): React.JSX.Elem
       live = false;
       window.removeEventListener(CART_UPDATED, onUpdate);
     };
-  }, [applyCount, signedIn]);
+  }, [signedIn]);
 
   const href = '/cart';
 

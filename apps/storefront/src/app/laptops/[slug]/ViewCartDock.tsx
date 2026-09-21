@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import type { Route } from 'next';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useProductCart } from '../../../lib/use-product-cart';
@@ -12,15 +11,13 @@ import { useProductCart } from '../../../lib/use-product-cart';
  */
 export function ViewCartDock(): React.JSX.Element | null {
   const pathname = usePathname();
-  const { itemCount, cartId, cartDockDismissed, dismissCartDock } = useProductCart();
+  const { itemCount, cartDockDismissed, dismissCartDock } = useProductCart();
 
   if (pathname.startsWith('/cart') || itemCount < 1 || cartDockDismissed) return null;
 
-  const href = cartId ? `/cart?cart=${encodeURIComponent(cartId)}` : '/cart';
-
   return (
     <div className="cartdock" role="status" aria-live="polite">
-      <Link className="cartdock-link pill acc" href={href as Route}>
+      <Link className="cartdock-link pill acc" href="/cart">
         View cart
         <span className="cartdock-count mono tnum" aria-label={`${itemCount} in cart`}>
           {itemCount}

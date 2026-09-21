@@ -16,7 +16,9 @@ export function PincodeFocusLink({
       type="button"
       className={className}
       onClick={() => {
-        document.getElementById('deliver')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        document
+          .getElementById('deliver')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         document.getElementById('pin')?.focus({ preventScroll: true });
       }}
     >

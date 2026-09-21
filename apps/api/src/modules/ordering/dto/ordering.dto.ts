@@ -27,19 +27,6 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * `ordering.cart.name` has `CHECK (length(btrim(name)) > 0)` behind it and
- * `uq_cart_active_name` indexes `lower(btrim(name))`, so the trim happens here
- * too — otherwise "  Finance  " and "Finance" look distinct to the client and
- * identical to the index, and the buyer gets a conflict they cannot see.
- */
-export const cartNameSchema = z.string().trim().min(1).max(60);
-
-export const createCartSchema = z.object({
-  /** A procurement head sourcing for three departments needs three names. */
-  name: cartNameSchema.default('Cart'),
-});
-
-/**
  * `qty` is what the buyer wants, not what is available — the cart deliberately
  * accepts a quantity larger than current stock and reports the shortfall on
  * view, because stock is not reserved here and any number checked at add time is
@@ -50,7 +37,6 @@ export const addCartItemSchema = z.object({
   qty: z.number().int().min(1).max(LISTING_QTY.max!),
 });
 
-export type CreateCartDto = z.infer<typeof createCartSchema>;
 export type AddCartItemDto = z.infer<typeof addCartItemSchema>;
 
 // ---------------------------------------------------------------------------

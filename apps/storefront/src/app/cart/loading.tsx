@@ -4,7 +4,7 @@ import { CartSkeleton } from './CartSkeleton';
 export default function Loading(): React.JSX.Element {
   return (
     <>
-      <div className="body">
+      <div className="body cartbody">
         <div className="wrap cartpage">
           <CartSkeleton />
         </div>

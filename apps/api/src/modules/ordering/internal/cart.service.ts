@@ -12,6 +12,7 @@ import {
 } from '../../../shared/errors/domain-errors';
 import { ListingService } from '../../listing';
 import { CatalogLookup } from './catalog-lookup';
+import { HoldService } from './hold.service';
 
 /**
  * The buyer's cart.
@@ -65,13 +66,6 @@ const PURCHASABLE_STATUSES: readonly string[] = ['ACTIVE', 'PARTIALLY_ACTIVE'];
  */
 const DISPATCH_UNKNOWN = 'Dispatch point to be confirmed';
 
-export interface CartSummary {
-  id: string;
-  name: string;
-  lineCount: number;
-  updatedAt: Date;
-}
-
 /**
  * One cart line, built from an explicit allow-list.
  *
@@ -114,7 +108,6 @@ export interface DispatchGroupView {
 
 export interface CartView {
   id: string;
-  name: string;
   /**
    * Grouped for delivery expectations only. There is one order and one invoice;
    * "sub-order" is an internal Phase 6 word and never appears in a buyer payload.
@@ -182,20 +175,22 @@ export class CartService {
     private readonly ctx: RequestContextService,
     private readonly listings: ListingService,
     private readonly catalog: CatalogLookup,
+    private readonly holds: HoldService,
   ) {}
 
   // -------------------------------------------------------------------------
-  // Named carts
+  // The cart
   // -------------------------------------------------------------------------
 
   /**
    * A cart belongs to a buyer organisation and to one person inside it.
    *
-   * `uq_cart_active_name` is keyed on `(buyer_org_id, user_id, name)`, so the
-   * database has already decided that carts are per user: two people on the same
-   * procurement team may each keep one called "Q3 refresh". Platform staff have
-   * no buyer org and therefore no cart, which is why this refuses rather than
-   * falling through to a null org id the foreign key would reject anyway.
+   * `uq_cart_one_open_per_buyer` is keyed on `(buyer_org_id, user_id)`, so the
+   * database has already decided that carts are per user and that each person
+   * has exactly one open at a time: two people on the same procurement team each
+   * keep their own. Platform staff have no buyer org and therefore no cart,
+   * which is why this refuses rather than falling through to a null org id the
+   * foreign key would reject anyway.
    */
   private buyer(): { orgId: string; userId: string } {
     const p = this.ctx.requirePrincipal();
@@ -212,43 +207,65 @@ export class CartService {
   }
 
   /**
-   * `ON CONFLICT ... DO NOTHING` against the partial index rather than a read
-   * followed by an insert: the read-then-write version has a window in which two
-   * tabs both create "Q3 refresh", and the index would then reject the second
+   * The buyer's one open cart, made on first use.
+   *
+   * There is no "create": the first read makes the cart, and once an order
+   * converts it the next read makes the next one, so a buyer never meets an
+   * empty list. `ON CONFLICT ... DO NOTHING` against the partial index rather
+   * than a read followed by an insert: the read-then-write version has a window
+   * in which two tabs both insert, and the index would then reject the second
    * with a message naming an index.
    */
-  async create(name: string): Promise<CartSummary> {
+  async current(): Promise<{ id: string }> {
     const { orgId, userId } = this.buyer();
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; updated_at: Date }>>`
-      INSERT INTO ordering.cart (buyer_org_id, user_id, name, status)
-      VALUES (${orgId}::uuid, ${userId}::uuid, ${name}, 'OPEN')
-      ON CONFLICT (buyer_org_id, user_id, lower(btrim(name))) WHERE status = 'OPEN'
+    const inserted = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO ordering.cart (buyer_org_id, user_id, status)
+      VALUES (${orgId}::uuid, ${userId}::uuid, 'OPEN')
+      ON CONFLICT (buyer_org_id, user_id) WHERE status = 'OPEN'
       DO NOTHING
-      RETURNING id, updated_at`;
+      RETURNING id`;
+    const made = inserted[0];
+    if (made) return { id: made.id };
 
-    const row = rows[0];
-    if (!row) {
-      throw new ConflictError(`You already have an open cart called "${name}".`, {
-        reason: 'duplicate_cart_name',
-      });
-    }
-    return { id: row.id, name, lineCount: 0, updatedAt: row.updated_at };
+    const existing = await this.prisma.db.cart.findFirst({
+      where: this.mine({ user_id: userId, status: 'OPEN' }),
+      select: { id: true },
+    });
+    // The insert lost to the index, so the row it lost to is there.
+    if (!existing) throw new NotFoundError('cart');
+    return { id: existing.id };
   }
 
-  /** The caller's own open carts. Scoped by org first, then narrowed to the person. */
-  async listOpen(): Promise<CartSummary[]> {
-    const { userId } = this.buyer();
-    const rows = await this.prisma.db.cart.findMany({
-      where: this.mine({ user_id: userId, status: 'OPEN' }),
-      orderBy: { updated_at: 'desc' },
-      select: { id: true, name: true, updated_at: true, _count: { select: { cart_item: true } } },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      lineCount: r._count.cart_item,
-      updatedAt: r.updated_at,
-    }));
+  /** The cart, with availability checked at the moment of the call. */
+  async currentView(): Promise<CartView> {
+    const { id } = await this.current();
+    return this.view(id);
+  }
+
+  async addToCart(listingId: string, qty: number): Promise<CartView> {
+    const { id } = await this.current();
+    return this.addLine(id, listingId, qty);
+  }
+
+  async removeFromCart(itemId: string): Promise<CartView> {
+    const { id } = await this.current();
+    return this.removeLine(id, itemId);
+  }
+
+  /**
+   * With one cart per buyer there is no second cart to shop into while this one
+   * is mid-checkout. A line changed under a live hold would leave the hold
+   * covering machines the buyer no longer wants, or missing ones they now do,
+   * so the cart is read-only until the checkout finishes, is left, or runs out.
+   */
+  private async refuseIfHeld(cartId: string): Promise<void> {
+    const held = await this.holds.read(cartId);
+    if (held && held.expiresAt > this.clock.now()) {
+      throw new ConflictError(
+        'Your cart is being checked out. Finish or leave that checkout to change it.',
+        { reason: 'cart_held' },
+      );
+    }
   }
 
   /**
@@ -352,6 +369,7 @@ export class CartService {
    */
   async addLine(cartId: string, listingId: string, qty: number): Promise<CartView> {
     await this.requireCart(cartId);
+    await this.refuseIfHeld(cartId);
 
     const offer = (await this.offerFacts([listingId])).get(listingId);
     if (!offer?.purchasable) {
@@ -380,6 +398,7 @@ export class CartService {
 
   async removeLine(cartId: string, itemId: string): Promise<CartView> {
     await this.requireCart(cartId);
+    await this.refuseIfHeld(cartId);
     const deleted = await this.prisma.$executeRaw`
       DELETE FROM ordering.cart_item WHERE id = ${itemId}::uuid AND cart_id = ${cartId}::uuid`;
     if (deleted === 0) throw new NotFoundError('cart line', { itemId });
@@ -484,7 +503,6 @@ export class CartService {
 
     return {
       id: cart.id,
-      name: cart.name,
       // Sorted by label so the page does not reshuffle between reads. The label
       // is a letter assigned at random by `listing.assign_supply_point`, so
       // ordering on it carries nothing about who the source is or how long they

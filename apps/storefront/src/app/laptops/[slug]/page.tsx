@@ -29,19 +29,21 @@
 import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { RepresentativeImage, SidePanel } from '@trugrade/ui';
+import { RepresentativeImage, RepresentativeImageDisclosure } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { normalisePincode, type Grade } from '@trugrade/contracts';
 import { getOfferBoard, getSkuDetail, type OfferBoard, type SkuDetail } from '../../../lib/api';
 import { Board } from './Board';
 import { ProductCartScope } from './ProductCartScope';
-import { ProductIdentityCard } from './ProductIdentityCard';
-import { specLine } from './spec-rows';
+import { PanelActions } from './PanelActions';
+import { specLine, specRows } from './spec-rows';
 import { PincodeFocusLink } from './PincodeFocusLink';
 // import { SupplyPointPicker } from './SupplyPointPicker';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
+
+const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
 const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 const GRADES = new Set(['A_PLUS', 'A', 'B']);
@@ -131,182 +133,200 @@ export default async function ProductPage({
   const regular = board.offers.filter((o) => o.valuationMethod === 'REGULAR');
   const margin = board.offers.filter((o) => o.valuationMethod === 'MARGIN');
 
+  const gradeLabel = GRADE_LABEL[board.grade] ?? board.grade;
+
+  // Each pool is sorted cheapest-first, and the margin note on the board holds
+  // that the cheapest row on the page is in the regular table. So the panel
+  // acts on `regular[0]` wherever there is one, and only falls to the margin
+  // pool when regular is empty.
+  const lowest = regular[0] ?? margin[0] ?? null;
+
+  // The headline figure. Before a pincode there is no landed price to quote —
+  // see the note at the top of this file on why we do not print one anyway.
+  const priced = board.delivery.kind === 'DELIVERABLE' && lowest !== null;
+
+  const batteryValues = board.offers.flatMap((o) =>
+    o.batteryHealthPct ? [o.batteryHealthPct.min, o.batteryHealthPct.max] : [],
+  );
+  const batteryLabel =
+    batteryValues.length > 0
+      ? `${Math.min(...batteryValues)}–${Math.max(...batteryValues)}%`
+      : null;
+
+  const warrantyMonths = board.offers.map((o) => o.totalWarrantyMonths);
+
   return (
     <>
-
       <div className="body">
-        <div className="wrap">
-          <div className="protop">
-            <div className="protop-main">
-              <ProductIdentityCard
-                sku={sku}
-                board={board}
-                fromPrice={shown?.fromPrice ?? null}
+        {/*
+          ONE cart scope for the whole record, wrapping both the panel and the
+          board. It used to be two — one around each — which gave the page two
+          providers that could not see each other's lines, two "View cart"
+          docks, and a dock rendered INSIDE the board: `.tbl-wrap` carries
+          `contain: paint`, which makes it the containing block for a fixed
+          child, so the dock was positioned against the table instead of the
+          viewport.
+        */}
+        <ProductCartScope>
+          <div className="wrap pdp">
+            {/*
+            LEFT — the sticky panel. Identity, the grade plate, and the two
+            actions. It stays put while the board and the specification scroll,
+            because the decision it carries is the one the rest of the page is
+            evidence for.
+          */}
+            <aside className="pv">
+              <div className="pv-img">
+                <span className="pv-grade mono">{gradeLabel}</span>
+                <span className="pv-seal">Tamper-sealed &middot; photographed</span>
+                {/*
+                A drawing, deliberately, and not a photograph. Every real frame
+                we hold is of a DIFFERENT machine of this grade, and
+                `RepresentativeImage` exists to say so in a caption. A caption
+                does not survive being shrunk into a product panel, so the
+                photographs stay in their own block below where the caption
+                reads, and this slot carries no claim at all.
+              */}
+                <svg viewBox="0 0 150 80" fill="none" aria-hidden="true" className="pv-draw">
+                  <rect
+                    x="27"
+                    y="10"
+                    width="96"
+                    height="56"
+                    rx="3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  />
+                  <path d="M12 70 h126 l-8 -4 H20 z" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </div>
+
+              <PanelActions
+                listingId={priced && lowest ? lowest.listingId : null}
+                city={lowest?.city ?? null}
+                snapshot={
+                  priced && lowest
+                    ? {
+                        listingId: lowest.listingId,
+                        title: `${sku.brandName} ${sku.modelName}`,
+                        specSummary: specLine(sku),
+                        grade: lowest.grade,
+                        unitPrice: lowest.landedPrice,
+                        supplyPoint: `Supply Point ${lowest.supplyPointCode.toUpperCase()} · ${lowest.city}`,
+                        dispatch: lowest.dispatchCommitment,
+                      }
+                    : null
+                }
+                disabledReason={
+                  // Order matters: with no pincode the board holds no offers
+                  // yet either, and answering "nothing sealed" to a question
+                  // nobody has asked reads as out of stock.
+                  board.delivery.kind === 'NONE'
+                    ? 'Enter a delivery pincode to see landed prices and buy.'
+                    : board.delivery.kind === 'UNSERVICEABLE'
+                      ? 'We cannot deliver to this pincode yet.'
+                      : `Nothing sealed at Grade ${gradeLabel} right now.`
+                }
               />
 
-              <section aria-labelledby="cond" className="protop-grade">
-                <div className="sh">
-                  <div className="shrow">
-                    <h2 id="cond">What Grade {GRADE_LABEL[board.grade] ?? board.grade} looks like</h2>
-                    <span className="sub">Photographed against the published grade bands</span>
-                  </div>
-                </div>
+              <p className="pv-trust">
+                Sold by <b>{BRAND.legalEntity}</b> &middot; one GST invoice, every serial listed
+                &middot; <b>48-hour</b> inspect-and-reject window.
+              </p>
 
-                <div className="gsel" role="group" aria-label="Inspected grade">
-                  {board.grades.map((g) => {
-                    const on = g.grade === board.grade;
-                    return (
-                      <Link
-                        key={g.grade}
-                        className={on ? 'chipf on' : 'chipf'}
-                        aria-current={on ? 'true' : undefined}
-                        href={
-                          href(slug, {
-                            ...query,
-                            grade: g.grade,
-                            sp: undefined,
-                            city: undefined,
-                          }) as Route
-                        }
-                      >
-                        Grade {GRADE_LABEL[g.grade] ?? g.grade}
-                        <span className="c mono">
-                          {g.unitsAvailable} unit{g.unitsAvailable === 1 ? '' : 's'} ·{' '}
-                          {g.supplyPoints} supply point{g.supplyPoints === 1 ? '' : 's'}
-                        </span>
-                      </Link>
-                    );
-                  })}
+              <dl className="pv-facts">
+                <div>
+                  <dt>Sealed at this grade</dt>
+                  <dd className="mono">{board.unitsAvailable}</dd>
                 </div>
-
-                <details className="grade-gal-acc">
-                  <summary>
-                    Condition photographs · Grade {GRADE_LABEL[board.grade] ?? board.grade}
-                    {sku.images?.images?.length ? (
-                      <span className="grade-gal-count mono">
-                        {sku.images.images.length} frame{sku.images.images.length === 1 ? '' : 's'}
+                <div>
+                  <dt>Supply points</dt>
+                  <dd className="mono">{board.supplyPoints}</dd>
+                </div>
+                <div>
+                  <dt>GST</dt>
+                  <dd className="mono">
+                    18%
+                    {board.offers[0] && (
+                      <span className="denom">
+                        {' '}
+                        {board.offers[0].isInterState ? 'IGST' : 'CGST+SGST'}
                       </span>
-                    ) : null}
-                  </summary>
-                  <div className="grade-gal-acc-body">
-                    <Gallery sku={sku} grade={board.grade} hasUnits={board.offers.length > 0} />
-                  </div>
-                </details>
-              </section>
-
-              {/*
-                Sits in the left column so it follows the grade accordion instead of
-                waiting for the deliver panel column to finish — that panel is taller
-                and was leaving a dead band above this section.
-              */}
-              <section aria-labelledby="board" className="protop-board" id="board">
-                <div className="sh">
-                  <div className="shrow">
-                    <h2 id="board">Compare supply points</h2>
-                    {/* <span className="sub">Pick a supply point to see its serials</span> */}
-                  </div>
+                    )}
+                  </dd>
                 </div>
-
-                {/* {board.offers.length > 0 && (
-                  <SupplyPointPicker
-                    offers={board.offers}
-                    initialSelected={selected}
-                    slug={slug}
-                    query={query}
-                  />
-                )} */}
-
-                <div className="tbl">
-                  <div className="tbh">
-                    <b>
-                      {sku.brandName} {sku.modelName}
-                    </b>
-                    <span className="m">
-                      {specLine(sku)} · Grade {GRADE_LABEL[board.grade] ?? board.grade}
-                    </span>
-                    <div className="r">
-                      <span className="chipf on">
-                        {board.pincode ? `Landed to ${board.pincode}` : 'No pincode yet'}
-                      </span>
-                      <span className="chipf">
-                        {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {board.delivery.kind === 'NONE' ? (
-                    <div className="empty">
-                      <h3>
-                        {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'} hold
-                        this machine at Grade {GRADE_LABEL[board.grade] ?? board.grade}
-                      </h3>
-                      <p>
-                        A landed price is our price plus GST plus freight to your dock, and we will
-                        not quote you one figure and add to it later. Tell us where it is going and
-                        every row below fills in — the price, the inspection score, how often that
-                        source&rsquo;s declared grade survived ours, and what is in stock.
-                      </p>
-                      <p className="retry">
-                        <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink>
-                      </p>
-                    </div>
-                  ) : board.delivery.kind === 'UNSERVICEABLE' ? (
-                    <div className="empty err">
-                      <h3>We cannot deliver to {board.pincode} yet</h3>
-                      <p>{board.delivery.reason}</p>
-                      <p className="retry">
-                        <PincodeFocusLink>Try another pincode</PincodeFocusLink>{' '}
-                        or{' '}
-                        <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
-                          ask us to quote this lane
-                        </a>
-                        .
-                      </p>
-                    </div>
-                  ) : board.offers.length === 0 ? (
-                    <div className="empty">
-                      <h3>Nothing sealed at this grade right now</h3>
-                      <p>
-                        Every unit at Grade {GRADE_LABEL[board.grade] ?? board.grade} has been sold,
-                        or its inspection certificate has expired and it is out of the window until
-                        it is re-tested. The other grades above still have stock.
-                      </p>
-                    </div>
-                  ) : (
-                    <ProductCartScope>
-                      {regular.length > 0 && (
-                        <Board
-                          rows={regular}
-                          pool="REGULAR"
-                          caption={`${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${GRADE_LABEL[board.grade] ?? board.grade}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
-                        />
-                      )}
-                      {margin.length > 0 && (
-                        <Board
-                          rows={margin}
-                          pool="MARGIN"
-                          caption={`${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
-                        />
-                      )}
-                    </ProductCartScope>
-                  )}
+                <div>
+                  <dt>Warranty</dt>
+                  <dd className="mono">
+                    {warrantyMonths.length > 0 ? (
+                      <>
+                        {Math.min(...warrantyMonths)}
+                        {Math.min(...warrantyMonths) === Math.max(...warrantyMonths)
+                          ? ''
+                          : `–${Math.max(...warrantyMonths)}`}{' '}
+                        mo
+                      </>
+                    ) : (
+                      <span className="notmeasured">Per supply point</span>
+                    )}
+                  </dd>
                 </div>
-              </section>
-            </div>
+              </dl>
+            </aside>
 
-            <div className="sidep protop-deliver" id="deliver">
-              <SidePanel
-                sticky={false}
-                title="Deliver to"
-                description="Freight and the GST split both depend on where this is going, so the prices follow your pincode."
-                footnote={
-                  <>
-                    We are the seller of record. One invoice from {BRAND.legalEntity}, with every
-                    serial on it, and a 48-hour window to inspect and reject after delivery.
-                  </>
-                }
-              >
-                <form className="pinform" action={`/laptops/${encodeURIComponent(slug)}`} method="get">
+            {/* RIGHT — what the machine is, what it costs landed, and the board. */}
+            <main className="det">
+              <h1 className="det-title">
+                {sku.brandName} {sku.modelName}
+              </h1>
+
+              <div className="meta-row">
+                <span className="dchip hl">Grade {gradeLabel}</span>
+                {batteryLabel ? (
+                  <span className="dchip mono">Battery {batteryLabel}</span>
+                ) : (
+                  <span className="dchip notmeasured">Battery not measured</span>
+                )}
+                <span className="dchip mono">{sku.cpuModel}</span>
+                <span className="dchip mono">{sku.ramGb} GB RAM</span>
+                <span className="dchip mono">
+                  {sku.storageGb} GB {sku.storageType.replace('_', ' ')}
+                </span>
+                <span className="dchip mono">
+                  {sku.screenSizeIn}&quot; {sku.resolution}
+                </span>
+              </div>
+
+              <div className="price-blk">
+                <div className="price-line">
+                  <span className="price-now mono">
+                    {priced && lowest
+                      ? `₹${RUPEES.format(Number(lowest.landedPrice))}`
+                      : shown?.fromPrice
+                        ? `₹${RUPEES.format(Number(shown.fromPrice))}`
+                        : 'Not priced'}
+                  </span>
+                  {/*
+                  No struck-through "new" price and no percentage off it. We do
+                  not hold what this model sold for new, and printing a number
+                  we cannot source beside a discount off it is the invented
+                  saving the CCPA guidelines name.
+                */}
+                  <span className="price-off">
+                    {priced ? 'lowest landed' : shown?.fromPrice ? 'from' : ''}
+                  </span>
+                </div>
+                <p className="price-note">
+                  {priced
+                    ? `Includes 18% GST and freight to ${board.pincode}. Every supply point is priced on the board below.`
+                    : 'Before tax and delivery. A landed price needs a destination — give us a pincode and every row below fills in.'}
+                </p>
+
+                <form
+                  className="pin-line"
+                  action={`/laptops/${encodeURIComponent(slug)}`}
+                  method="get"
+                >
                   {board.grade && <input type="hidden" name="grade" value={board.grade} />}
                   {selected && (
                     <>
@@ -314,72 +334,206 @@ export default async function ProductPage({
                       <input type="hidden" name="city" value={selected.city} />
                     </>
                   )}
-                  <label htmlFor="pin">Delivery pincode</label>
-                  <div className="pinrow">
-                    <input
-                      id="pin"
-                      name="pin"
-                      className="mono"
-                      inputMode="numeric"
-                      pattern="[1-9][0-9]{2}[ ]?[0-9]{3}"
-                      maxLength={7}
-                      defaultValue={board.pincode ?? ''}
-                      placeholder="110001"
-                      aria-describedby="pinhelp"
-                    />
-                    <button type="submit" className={board.pincode ? 'sel gh' : 'sel'}>
-                      {board.pincode ? 'Update' : 'Show landed prices'}
-                    </button>
-                  </div>
-                  <p id="pinhelp" className="fnote">
-                    {askedPin && pincode === null
-                      ? 'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
-                      : board.delivery.kind === 'DELIVERABLE' && board.delivery.etaDays > 0
-                        ? `Prices below include GST and freight to ${board.pincode}. Carrier transit is ${board.delivery.etaDays} day${board.delivery.etaDays === 1 ? '' : 's'} once dispatched.`
-                        : 'Six digits. We quote the real freight for the lane, not an average.'}
-                  </p>
+                  <label className="sr-only" htmlFor="pin">
+                    Delivery pincode
+                  </label>
+                  <input
+                    id="pin"
+                    name="pin"
+                    className="field mono"
+                    inputMode="numeric"
+                    pattern="[1-9][0-9]{2}[ ]?[0-9]{3}"
+                    maxLength={7}
+                    defaultValue={board.pincode ?? ''}
+                    placeholder="Delivery pincode"
+                    aria-describedby="pinhelp"
+                  />
+                  <button type="submit" className="mini">
+                    {board.pincode ? 'Update' : 'Show prices'}
+                  </button>
                 </form>
 
-                <dl className="facts">
-                  <div>
-                    <dt>Sealed units at this grade</dt>
-                    <dd className="mono">{board.unitsAvailable}</dd>
-                  </div>
-                  <div>
-                    <dt>Supply points holding it</dt>
-                    <dd className="mono">{board.supplyPoints}</dd>
-                  </div>
-                  <div>
-                    <dt>GST</dt>
-                    <dd className="mono">
-                      18% · HSN {sku.hsnCode}
-                      {board.offers[0] && (
-                        <span className="denom">
-                          {' '}
-                          {board.offers[0].isInterState ? 'IGST' : 'CGST + SGST'}
-                        </span>
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Warranty</dt>
-                    <dd className="mono">
-                      {board.offers.length > 0 ? (
+                <p id="pinhelp" className="deliver">
+                  {askedPin && pincode === null ? (
+                    'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
+                  ) : board.delivery.kind === 'DELIVERABLE' && lowest ? (
+                    <>
+                      {lowest.dispatchCommitment}
+                      {board.delivery.etaDays > 0 ? (
                         <>
-                          {Math.min(...board.offers.map((o) => o.totalWarrantyMonths))}–
-                          {Math.max(...board.offers.map((o) => o.totalWarrantyMonths))} months
-                          <span className="denom"> total, from us, per supply point</span>
+                          , then <b>{board.delivery.etaDays}</b> day
+                          {board.delivery.etaDays === 1 ? '' : 's'} transit to {board.pincode}
                         </>
-                      ) : (
-                        <span className="notmeasured">Shown per supply point</span>
-                      )}
-                    </dd>
+                      ) : null}
+                      .
+                    </>
+                  ) : (
+                    'Six digits. We quote the real freight for the lane, not an average.'
+                  )}
+                </p>
+              </div>
+
+              <h2 className="sec-t">Choose grade</h2>
+              <div className="grades" role="group" aria-label="Inspected grade">
+                {board.grades.map((g) => {
+                  const on = g.grade === board.grade;
+                  return (
+                    <Link
+                      key={g.grade}
+                      className={on ? 'gpill on' : 'gpill'}
+                      aria-current={on ? 'true' : undefined}
+                      href={
+                        href(slug, {
+                          ...query,
+                          grade: g.grade,
+                          sp: undefined,
+                          city: undefined,
+                        }) as Route
+                      }
+                    >
+                      <b>Grade {GRADE_LABEL[g.grade] ?? g.grade}</b>
+                      <small className="mono">
+                        {g.unitsAvailable} unit{g.unitsAvailable === 1 ? '' : 's'} &middot;{' '}
+                        {g.supplyPoints} supply point{g.supplyPoints === 1 ? '' : 's'}
+                      </small>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <h2 className="sec-t" id="board">
+                Compare supply points
+                <span className="sec-sub">
+                  {board.pincode
+                    ? `· Grade ${gradeLabel} · landed to ${board.pincode}`
+                    : `· Grade ${gradeLabel}`}
+                </span>
+              </h2>
+
+              <div className="tbl-wrap">
+                {board.delivery.kind === 'NONE' ? (
+                  <div className="empty">
+                    <h3>
+                      {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'} hold
+                      this machine at Grade {gradeLabel}
+                    </h3>
+                    <p>
+                      A landed price is our price plus GST plus freight to your dock, and we will
+                      not quote you one figure and add to it later. Tell us where it is going and
+                      every row below fills in &mdash; the price, the inspection score, how often
+                      that source&rsquo;s declared grade survived ours, and what is in stock.
+                    </p>
+                    <p className="retry">
+                      <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink>
+                    </p>
                   </div>
+                ) : board.delivery.kind === 'UNSERVICEABLE' ? (
+                  <div className="empty err">
+                    <h3>We cannot deliver to {board.pincode} yet</h3>
+                    <p>{board.delivery.reason}</p>
+                    <p className="retry">
+                      <PincodeFocusLink>Try another pincode</PincodeFocusLink> or{' '}
+                      <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
+                        ask us to quote this lane
+                      </a>
+                      .
+                    </p>
+                  </div>
+                ) : board.offers.length === 0 ? (
+                  <div className="empty">
+                    <h3>Nothing sealed at this grade right now</h3>
+                    <p>
+                      Every unit at Grade {gradeLabel} has been sold, or its inspection certificate
+                      has expired and it is out of the window until it is re-tested. The other
+                      grades above still have stock.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {regular.length > 0 && (
+                      <Board
+                        layout="table"
+                        rows={regular}
+                        pool="REGULAR"
+                        sku={`${sku.brandName} ${sku.modelName}`}
+                        spec={specLine(sku)}
+                        caption={`${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
+                      />
+                    )}
+                    {margin.length > 0 && (
+                      <Board
+                        layout="table"
+                        rows={margin}
+                        pool="MARGIN"
+                        sku={`${sku.brandName} ${sku.modelName}`}
+                        spec={specLine(sku)}
+                        caption={`${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+
+              <details className="acc">
+                <summary className="acc-h">
+                  Specification
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </summary>
+                {/*
+                A definition list rather than a table. A `<table>` here has to
+                resolve its width against a grid column, and a long mono value
+                — `DEL-LAT5420-I51135G7-16-512` — sizes the column from its own
+                content and pushes the record sideways on a phone. Rows of
+                `dt`/`dd` wrap instead, and this is what the spec block on the
+                old identity card already used.
+              */}
+                <dl className="spec">
+                  {specRows(sku).map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd className="mono">{value}</dd>
+                    </div>
+                  ))}
                 </dl>
-              </SidePanel>
-            </div>
+              </details>
+
+              <details className="acc">
+                <summary className="acc-h">
+                  Condition photographs &middot; Grade {gradeLabel}
+                  {sku.images?.images?.length ? (
+                    <span className="acc-count mono">
+                      {sku.images.images.length} frame{sku.images.images.length === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </summary>
+                <div className="acc-b acc-b-pad">
+                  <Gallery sku={sku} grade={board.grade} hasUnits={board.offers.length > 0} />
+                </div>
+              </details>
+            </main>
           </div>
-        </div>
+        </ProductCartScope>
       </div>
     </>
   );
@@ -454,8 +608,21 @@ function Gallery({
   // them being presented as the machine the buyer will receive. The caption
   // repeats, and that is the component's contract rather than an oversight — see
   // the note on a one-caption gallery in the build ledger.
+  // ONE disclosure for the set, above the frames, instead of the same sentence
+  // repeated under all six. Each figure still points at it through
+  // `aria-describedby`, so a screen reader announces it per image as before.
+  const disclosureId = 'grade-frames-disclosure';
+
   return (
     <>
+      <RepresentativeImageDisclosure
+        id={disclosureId}
+        grade={grade as Grade}
+        match={resolved?.match ?? 'SKU'}
+        count={held.length}
+        passportHref={passportHref}
+        className="gal-disclosure"
+      />
       <div className="gal">
         {held.map((image) => (
           <RepresentativeImage
@@ -465,6 +632,7 @@ function Gallery({
             grade={grade as Grade}
             match={resolved?.match ?? 'SKU'}
             passportHref={passportHref}
+            captionedBy={disclosureId}
           />
         ))}
       </div>
@@ -480,10 +648,7 @@ function Gallery({
           : resolved?.match === 'SERIES'
             ? ' — of this range rather than of this model'
             : ''}
-        .{' '}
-        {hasUnits
-          ? 'Every unit’s own inspection photographs are on its passport, below, before you buy.'
-          : 'Every unit’s own inspection photographs are on its passport, reachable before you buy.'}
+        .
       </p>
     </>
   );

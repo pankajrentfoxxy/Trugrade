@@ -19,25 +19,23 @@
  * 7. **Every charge is named on this one screen.** No drip pricing.
  */
 import * as React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { findVendorIdentityLeaks, type VendorIdentity } from '@trugrade/contracts';
 import { CartScreen } from './CartScreen';
-import type { CartSummary, CartView } from './api';
+import type { CartView } from './api';
 
 jest.mock('./api', () => ({
   ...jest.requireActual('./api'),
-  listCarts: jest.fn(),
-  viewCart: jest.fn(),
-  createCart: jest.fn(),
+  getCart: jest.fn(),
   setCartLine: jest.fn(),
   removeCartLine: jest.fn(),
 }));
+jest.mock('../../lib/merge-guest-cart', () => ({ mergeGuestCart: jest.fn(async () => null) }));
 
-import { listCarts, viewCart } from './api';
+import { getCart } from './api';
 
-const mockList = listCarts as jest.MockedFunction<typeof listCarts>;
-const mockView = viewCart as jest.MockedFunction<typeof viewCart>;
+const mockCart = getCart as jest.MockedFunction<typeof getCart>;
 
 /* ----------------------------------------------------------------- fixtures */
 
@@ -79,7 +77,6 @@ const line = (over: Partial<CartView['dispatchGroups'][0]['lines'][0]> = {}) => 
 /** Two dispatch points, one of them short. The shape of the whole screen. */
 const view = (over: Partial<CartView> = {}): CartView => ({
   id: CART_ID,
-  name: 'National rollout',
   dispatchGroups: [
     { label: 'Supply Point B · Palwal', lines: [shortLine] },
     { label: 'Supply Point W · New Delhi', lines: [line()] },
@@ -110,16 +107,6 @@ const gone = line({
   lineTotal: '0.00',
 });
 
-const summaries: CartSummary[] = [
-  { id: CART_ID, name: 'National rollout', lineCount: 2, updatedAt: '2026-08-29T17:24:15.171Z' },
-  {
-    id: 'd0e0a0f4-8e3a-4b2c-9c7d-2b9a1e6f4a11',
-    name: 'Q3 refresh',
-    lineCount: 0,
-    updatedAt: '2026-08-28T09:00:00.000Z',
-  },
-];
-
 const ok = <T,>(data: T) => ({ ok: true as const, data });
 const refused = (status: number, message: string) => ({
   ok: false as const,
@@ -132,11 +119,11 @@ const refused = (status: number, message: string) => ({
 
 /** Render the screen with a cart on the wire, and wait for the read to land. */
 async function open(cart: CartView = view()) {
-  mockList.mockResolvedValue(ok(summaries));
-  mockView.mockResolvedValue(ok(cart));
+  mockCart.mockResolvedValue(ok(cart));
   const rendered = render(<CartScreen />);
-  // Wait for the cart read to land — the active cart chip is the anchor.
-  await screen.findByRole('button', { current: true });
+  // Wait for the cart read to land — the rail's subtitle is only in the ready
+  // state (the skeleton carries the rail's title, hidden).
+  await screen.findByText('Every charge is named here. Nothing is added later.');
   return rendered;
 }
 
@@ -269,7 +256,7 @@ describe('the anonymity guarantee', () => {
 
 describe('a visitor with no session', () => {
   it('offers a way in rather than an error', async () => {
-    mockList.mockResolvedValue(refused(401, 'Sign in to continue.'));
+    mockCart.mockResolvedValue(refused(401, 'Sign in to continue.'));
     render(<CartScreen />);
     const link = await screen.findByRole('link', { name: 'Sign in' });
     expect(link).toHaveAttribute('href', expect.stringContaining('/sign-in?next='));
@@ -279,7 +266,7 @@ describe('a visitor with no session', () => {
 
 describe('a cart we could not read', () => {
   it('says it is our problem and offers the retry', async () => {
-    mockList.mockResolvedValue(
+    mockCart.mockResolvedValue(
       refused(0, 'We could not reach the server. Your answers are still here — try again.'),
     );
     render(<CartScreen />);
@@ -288,13 +275,12 @@ describe('a cart we could not read', () => {
   });
 });
 
-describe('more than one named cart', () => {
-  it('lists them all with their line counts, and marks the open one', async () => {
+describe('one cart per buyer', () => {
+  it('is titled as the cart, with what is in it, and offers nowhere to make another', async () => {
     await open();
-    await waitFor(() => expect(screen.getByText('Q3 refresh')).toBeInTheDocument());
-    const active = screen.getAllByRole('button', { current: true });
-    expect(active).toHaveLength(1);
-    expect(active[0]?.textContent).toContain('National rollout');
-    expect(active[0]?.textContent).toContain('2 lines');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(
+      /Your cart.*6 machines.*2 dispatch points/,
+    );
+    expect(screen.queryByRole('button', { name: /new cart/i })).toBeNull();
   });
 });
