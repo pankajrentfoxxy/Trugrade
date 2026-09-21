@@ -1,0 +1,702 @@
+/**
+ * Supplier signup — the parts of the approved mock that sign-in does not
+ * share. `auth/auth-split.css` draws the split, the brand panel, the fields,
+ * the OTP boxes and the buttons; this file adds the scan-and-seal scene, the
+ * promises checklist, the progress bars, the +91 mobile group, the password
+ * hint and the done card. Scoped under `.signup-split`, tokens from
+ * `packages/ui/src/globals.css`.
+ */
+
+.signup-split {
+  --sl-cycle: 8s;
+}
+.signup-split .split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+}
+
+/* ---- the scene: scan -> checks -> seal -> payout, on loop ---- */
+.signup-split .scene {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 22px;
+}
+.signup-split .rig {
+  position: relative;
+  width: 300px;
+  height: 250px;
+}
+
+/* laptop */
+.signup-split .lap {
+  position: absolute;
+  left: 50%;
+  top: 26px;
+  translate: -50% 0;
+  width: 230px;
+}
+.signup-split .lap .scr {
+  position: relative;
+  height: 140px;
+  background: var(--sl-eye);
+  border: 3px solid var(--sl-lap-edge);
+  border-radius: 12px 12px 3px 3px;
+  overflow: hidden;
+}
+.signup-split .lap .scr .glass {
+  position: absolute;
+  inset: 8px;
+  background: var(--sl-card-label);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.signup-split .lap .scr .glass i {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--sl-line);
+}
+.signup-split .lap .scr .glass i:nth-child(1) {
+  top: 14px;
+  width: 55%;
+}
+.signup-split .lap .scr .glass i:nth-child(2) {
+  top: 30px;
+}
+.signup-split .lap .scr .glass i:nth-child(3) {
+  top: 46px;
+  width: 70%;
+}
+.signup-split .lap .scr .glass i:nth-child(4) {
+  top: 62px;
+  width: 40%;
+  background: var(--sl-accent-soft);
+}
+.signup-split .lap .scr .glass i:nth-child(5) {
+  top: 88px;
+  width: 62%;
+}
+.signup-split .lap .base {
+  height: 14px;
+  background: var(--sl-lap-edge);
+  border-radius: 2px 2px 10px 10px;
+  margin: 0 -14px;
+}
+.signup-split .lap .base::after {
+  content: '';
+  display: block;
+  margin: 0 auto;
+  width: 52px;
+  height: 5px;
+  border-radius: 0 0 6px 6px;
+  background: var(--sl-eye);
+}
+
+/* scan beam sweeps the glass (0–34% of cycle) */
+.signup-split .beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -14px;
+  height: 12px;
+  background: var(--sl-accent);
+  box-shadow: 0 0 22px var(--sl-accent-glow-90);
+  border-radius: 6px;
+  animation: ss-beam var(--sl-cycle) ease-in-out infinite;
+}
+@keyframes ss-beam {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(132px);
+    opacity: 1;
+  }
+  34%,
+  100% {
+    transform: translateY(132px);
+    opacity: 0;
+  }
+}
+
+/* QC check dots pop around the machine (8–40%) */
+.signup-split .dot {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--sl-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px var(--sl-accent-glow-45);
+  scale: 0;
+  animation: ss-dot var(--sl-cycle) ease-in-out infinite;
+}
+.signup-split .dot svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--sl-accent-ink);
+}
+.signup-split .dot small {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  translate: -50% 4px;
+  font-family: var(--sl-mono);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sl-on-ink-65);
+  white-space: nowrap;
+}
+.signup-split .d1 {
+  left: -24px;
+  top: 8px;
+}
+.signup-split .d2 {
+  right: -24px;
+  top: 8px;
+  animation-delay: 0.5s;
+}
+.signup-split .d3 {
+  left: -34px;
+  top: 96px;
+  animation-delay: 1s;
+}
+.signup-split .d4 {
+  right: -34px;
+  top: 96px;
+  animation-delay: 1.5s;
+}
+.signup-split .d5 {
+  left: 24px;
+  top: 172px;
+  animation-delay: 2s;
+}
+.signup-split .d6 {
+  right: 24px;
+  top: 172px;
+  animation-delay: 2.5s;
+}
+@keyframes ss-dot {
+  0%,
+  8% {
+    scale: 0;
+  }
+  11% {
+    scale: 1.18;
+  }
+  13%,
+  52% {
+    scale: 1;
+  }
+  58%,
+  100% {
+    scale: 0;
+  }
+}
+
+/* the seal stamps on (46–90%) */
+.signup-split .seal {
+  position: absolute;
+  left: 50%;
+  top: 64px;
+  translate: -50% 0;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: var(--sl-accent);
+  border: 4px solid var(--sl-card-label);
+  outline: 3px solid var(--sl-accent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  rotate: -10deg;
+  scale: 0;
+  box-shadow: 0 14px 34px var(--sl-accent-glow-50);
+  animation: ss-seal var(--sl-cycle) ease-in-out infinite;
+  z-index: 3;
+}
+.signup-split .seal b {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--sl-accent-ink);
+  line-height: 1;
+}
+.signup-split .seal small {
+  font-family: var(--sl-mono);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--sl-accent-ink);
+  margin-top: 3px;
+}
+@keyframes ss-seal {
+  0%,
+  46% {
+    scale: 0;
+    rotate: -30deg;
+  }
+  50% {
+    scale: 1.22;
+    rotate: -8deg;
+  }
+  53%,
+  88% {
+    scale: 1;
+    rotate: -10deg;
+  }
+  93%,
+  100% {
+    scale: 0;
+    rotate: -10deg;
+  }
+}
+
+/* payout pill rises (58–92%) */
+.signup-split .payout {
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  translate: -50% 16px;
+  font-family: var(--sl-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--sl-card-label);
+  color: var(--sl-accent-ink);
+  border: 2px solid var(--sl-accent);
+  border-radius: 999px;
+  padding: 9px 16px;
+  white-space: nowrap;
+  opacity: 0;
+  animation: ss-pay var(--sl-cycle) ease-in-out infinite;
+  z-index: 3;
+}
+.signup-split .payout b {
+  color: var(--sl-accent-deep);
+}
+@keyframes ss-pay {
+  0%,
+  58% {
+    opacity: 0;
+    translate: -50% 16px;
+  }
+  63%,
+  88% {
+    opacity: 1;
+    translate: -50% 0;
+  }
+  93%,
+  100% {
+    opacity: 0;
+    translate: -50% -8px;
+  }
+}
+
+/* ---- promises checklist, ticks draw on load ---- */
+.signup-split .promises {
+  position: relative;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.signup-split .promises li {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--sl-on-ink-80);
+  opacity: 0;
+  translate: -8px 0;
+  animation: ss-promise 0.5s ease forwards;
+}
+.signup-split .promises li:nth-child(1) {
+  animation-delay: 0.2s;
+}
+.signup-split .promises li:nth-child(2) {
+  animation-delay: 0.45s;
+}
+.signup-split .promises li:nth-child(3) {
+  animation-delay: 0.7s;
+}
+.signup-split .promises li:nth-child(4) {
+  animation-delay: 0.95s;
+}
+@keyframes ss-promise {
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+.signup-split .promises b {
+  color: var(--sl-on-ink);
+}
+.signup-split .tickring {
+  flex: none;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 2px solid var(--sl-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.signup-split .tickring svg {
+  width: 11px;
+  height: 11px;
+  stroke: var(--sl-accent);
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+}
+.signup-split .promises li:nth-child(1) .tickring svg {
+  animation: ss-draw 0.45s ease forwards 0.5s;
+}
+.signup-split .promises li:nth-child(2) .tickring svg {
+  animation: ss-draw 0.45s ease forwards 0.75s;
+}
+.signup-split .promises li:nth-child(3) .tickring svg {
+  animation: ss-draw 0.45s ease forwards 1s;
+}
+.signup-split .promises li:nth-child(4) .tickring svg {
+  animation: ss-draw 0.45s ease forwards 1.25s;
+}
+@keyframes ss-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.signup-split .left-foot {
+  position: relative;
+  font-family: var(--sl-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  color: var(--sl-on-ink-45);
+  padding-top: 18px;
+}
+
+/* ---- right: the wizard ---- */
+.signup-split .panel {
+  width: min(480px, 100%);
+}
+.signup-split .prog {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 26px;
+}
+.signup-split .seg {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--sl-line);
+  overflow: hidden;
+}
+.signup-split .seg i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--sl-accent);
+  border-radius: 999px;
+  transition: width 0.45s ease;
+}
+.signup-split .seg.done i {
+  width: 100%;
+}
+.signup-split .seg.cur i {
+  width: 45%;
+}
+.signup-split .right .panel h2 {
+  font-size: clamp(1.45rem, 2.4vw, 1.8rem);
+}
+.signup-split .stepbox {
+  margin-top: 24px;
+}
+
+/* +91 mobile group */
+.signup-split .mob {
+  display: flex;
+  align-items: stretch;
+  background: var(--sl-surface);
+  border: 1px solid var(--sl-line);
+  border-radius: 12px;
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.signup-split .mob:focus-within {
+  border-color: var(--sl-accent);
+  box-shadow: 0 0 0 3px var(--sl-accent-ring);
+}
+.signup-split .mob.bad {
+  border-color: var(--sl-accent-deep);
+}
+.signup-split .mob .cc {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-family: var(--sl-mono);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--sl-muted);
+  background: var(--sl-surface-2);
+  border-right: 1px solid var(--sl-line);
+}
+.signup-split .mob input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 13px 15px;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  font-family: var(--sl-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sl-text);
+}
+.signup-split .mob input::placeholder {
+  color: var(--sl-line-32);
+}
+
+.signup-split .go:hover:not([disabled]) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px var(--sl-accent-glow-40);
+}
+.signup-split .go[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.signup-split .links {
+  margin-top: 18px;
+  text-align: center;
+  display: block;
+}
+.signup-split .links button {
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.signup-split .sent-line {
+  font-size: 0.84rem;
+  margin-bottom: 14px;
+}
+
+/* password rules, as the mock's hint line */
+.signup-split .hint {
+  font-size: 0.74rem;
+  color: var(--sl-muted);
+  margin-top: 7px;
+}
+.signup-split .hint.ok {
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+}
+.signup-split .rules {
+  list-style: none;
+  margin: 7px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.74rem;
+  color: var(--sl-muted);
+}
+.signup-split .rules li[data-met='true'] {
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+}
+.signup-split .rules li[data-met='true']::before {
+  content: '✓ ';
+}
+.signup-split .meter {
+  display: flex;
+  gap: 5px;
+  margin-top: 9px;
+}
+.signup-split .meter span {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--sl-line);
+}
+.signup-split .meter span[data-on='true'] {
+  background: var(--sl-accent);
+}
+
+/* done step */
+.signup-split .done-badge {
+  width: 54px;
+  height: 54px;
+  border-radius: 15px;
+  background: var(--sl-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 26px var(--sl-accent-glow-45);
+}
+.signup-split .done-badge svg {
+  width: 26px;
+  height: 26px;
+  stroke: var(--sl-accent-ink);
+}
+.signup-split .right .done h2 {
+  margin-top: 16px;
+}
+.signup-split .next-box {
+  margin-top: 20px;
+  background: var(--sl-surface);
+  border: 1px solid var(--sl-line);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.signup-split .next-box h4 {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+.signup-split .next-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 11px 0 0;
+  padding: 0;
+}
+.signup-split .nchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: var(--sl-surface-2);
+  border: 1px solid var(--sl-line-soft);
+  border-radius: 999px;
+  padding: 6px 11px 6px 7px;
+}
+.signup-split .nchip i {
+  font-style: normal;
+  font-family: var(--sl-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--sl-accent-deep);
+  background: var(--sl-accent-soft);
+  border-radius: 5px;
+  padding: 2.5px 5px;
+}
+.signup-split .next-box p {
+  font-size: 0.76rem;
+  color: var(--sl-muted);
+  margin-top: 11px;
+}
+.signup-split .next-box p b {
+  color: var(--sl-text);
+}
+
+/* a refusal at the last step: the same card as the mock's error voice */
+.signup-split .refusal {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--sl-accent-soft);
+  border: 1px solid var(--sl-accent-line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--sl-text);
+}
+.signup-split .refusal .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.signup-split .refusal .mono {
+  font-family: var(--sl-mono);
+  font-variant-numeric: tabular-nums;
+}
+.signup-split .refusal .ghost {
+  padding: 0;
+}
+
+/* ==================== RESPONSIVE + MOTION ==================== */
+@media (max-width: 900px) {
+  .signup-split .split {
+    grid-template-columns: 1fr;
+  }
+  .signup-split .scene {
+    min-height: 340px;
+  }
+}
+@media (max-width: 520px) {
+  .signup-split .rig {
+    scale: 0.85;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signup-split .dot {
+    scale: 1;
+  }
+  .signup-split .seal {
+    scale: 1;
+  }
+  .signup-split .payout {
+    opacity: 1;
+    translate: -50% 0;
+  }
+  .signup-split .beam {
+    display: none;
+  }
+  .signup-split .promises li {
+    opacity: 1;
+    translate: 0 0;
+  }
+  .signup-split .tickring svg {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Not yet valid: drawn like the mock's disabled button, but still pressable so
+   a press names what is missing instead of doing nothing. */
+.signup-split .go[aria-disabled='true'] {
+  opacity: 0.45;
+  transform: none;
+  box-shadow: none;
+}
+
+/* The headline under the logo. The hub surface styles `h1` dark for its own
+   pages; on this panel it is the mock's uppercase claim in the panel's ink. */
+.auth-split.signup-split .left h1 {
+  position: relative;
+  margin-top: 22px;
+  font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  max-width: 22ch;
+  color: var(--sl-on-ink);
+}
+.auth-split.signup-split .left h1 span {
+  color: var(--sl-accent);
+}

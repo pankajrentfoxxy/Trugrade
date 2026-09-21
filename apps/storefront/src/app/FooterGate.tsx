@@ -11,8 +11,8 @@ import { isPortalPath } from './(portal)/shell/nav';
  */
 const FOOTER_HIDDEN = new Set(['/sign-in', '/register', '/invite/accept']);
 
-export function FooterGate(): React.JSX.Element | null {
+export function FooterGate({ sellUrl }: { sellUrl: string }): React.JSX.Element | null {
   const pathname = usePathname();
   if (FOOTER_HIDDEN.has(pathname) || isPortalPath(pathname)) return null;
-  return <SiteFooter />;
+  return <SiteFooter sellUrl={sellUrl} />;
 }

@@ -777,11 +777,25 @@ export class PurchaseOrderRepository {
                updated_at = ${input.dispatchedAt}
          WHERE id = ${poId}::uuid`;
 
+      // The consignment leaves with its purchase order. Until this was written
+      // a dispatch moved the PO and left `sub_order.status` at CONFIRMED, so the
+      // buyer's tracking page never said "on its way" and their own delivery
+      // confirmation refused every consignment as not dispatched. One PO is one
+      // consignment (`uq_suborder_order_vendor_pickup`), so the event is scoped
+      // to it and the timeline can tell three deliveries apart.
+      const moved = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        UPDATE ordering.sub_order
+           SET status = 'DISPATCHED'::public.order_status
+         WHERE purchase_order_id = ${poId}::uuid
+           AND status <> 'CANCELLED'::public.order_status
+        RETURNING id`;
+
       await this.prisma.$executeRaw`
         INSERT INTO ordering.order_event
-          (order_id, event_type, from_status, to_status, note, occurred_at, actor_id)
+          (order_id, sub_order_id, event_type, from_status, to_status, note, occurred_at, actor_id)
         VALUES (
           ${po.order_id}::uuid,
+          ${moved[0]?.id ?? null}::uuid,
           'PO_DISPATCHED',
           ${po.status},
           'DISPATCHED',
@@ -789,6 +803,19 @@ export class PurchaseOrderRepository {
           ${input.dispatchedAt},
           ${actorUserId}::uuid
         )`;
+
+      // The order follows once every live consignment has left. A partly
+      // dispatched order stays where it is: "dispatched" on the board would
+      // read as all of it.
+      await this.prisma.$executeRaw`
+        UPDATE ordering."order" o
+           SET status = 'DISPATCHED'::public.order_status
+         WHERE o.id = ${po.order_id}::uuid
+           AND o.status IN ('CONFIRMED', 'VENDOR_ACCEPTED', 'PICKUP_SCHEDULED', 'PACKED', 'INVOICED')
+           AND NOT EXISTS (
+             SELECT 1 FROM ordering.sub_order s
+              WHERE s.order_id = o.id
+                AND s.status NOT IN ('DISPATCHED', 'DELIVERED', 'CANCELLED'))`;
 
       await this.prisma.db.audit_log.create({
         data: {

@@ -2,20 +2,19 @@ import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import { BRAND } from '@trugrade/config/brand';
 import { OTP_POLICY, normaliseMobile } from '@trugrade/contracts';
-import {
-  Button,
-  Input,
-  MfaChallenge,
-  OtpInput,
-  RateLimitNotice,
-  StatusPill,
-  Tabs,
-} from '@trugrade/ui';
-import { AuthShell } from '../AuthShell';
+import { MfaChallenge, OtpInput, RateLimitNotice, StatusPill, Tabs } from '@trugrade/ui';
+import { VendorSurfaceSync } from '../lib/vendor-surface';
 import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/auth';
+import './auth/auth-split.css';
 
 /**
  * ARCHETYPE F — Focus. One task, centred, no navigation.
+ *
+ * The approved split-screen mock: a dark brand panel on the left where four
+ * figures hold placards with one supplier promise each, and the working form
+ * on the right. The crew is CSS in `auth/auth-split.css` and is hidden from
+ * assistive technology — the promises it carries are decoration here, and are
+ * stated in full on the landing page.
  *
  * Deliberately outside the shell: chrome offering sections you cannot reach yet
  * is noise, and the section rail is meaningless before there is a principal to
@@ -45,10 +44,19 @@ import { isFailure, useAuth, type AuthFailure, type Principal } from '../lib/aut
 /** Supplier registration lives on this console, not the storefront. */
 const sellRegisterPath = '/sell/register';
 
-/** Buyers shop here; the login wordmark still links out to them. */
-const STOREFRONT_URL = import.meta.env.VITE_STOREFRONT_URL ?? 'http://localhost:3000';
-
 const SIGN_IN_LEDE = `${BRAND.name} staff and suppliers. Buyers sign in on the shop.`;
+
+/** What the crew holds up. The bold run is the mock's own emphasis. */
+const PLACARDS = [
+  { hair: '', lead: 'We ', bold: 'inspect, grade and seal', rest: ' every machine before it goes live' },
+  { hair: 'bun', lead: 'Your name is ', bold: 'never shown', rest: ' to buyers' },
+  { hair: 'cap', lead: 'Payment on a ', bold: 'fixed cycle', rest: ', every deduction itemised' },
+  { hair: 'curl', lead: '', bold: 'No listing fee,', rest: ' no monthly fee' },
+] as const;
+
+/** A work email, or a ten-digit Indian mobile. The same test the mock runs. */
+const validIdentifier = (v: string): boolean =>
+  /^[6-9]\d{9}$/.test(v) || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
 
 interface ApplicationState {
   status: string;
@@ -79,12 +87,65 @@ const formatWhen = (iso: string): string =>
     minute: '2-digit',
   });
 
-function applicationCopy(): { title: string; lede: string } {
-  return {
-    title: 'This account was not approved',
-    lede: 'The reviewer’s reason is below, exactly as they wrote it.',
-  };
+/* ==========================================================================
+ * The brand panel
+ * ======================================================================== */
+
+function Crew(): React.JSX.Element {
+  return (
+    <div className="crew" aria-hidden="true">
+      {PLACARDS.map((p, i) => (
+        <figure className={`pal p${i + 1}`} key={p.bold}>
+          <div className="sign">
+            <p>
+              {p.lead}
+              <b>{p.bold}</b>
+              {p.rest}
+            </p>
+          </div>
+          <div className="stick" />
+          <div className="human">
+            <div className={`hair ${p.hair}`.trim()} />
+            <div className="face">
+              <i className="eye l" />
+              <i className="eye r" />
+              <i className="smile" />
+            </div>
+            <div className="torso" />
+            <div className="arm al" />
+            <div className="arm ar" />
+            <div className="leg ll" />
+            <div className="leg lr" />
+          </div>
+        </figure>
+      ))}
+    </div>
+  );
 }
+
+function BrandPanel(): React.JSX.Element {
+  return (
+    <aside className="left">
+      <Link to="/" className="brand-logo" aria-label={`${BRAND.name} home`}>
+        <span className="b" aria-hidden="true">
+          t
+        </span>
+        <span className="t">
+          <b>
+            tru<i>grade</i>
+          </b>
+          <small>SUPPLIER HUB</small>
+        </span>
+      </Link>
+      <Crew />
+      <div className="floor" />
+    </aside>
+  );
+}
+
+/* ==========================================================================
+ * The route
+ * ======================================================================== */
 
 export function LoginRoute(): React.JSX.Element {
   const {
@@ -179,10 +240,7 @@ export function LoginRoute(): React.JSX.Element {
       // Every status but REJECTED is told in full on /vendor itself — Home's
       // gate names the sections still open, and the shell's banner tracks the
       // same percentage — so stopping here to say it a second, narrower way
-      // is redundant at best. It used to be worse than redundant: the one
-      // button this screen offered sent an already-registered vendor to
-      // /sell/register, which is the one-minute SIGNUP form and has no notion
-      // of resuming an existing application.
+      // is redundant at best.
       void navigate('/', { replace: true });
       return;
     }
@@ -209,16 +267,8 @@ export function LoginRoute(): React.JSX.Element {
     await afterSignIn(result);
   };
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    const form = new FormData(e.currentTarget);
-    await afterFirstFactor(await signIn(String(form.get('email')), String(form.get('password'))));
-  }
-
   const notices = (
-    <>
+    <div className="notices">
       {wait && (
         <RateLimitNotice
           message={wait.message}
@@ -227,179 +277,291 @@ export function LoginRoute(): React.JSX.Element {
         />
       )}
       {error && (
-        <p role="alert" className="rounded border border-fail bg-sheet-2 p-4 text-body-sm text-ink">
+        <p role="alert" className="alert">
           {error}
         </p>
       )}
-    </>
+    </div>
   );
-
-  const shell =
-    stage.k === 'refused'
-      ? {
-          title: 'We cannot sign you in',
-          lede: 'This account cannot be used to sign in right now.',
-          wide: false as const,
-        }
-      : stage.k === 'application'
-        ? { ...applicationCopy(), wide: true as const }
-        : { title: 'Sign in', lede: SIGN_IN_LEDE, wide: false as const };
 
   return (
-    <AuthShell brandHref={STOREFRONT_URL} {...shell}>
-      {stage.k === 'refused' ? (
-        <div className="flex flex-col gap-3" data-testid="login-suspended">
-          <StatusPill className="self-start" tone="fail" label="Account closed to sign-in" />
-          <p className="text-body text-ink">{stage.message}</p>
-          <p className="text-body-sm text-ink-3">
-            Nothing on the account was changed by this attempt.
-          </p>
-          <div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setError(null);
-                setStage({ k: 'password' });
-              }}
-            >
-              Try a different account
-            </Button>
-          </div>
-        </div>
-      ) : stage.k === 'application' ? (
-        <ApplicationPanel state={stage.state} />
-      ) : stage.k === 'mfa' ? (
-        <div className="flex flex-col gap-4">
-          {notices}
-          <MfaChallenge
-            sentTo={stage.sentTo}
-            pillLabel="Second factor"
-            heading="One more code before you are in"
-            reason="This account can change where money is sent, so it needs a second factor every time — not only today."
-            className="border-0 bg-transparent p-0"
-            onVerify={async (code) => {
-              const result = await verifyMfa(code);
-              if (isFailure(result)) {
-                if (result.status === 401) {
-                  await startOver(SESSION_LAPSED);
-                  return undefined;
-                }
-                if (result.code === 'RATE_LIMITED') {
-                  refuse(result);
-                  return undefined;
-                }
-                return result.message;
-              }
-              await afterSignIn(result);
-              return undefined;
-            }}
-            onResend={async () => {
-              const sent = await requestMfaCode();
-              if (isFailure(sent) && sent.status === 401) {
-                await startOver(SESSION_LAPSED);
-                return { error: SESSION_LAPSED };
-              }
-              return isFailure(sent) ? { error: sent.message } : { sentTo: sent.sentTo };
-            }}
-          />
-          <div className="border-t border-rule-2 pt-3">
-            <Button type="button" variant="ghost" onClick={() => void startOver()}>
-              Use a different account
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Tabs
-          label="How to sign in"
-          value={method}
-          onChange={(key) => {
-            setMethod(key === 'mobile' ? 'mobile' : 'password');
-            setError(null);
-          }}
-          items={[
-            {
-              key: 'password',
-              label: 'Email & password',
-              panel: (
-                <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
-                  {method === 'password' ? notices : null}
-                  <Input
-                    label="Work email or mobile"
-                    name="email"
-                    required
-                    autoComplete="username"
-                  />
-                  <Input
-                    label="Password"
-                    name="password"
-                    type="password"
-                    required
-                    autoComplete="current-password"
-                  />
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    block
-                    loading={busy}
-                    {...(wait
-                      ? {
-                          disabledReason: 'Too many attempts. The wait above has to run out first.',
-                        }
-                      : {})}
-                  >
-                    Sign in
-                  </Button>
-                  <div className="flex flex-col gap-1 border-t border-rule-2 pt-3">
-                    <Link
-                      className="text-body-sm text-acc-ink underline underline-offset-4"
-                      to="/forgot-password"
-                    >
-                      Forgotten your password?
-                    </Link>
-                    <p className="text-body-sm text-ink-3">
-                      Applying to supply?{' '}
-                      <a
-                        className="text-acc-ink underline underline-offset-4"
-                        href={sellRegisterPath}
-                      >
-                        Start an application
-                      </a>
-                      .
-                    </p>
-                  </div>
-                </form>
-              ),
-            },
-            {
-              key: 'mobile',
-              label: 'Mobile & OTP',
-              panel: (
-                <MobileCodeForm
-                  notices={method === 'mobile' ? notices : null}
-                  blocked={wait !== null}
-                  requestCode={requestMobileCode}
-                  onFailure={refuse}
-                  onCode={async (mobile, code) => {
+    <div className="auth-split login-split">
+      <VendorSurfaceSync />
+      <div className="split">
+        <BrandPanel />
+        <main className="right">
+          <div className="panel">
+            {stage.k === 'refused' ? (
+              <div className="stage" data-testid="login-suspended">
+                <h2>We cannot sign you in</h2>
+                <StatusPill className="self-start" tone="fail" label="Account closed to sign-in" />
+                <p>{stage.message}</p>
+                <p>Nothing on the account was changed by this attempt.</p>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
                     setError(null);
-                    setBusy(true);
-                    const result = await signInWithMobileCode(mobile, code);
-                    if (isFailure(result) && result.status === 422) {
-                      setBusy(false);
+                    setStage({ k: 'password' });
+                  }}
+                >
+                  Try a different account
+                </button>
+              </div>
+            ) : stage.k === 'application' ? (
+              <ApplicationPanel state={stage.state} />
+            ) : stage.k === 'mfa' ? (
+              <div className="stage">
+                {notices}
+                <MfaChallenge
+                  sentTo={stage.sentTo}
+                  pillLabel="Second factor"
+                  heading="One more code before you are in"
+                  reason="This account can change where money is sent, so it needs a second factor every time — not only today."
+                  className="border-0 bg-transparent p-0"
+                  onVerify={async (code) => {
+                    const result = await verifyMfa(code);
+                    if (isFailure(result)) {
+                      if (result.status === 401) {
+                        await startOver(SESSION_LAPSED);
+                        return undefined;
+                      }
+                      if (result.code === 'RATE_LIMITED') {
+                        refuse(result);
+                        return undefined;
+                      }
                       return result.message;
                     }
-                    await afterFirstFactor(result);
+                    await afterSignIn(result);
                     return undefined;
                   }}
+                  onResend={async () => {
+                    const sent = await requestMfaCode();
+                    if (isFailure(sent) && sent.status === 401) {
+                      await startOver(SESSION_LAPSED);
+                      return { error: SESSION_LAPSED };
+                    }
+                    return isFailure(sent) ? { error: sent.message } : { sentTo: sent.sentTo };
+                  }}
                 />
-              ),
-            },
-          ]}
-        />
-      )}
-    </AuthShell>
+                <button type="button" className="ghost" onClick={() => void startOver()}>
+                  Use a different account
+                </button>
+              </div>
+            ) : (
+              <>
+                <h2>Sign in</h2>
+                <p className="sub">{SIGN_IN_LEDE}</p>
+                <Tabs
+                  label="How to sign in"
+                  value={method}
+                  onChange={(key) => {
+                    setMethod(key === 'mobile' ? 'mobile' : 'password');
+                    setError(null);
+                  }}
+                  items={[
+                    {
+                      key: 'password',
+                      label: 'Email & password',
+                      panel: (
+                        <PasswordForm
+                          notices={method === 'password' ? notices : null}
+                          busy={busy}
+                          blocked={wait !== null}
+                          onSubmit={async (identifier, password) => {
+                            setError(null);
+                            setBusy(true);
+                            await afterFirstFactor(await signIn(identifier, password));
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      key: 'mobile',
+                      label: 'Mobile & OTP',
+                      panel: (
+                        <MobileCodeForm
+                          notices={method === 'mobile' ? notices : null}
+                          blocked={wait !== null}
+                          requestCode={requestMobileCode}
+                          onFailure={refuse}
+                          onCode={async (mobile, code) => {
+                            setError(null);
+                            setBusy(true);
+                            const result = await signInWithMobileCode(mobile, code);
+                            if (isFailure(result) && result.status === 422) {
+                              setBusy(false);
+                              return result.message;
+                            }
+                            await afterFirstFactor(result);
+                            return undefined;
+                          }}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              </>
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
+
+/* ==========================================================================
+ * Email & password
+ * ======================================================================== */
+
+function PasswordForm({
+  notices,
+  busy,
+  blocked,
+  onSubmit,
+}: {
+  notices: React.ReactNode;
+  busy: boolean;
+  blocked: boolean;
+  onSubmit: (identifier: string, password: string) => Promise<void>;
+}): React.JSX.Element {
+  const [identifier, setIdentifier] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [show, setShow] = React.useState(false);
+  const [idError, setIdError] = React.useState<string | null>(null);
+  const [pwError, setPwError] = React.useState<string | null>(null);
+  const [shaking, setShaking] = React.useState<'id' | 'pw' | null>(null);
+  const idRef = React.useRef<HTMLInputElement>(null);
+  const pwRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    idRef.current?.focus();
+  }, []);
+
+  const shake = (which: 'id' | 'pw'): void => {
+    setShaking(null);
+    requestAnimationFrame(() => setShaking(which));
+    (which === 'id' ? idRef : pwRef).current?.focus();
+  };
+
+  return (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        const id = identifier.trim();
+        if (!validIdentifier(id)) {
+          setIdError('Enter a valid work email or a 10-digit mobile number.');
+          shake('id');
+          return;
+        }
+        setIdError(null);
+        if (!password) {
+          setPwError('Enter your password.');
+          shake('pw');
+          return;
+        }
+        setPwError(null);
+        void onSubmit(id, password);
+      }}
+    >
+      {notices}
+      <label className="f-lbl" htmlFor="login-identifier">
+        Work email or mobile <i>*</i>
+      </label>
+      <input
+        ref={idRef}
+        id="login-identifier"
+        name="email"
+        className={`field${idError ? ' bad' : ''}${shaking === 'id' ? ' shake' : ''}`}
+        placeholder="you@company.in or 9876543210"
+        autoComplete="username"
+        value={identifier}
+        onChange={(e) => {
+          setIdentifier(e.target.value);
+          setIdError(null);
+        }}
+        aria-invalid={idError ? true : undefined}
+        aria-describedby={idError ? 'login-identifier-err' : undefined}
+      />
+      {idError ? (
+        <p className="err" id="login-identifier-err">
+          {idError}
+        </p>
+      ) : null}
+
+      <label className="f-lbl gap" htmlFor="login-password">
+        Password <i>*</i>
+      </label>
+      <div className="field-wrap">
+        <input
+          ref={pwRef}
+          id="login-password"
+          name="password"
+          type={show ? 'text' : 'password'}
+          className={`field pw${pwError ? ' bad' : ''}${shaking === 'pw' ? ' shake' : ''}`}
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setPwError(null);
+          }}
+          aria-invalid={pwError ? true : undefined}
+          aria-describedby={pwError ? 'login-password-err' : undefined}
+        />
+        <button
+          type="button"
+          className="eyebtn"
+          aria-label={show ? 'Hide password' : 'Show password'}
+          aria-pressed={show}
+          onClick={() => setShow((s) => !s)}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+            <circle cx="12" cy="12" r="2.8" />
+            {show ? <path d="M4 4l16 16" /> : null}
+          </svg>
+        </button>
+      </div>
+      {pwError ? (
+        <p className="err" id="login-password-err">
+          {pwError}
+        </p>
+      ) : null}
+
+      <button
+        type="submit"
+        className="go"
+        disabled={busy || blocked}
+        aria-disabled={blocked || undefined}
+        aria-busy={busy || undefined}
+        title={blocked ? 'Too many attempts. The wait above has to run out first.' : undefined}
+      >
+        Sign in
+      </button>
+
+      <div className="links">
+        <span>
+          <Link to="/forgot-password">Forgotten your password?</Link>
+        </span>
+        <span>
+          Applying to supply? <a href={sellRegisterPath}>Start an application</a>.
+        </span>
+      </div>
+    </form>
+  );
+}
+
+/* ==========================================================================
+ * Mobile & OTP
+ * ======================================================================== */
 
 interface MobileCodeFormProps {
   notices: React.ReactNode;
@@ -424,6 +586,7 @@ function MobileCodeForm({
 }: MobileCodeFormProps): React.JSX.Element {
   const [digits, setDigits] = React.useState('');
   const [fieldError, setFieldError] = React.useState<string | undefined>();
+  const [shaking, setShaking] = React.useState(false);
   const [sent, setSent] = React.useState<{ sentTo: string; devCode: string | null } | null>(null);
   const [code, setCode] = React.useState('');
   const [codeError, setCodeError] = React.useState<string | undefined>();
@@ -445,6 +608,8 @@ function MobileCodeForm({
           ? 'Indian mobile numbers start with 6, 7, 8 or 9. Check the first digit.'
           : `Enter the 10-digit mobile number on your account — ${digits.length} digits so far.`,
       );
+      setShaking(false);
+      requestAnimationFrame(() => setShaking(true));
       return;
     }
     setFieldError(undefined);
@@ -461,92 +626,80 @@ function MobileCodeForm({
     setSent({ sentTo: result.sentTo, devCode: result.devCode ?? null });
   };
 
+  const verify = (entered: string): void => {
+    if (!mobile) return;
+    setBusy(true);
+    void onCode(mobile, entered).then((refusal) => {
+      setBusy(false);
+      if (refusal) {
+        setCode('');
+        setCodeError(refusal);
+      }
+    });
+  };
+
   if (!sent) {
     return (
       <form
         noValidate
-        className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
           void send();
         }}
       >
         {notices}
-        <Input
-          label="Mobile number"
-          required
-          mono
+        <label className="f-lbl" htmlFor="login-mobile">
+          Registered mobile number <i>*</i>
+        </label>
+        <input
+          id="login-mobile"
+          className={`field mono${fieldError ? ' bad' : ''}${shaking ? ' shake' : ''}`}
           inputMode="numeric"
           autoComplete="tel-national"
           maxLength={10}
           placeholder="9876543210"
-          hint="The number on your supplier account. We add +91 and send a six-digit code on WhatsApp."
           value={digits}
           onChange={(e) => {
             setDigits(e.target.value.replace(/\D/g, '').slice(0, 10));
             setFieldError(undefined);
           }}
-          error={fieldError}
+          aria-invalid={fieldError ? true : undefined}
+          aria-describedby="login-mobile-hint"
         />
-        <Button
+        {fieldError ? (
+          <p className="err" id="login-mobile-err">
+            {fieldError}
+          </p>
+        ) : null}
+        <p className="proto" id="login-mobile-hint">
+          The number on your supplier account. We add +91 and send a six-digit code on WhatsApp.
+        </p>
+        <button
           type="submit"
-          variant="primary"
-          block
-          loading={busy}
-          {...(blocked
-            ? { disabledReason: 'Too many attempts. The wait above has to run out first.' }
-            : {})}
+          className="go"
+          disabled={busy || blocked}
+          aria-disabled={blocked || undefined}
+          aria-busy={busy || undefined}
+          title={blocked ? 'Too many attempts. The wait above has to run out first.' : undefined}
         >
           Send code
-        </Button>
+        </button>
+        <div className="links">
+          <span>
+            Applying to supply? <a href={sellRegisterPath}>Start an application</a>.
+          </span>
+        </div>
       </form>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div>
       {notices}
-      <p className="text-body text-ink-2">
-        If <span className="font-mono tnum">{sent.sentTo}</span> is on a supplier or staff account,
-        a six-digit code is on its way on WhatsApp. It is good for five minutes.
-      </p>
-      <OtpInput
-        label="Six-digit code"
-        value={code}
-        onChange={setCode}
-        onComplete={(entered) => {
-          if (!mobile) return;
-          setBusy(true);
-          void onCode(mobile, entered).then((refusal) => {
-            setBusy(false);
-            if (refusal) {
-              setCode('');
-              setCodeError(refusal);
-            }
-          });
-        }}
-        error={codeError}
-        disabled={busy || blocked}
-      />
-      {sent.devCode ? (
-        <p className="text-body-sm text-ink-3" data-testid="prototype-code">
-          Prototype: your code is <span className="font-mono tnum">{sent.devCode}</span>.
-        </p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-3 border-t border-rule-2 pt-3">
-        <Button
+      <p className="sent-line">
+        Code sent to <b>{sent.sentTo}</b>
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          disabled={cooldown > 0 || busy || blocked}
-          onClick={() => void send()}
-        >
-          Resend code
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
           disabled={busy}
           onClick={() => {
             setSent(null);
@@ -554,35 +707,79 @@ function MobileCodeForm({
             setCodeError(undefined);
           }}
         >
-          Change number
-        </Button>
-        {cooldown > 0 ? (
-          <span className="text-body-sm text-ink-3" aria-live="polite">
-            Another code in <span className="font-mono tnum">{cooldown}</span>{' '}
-            {cooldown === 1 ? 'second' : 'seconds'}
-          </span>
-        ) : null}
+          Change
+        </button>
+      </p>
+      <OtpInput
+        label="Six-digit code"
+        value={code}
+        onChange={(v) => {
+          setCode(v);
+          setCodeError(undefined);
+        }}
+        onComplete={verify}
+        error={codeError}
+        disabled={busy || blocked}
+      />
+      {sent.devCode ? (
+        <p className="proto" data-testid="prototype-code">
+          Prototype: your code is <b>{sent.devCode}</b>.
+        </p>
+      ) : null}
+      <p className="resend">
+        Didn&rsquo;t get it?{' '}
+        <button
+          type="button"
+          disabled={cooldown > 0 || busy || blocked}
+          onClick={() => void send()}
+          aria-live="polite"
+        >
+          {cooldown > 0 ? (
+            <>
+              Resend in <b>{cooldown}</b>s
+            </>
+          ) : (
+            'Resend code'
+          )}
+        </button>
+      </p>
+      <button
+        type="button"
+        className="go"
+        disabled={busy || blocked || code.length < 6}
+        aria-busy={busy || undefined}
+        onClick={() => verify(code)}
+      >
+        Verify &amp; sign in
+      </button>
+      <div className="links">
+        <span>
+          Applying to supply? <a href={sellRegisterPath}>Start an application</a>.
+        </span>
       </div>
     </div>
   );
 }
 
+/* ==========================================================================
+ * A rejected application
+ * ======================================================================== */
+
 /** Reached only for REJECTED — `afterSignIn` sends every other status to /vendor. */
 function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-3" data-testid="login-application">
+    <div className="stage" data-testid="login-application">
+      <h2>This account was not approved</h2>
       <StatusPill className="self-start" tone="fail" label={state.status.replace(/_/g, ' ')} />
-
-      <p className="text-body text-ink-2">
-        If you believe it is wrong, reply to the email we sent and a person will look again.
-      </p>
+      <p>The reviewer&rsquo;s reason is below, exactly as they wrote it.</p>
+      <p>If you believe it is wrong, reply to the email we sent and a person will look again.</p>
 
       {state.decision && state.decision.decision !== 'APPROVE' && (
-        <div role="alert" className="flex flex-col gap-3 rounded border border-fail bg-sheet-2 p-4">
-          <span className="font-mono text-label uppercase tracking-[0.13em] text-fail">
+        <div role="alert" className="alert">
+          <span className="font-mono text-label uppercase tracking-[0.13em]">
             What the reviewer said
           </span>
-          <blockquote className="text-body text-ink">
+          <blockquote>
             {state.decision.notes ?? (
               <span className="text-ink-4">
                 No reason was recorded. That is our mistake — contact support quoting the date
@@ -590,12 +787,9 @@ function ApplicationPanel({ state }: { state: ApplicationState }): React.JSX.Ele
               </span>
             )}
           </blockquote>
-          <dl className="flex items-baseline gap-3 border-t border-rule-2 pt-3">
-            <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">Decided</dt>
-            <dd className="font-mono text-data tnum text-ink">
-              {formatWhen(state.decision.decidedAt)}
-            </dd>
-          </dl>
+          <p>
+            Decided <span className="font-mono tnum">{formatWhen(state.decision.decidedAt)}</span>
+          </p>
         </div>
       )}
     </div>

@@ -56,6 +56,25 @@ export interface DeliveryWindow {
   hoursRemaining: number;
 }
 
+export type DeliveryStage =
+  | 'PLACED'
+  | 'APPROVED'
+  | 'CONFIRMED'
+  | 'PREPARING'
+  | 'DISPATCHED'
+  | 'DELIVERED'
+  | 'RECEIVED'
+  | 'CANCELLED';
+
+export interface DeliveryStep {
+  stage: DeliveryStage;
+  /** Buyer words from the API. Never a status enum. */
+  label: string;
+  /** ISO 8601, or null when the stage was reached but the instant was never recorded. */
+  at: string | null;
+  state: 'done' | 'current' | 'upcoming';
+}
+
 export interface DeliveryConsignment {
   /** 1-based. The only handle a buyer gets on a consignment. */
   index: number;
@@ -67,6 +86,8 @@ export interface DeliveryConsignment {
   window: DeliveryWindow | null;
   machines: DeliveryMachine[];
   receiptConfirmedAt: string | null;
+  /** Oldest first. Exactly one step is `current` — the last that happened. */
+  timeline: DeliveryStep[];
   /** Null when receipt can be confirmed; otherwise why not, naming the machines. */
   blockedReason: string | null;
 }

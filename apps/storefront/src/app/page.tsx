@@ -1,6 +1,6 @@
 import { BRAND } from '@trugrade/config/brand';
 import { getSearch, getStats } from '../lib/api';
-import { consoleSellRegisterUrl } from '../lib/console-url';
+import { consoleSellRegisterUrlFromRequest } from '../lib/console-url.server';
 import { toApiQueryString } from './search/query';
 import { BrandRail } from './BrandRail';
 import { HeroBanner } from './HeroBanner';
@@ -105,7 +105,11 @@ export default async function HomePage({
   // beside each option on the homepage are the counts the results page will
   // honour. Two sources for one rail is how a facet starts promising stock that
   // the search behind it does not return.
-  const [stats, search] = await Promise.all([getStats(), getSearch(apiQuery.toString())]);
+  const [stats, search, sellUrl] = await Promise.all([
+    getStats(),
+    getSearch(apiQuery.toString()),
+    consoleSellRegisterUrlFromRequest(),
+  ]);
 
   const inspected = stats?.unitsInspected ?? 0;
   const results = search?.results ?? [];
@@ -130,7 +134,7 @@ export default async function HomePage({
 
         {/* The banner, then the same machines the grid holds, one at a time,
           with their measurements. Both are homepage-only: this is the way in. */}
-        <HeroBanner results={results} sellUrl={consoleSellRegisterUrl()} />
+        <HeroBanner results={results} sellUrl={sellUrl} />
 
         <HomeStrip />
 

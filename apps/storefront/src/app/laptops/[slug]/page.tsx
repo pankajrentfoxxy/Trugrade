@@ -217,16 +217,6 @@ export default async function ProductPage({
                       }
                     : null
                 }
-                disabledReason={
-                  // Order matters: with no pincode the board holds no offers
-                  // yet either, and answering "nothing sealed" to a question
-                  // nobody has asked reads as out of stock.
-                  board.delivery.kind === 'NONE'
-                    ? 'Enter a delivery pincode to see landed prices and buy.'
-                    : board.delivery.kind === 'UNSERVICEABLE'
-                      ? 'We cannot deliver to this pincode yet.'
-                      : `Nothing sealed at Grade ${gradeLabel} right now.`
-                }
               />
 
               <p className="pv-trust">
@@ -413,16 +403,6 @@ export default async function ProductPage({
               <div className="tbl-wrap">
                 {board.delivery.kind === 'NONE' ? (
                   <div className="empty">
-                    <h3>
-                      {board.supplyPoints} supply point{board.supplyPoints === 1 ? '' : 's'} hold
-                      this machine at Grade {gradeLabel}
-                    </h3>
-                    <p>
-                      A landed price is our price plus GST plus freight to your dock, and we will
-                      not quote you one figure and add to it later. Tell us where it is going and
-                      every row below fills in &mdash; the price, the inspection score, how often
-                      that source&rsquo;s declared grade survived ours, and what is in stock.
-                    </p>
                     <p className="retry">
                       <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink>
                     </p>
@@ -430,7 +410,6 @@ export default async function ProductPage({
                 ) : board.delivery.kind === 'UNSERVICEABLE' ? (
                   <div className="empty err">
                     <h3>We cannot deliver to {board.pincode} yet</h3>
-                    <p>{board.delivery.reason}</p>
                     <p className="retry">
                       <PincodeFocusLink>Try another pincode</PincodeFocusLink> or{' '}
                       <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>

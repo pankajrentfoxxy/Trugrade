@@ -3,9 +3,22 @@
 import * as React from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { EmptyState, HubPageHeader, Skeleton, StatusPill } from '@trugrade/ui';
+import {
+  EmptyState,
+  HubPageHeader,
+  Skeleton,
+  StatusPill,
+  Timeline,
+  type TimelineEvent,
+} from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
-import { getDelivery, type DeliveryConsignment, type DeliveryView } from '../delivery/api';
+import {
+  getDelivery,
+  type DeliveryConsignment,
+  type DeliveryStage,
+  type DeliveryStep,
+  type DeliveryView,
+} from '../delivery/api';
 
 /**
  * Where each consignment on this order has got to.
@@ -51,13 +64,79 @@ const when = (iso: string): string =>
     minute: '2-digit',
   });
 
-/** The status a consignment carries, in the buyer's words. */
+/**
+ * The status a consignment carries, in the buyer's words.
+ *
+ * Every `order_status` the consignment row can hold is here, because the
+ * fallback used to print the enum — and `VENDOR_ACCEPTED`, the state a real
+ * order sits in longest, put the word "vendor" on a buyer's screen. A status
+ * this map still does not know says "In progress" rather than naming itself.
+ */
 const STATE: Readonly<Record<string, { label: string; tone: 'pass' | 'info' | 'neutral' }>> = {
-  DELIVERED: { label: 'Delivered', tone: 'pass' },
+  CREATED: { label: 'Not yet placed', tone: 'neutral' },
+  AWAITING_APPROVAL: { label: 'Awaiting approval', tone: 'neutral' },
+  PAYMENT_PENDING: { label: 'Payment pending', tone: 'neutral' },
+  CONFIRMED: { label: 'Confirmed', tone: 'neutral' },
+  VENDOR_ACCEPTED: { label: 'Being prepared', tone: 'neutral' },
+  PICKUP_SCHEDULED: { label: 'Being prepared', tone: 'neutral' },
+  PACKED: { label: 'Being prepared', tone: 'neutral' },
+  INVOICED: { label: 'Being prepared', tone: 'neutral' },
+  QC_IN_PROGRESS: { label: 'Being prepared', tone: 'neutral' },
+  QC_HOLD: { label: 'Being prepared', tone: 'neutral' },
+  QC_CLEARED: { label: 'Being prepared', tone: 'neutral' },
+  PICKED_UP: { label: 'On its way', tone: 'info' },
   DISPATCHED: { label: 'On its way', tone: 'info' },
-  CONFIRMED: { label: 'Being prepared', tone: 'neutral' },
-  CREATED: { label: 'Being prepared', tone: 'neutral' },
+  AT_HUB: { label: 'On its way', tone: 'info' },
+  IN_TRANSIT: { label: 'On its way', tone: 'info' },
+  OUT_FOR_DELIVERY: { label: 'Out for delivery', tone: 'info' },
+  DELIVERED: { label: 'Delivered', tone: 'pass' },
+  PARTIALLY_FULFILLED: { label: 'Delivered', tone: 'pass' },
+  COMPLETED: { label: 'Delivered', tone: 'pass' },
+  RETURN_REQUESTED: { label: 'Return requested', tone: 'neutral' },
+  RETURNED: { label: 'Returned', tone: 'neutral' },
+  REFUNDED: { label: 'Refunded', tone: 'neutral' },
+  VENDOR_REJECTED: { label: 'Cancelled', tone: 'neutral' },
+  RTO: { label: 'Cancelled', tone: 'neutral' },
+  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
 };
+const UNKNOWN_STATE = { label: 'In progress', tone: 'neutral' as const };
+
+/** Green is for arrived, blue for moving, neutral for everything else. Never red: none of these is a verdict. */
+const TONE: Readonly<Record<DeliveryStage, 'pass' | 'info' | 'neutral'>> = {
+  PLACED: 'neutral',
+  APPROVED: 'neutral',
+  CONFIRMED: 'neutral',
+  PREPARING: 'neutral',
+  DISPATCHED: 'info',
+  DELIVERED: 'pass',
+  RECEIVED: 'pass',
+  CANCELLED: 'neutral',
+};
+
+/**
+ * Who did it, per stage. We are the seller, so everything between the buyer's
+ * own actions is "Trugrade" — never a supply point's operator by name.
+ */
+const ACTOR: Readonly<Record<DeliveryStage, string>> = {
+  PLACED: 'Your team',
+  APPROVED: 'Your approver',
+  CONFIRMED: 'Trugrade',
+  PREPARING: 'Trugrade',
+  DISPATCHED: 'Trugrade',
+  DELIVERED: 'Trugrade',
+  RECEIVED: 'Your team',
+  CANCELLED: 'Trugrade',
+};
+
+/** A done step with no recorded instant says so. It never borrows a neighbour's time. */
+const toEvent = (step: DeliveryStep): TimelineEvent => ({
+  key: step.stage,
+  action: step.label,
+  actor: ACTOR[step.stage],
+  at: step.at ? when(step.at) : 'Time not recorded',
+  dateTime: step.at ?? undefined,
+  current: step.state === 'current',
+});
 
 export function Tracking({ orderNumber }: { orderNumber: string }): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
@@ -127,7 +206,15 @@ function Consignment({
   consignment: DeliveryConsignment;
   orderNumber: string;
 }): React.JSX.Element {
-  const state = STATE[c.status] ?? { label: c.status.replace(/_/g, ' '), tone: 'neutral' as const };
+  // The pill and the rail must agree. `sub_order.status` lags the events — a
+  // vendor's acknowledgement writes an event and leaves the row at CONFIRMED —
+  // so when the timeline has a current step, that step is what the pill names.
+  const current = c.timeline.find((s) => s.state === 'current');
+  const state = current
+    ? { label: current.label, tone: TONE[current.stage] }
+    : (STATE[c.status] ?? UNKNOWN_STATE);
+  const happened = c.timeline.filter((s) => s.state !== 'upcoming');
+  const upcoming = c.timeline.filter((s) => s.state === 'upcoming');
 
   return (
     <section className="dvcons" aria-label={c.label}>
@@ -169,6 +256,18 @@ function Consignment({
           </div>
         ) : null}
       </dl>
+
+      <div className="dvtl">
+        <h3>Where it has got to</h3>
+        <Timeline events={happened.map(toEvent)} label={`${c.label} timeline`} />
+        {upcoming.length > 0 ? (
+          <ol className="dvnext" aria-label="Still to come">
+            {upcoming.map((s) => (
+              <li key={s.stage}>{s.label}</li>
+            ))}
+          </ol>
+        ) : null}
+      </div>
 
       {/*
         The half of tracking this product cannot answer, said plainly rather

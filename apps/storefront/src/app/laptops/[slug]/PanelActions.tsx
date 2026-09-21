@@ -21,22 +21,20 @@ export function PanelActions({
   listingId,
   city,
   snapshot,
-  disabledReason,
 }: {
   /** The lowest-landed offer's listing, or null before the board is priced. */
   listingId: string | null;
   city: string | null;
   /** What a signed-out basket records for this line. Null when unpriced. */
   snapshot: GuestCartSnapshot | null;
-  /** Shown in place of the buttons when there is nothing to add. */
-  disabledReason?: string;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const { qtyFor, busyListingId, addListing } = useProductCart();
   const [goingToCart, setGoingToCart] = React.useState(false);
 
-  if (!listingId || !snapshot) {
-    return <p className="pv-blocked">{disabledReason ?? 'Enter a delivery pincode to buy.'}</p>;
-  }
+  // Nothing to add yet — no pincode, an unserviceable one, or no stock at this
+  // grade. The panel stays silent: the board below is where that is explained,
+  // and a second copy of it here was the same answer twice.
+  if (!listingId || !snapshot) return null;
 
   const inCart = qtyFor(listingId);
   const busy = busyListingId === listingId || goingToCart;

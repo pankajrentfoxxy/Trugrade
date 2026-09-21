@@ -1,0 +1,1062 @@
+/**
+ * Supplier landing — Archetype A. Scoped under `.sell-landing`, and every
+ * colour is one of the `--sl-*` tokens declared for that root in
+ * `packages/ui/src/globals.css`. The hero is a conveyor belt: cartons ride in,
+ * pass the DeviceSure gate, and leave stamped with a grade and the seller's
+ * named payout. Pure CSS — nothing here needs a script.
+ */
+
+.sell-landing {
+  background: var(--sl-bg);
+  color: var(--sl-text);
+  font-family: var(--sl-font);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  min-height: 100dvh;
+}
+.sell-landing *,
+.sell-landing *::before,
+.sell-landing *::after {
+  box-sizing: border-box;
+}
+.sell-landing a {
+  text-decoration: none;
+  color: inherit;
+}
+.sell-landing h1,
+.sell-landing h2,
+.sell-landing h3,
+.sell-landing p,
+.sell-landing ol,
+.sell-landing ul {
+  margin: 0;
+  padding: 0;
+}
+
+/* ============ TOP BAR ============ */
+.sell-landing .bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--sl-surface);
+  border-bottom: 1px solid var(--sl-line);
+  padding: 12px clamp(16px, 4vw, 48px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sell-landing .logo-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--sl-accent);
+  color: var(--sl-accent-ink);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sell-landing .logo {
+  line-height: 1.05;
+}
+.sell-landing .logo b {
+  font-weight: 800;
+  font-size: 1rem;
+}
+.sell-landing .logo b i {
+  font-style: normal;
+  color: var(--sl-accent-deep);
+}
+.sell-landing .logo small {
+  display: block;
+  font-family: var(--sl-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  color: var(--sl-muted);
+}
+.sell-landing .bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sell-landing .bar-right .signin {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--sl-muted);
+}
+.sell-landing .bar-right .signin:hover {
+  color: var(--sl-text);
+}
+.sell-landing .cta {
+  padding: 10px 20px;
+  border-radius: 11px;
+  background: var(--sl-accent);
+  color: var(--sl-accent-ink);
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: inline-block;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.sell-landing .cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px var(--sl-accent-glow-40);
+}
+
+/* ============ HERO ============ */
+.sell-landing .hero {
+  padding: clamp(40px, 6vh, 72px) clamp(16px, 4vw, 48px) 0;
+}
+.sell-landing .hero-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.sell-landing .kicker {
+  display: inline-block;
+  font-family: var(--sl-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--sl-accent-deep);
+  border: 1px solid var(--sl-accent-line);
+  background: var(--sl-accent-soft);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+.sell-landing .hero h1 {
+  margin-top: 18px;
+  font-size: clamp(2.1rem, 4.6vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  max-width: 16ch;
+}
+.sell-landing .hero h1 span {
+  color: var(--sl-accent);
+}
+.sell-landing .hero .lede {
+  margin-top: 16px;
+  max-width: 56ch;
+  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
+  line-height: 1.65;
+  color: var(--sl-muted);
+}
+.sell-landing .hero .lede b {
+  color: var(--sl-text);
+  font-weight: 700;
+}
+.sell-landing .hero-cta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 26px;
+}
+.sell-landing .cta.big {
+  padding: 15px 30px;
+  font-size: 0.9rem;
+}
+.sell-landing .req {
+  font-size: 0.8rem;
+  color: var(--sl-muted);
+  font-weight: 600;
+}
+
+.sell-landing .stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+.sell-landing .stat {
+  background: var(--sl-surface);
+  border: 1px solid var(--sl-line);
+  border-radius: 13px;
+  padding: 12px 18px;
+}
+.sell-landing .stat small {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sl-muted);
+}
+.sell-landing .stat b {
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.sell-landing .stat b i {
+  font-style: normal;
+  color: var(--sl-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+/* ============ CONVEYOR BELT ============ */
+.sell-landing .convey {
+  position: relative;
+  margin-top: clamp(30px, 5vh, 48px);
+  height: 250px;
+  overflow: hidden;
+}
+
+/* scanner gate, centred */
+.sell-landing .gate {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 64px;
+  width: 250px;
+  height: 172px;
+  z-index: 4;
+  pointer-events: none;
+}
+.sell-landing .gate .post {
+  position: absolute;
+  bottom: 0;
+  width: 12px;
+  height: 130px;
+  background: var(--sl-ink);
+  border-radius: 4px 4px 0 0;
+}
+.sell-landing .gate .post.l {
+  left: 0;
+}
+.sell-landing .gate .post.r {
+  right: 0;
+}
+.sell-landing .gate .top {
+  position: absolute;
+  top: 26px;
+  left: -8px;
+  right: -8px;
+  height: 34px;
+  background: var(--sl-ink);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.sell-landing .gate .top small {
+  font-family: var(--sl-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--sl-on-ink);
+}
+.sell-landing .gate .top .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sl-accent);
+  animation: sl-blink 1.2s ease-in-out infinite;
+}
+@keyframes sl-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.sell-landing .gate .beam {
+  position: absolute;
+  top: 62px;
+  bottom: 2px;
+  left: 50%;
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--sl-accent);
+  box-shadow: 0 0 16px var(--sl-accent-glow-80);
+  animation: sl-sweep 1.4s ease-in-out infinite alternate;
+}
+@keyframes sl-sweep {
+  from {
+    transform: translateX(-72px);
+  }
+  to {
+    transform: translateX(72px);
+  }
+}
+
+/* the belt */
+.sell-landing .belt {
+  position: absolute;
+  left: -40px;
+  right: -40px;
+  bottom: 34px;
+  height: 30px;
+  background: var(--sl-ink);
+  border-radius: 15px;
+  z-index: 3;
+  overflow: hidden;
+}
+.sell-landing .belt i {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    115deg,
+    transparent 0 20px,
+    var(--sl-white-09) 20px 34px
+  );
+  animation: sl-beltrun 1.1s linear infinite;
+}
+@keyframes sl-beltrun {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(34px);
+  }
+}
+.sell-landing .legs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34px;
+  z-index: 2;
+}
+.sell-landing .legs i {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 34px;
+  background: var(--sl-shadow-25);
+  border-radius: 3px 3px 0 0;
+}
+.sell-landing .legs i:nth-child(1) {
+  left: 12%;
+}
+.sell-landing .legs i:nth-child(2) {
+  left: 38%;
+}
+.sell-landing .legs i:nth-child(3) {
+  left: 62%;
+}
+.sell-landing .legs i:nth-child(4) {
+  left: 88%;
+}
+
+/* boxes */
+.sell-landing .box {
+  position: absolute;
+  bottom: 62px;
+  left: 0;
+  width: 196px;
+  height: 96px;
+  background: var(--sl-card);
+  border: 1.5px solid var(--sl-card-edge);
+  border-radius: 7px;
+  z-index: 3;
+  transform: translateX(-240px);
+  animation: sl-ride var(--sl-ride) linear infinite;
+  box-shadow: 0 10px 16px var(--sl-shadow-18);
+}
+.sell-landing .box::before {
+  /* top flaps */
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: var(--sl-card-2);
+  border-bottom: 1.5px solid var(--sl-card-edge);
+  border-radius: 5px 5px 0 0;
+}
+.sell-landing .box::after {
+  /* packing tape */
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 22px;
+  margin-left: -11px;
+  background: var(--sl-tape);
+  border-left: 1px solid var(--sl-line-12);
+  border-right: 1px solid var(--sl-line-12);
+}
+.sell-landing .box .label {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: 46px;
+  background: var(--sl-card-label);
+  border: 1px solid var(--sl-line-18);
+  border-radius: 4px;
+  padding: 6px 8px 6px 9px;
+  z-index: 2;
+}
+.sell-landing .box .label b {
+  display: block;
+  font-family: var(--sl-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--sl-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sell-landing .box .label small {
+  font-family: var(--sl-mono);
+  font-size: 0.52rem;
+  color: var(--sl-muted);
+  letter-spacing: 0.06em;
+}
+.sell-landing .box .barcode {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  bottom: 7px;
+  width: 26px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--sl-text) 0 1.5px,
+    transparent 1.5px 4px
+  );
+  opacity: 0.75;
+}
+/* grade stamp + payout tag appear as the box clears the scanner (~52% of the ride) */
+.sell-landing .box .stamp {
+  position: absolute;
+  top: -14px;
+  right: -10px;
+  z-index: 3;
+  width: 38px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--sl-accent);
+  color: var(--sl-accent-ink);
+  font-weight: 800;
+  font-size: 0.86rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(7deg) scale(0);
+  box-shadow: 0 6px 14px var(--sl-accent-glow-50);
+  animation: sl-stamp-in var(--sl-ride) linear infinite;
+}
+.sell-landing .box .pay {
+  position: absolute;
+  left: -8px;
+  top: -13px;
+  z-index: 3;
+  font-family: var(--sl-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--sl-ink);
+  color: var(--sl-accent);
+  border-radius: 999px;
+  padding: 5px 10px;
+  transform: scale(0);
+  animation: sl-pay-in var(--sl-ride) linear infinite;
+}
+@keyframes sl-ride {
+  from {
+    transform: translateX(-240px);
+  }
+  to {
+    transform: translateX(calc(100vw + 60px));
+  }
+}
+@keyframes sl-stamp-in {
+  0%,
+  50% {
+    transform: rotate(7deg) scale(0);
+  }
+  53% {
+    transform: rotate(7deg) scale(1.2);
+  }
+  55%,
+  100% {
+    transform: rotate(7deg) scale(1);
+  }
+}
+@keyframes sl-pay-in {
+  0%,
+  54% {
+    transform: scale(0);
+  }
+  57% {
+    transform: scale(1.12);
+  }
+  59%,
+  100% {
+    transform: scale(1);
+  }
+}
+/* five boxes, evenly phased */
+.sell-landing .box:nth-of-type(2),
+.sell-landing .box:nth-of-type(2) .stamp,
+.sell-landing .box:nth-of-type(2) .pay {
+  animation-delay: -3.2s;
+}
+.sell-landing .box:nth-of-type(3),
+.sell-landing .box:nth-of-type(3) .stamp,
+.sell-landing .box:nth-of-type(3) .pay {
+  animation-delay: -6.4s;
+}
+.sell-landing .box:nth-of-type(4),
+.sell-landing .box:nth-of-type(4) .stamp,
+.sell-landing .box:nth-of-type(4) .pay {
+  animation-delay: -9.6s;
+}
+.sell-landing .box:nth-of-type(5),
+.sell-landing .box:nth-of-type(5) .stamp,
+.sell-landing .box:nth-of-type(5) .pay {
+  animation-delay: -12.8s;
+}
+
+.sell-landing .convey-note {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 2px;
+  font-family: var(--sl-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--sl-muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sell-landing .convey-note b {
+  color: var(--sl-accent-deep);
+}
+
+/* ============ SECTIONS ============ */
+.sell-landing .section {
+  padding: clamp(48px, 7vh, 76px) clamp(16px, 4vw, 48px);
+}
+.sell-landing .section.on-white {
+  background: var(--sl-surface);
+  border-top: 1px solid var(--sl-line-soft);
+  border-bottom: 1px solid var(--sl-line-soft);
+}
+.sell-landing .sec-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.sell-landing .sec-kick {
+  font-family: var(--sl-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--sl-accent-deep);
+  text-transform: uppercase;
+}
+.sell-landing .sec-inner h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-top: 8px;
+}
+
+/* the model — 3 cards */
+.sell-landing .model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 18px;
+  margin-top: 26px;
+}
+.sell-landing .mcard {
+  background: var(--sl-bg);
+  border: 1px solid var(--sl-line);
+  border-radius: 16px;
+  padding: 22px;
+}
+.sell-landing .section.on-white .mcard {
+  background: var(--sl-surface-2);
+  border-color: var(--sl-line-soft);
+}
+.sell-landing .mcard .ic {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--sl-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sell-landing .mcard .ic svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--sl-accent-ink);
+}
+.sell-landing .mcard h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  margin-top: 14px;
+}
+.sell-landing .mcard p {
+  font-size: 0.85rem;
+  color: var(--sl-muted);
+  line-height: 1.6;
+  margin-top: 7px;
+}
+.sell-landing .mcard p b {
+  color: var(--sl-text);
+  font-weight: 700;
+}
+
+/* DeviceSure grid */
+.sell-landing .ds {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: clamp(24px, 4vw, 54px);
+  align-items: center;
+  margin-top: 8px;
+}
+.sell-landing .ds-copy p {
+  font-size: 0.9rem;
+  color: var(--sl-muted);
+  line-height: 1.65;
+  margin-top: 14px;
+  max-width: 48ch;
+}
+.sell-landing .ds-copy p b {
+  color: var(--sl-text);
+}
+.sell-landing .gradeline {
+  display: flex;
+  gap: 9px;
+  margin-top: 18px;
+}
+.sell-landing .gc {
+  min-width: 38px;
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+.sell-landing .gc1 {
+  background: var(--sl-accent);
+  color: var(--sl-accent-ink);
+}
+.sell-landing .gc2 {
+  border: 1.5px solid var(--sl-accent);
+  color: var(--sl-accent-deep);
+  background: var(--sl-accent-soft);
+}
+.sell-landing .gc3 {
+  border: 1.5px solid var(--sl-line-30);
+  color: var(--sl-muted);
+}
+.sell-landing .ds-note {
+  font-size: 0.78rem !important;
+}
+.sell-landing .ds-note i {
+  font-style: normal;
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+}
+
+.sell-landing .areas {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--sl-line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--sl-surface);
+}
+.sell-landing .area {
+  padding: 18px 16px 16px;
+  border-right: 1px solid var(--sl-line-soft);
+  border-bottom: 1px solid var(--sl-line-soft);
+  animation: sl-area-pulse 8.4s ease-in-out infinite;
+}
+.sell-landing .area:nth-child(4n) {
+  border-right: none;
+}
+.sell-landing .area:nth-child(n + 9) {
+  border-bottom: none;
+}
+.sell-landing .area small {
+  font-family: var(--sl-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sl-accent-deep);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--sl-accent-soft);
+}
+.sell-landing .area b {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin-top: 8px;
+}
+.sell-landing .area:nth-child(2) {
+  animation-delay: 0.6s;
+}
+.sell-landing .area:nth-child(3) {
+  animation-delay: 1.2s;
+}
+.sell-landing .area:nth-child(4) {
+  animation-delay: 1.8s;
+}
+.sell-landing .area:nth-child(5) {
+  animation-delay: 2.4s;
+}
+.sell-landing .area:nth-child(6) {
+  animation-delay: 3s;
+}
+.sell-landing .area:nth-child(7) {
+  animation-delay: 3.6s;
+}
+.sell-landing .area:nth-child(8) {
+  animation-delay: 4.2s;
+}
+.sell-landing .area:nth-child(9) {
+  animation-delay: 4.8s;
+}
+.sell-landing .area:nth-child(10) {
+  animation-delay: 5.4s;
+}
+.sell-landing .area:nth-child(11) {
+  animation-delay: 6s;
+}
+.sell-landing .area:nth-child(12) {
+  animation-delay: 6.6s;
+}
+@keyframes sl-area-pulse {
+  0%,
+  4% {
+    background: transparent;
+  }
+  6%,
+  12% {
+    background: var(--sl-accent-soft);
+  }
+  18%,
+  100% {
+    background: transparent;
+  }
+}
+
+/* how to sell — 4 steps with drawing connectors */
+.sell-landing .hsteps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(18px, 3vw, 40px);
+  margin-top: 26px;
+}
+.sell-landing .hstep {
+  color: var(--sl-text-55);
+  animation: sl-step-pulse 8s ease-in-out infinite;
+}
+.sell-landing .hstep:nth-child(2) {
+  animation-delay: 2s;
+}
+.sell-landing .hstep:nth-child(3) {
+  animation-delay: 4s;
+}
+.sell-landing .hstep:nth-child(4) {
+  animation-delay: 6s;
+}
+.sell-landing .hs-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sell-landing .num {
+  flex: none;
+  font-family: var(--sl-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-width: 34px;
+  height: 26px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--sl-accent-soft);
+  color: var(--sl-accent-deep);
+  animation: sl-num-pulse 8s ease-in-out infinite;
+}
+.sell-landing .hstep:nth-child(2) .num {
+  animation-delay: 2s;
+}
+.sell-landing .hstep:nth-child(3) .num {
+  animation-delay: 4s;
+}
+.sell-landing .hstep:nth-child(4) .num {
+  animation-delay: 6s;
+}
+.sell-landing .hline {
+  flex: 1;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--sl-line-12);
+  position: relative;
+  overflow: hidden;
+}
+.sell-landing .hline i {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--sl-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: sl-line-draw 8s ease-in-out infinite;
+}
+.sell-landing .hstep:nth-child(1) .hline i {
+  animation-delay: 0.5s;
+}
+.sell-landing .hstep:nth-child(2) .hline i {
+  animation-delay: 2.5s;
+}
+.sell-landing .hstep:nth-child(3) .hline i {
+  animation-delay: 4.5s;
+}
+.sell-landing .hstep:nth-child(4) .hline {
+  display: none;
+}
+.sell-landing .hstep h3 {
+  margin-top: 14px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: inherit;
+}
+.sell-landing .hstep p {
+  margin-top: 7px;
+  font-size: 0.83rem;
+  line-height: 1.55;
+  color: var(--sl-muted);
+  max-width: 30ch;
+}
+@keyframes sl-step-pulse {
+  0% {
+    color: var(--sl-text-55);
+  }
+  4%,
+  20% {
+    color: var(--sl-text);
+  }
+  32%,
+  88% {
+    color: var(--sl-text-80);
+  }
+  100% {
+    color: var(--sl-text-55);
+  }
+}
+@keyframes sl-num-pulse {
+  0% {
+    background: var(--sl-accent-soft);
+    color: var(--sl-accent-deep);
+    transform: scale(1);
+  }
+  4% {
+    background: var(--sl-accent);
+    color: var(--sl-accent-ink);
+    transform: scale(1.08);
+  }
+  20% {
+    background: var(--sl-accent);
+    color: var(--sl-accent-ink);
+    transform: scale(1);
+  }
+  32%,
+  100% {
+    background: var(--sl-accent-soft);
+    color: var(--sl-accent-deep);
+  }
+}
+@keyframes sl-line-draw {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  17% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  88% {
+    transform: scaleX(1);
+    opacity: 0.4;
+  }
+  97%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+/* ============ CLOSING BAND ============ */
+.sell-landing .close-band {
+  background: var(--sl-ink);
+  color: var(--sl-on-ink);
+}
+.sell-landing .close-band h2 {
+  color: var(--sl-on-ink);
+  text-transform: uppercase;
+}
+.sell-landing .close-band h2 span {
+  color: var(--sl-accent);
+}
+.sell-landing .close-band .lede {
+  color: var(--sl-on-ink-65);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin-top: 10px;
+  max-width: 52ch;
+}
+.sell-landing .assure {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 12px;
+  margin-top: 26px;
+}
+.sell-landing .as {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--sl-white-04);
+  border: 1px solid var(--sl-white-10);
+  border-radius: 13px;
+  padding: 14px 16px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--sl-on-ink-80);
+}
+.sell-landing .as b {
+  color: var(--sl-on-ink);
+}
+.sell-landing .as svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  stroke: var(--sl-accent);
+  margin-top: 1px;
+}
+.sell-landing .close-band .cta.big {
+  margin-top: 26px;
+}
+
+/* ============ LEGAL FOOTER ============
+   Not in the mock. Kept because the registered office, GSTIN and grievance
+   contact are the disclosures a public page of an Indian company carries. */
+.sell-landing .legal {
+  background: var(--sl-ink);
+  border-top: 1px solid var(--sl-white-10);
+  padding: 22px clamp(16px, 4vw, 48px);
+}
+.sell-landing .legal p {
+  max-width: 1240px;
+  margin: 0 auto;
+  font-family: var(--sl-mono);
+  font-size: 0.66rem;
+  line-height: 1.8;
+  letter-spacing: 0.02em;
+  color: var(--sl-on-ink-65);
+  font-variant-numeric: tabular-nums;
+}
+.sell-landing .legal a {
+  color: var(--sl-on-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ============ RESPONSIVE + MOTION ============ */
+@media (max-width: 1000px) {
+  .sell-landing .ds {
+    grid-template-columns: 1fr;
+  }
+  .sell-landing .hsteps {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sell-landing .hline {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .sell-landing .areas {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .sell-landing .area:nth-child(4n) {
+    border-right: 1px solid var(--sl-line-soft);
+  }
+  .sell-landing .area:nth-child(3n) {
+    border-right: none;
+  }
+  .sell-landing .area:nth-child(n + 9) {
+    border-bottom: 1px solid var(--sl-line-soft);
+  }
+  .sell-landing .area:nth-child(n + 10) {
+    border-bottom: none;
+  }
+  .sell-landing .hsteps {
+    grid-template-columns: 1fr;
+  }
+  .sell-landing .box {
+    width: 168px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sell-landing *,
+  .sell-landing *::before,
+  .sell-landing *::after {
+    animation: none !important;
+  }
+  .sell-landing .box {
+    transform: none;
+    position: absolute;
+  }
+  .sell-landing .box:nth-of-type(1) {
+    left: 4%;
+  }
+  .sell-landing .box:nth-of-type(2) {
+    left: 30%;
+  }
+  .sell-landing .box:nth-of-type(3) {
+    left: 58%;
+    bottom: 62px;
+  }
+  .sell-landing .box:nth-of-type(4) {
+    left: 84%;
+  }
+  .sell-landing .box:nth-of-type(5) {
+    display: none;
+  }
+  .sell-landing .box .stamp {
+    transform: rotate(7deg) scale(1);
+  }
+  .sell-landing .box .pay {
+    transform: scale(1);
+  }
+  .sell-landing .hline i {
+    transform: none;
+  }
+  .sell-landing .hstep {
+    color: var(--sl-text);
+  }
+  .sell-landing .num {
+    background: var(--sl-accent);
+    color: var(--sl-accent-ink);
+  }
+}

@@ -98,6 +98,11 @@ const consignment = (over: Partial<DeliveryConsignment> = {}): DeliveryConsignme
   deliveredAt: '2026-08-30T06:00:00.000Z',
   window: { closesAt: '2026-09-01T06:00:00.000Z', open: true, hoursRemaining: 41 },
   machines: [machine()],
+  timeline: [
+    { stage: 'PLACED', label: 'Order placed', at: '2026-08-28T06:00:00.000Z', state: 'done' },
+    { stage: 'DELIVERED', label: 'Delivered', at: '2026-08-30T06:00:00.000Z', state: 'current' },
+    { stage: 'RECEIVED', label: 'Receipt confirmed', at: null, state: 'upcoming' },
+  ],
   receiptConfirmedAt: null,
   blockedReason: '1 of 1 machine has a seal nobody has looked at yet — TGD88DA0397.',
   ...over,

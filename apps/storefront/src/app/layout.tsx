@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { BRAND } from '@trugrade/config/brand';
 import { THEME_STOREFRONT_PREPAINT_SCRIPT } from '@trugrade/ui';
 import { FooterGate } from './FooterGate';
+import { consoleHomeUrlFromRequest } from '../lib/console-url.server';
 import '@trugrade/ui/globals.css';
 import './globals.css';
 import './storefront.css';
@@ -16,7 +17,16 @@ export const metadata: Metadata = {
  * model and brand pages are the SEO surface, and they change when stock changes.
  * The console has neither property, which is why it moved to Vite.
  */
-export default function RootLayout({ children }: { children: React.ReactNode }): React.JSX.Element {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}): Promise<React.JSX.Element> {
+  // The footer is pulled into the CLIENT bundle by `FooterGate`, so it cannot
+  // resolve this itself: `process.env.CONSOLE_URL` is not in a browser bundle
+  // and `NEXT_PUBLIC_*` is frozen at build time. The server resolves it per
+  // request and hands it down.
+  const sellUrl = await consoleHomeUrlFromRequest();
   return (
     <html
       lang="en"
@@ -62,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
           `/legal/**` documents reachable from anywhere. A published policy
           nothing links to is a policy nobody finds.
         */}
-        <FooterGate />
+        <FooterGate sellUrl={sellUrl} />
       </body>
     </html>
   );

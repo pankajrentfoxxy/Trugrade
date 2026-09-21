@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { ThemeToggle } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
-import { consoleHomeUrl } from '../lib/console-url';
+import { consoleHomeUrlFromRequest } from '../lib/console-url.server';
 
 /**
  * Who, if anyone, is signed in — read on the server from the request's own
@@ -94,6 +94,9 @@ export async function SiteHeader({
   inspected: number | null;
 }): Promise<React.JSX.Element> {
   const user = await currentUser();
+  // Resolved per request: see `console-url.server.ts` for why the host has to
+  // come from the header rather than from nothing.
+  const sellUrl = await consoleHomeUrlFromRequest();
   return (
     <header>
       <a className="skiplink" href="#content">
@@ -142,7 +145,7 @@ export async function SiteHeader({
                 Help
               </a>
               <a
-                href={consoleHomeUrl()}
+                href={sellUrl}
                 className="util-promo"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -185,9 +188,9 @@ export async function SiteHeader({
               </Link>
             )}
             {user ? (
-              <AccountMenu fullName={user.fullName} sellUrl={consoleHomeUrl()} />
+              <AccountMenu fullName={user.fullName} sellUrl={sellUrl} />
             ) : (
-              <AuthButtons sellUrl={consoleHomeUrl()} />
+              <AuthButtons sellUrl={sellUrl} />
             )}
             {/* Last, so the cart is the rightmost control in both states —
                 the place every storefront puts it and the place a buyer's

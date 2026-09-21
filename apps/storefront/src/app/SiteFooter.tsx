@@ -1,7 +1,6 @@
 import type { Route } from 'next';
 import Link from 'next/link';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
-import { consoleHomeUrl } from '../lib/console-url';
 
 /**
  * Block 9 of `09_FRONTEND_LOCKED.md` §7 — the five-column footer, built against
@@ -46,13 +45,16 @@ const BUY = [
   ['Your orders', '/orders'],
 ] as const;
 
-const SELL = [
-  // T43: `/sell` was a 404 on every page. There is one supplier entry and it
-  // is the console's front door; a second label for a route nobody built is
-  // not a second door.
-  ['Become a supplier', consoleHomeUrl()],
-  ['Grading standard', '/legal/grading'],
-] as const;
+// T43: `/sell` was a 404 on every page. There is one supplier entry and it is
+// the console's front door; a second label for a route nobody built is not a
+// second door. Built per render rather than at module scope: this file is in
+// the client bundle, so a module-scope call froze the console origin at build
+// time and shipped `localhost:5173` to production.
+const sellLinks = (sellUrl: string) =>
+  [
+    ['Become a supplier', sellUrl],
+    ['Grading standard', '/legal/grading'],
+  ] as const;
 
 const TRUST = [
   ['Grading standard', '/legal/grading'],
@@ -112,7 +114,8 @@ function Pending({ what }: { what: string }): React.JSX.Element {
   return <span className="text-on-chrome-3">[{what} — not yet published]</span>;
 }
 
-export function SiteFooter(): React.JSX.Element {
+export function SiteFooter({ sellUrl }: { sellUrl: string }): React.JSX.Element {
+  const SELL = sellLinks(sellUrl);
   const office = LEGAL_DISCLOSURE.registeredOffice;
   return (
     <footer>

@@ -1,0 +1,782 @@
+/**
+ * Supplier credential screens — Archetype F, the approved split-screen mocks. Shared by sign-in (`Login.tsx`) and signup (`sell/SupplierSignup.tsx`).
+ * LEFT: dark brand panel with four animated figures, each holding a placard
+ * with one supplier promise; a spotlight passes person to person on an 8s loop.
+ * RIGHT: the working form. Scoped under `.auth-split`; every colour is an
+ * `--sl-*` token from `packages/ui/src/globals.css`.
+ */
+
+.auth-split {
+  min-height: 100vh;
+  background: var(--sl-bg);
+  color: var(--sl-text);
+  font-family: var(--sl-font);
+  -webkit-font-smoothing: antialiased;
+}
+.auth-split *,
+.auth-split *::before,
+.auth-split *::after {
+  box-sizing: border-box;
+}
+.auth-split h1,
+.auth-split h2,
+.auth-split h3,
+.auth-split p,
+.auth-split figure {
+  margin: 0;
+  padding: 0;
+}
+.auth-split button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+.auth-split input {
+  font: inherit;
+}
+.auth-split a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.auth-split .split {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+}
+
+/* ==================== LEFT — BRAND + CREW ==================== */
+.auth-split .left {
+  position: relative;
+  background: var(--sl-ink);
+  color: var(--sl-on-ink);
+  padding: 34px clamp(22px, 3.5vw, 52px) 26px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.auth-split .left::before {
+  /* dot grid texture */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--sl-white-07) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 100% 65% at 50% 0%, #000 25%, transparent 85%);
+  mask-image: radial-gradient(ellipse 100% 65% at 50% 0%, #000 25%, transparent 85%);
+}
+.auth-split .brand-logo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.auth-split .brand-logo .b {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--sl-accent);
+  color: var(--sl-accent-ink);
+  font-weight: 800;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-split .brand-logo .t {
+  line-height: 1.05;
+}
+.auth-split .brand-logo .t b {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.auth-split .brand-logo .t b i {
+  font-style: normal;
+  color: var(--sl-accent);
+}
+.auth-split .brand-logo .t small {
+  display: block;
+  font-family: var(--sl-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  color: var(--sl-on-ink-50);
+}
+
+/* ---- the crew ---- */
+.auth-split .crew {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  align-items: end;
+  /* The mock's headline sat here. Without it the raised placards would ride
+     up into the logo on a phone, so the crew keeps the headline's room. */
+  margin-top: 48px;
+  padding-bottom: 10px;
+}
+.auth-split .pal {
+  position: relative;
+  height: 275px;
+  animation:
+    ls-bob 3.2s ease-in-out infinite,
+    ls-spot 8s ease-in-out infinite;
+}
+.auth-split .pal:nth-child(2) {
+  animation-delay: 0.45s, 2s;
+}
+.auth-split .pal:nth-child(3) {
+  animation-delay: 0.9s, 4s;
+}
+.auth-split .pal:nth-child(4) {
+  animation-delay: 0.3s, 6s;
+}
+@keyframes ls-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -5px;
+  }
+}
+@keyframes ls-spot {
+  0%,
+  3% {
+    filter: brightness(1);
+  }
+  6%,
+  22% {
+    filter: brightness(1.18);
+  }
+  28%,
+  100% {
+    filter: brightness(1);
+  }
+}
+
+/* placard */
+.auth-split .sign {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  width: min(96%, 235px);
+  min-height: 96px;
+  background: var(--sl-card-label);
+  border: 2px solid var(--sl-accent);
+  border-radius: 10px;
+  padding: 12px 13px;
+  display: flex;
+  align-items: center;
+  transform-origin: 50% 130%;
+  animation:
+    ls-sway 3.2s ease-in-out infinite,
+    ls-raise 8s ease-in-out infinite;
+  box-shadow: 0 10px 26px var(--sl-black-40);
+  z-index: 2;
+}
+.auth-split .pal:nth-child(2) .sign {
+  animation-delay: 0.45s, 2s;
+}
+.auth-split .pal:nth-child(3) .sign {
+  animation-delay: 0.9s, 4s;
+}
+.auth-split .pal:nth-child(4) .sign {
+  animation-delay: 0.3s, 6s;
+}
+@keyframes ls-sway {
+  0%,
+  100% {
+    rotate: -1.6deg;
+  }
+  50% {
+    rotate: 1.6deg;
+  }
+}
+@keyframes ls-raise {
+  0%,
+  3% {
+    translate: -50% 0;
+  }
+  6%,
+  22% {
+    translate: -50% -9px;
+  }
+  28%,
+  100% {
+    translate: -50% 0;
+  }
+}
+.auth-split .sign p {
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--sl-text);
+}
+.auth-split .sign p b {
+  color: var(--sl-accent-deep);
+}
+.auth-split .sign::after {
+  /* pin */
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  translate: -50% 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sl-accent);
+}
+
+/* stick */
+.auth-split .stick {
+  position: absolute;
+  top: 88px;
+  left: 50%;
+  translate: -50% 0;
+  width: 7px;
+  height: 106px;
+  background: var(--sl-stick);
+  border-radius: 3px;
+  z-index: 1;
+}
+
+/* human */
+.auth-split .human {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: 0;
+  width: 120px;
+  height: 132px;
+  z-index: 2;
+}
+.auth-split .face {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--skin);
+  z-index: 2;
+}
+.auth-split .hair {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  translate: -50% 0;
+  width: 52px;
+  height: 26px;
+  background: var(--hairc);
+  border-radius: 26px 26px 8px 8px;
+  z-index: 3;
+}
+.auth-split .hair.bun::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  translate: -50% 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--hairc);
+}
+.auth-split .hair.cap {
+  border-radius: 26px 26px 4px 4px;
+  background: var(--sl-accent);
+}
+.auth-split .hair.cap::before {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: -6px;
+  width: 34px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--sl-accent);
+}
+.auth-split .hair.curl {
+  height: 30px;
+  border-radius: 50% 50% 40% 40%;
+}
+.auth-split .eye {
+  position: absolute;
+  top: 20px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sl-eye);
+  animation: ls-blink 4.6s ease-in-out infinite;
+}
+.auth-split .eye.l {
+  left: 12px;
+}
+.auth-split .eye.r {
+  right: 12px;
+}
+.auth-split .pal:nth-child(2) .eye {
+  animation-delay: 1.2s;
+}
+.auth-split .pal:nth-child(3) .eye {
+  animation-delay: 2.3s;
+}
+.auth-split .pal:nth-child(4) .eye {
+  animation-delay: 3.1s;
+}
+@keyframes ls-blink {
+  0%,
+  7%,
+  100% {
+    scale: 1 1;
+  }
+  3.5% {
+    scale: 1 0.12;
+  }
+}
+.auth-split .smile {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  translate: -50% 0;
+  width: 14px;
+  height: 7px;
+  border: 2px solid var(--sl-eye);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+.auth-split .torso {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  translate: -50% 0;
+  width: 74px;
+  height: 64px;
+  background: var(--shirt);
+  border-radius: 20px 20px 10px 10px;
+  z-index: 1;
+}
+.auth-split .arm {
+  position: absolute;
+  top: 36px;
+  width: 13px;
+  height: 58px;
+  background: var(--shirt);
+  border-radius: 8px;
+  z-index: 0;
+}
+.auth-split .arm::after {
+  /* hand */
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  translate: -50% 0;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--skin);
+}
+.auth-split .arm.al {
+  left: 26px;
+  rotate: 50deg;
+}
+.auth-split .arm.ar {
+  right: 26px;
+  rotate: -50deg;
+}
+.auth-split .leg {
+  position: absolute;
+  bottom: 0;
+  width: 15px;
+  height: 32px;
+  background: var(--sl-eye);
+  border-radius: 6px 6px 4px 4px;
+}
+.auth-split .leg.ll {
+  left: 34px;
+}
+.auth-split .leg.lr {
+  right: 34px;
+}
+
+/* per-person palette */
+.auth-split .p1 {
+  --skin: var(--sl-skin-1);
+  --shirt: var(--sl-accent);
+  --hairc: var(--sl-eye);
+}
+.auth-split .p2 {
+  --skin: var(--sl-skin-2);
+  --shirt: var(--sl-shirt-2);
+  --hairc: var(--sl-hair-2);
+}
+.auth-split .p3 {
+  --skin: var(--sl-skin-3);
+  --shirt: var(--sl-accent-deep);
+  --hairc: var(--sl-hair-3);
+}
+.auth-split .p4 {
+  --skin: var(--sl-skin-4);
+  --shirt: var(--sl-card);
+  --hairc: var(--sl-eye);
+}
+
+.auth-split .floor {
+  position: relative;
+  border-top: 2px dashed var(--sl-white-16);
+  margin-top: 2px;
+}
+
+/* ==================== RIGHT — FORM ==================== */
+.auth-split .right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(28px, 5vh, 56px) clamp(20px, 4vw, 64px);
+}
+.auth-split .panel {
+  width: min(460px, 100%);
+}
+.auth-split .right .panel h2 {
+  font-size: clamp(1.6rem, 2.6vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.auth-split .panel .sub {
+  font-size: 0.88rem;
+  color: var(--sl-muted);
+  margin-top: 7px;
+}
+
+/* tabs — the shared Tabs component, restyled to the mock */
+.auth-split [role='tablist'] {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--sl-line);
+  margin-top: 24px;
+}
+.auth-split [role='tab'] {
+  min-height: 0;
+  padding: 10px 16px 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--sl-muted);
+  border-radius: 0;
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+.auth-split [role='tab'][aria-selected='true'] {
+  color: var(--sl-text);
+  border-color: var(--sl-accent);
+}
+.auth-split [role='tab']:hover {
+  background: none;
+  color: var(--sl-text);
+}
+.auth-split [role='tab']:focus-visible {
+  outline: 2px solid var(--sl-accent);
+  outline-offset: -2px;
+}
+.auth-split [role='tabpanel'] {
+  padding-top: 22px;
+}
+
+.auth-split .f-lbl {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+.auth-split .f-lbl i {
+  color: var(--sl-accent-deep);
+  font-style: normal;
+}
+.auth-split .field-wrap {
+  position: relative;
+}
+.auth-split .field {
+  width: 100%;
+  background: var(--sl-surface);
+  border: 1px solid var(--sl-line);
+  border-radius: 12px;
+  color: var(--sl-text);
+  padding: 13px 15px;
+  font-size: 0.92rem;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.auth-split .field.pw {
+  padding-right: 44px;
+}
+.auth-split .field.mono {
+  font-family: var(--sl-mono);
+  font-variant-numeric: tabular-nums;
+}
+.auth-split .field::placeholder {
+  color: var(--sl-line-35);
+}
+.auth-split .field:focus {
+  border-color: var(--sl-accent);
+  box-shadow: 0 0 0 3px var(--sl-accent-ring);
+}
+.auth-split .field.bad {
+  border-color: var(--sl-accent-deep);
+}
+.auth-split .shake {
+  animation: ls-shake 0.35s ease;
+}
+@keyframes ls-shake {
+  0%,
+  100% {
+    translate: 0;
+  }
+  25% {
+    translate: -5px;
+  }
+  50% {
+    translate: 5px;
+  }
+  75% {
+    translate: -3px;
+  }
+}
+.auth-split .err {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--sl-accent-deep);
+  margin-top: 7px;
+}
+.auth-split .eyebtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  translate: 0 -50%;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sl-muted);
+}
+.auth-split .eyebtn:hover {
+  background: var(--sl-line-06);
+  color: var(--sl-text);
+}
+.auth-split .eyebtn svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+}
+
+.auth-split .go {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 0;
+  border-radius: 12px;
+  background: var(--sl-accent);
+  color: var(--sl-accent-ink);
+  font-weight: 800;
+  font-size: 0.88rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+.auth-split .go:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px var(--sl-accent-glow-40);
+}
+.auth-split .go[disabled] {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+.auth-split .links {
+  margin-top: 20px;
+  font-size: 0.84rem;
+  color: var(--sl-muted);
+  display: grid;
+  gap: 7px;
+}
+.auth-split .links a {
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.auth-split .gap {
+  margin-top: 16px;
+}
+
+/* notices — the rate-limit wait and a server refusal */
+.auth-split .notices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.auth-split .notices:empty {
+  display: none;
+}
+.auth-split .alert {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--sl-text);
+  background: var(--sl-accent-soft);
+  border: 1px solid var(--sl-accent-line);
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+/* OTP */
+.auth-split .sent-line {
+  font-size: 0.82rem;
+  color: var(--sl-muted);
+  margin-bottom: 12px;
+}
+.auth-split .sent-line b {
+  color: var(--sl-text);
+  font-family: var(--sl-mono);
+  font-variant-numeric: tabular-nums;
+}
+.auth-split .sent-line button {
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+  text-decoration: underline;
+  margin-left: 6px;
+}
+/* the shared OtpInput, restyled to the mock's six boxes */
+.auth-split [data-testid='otp-input'] {
+  display: flex;
+  gap: 9px;
+}
+.auth-split [data-testid='otp-input'] input {
+  width: 52px;
+  height: 56px;
+  min-height: 0;
+  text-align: center;
+  font-family: var(--sl-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--sl-text);
+  background: var(--sl-surface);
+  border: 1px solid var(--sl-line);
+  border-radius: 12px;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.auth-split [data-testid='otp-input'] input:focus {
+  border-color: var(--sl-accent);
+  box-shadow: 0 0 0 3px var(--sl-accent-ring);
+}
+.auth-split .resend {
+  font-size: 0.78rem;
+  color: var(--sl-muted);
+  margin-top: 12px;
+}
+.auth-split .resend button {
+  color: var(--sl-accent-deep);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.auth-split .resend button[disabled] {
+  color: var(--sl-muted);
+  text-decoration: none;
+  cursor: default;
+  font-weight: 600;
+}
+.auth-split .resend b {
+  font-family: var(--sl-mono);
+  font-variant-numeric: tabular-nums;
+}
+.auth-split .proto {
+  font-size: 0.78rem;
+  color: var(--sl-muted);
+  margin-top: 10px;
+}
+.auth-split .proto b {
+  font-family: var(--sl-mono);
+  color: var(--sl-text);
+}
+
+/* second factor and the two refusal panels share the mock's type */
+.auth-split .stage {
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-split .right .stage h2 {
+  font-size: 1.3rem;
+}
+.auth-split .stage p,
+.auth-split .stage blockquote {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--sl-muted);
+}
+.auth-split .stage blockquote {
+  margin: 0;
+  color: var(--sl-text);
+}
+.auth-split .ghost {
+  align-self: flex-start;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--sl-accent-deep);
+  text-decoration: underline;
+  padding: 6px 0;
+}
+
+/* ==================== RESPONSIVE + MOTION ==================== */
+@media (max-width: 900px) {
+  .auth-split .split {
+    grid-template-columns: 1fr;
+  }
+  .auth-split .left {
+    padding-bottom: 18px;
+  }
+  .auth-split .pal {
+    height: 250px;
+  }
+}
+@media (max-width: 520px) {
+  .auth-split .crew {
+    gap: 4px 8px;
+  }
+  .auth-split .sign p {
+    font-size: 0.68rem;
+  }
+  .auth-split [data-testid='otp-input'] input {
+    width: 44px;
+    height: 50px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-split *,
+  .auth-split *::before,
+  .auth-split *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

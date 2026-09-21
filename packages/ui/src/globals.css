@@ -1087,3 +1087,76 @@
 :root[data-t='light'] .tg-theme-name--light {
   display: inline;
 }
+
+/* ==========================================================================
+ * Supplier landing palette — `apps/console/src/routes/SellLanding.tsx`
+ *
+ * The public face of the supplier console carries its own cream-and-yellow
+ * palette, scoped to the page root so nothing inside the hub picks it up. This
+ * block is the only place those colours are spelled out; the page's own
+ * stylesheet reads them as variables.
+ * ======================================================================== */
+.sell-landing,
+.auth-split {
+  --sl-bg: #fff6e3;
+  --sl-surface: #ffffff;
+  --sl-surface-2: #f8efd8;
+  --sl-line: rgba(58, 44, 8, 0.14);
+  --sl-line-soft: rgba(58, 44, 8, 0.08);
+  --sl-line-12: rgba(58, 44, 8, 0.12);
+  --sl-line-18: rgba(58, 44, 8, 0.18);
+  --sl-line-30: rgba(58, 44, 8, 0.3);
+  --sl-text: #2a2105;
+  --sl-text-55: rgba(42, 33, 5, 0.55);
+  --sl-text-80: rgba(42, 33, 5, 0.8);
+  --sl-muted: #86754c;
+  --sl-accent: #fdb017;
+  --sl-accent-ink: #2a2105;
+  --sl-accent-soft: rgba(253, 176, 23, 0.16);
+  --sl-accent-line: rgba(253, 176, 23, 0.55);
+  --sl-accent-glow-40: rgba(253, 176, 23, 0.4);
+  --sl-accent-glow-50: rgba(253, 176, 23, 0.5);
+  --sl-accent-glow-80: rgba(253, 176, 23, 0.8);
+  --sl-accent-deep: #b07a00;
+  --sl-ink: #171204;
+  --sl-on-ink: #f7f2e4;
+  --sl-on-ink-65: rgba(247, 242, 228, 0.65);
+  --sl-on-ink-80: rgba(247, 242, 228, 0.8);
+  --sl-white-04: rgba(255, 255, 255, 0.04);
+  --sl-white-09: rgba(255, 255, 255, 0.09);
+  --sl-white-10: rgba(255, 255, 255, 0.1);
+  --sl-card: #e9d3a2;
+  --sl-card-2: #dcc088;
+  --sl-card-edge: #bf9c58;
+  --sl-card-label: #fffdf6;
+  --sl-tape: rgba(255, 246, 227, 0.55);
+  --sl-shadow-18: rgba(58, 44, 8, 0.18);
+  --sl-shadow-25: rgba(58, 44, 8, 0.25);
+  --sl-font: 'Archivo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --sl-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --sl-ride: 16s;
+  /* Sign-in only: the crew on the brand panel and the form's states. */
+  --sl-eye: #241c08;
+  --sl-stick: #caa85e;
+  --sl-black-40: rgba(0, 0, 0, 0.4);
+  --sl-white-07: rgba(255, 255, 255, 0.07);
+  --sl-white-16: rgba(255, 255, 255, 0.16);
+  --sl-on-ink-45: rgba(247, 242, 228, 0.45);
+  --sl-on-ink-50: rgba(247, 242, 228, 0.5);
+  --sl-line-06: rgba(58, 44, 8, 0.06);
+  --sl-line-35: rgba(58, 44, 8, 0.35);
+  --sl-accent-ring: rgba(253, 176, 23, 0.15);
+  --sl-accent-glow-45: rgba(253, 176, 23, 0.45);
+  --sl-toast-text: #ffffff;
+  --sl-skin-1: #f0c49c;
+  --sl-skin-2: #a5673f;
+  --sl-skin-3: #d99a5e;
+  --sl-skin-4: #8a5430;
+  --sl-shirt-2: #f3e3bb;
+  --sl-hair-2: #100c02;
+  --sl-hair-3: #3b2c08;
+  /* Signup only: the laptop in the scan-and-seal scene. */
+  --sl-lap-edge: #3b2f0c;
+  --sl-accent-glow-90: rgba(253, 176, 23, 0.9);
+  --sl-line-32: rgba(58, 44, 8, 0.32);
+}

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { SESSION_POLICY, type Permission } from '@trugrade/contracts';
+import type { Permission } from '@trugrade/contracts';
 
 export interface Principal {
   userId: string;
@@ -261,31 +261,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   }, []);
 
   /**
-   * Renew ahead of expiry, because nothing else does.
-   *
-   * The access cookie is set to `accessTtl - 30s` and there is no interceptor
-   * renewing it, so a tab left open simply starts 401ing at the fifteen-minute
-   * mark while the chrome goes on drawing a session that is gone. The user's
-   * instinct is to reload, and a reload used to be the thing that destroyed the
-   * session outright.
-   *
-   * Only a 401 clears the principal. A refresh that failed because the network
-   * blinked is not evidence that the session ended, and signing someone out over
-   * it would swap a silent failure for a rude one.
+   * No timer renews the access cookie. `apiFetch` restores the session on the
+   * first 401 and replays the request, exactly as the storefront does, so an
+   * idle tab costs one extra round trip on its next call and nothing else. A
+   * background refresh on top of that rotated the refresh cookie every twelve
+   * minutes in every open tab, which is the race the dedupe above cannot cover.
    */
   React.useEffect(() => {
     if (!principal) return;
     // A live session again, so the next dead one is worth signing out over.
     armSessionLoss();
-    const everyMs = SESSION_POLICY.accessTtlSeconds * 0.8 * 1000;
-    const id = setInterval(() => {
-      void refreshSession().then((result) => {
-        if (result && 'code' in (result as object)) {
-          if ((result as AuthFailure).status === 401) setPrincipal(null);
-        }
-      });
-    }, everyMs);
-    return () => clearInterval(id);
   }, [principal]);
 
   const value = React.useMemo<AuthState>(

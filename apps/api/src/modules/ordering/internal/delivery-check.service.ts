@@ -12,6 +12,7 @@ import { PlatformService } from '../../platform';
 import { QcService, type QcVerdict } from '../../qc';
 import { CatalogLookup } from './catalog-lookup';
 import { dispatchLabels, UNKNOWN_DISPATCH_LABEL } from './dispatch-label';
+import { consignmentTimeline, type DeliveryStep, type TimelineEventRow } from './delivery-timeline';
 
 /**
  * The buyer's own seal check at handover — T24,
@@ -122,6 +123,12 @@ export interface DeliveryConsignment {
   machines: readonly DeliveryMachine[];
   /** ISO 8601 of the buyer's own confirmation, from `ordering.order_event`. */
   receiptConfirmedAt: string | null;
+  /**
+   * Where this consignment has got to, as a fixed sequence of buyer stages.
+   * Derived from `ordering.order_event` and the consignment's own columns by
+   * `consignmentTimeline`; only timestamps cross from the event rows.
+   */
+  timeline: readonly DeliveryStep[];
   /**
    * Why receipt cannot be confirmed yet, in a sentence, or null when it can.
    * Decided here: "every seal on this consignment has been looked at and none of
@@ -413,7 +420,7 @@ export class DeliveryCheckService {
     const consignments = await this.consignments(order.id);
     const machines = await this.machines(order.id);
 
-    const [seals, descriptions, labels, receipts] = await Promise.all([
+    const [seals, descriptions, labels, receipts, events] = await Promise.all([
       this.sealsByReport(machines),
       this.describe(machines),
       dispatchLabels(
@@ -421,6 +428,7 @@ export class DeliveryCheckService {
         machines.map((m) => m.unit_id),
       ),
       this.receipts(order.id),
+      this.events(order.id),
     ]);
 
     return {
@@ -465,6 +473,14 @@ export class DeliveryCheckService {
           window: win,
           machines: built,
           receiptConfirmedAt: receipts.get(c.id)?.toISOString() ?? null,
+          timeline: consignmentTimeline({
+            events,
+            subOrderId: c.id,
+            consignmentStatus: c.status,
+            orderStatus: order.status,
+            deliveredAt: c.delivered_at,
+            receiptConfirmedAt: receipts.get(c.id) ?? null,
+          }),
           blockedReason: consignmentBlockedReason(c.delivered_at, win?.open ?? null, built),
         };
       }),
@@ -490,6 +506,19 @@ export class DeliveryCheckService {
        WHERE so.order_id = ${orderId}::uuid
          AND so.status <> 'CANCELLED'::public.order_status
        ORDER BY olu.serial_number`;
+  }
+
+  /**
+   * Every transition on the order, oldest first. Four columns and no `note`:
+   * the dispatch note names a purchase order and a carrier, and the timeline
+   * only ever takes a timestamp from a row.
+   */
+  private async events(orderId: string): Promise<TimelineEventRow[]> {
+    return this.prisma.$queryRaw<TimelineEventRow[]>`
+      SELECT sub_order_id, event_type, to_status, occurred_at
+        FROM ordering.order_event
+       WHERE order_id = ${orderId}::uuid
+       ORDER BY occurred_at, id`;
   }
 
   /** The buyer's own acceptance per consignment, newest kept. */

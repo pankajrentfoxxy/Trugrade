@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Button, Input, OtpInput } from '@trugrade/ui';
-import { SupplierBrandPanel } from '../../AuthShell';
-import { VendorSurfaceSync } from '../../lib/vendor-surface';
+import { BRAND } from '@trugrade/config/brand';
+import { OtpInput } from '@trugrade/ui';
 import { OTP_POLICY } from '@trugrade/contracts';
+import { VendorSurfaceSync } from '../../lib/vendor-surface';
 import {
   register,
   requestMfaCode,
@@ -12,6 +12,7 @@ import {
   verifyOtp,
 } from '../../../../storefront/src/app/register/api';
 import { MfaGate } from '../../../../storefront/src/app/register/MfaGate';
+import { PROFILE_SECTIONS } from '../vendor/profile/sections.config';
 import {
   liveFieldError,
   mobileSubscriberDigits,
@@ -25,12 +26,26 @@ import {
   validateMobile,
   validateSignupPassword,
 } from './signup-validation';
-import './supplier-signup.css';
+import '../auth/auth-split.css';
+import './signup-split.css';
 
 /**
  * ARCHETYPE F — Focus. One-minute supplier signup; business details come later.
+ *
+ * The approved split-screen mock. LEFT: a laptop gets the Trugrade treatment
+ * on loop — the scan beam sweeps it, six check-dots pop around it, the A+ seal
+ * stamps on, a payout pill rises — and beneath it the four supplier promises
+ * tick themselves in. All CSS, in `signup-split.css`, and hidden from assistive
+ * technology. RIGHT: the wizard the four progress bars count.
+ *
+ * The mock's wizard was mobile → code → details → done. The real one has one
+ * more proof in it: the work email is verified with its own code before the
+ * account is created, because the server only names a duplicate contact once
+ * both channels are proved — so "details" is two steps here, and the bars
+ * count four real ones. The done card is real too: it is on screen while the
+ * fresh session is synced and the application opened, and the button on it
+ * goes where that lands anyway.
  */
-const STEP_LABELS = ['Mobile', 'Verify', 'Email', 'Account'] as const;
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -60,6 +75,31 @@ export interface SupplierSignupProps {
   onSessionEstablished?: () => Promise<void> | void;
 }
 
+/** What the six check-dots around the machine are labelled. Illustration, in QC's own words. */
+const DOTS = ['SCREEN', 'CHASSIS', 'BATTERY', 'PORTS', 'KEYBOARD', 'THERMALS'] as const;
+
+const PROMISES = [
+  { lead: 'We ', bold: 'inspect, grade and seal', rest: ' every machine before it goes live' },
+  { lead: 'Your name is ', bold: 'never shown', rest: ' to buyers' },
+  { lead: 'Payment on a ', bold: 'fixed cycle', rest: ', every deduction itemised' },
+  { lead: '', bold: 'No listing fee,', rest: ' no monthly fee' },
+] as const;
+
+const two = (i: number): string => String(i + 1).padStart(2, '0');
+
+const Tick = ({ width }: { width: number }): React.JSX.Element => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    strokeWidth={width}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+);
+
 /**
  * The resend wait, as text. It used to exist only as the disabled button's
  * `title` tooltip, which a phone never shows — and a phone is where most
@@ -68,16 +108,95 @@ export interface SupplierSignupProps {
 function ResendCountdown({ seconds }: { seconds: number }): React.JSX.Element | null {
   if (seconds <= 0) return null;
   return (
-    <p className="text-body-sm text-ink-3" aria-live="polite" data-testid="resend-countdown">
-      You can ask for another code in <span className="font-mono tnum">{seconds}</span>{' '}
-      {seconds === 1 ? 'second' : 'seconds'}.
-    </p>
+    <span data-testid="resend-countdown" aria-live="polite">
+      You can ask for another code in <b>{seconds}</b> {seconds === 1 ? 'second' : 'seconds'}.
+    </span>
   );
 }
+
+/* ==========================================================================
+ * The brand panel
+ * ======================================================================== */
+
+function Scene(): React.JSX.Element {
+  return (
+    <div className="scene" aria-hidden="true">
+      <div className="rig">
+        <div className="lap">
+          <div className="scr">
+            <div className="glass">
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+            <div className="beam" />
+          </div>
+          <div className="base" />
+        </div>
+        {DOTS.map((label, i) => (
+          <span className={`dot d${i + 1}`} key={label}>
+            <Tick width={3} />
+            <small>{label}</small>
+          </span>
+        ))}
+        <div className="seal">
+          <b>A+</b>
+          <small>SEALED</small>
+        </div>
+        <div className="payout">
+          ₹38,500 · <b>paid to you</b>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrandPanel(): React.JSX.Element {
+  return (
+    <aside className="left">
+      <Link to="/" className="brand-logo" aria-label={`${BRAND.name} home`}>
+        <span className="b" aria-hidden="true">
+          t
+        </span>
+        <span className="t">
+          <b>
+            tru<i>grade</i>
+          </b>
+          <small>SUPPLIER HUB</small>
+        </span>
+      </Link>
+      <h1>
+        Your machines, <span>working for you.</span>
+      </h1>
+      <Scene />
+      <ul className="promises" aria-label="What every supplier gets">
+        {PROMISES.map((p) => (
+          <li key={p.bold}>
+            <span className="tickring" aria-hidden="true">
+              <Tick width={3.4} />
+            </span>
+            <span>
+              {p.lead}
+              <b>{p.bold}</b>
+              {p.rest}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+/* ==========================================================================
+ * The wizard
+ * ======================================================================== */
 
 export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): React.JSX.Element {
   const navigate = useNavigate();
   const [step, setStep] = React.useState<Step>(1);
+  const [done, setDone] = React.useState(false);
   const [mobileDigits, setMobileDigits] = React.useState('');
   const [mobileSentTo, setMobileSentTo] = React.useState<string | null>(null);
   const [mobileCode, setMobileCode] = React.useState('');
@@ -89,6 +208,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const [emailDevCode, setEmailDevCode] = React.useState<string | null>(null);
   const [fullName, setFullName] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [showPassword, setShowPassword] = React.useState(false);
   const [confirm, setConfirm] = React.useState('');
   const [error, setError] = React.useState<string | undefined>();
   const [serverErrors, setServerErrors] = React.useState<Partial<Record<SignupFieldKey, string>>>(
@@ -100,6 +220,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const [focused, setFocused] = React.useState<SignupFieldKey | null>(null);
   const [active, setActive] = React.useState<Partial<Record<SignupFieldKey, boolean>>>({});
   const [refusal, setRefusal] = React.useState<ContactRefusal | null>(null);
+  const [shaking, setShaking] = React.useState<SignupFieldKey | null>(null);
 
   const mobileDisplay = mobileDigits.length > 0 ? `+91 ${mobileDigits}` : '+91 ';
   const e164 = toE164(mobileDisplay);
@@ -108,8 +229,16 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     setActive((prev) => ({ ...prev, [key]: true }));
   };
 
+  /** The mock's refusal: the field turns, shakes and takes focus. */
+  const shake = (key: SignupFieldKey): void => {
+    setShaking(null);
+    requestAnimationFrame(() => setShaking(key));
+  };
+
   const mobileError =
-    liveFieldError('mobile', mobileDisplay, validateMobile, focused, active) ??
+    // The digits, not the '+91 ' display: an untouched field is empty, and the
+    // live rule must not read the prefix as something typed.
+    liveFieldError('mobile', mobileDigits, () => validateMobile(mobileDisplay), focused, active) ??
     (error && step === 1 ? error : undefined);
 
   const emailError =
@@ -152,7 +281,10 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const sendMobileOtp = async (): Promise<void> => {
     markActive('mobile');
     const validation = validateMobile(mobileDisplay);
-    if (validation) return;
+    if (validation) {
+      shake('mobile');
+      return;
+    }
     setError(undefined);
     setBusy(true);
     const result = await sendOtp('MOBILE', e164);
@@ -185,7 +317,10 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const sendEmailOtp = async (): Promise<void> => {
     markActive('email');
     const validation = validateEmail(email);
-    if (validation) return;
+    if (validation) {
+      shake('email');
+      return;
+    }
     setError(undefined);
     setBusy(true);
     const result = await sendOtp('EMAIL', email.trim());
@@ -221,8 +356,18 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     markActive('confirm');
     const nameErr = validateFullName(fullName);
     const passErr = validateSignupPassword(password, passwordContext);
-    if (nameErr || passErr) return;
-    if (password !== confirm) return;
+    if (nameErr) {
+      shake('fullName');
+      return;
+    }
+    if (passErr) {
+      shake('password');
+      return;
+    }
+    if (password !== confirm) {
+      shake('confirm');
+      return;
+    }
     setError(undefined);
     setServerErrors({});
     setBusy(true);
@@ -292,8 +437,13 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
    * asked for a second, redundant code. `onSessionEstablished` is `syncSession`
    * (see `VendorRegisterRoute`), and awaiting it here is what makes the
    * principal current before the guard ever looks at it.
+   *
+   * The done card is shown for the whole of that wait, so the account's
+   * creation is told rather than implied by a page change.
    */
   const completeOnboarding = async (): Promise<void> => {
+    setMfaSentTo(null);
+    setDone(true);
     setBusy(true);
     await onSessionEstablished?.();
     const started = await startOnboarding();
@@ -356,6 +506,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
   const strength = signupPasswordStrength(password, passwordContext);
   const rules = signupPasswordRules(password);
   const passwordEngaged = focused === 'password' || active.password;
+  const passwordOk = password.length > 0 && !validateSignupPassword(password, passwordContext);
   const stepFourBanner = error && step === 4 ? error : undefined;
 
   const stepHead =
@@ -365,7 +516,10 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
           sub: 'About a minute. Business details come later.',
         }
       : step === 2
-        ? { title: 'Verify your mobile', sub: null }
+        ? {
+            title: 'Verify your mobile',
+            sub: 'This number gets order alerts and payout confirmations.',
+          }
         : step === 3
           ? {
               title: 'Your work email',
@@ -373,44 +527,104 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
             }
           : {
               title: 'Set a password',
-              sub: 'Mobile and email verified. One more field.',
+              sub: 'Who runs this account, and how you’ll sign in.',
             };
 
+  const field = (key: SignupFieldKey, bad: boolean, extra = ''): string =>
+    `field${extra}${bad ? ' bad' : ''}${shaking === key ? ' shake' : ''}`;
+
+  const firstName = fullName.trim().split(' ')[0] ?? '';
+
   return (
-    <div className="sup-signup-page">
+    <div className="auth-split signup-split">
       <VendorSurfaceSync />
-      <div className="sup-signup-card">
-        <SupplierBrandPanel />
+      <div className="split">
+        <BrandPanel />
+        <main className="right">
+          <div className="panel">
+            <div className="prog" aria-label="Signup progress" role="progressbar" aria-valuemin={1} aria-valuemax={4} aria-valuenow={done ? 4 : step}>
+              {[1, 2, 3, 4].map((n) => (
+                <span
+                  key={n}
+                  className={`seg${done || n < step ? ' done' : n === step ? ' cur' : ''}`}
+                >
+                  <i />
+                </span>
+              ))}
+            </div>
 
-        <div className="sup-signup-main">
-          {mfaSentTo ? (
-            <MfaGate
-              sentTo={mfaSentTo}
-              onVerified={async () => {
-                await completeOnboarding();
-              }}
-            />
-          ) : (
-            <>
-              <div className="sup-signup-progress" aria-label="Signup progress">
-                {STEP_LABELS.map((label, i) => (
-                  <span key={label} data-active={i + 1 <= step} title={label} aria-hidden="true" />
-                ))}
+            {mfaSentTo ? (
+              <div className="stage">
+                <MfaGate
+                  sentTo={mfaSentTo}
+                  onVerified={async () => {
+                    await completeOnboarding();
+                  }}
+                />
               </div>
-
-              <div className="sup-signup-head">
-                <h1 className="sup-signup-step-title">{stepHead.title}</h1>
-                {stepHead.sub ? <p className="sup-signup-step-sub">{stepHead.sub}</p> : null}
+            ) : done ? (
+              <div className="done" data-testid="signup-done">
+                <div className="done-badge" aria-hidden="true">
+                  <Tick width={2.4} />
+                </div>
+                <h2>Account created.</h2>
+                <p className="sub">
+                  Welcome{firstName ? `, ${firstName}` : ''} — signed in on{' '}
+                  <span className="font-mono tnum">{mobileSentTo ?? e164}</span>.
+                </p>
+                {error ? (
+                  <p className="alert" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+                <div className="next-box">
+                  <h4>The application asks for {PROFILE_SECTIONS.length} short sections:</h4>
+                  <ul className="next-chips">
+                    {PROFILE_SECTIONS.map((s, i) => (
+                      <li className="nchip" key={s.id}>
+                        <i>{two(i)}</i>
+                        {s.title}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>
+                    Stop after any section and come back — <b>nothing is submitted</b> until every
+                    required one is saved.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="go"
+                  disabled={busy}
+                  aria-busy={busy || undefined}
+                  onClick={() => void navigate('/vendor', { replace: true })}
+                >
+                  {busy ? 'Opening your application…' : 'Start your application'}
+                </button>
               </div>
+            ) : (
+              <>
+                <h2>{stepHead.title}</h2>
+                <p className="sub">{stepHead.sub}</p>
 
-              {step === 1 ? (
-                <div className="sup-signup-fields">
-                  <div>
-                    <label htmlFor="sup-mobile" className="sup-signup-field-label">
-                      Mobile number <span className="req">*</span>
+                {step === 1 ? (
+                  <form
+                    className="stepbox"
+                    noValidate
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void sendMobileOtp();
+                    }}
+                  >
+                    <label className="f-lbl" htmlFor="sup-mobile">
+                      Mobile number <i>*</i>
                     </label>
-                    <div className="sup-signup-mobile-row">
-                      <span className="sup-signup-prefix">+91</span>
+                    <div
+                      className={`mob${mobileError ? ' bad' : ''}${shaking === 'mobile' ? ' shake' : ''}`}
+                    >
+                      <span className="cc" aria-hidden="true">
+                        +91
+                      </span>
                       <input
                         id="sup-mobile"
                         inputMode="numeric"
@@ -420,6 +634,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                         aria-invalid={Boolean(mobileError) || undefined}
                         aria-describedby={mobileError ? 'sup-mobile-error' : undefined}
                         placeholder="9876543210"
+                        autoFocus
                         onFocus={() => setFocused('mobile')}
                         onBlur={() => setFocused(null)}
                         onChange={(e) => {
@@ -430,202 +645,262 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                       />
                     </div>
                     {mobileError ? (
-                      <p id="sup-mobile-error" className="sup-signup-field-error" role="alert">
+                      <p id="sup-mobile-error" className="err" role="alert">
                         {mobileError}
                       </p>
                     ) : null}
-                  </div>
-                  <div className="sup-signup-actions">
-                    <Button
-                      variant="primary"
-                      loading={busy}
-                      disabledReason={validateMobile(mobileDisplay)}
-                      onClick={() => void sendMobileOtp()}
+                    <button
+                      type="submit"
+                      className="go"
+                      aria-disabled={validateMobile(mobileDisplay) ? true : undefined}
+                      aria-busy={busy || undefined}
                     >
-                      Send OTP
-                    </Button>
-                    <p className="sup-signup-foot">
+                      {busy ? 'Sending…' : 'Send OTP'}
+                    </button>
+                    <p className="links">
                       Already with us? <Link to="/login">Sign in</Link>
                     </p>
-                  </div>
-                </div>
-              ) : null}
+                  </form>
+                ) : null}
 
-              {step === 2 ? (
-                <div className="sup-signup-fields">
-                  <p className="sup-signup-sent">
-                    Code sent to <span className="tnum">{mobileSentTo ?? e164}</span>
-                    <button
-                      type="button"
-                      className="sup-signup-change"
-                      onClick={() => {
-                        setStep(1);
-                        setMobileCode('');
+                {step === 2 ? (
+                  <div className="stepbox">
+                    <p className="sent-line">
+                      OTP sent to <b>{mobileSentTo ?? e164}</b>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep(1);
+                          setMobileCode('');
+                          setError(undefined);
+                        }}
+                      >
+                        Change
+                      </button>
+                    </p>
+                    <OtpInput
+                      label="Six-digit code"
+                      value={mobileCode}
+                      onChange={(code) => {
+                        setMobileCode(code);
                         setError(undefined);
                       }}
-                    >
-                      change
-                    </button>
-                  </p>
-                  <OtpInput
-                    label="Six-digit code"
-                    value={mobileCode}
-                    onChange={(code) => {
-                      setMobileCode(code);
-                      setError(undefined);
-                    }}
-                    disabled={busy}
-                    error={error}
-                    onComplete={(code) => void verifyMobileOtp(code)}
-                  />
-                  {mobileDevCode ? (
-                    <p className="sup-signup-prototype">
-                      Prototype — your code is <span className="tnum">{mobileDevCode}</span>
-                    </p>
-                  ) : null}
-                  <div className="sup-signup-actions">
-                    <Button
-                      variant="primary"
-                      loading={busy}
-                      disabledReason={mobileCode.length < 6 ? 'Enter all six digits.' : undefined}
-                      onClick={() => void verifyMobileOtp(mobileCode)}
-                    >
-                      Verify
-                    </Button>
-                    <div className="sup-signup-actions-row">
-                      <Button
+                      disabled={busy}
+                      error={error}
+                      onComplete={(code) => void verifyMobileOtp(code)}
+                    />
+                    {mobileDevCode ? (
+                      <p className="proto" data-testid="prototype-code">
+                        Prototype — your code is <b>{mobileDevCode}</b>
+                      </p>
+                    ) : null}
+                    <p className="resend">
+                      Didn&rsquo;t get it?{' '}
+                      <button
                         type="button"
-                        variant="secondary"
-                        disabledReason={cooldown > 0 ? `Resend in ${cooldown} s` : undefined}
-                        loading={busy}
+                        disabled={cooldown > 0 || busy}
                         onClick={() => void sendMobileOtp()}
                       >
                         Resend
-                      </Button>
+                      </button>{' '}
                       <ResendCountdown seconds={cooldown} />
-                    </div>
+                    </p>
+                    <button
+                      type="button"
+                      className="go"
+                      aria-disabled={mobileCode.length < 6 ? true : undefined}
+                      aria-busy={busy || undefined}
+                      onClick={() => {
+                        if (mobileCode.length < 6) {
+                          setError('Enter all six digits.');
+                          return;
+                        }
+                        void verifyMobileOtp(mobileCode);
+                      }}
+                    >
+                      {busy ? 'Verifying…' : 'Verify'}
+                    </button>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              {step === 3 ? (
-                <div className="sup-signup-fields">
-                  <Input
-                    label="Email address"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    readOnly={emailLocked}
-                    error={emailError}
-                    placeholder="name@company.com"
-                    onFocus={() => setFocused('email')}
-                    onBlur={() => setFocused(null)}
-                    onChange={(e) => {
-                      markActive('email');
-                      setEmail(e.target.value);
-                      setError(undefined);
+                {step === 3 ? (
+                  <form
+                    className="stepbox"
+                    noValidate
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!emailLocked) void sendEmailOtp();
+                      else void verifyEmailAndContinue(emailCode);
                     }}
-                  />
-                  {!emailLocked ? (
-                    <div className="sup-signup-actions">
-                      <Button
-                        variant="primary"
-                        loading={busy}
-                        disabledReason={validateEmail(email)}
-                        onClick={() => void sendEmailOtp()}
+                  >
+                    <label className="f-lbl" htmlFor="sup-email">
+                      Work email address <i>*</i>
+                    </label>
+                    <input
+                      id="sup-email"
+                      className={field('email', Boolean(emailError))}
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      readOnly={emailLocked}
+                      placeholder="you@company.in"
+                      aria-invalid={Boolean(emailError) || undefined}
+                      aria-describedby={emailError ? 'sup-email-error' : undefined}
+                      autoFocus
+                      onFocus={() => setFocused('email')}
+                      onBlur={() => setFocused(null)}
+                      onChange={(e) => {
+                        markActive('email');
+                        setEmail(e.target.value);
+                        setError(undefined);
+                      }}
+                    />
+                    {emailError ? (
+                      <p id="sup-email-error" className="err" role="alert">
+                        {emailError}
+                      </p>
+                    ) : null}
+                    {!emailLocked ? (
+                      <button
+                        type="submit"
+                        className="go"
+                        aria-disabled={validateEmail(email) ? true : undefined}
+                        aria-busy={busy || undefined}
                       >
-                        Send OTP
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <OtpInput
-                        label={`Code sent to ${emailSentTo ?? email}`}
-                        value={emailCode}
-                        onChange={(code) => {
-                          setEmailCode(code);
-                          setError(undefined);
-                        }}
-                        disabled={busy}
-                        error={error}
-                        onComplete={(code) => void verifyEmailAndContinue(code)}
-                      />
-                      {emailDevCode ? (
-                        <p className="sup-signup-prototype">
-                          Prototype — your code is <span className="tnum">{emailDevCode}</span>
-                        </p>
-                      ) : null}
-                      <div className="sup-signup-actions">
-                        <Button
-                          variant="primary"
-                          loading={busy}
-                          disabledReason={
-                            emailCode.length < 6 ? 'Enter all six digits.' : undefined
-                          }
-                          onClick={() => void verifyEmailAndContinue(emailCode)}
-                        >
-                          Verify and continue
-                        </Button>
-                        <div className="sup-signup-actions-row">
-                          <Button
+                        {busy ? 'Sending…' : 'Send OTP'}
+                      </button>
+                    ) : (
+                      <div className="gap">
+                        <OtpInput
+                          label={`Code sent to ${emailSentTo ?? email}`}
+                          value={emailCode}
+                          onChange={(code) => {
+                            setEmailCode(code);
+                            setError(undefined);
+                          }}
+                          disabled={busy}
+                          error={error}
+                          onComplete={(code) => void verifyEmailAndContinue(code)}
+                        />
+                        {emailDevCode ? (
+                          <p className="proto" data-testid="prototype-code">
+                            Prototype — your code is <b>{emailDevCode}</b>
+                          </p>
+                        ) : null}
+                        <p className="resend">
+                          Didn&rsquo;t get it?{' '}
+                          <button
                             type="button"
-                            variant="secondary"
-                            disabledReason={cooldown > 0 ? `Resend in ${cooldown} s` : undefined}
+                            disabled={cooldown > 0 || busy}
                             onClick={() => void sendEmailOtp()}
                           >
                             Resend
-                          </Button>
+                          </button>{' '}
                           <ResendCountdown seconds={cooldown} />
-                        </div>
+                        </p>
+                        <button
+                          type="submit"
+                          className="go"
+                          aria-disabled={emailCode.length < 6 ? true : undefined}
+                          aria-busy={busy || undefined}
+                        >
+                          {busy ? 'Verifying…' : 'Verify and continue'}
+                        </button>
                       </div>
-                    </>
-                  )}
-                </div>
-              ) : null}
+                    )}
+                  </form>
+                ) : null}
 
-              {step === 4 ? (
-                <div className="sup-signup-fields">
-                  <Input
-                    label="Your name"
-                    autoComplete="name"
-                    required
-                    value={fullName}
-                    error={nameError}
-                    onFocus={() => setFocused('fullName')}
-                    onBlur={() => setFocused(null)}
-                    onChange={(e) => {
-                      markActive('fullName');
-                      setFullName(typeFullName(e.target.value));
-                      setError(undefined);
-                      setServerErrors((prev) => ({ ...prev, fullName: undefined }));
+                {step === 4 ? (
+                  <form
+                    className="stepbox"
+                    noValidate
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void finishSignup();
                     }}
-                  />
-                  <div>
-                    <Input
-                      label="Password"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      value={password}
-                      error={passwordError}
-                      placeholder="At least 12 characters"
-                      onFocus={() => setFocused('password')}
+                  >
+                    <label className="f-lbl" htmlFor="sup-name">
+                      Your name <i>*</i>
+                    </label>
+                    <input
+                      id="sup-name"
+                      className={field('fullName', Boolean(nameError))}
+                      autoComplete="name"
+                      placeholder="As on your PAN"
+                      value={fullName}
+                      aria-invalid={Boolean(nameError) || undefined}
+                      aria-describedby={nameError ? 'sup-name-error' : undefined}
+                      autoFocus
+                      onFocus={() => setFocused('fullName')}
                       onBlur={() => setFocused(null)}
                       onChange={(e) => {
-                        markActive('password');
-                        setPassword(e.target.value);
+                        markActive('fullName');
+                        setFullName(typeFullName(e.target.value));
                         setError(undefined);
-                        setServerErrors((prev) => ({ ...prev, password: undefined }));
+                        setServerErrors((prev) => ({ ...prev, fullName: undefined }));
                       }}
                     />
-                    <div className="sup-signup-meter mt-2" aria-hidden="true">
+                    {nameError ? (
+                      <p id="sup-name-error" className="err" role="alert">
+                        {nameError}
+                      </p>
+                    ) : null}
+
+                    <label className="f-lbl gap" htmlFor="sup-password">
+                      Password <i>*</i>
+                    </label>
+                    <div className="field-wrap">
+                      <input
+                        id="sup-password"
+                        className={field('password', Boolean(passwordError), ' pw')}
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        value={password}
+                        aria-invalid={Boolean(passwordError) || undefined}
+                        aria-describedby="sup-password-hint"
+                        onFocus={() => setFocused('password')}
+                        onBlur={() => setFocused(null)}
+                        onChange={(e) => {
+                          markActive('password');
+                          setPassword(e.target.value);
+                          setError(undefined);
+                          setServerErrors((prev) => ({ ...prev, password: undefined }));
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="eyebtn"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
+                        onClick={() => setShowPassword((s) => !s)}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+                          <circle cx="12" cy="12" r="2.8" />
+                          {showPassword ? <path d="M4 4l16 16" /> : null}
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="meter" aria-hidden="true">
                       {[1, 2, 3, 4].map((n) => (
                         <span key={n} data-on={strength.score >= n} />
                       ))}
                     </div>
+                    {passwordError ? (
+                      <p className="err" role="alert">
+                        {passwordError}
+                      </p>
+                    ) : null}
                     {passwordEngaged ? (
-                      <ul className="sup-signup-rules mt-2">
+                      <ul className="rules" id="sup-password-hint">
                         {rules.map((rule) => (
                           <li key={rule.id} data-met={rule.met}>
                             {rule.label}
@@ -633,107 +908,103 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-body-sm text-ink-3 mt-2">
-                        12+ characters, one lowercase, one capital, one number, one symbol
+                      <p className={`hint${passwordOk ? ' ok' : ''}`} id="sup-password-hint">
+                        {passwordOk
+                          ? 'Good — that’ll do.'
+                          : '12+ characters, one lowercase, one capital, one number, one symbol.'}
                       </p>
                     )}
-                  </div>
-                  <Input
-                    label="Confirm password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    value={confirm}
-                    error={confirmError}
-                    onFocus={() => setFocused('confirm')}
-                    onBlur={() => setFocused(null)}
-                    onChange={(e) => {
-                      markActive('confirm');
-                      setConfirm(e.target.value);
-                      setError(undefined);
-                      setServerErrors((prev) => ({ ...prev, confirm: undefined }));
-                    }}
-                  />
-                  {refusal ? (
-                    <div
-                      className="flex flex-col gap-3 rounded border border-fail bg-sheet-2 p-4"
-                      data-testid="signup-contact-refusal"
-                    >
-                      <p role="alert" className="text-body-sm text-ink">
-                        {refusal.message}
+
+                    <label className="f-lbl gap" htmlFor="sup-confirm">
+                      Confirm password <i>*</i>
+                    </label>
+                    <input
+                      id="sup-confirm"
+                      className={field('confirm', Boolean(confirmError))}
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      value={confirm}
+                      aria-invalid={Boolean(confirmError) || undefined}
+                      aria-describedby={confirmError ? 'sup-confirm-error' : undefined}
+                      onFocus={() => setFocused('confirm')}
+                      onBlur={() => setFocused(null)}
+                      onChange={(e) => {
+                        markActive('confirm');
+                        setConfirm(e.target.value);
+                        setError(undefined);
+                        setServerErrors((prev) => ({ ...prev, confirm: undefined }));
+                      }}
+                    />
+                    {confirmError ? (
+                      <p id="sup-confirm-error" className="err" role="alert">
+                        {confirmError}
                       </p>
-                      <p className="text-body-sm text-ink-2">
-                        {refusal.channel === 'EMAIL' ? 'Email' : 'Mobile'}:{' '}
-                        <span className="font-mono tnum text-ink">{refusalValue}</span>
-                      </p>
-                      {refusal.kind === 'taken' ? (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Button type="button" variant="secondary" onClick={changeRefusedContact}>
-                            {refusal.channel === 'EMAIL'
-                              ? 'Use a different email'
-                              : 'Use a different number'}
-                          </Button>
-                          <Link
-                            to="/login"
-                            className="text-body-sm text-acc-ink underline underline-offset-4"
-                          >
-                            Sign in instead
-                          </Link>
-                        </div>
-                      ) : refusal.sentTo ? (
-                        <>
-                          <OtpInput
-                            label={`Code sent to ${refusal.sentTo}`}
-                            value={refusal.code}
-                            onChange={(code) => patchRefusal({ code, error: null })}
-                            disabled={refusal.busy}
-                            error={refusal.error ?? undefined}
-                            onComplete={(code) => void verifyForRefusal(code)}
-                          />
-                          {refusal.devCode ? (
-                            <p className="sup-signup-prototype">
-                              Prototype — your code is{' '}
-                              <span className="tnum">{refusal.devCode}</span>
-                            </p>
-                          ) : null}
-                        </>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          <div>
-                            <Button
+                    ) : null}
+
+                    {refusal ? (
+                      <div className="refusal" data-testid="signup-contact-refusal">
+                        <p role="alert">{refusal.message}</p>
+                        <p>
+                          {refusal.channel === 'EMAIL' ? 'Email' : 'Mobile'}:{' '}
+                          <span className="mono">{refusalValue}</span>
+                        </p>
+                        {refusal.kind === 'taken' ? (
+                          <div className="row">
+                            <button type="button" className="ghost" onClick={changeRefusedContact}>
+                              {refusal.channel === 'EMAIL'
+                                ? 'Use a different email'
+                                : 'Use a different number'}
+                            </button>
+                            <Link to="/login" className="ghost">
+                              Sign in instead
+                            </Link>
+                          </div>
+                        ) : refusal.sentTo ? (
+                          <>
+                            <OtpInput
+                              label={`Code sent to ${refusal.sentTo}`}
+                              value={refusal.code}
+                              onChange={(code) => patchRefusal({ code, error: null })}
+                              disabled={refusal.busy}
+                              error={refusal.error ?? undefined}
+                              onComplete={(code) => void verifyForRefusal(code)}
+                            />
+                            {refusal.devCode ? (
+                              <p className="proto">
+                                Prototype — your code is <b>{refusal.devCode}</b>
+                              </p>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="row">
+                            <button
                               type="button"
-                              variant="secondary"
-                              loading={refusal.busy}
+                              className="ghost"
+                              disabled={refusal.busy}
                               onClick={() => void resendForRefusal()}
                             >
                               Send a new code
-                            </Button>
+                            </button>
+                            {refusal.error ? <span className="err">{refusal.error}</span> : null}
+                            <span>Your name and password stay as you typed them.</span>
                           </div>
-                          {refusal.error ? (
-                            <p className="text-body-sm text-fail">{refusal.error}</p>
-                          ) : null}
-                          <p className="text-body-sm text-ink-3">
-                            Your name and password stay as you typed them.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                  {stepFourBanner ? (
-                    <p className="text-body-sm text-fail" role="alert">
-                      {stepFourBanner}
-                    </p>
-                  ) : null}
-                  <div className="sup-signup-actions">
-                    <Button variant="primary" loading={busy} onClick={() => void finishSignup()}>
-                      Create account
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
+                        )}
+                      </div>
+                    ) : null}
+                    {stepFourBanner ? (
+                      <p className="err" role="alert">
+                        {stepFourBanner}
+                      </p>
+                    ) : null}
+                    <button type="submit" className="go" aria-busy={busy || undefined}>
+                      {busy ? 'Creating…' : 'Create account'}
+                    </button>
+                  </form>
+                ) : null}
+              </>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );

@@ -75,7 +75,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible{
   padding:10px 16px;border-radius:0 0 5px 0}
 .skiplink:focus{left:0}
 html,body{overflow-x:clip}
-.wrap{max-width:1400px;margin:0 auto;padding:0 20px}
+/* One side gutter for the whole storefront, so the header, every section and the
+   footer share a left edge. Scales with the viewport; the mobile blocks below
+   narrow it. Change it here, not on the individual rules. */
+:root{--gutter:clamp(24px,5.5vw,110px)}
+.wrap{max-width:none;margin:0 auto;padding:0 var(--gutter)}
 .hide-sm{display:inline}
 .hide-md{display:inline}
 /* ---- QC motifs ---- */
@@ -88,7 +92,7 @@ html,body{overflow-x:clip}
 /* ============ UTILITY ============ */
 header,footer{width:100%;max-width:100%}
 .util{background:var(--head);border-bottom:1px solid var(--head-line);font-size:12px;color:var(--on-head-2)}
-.util .wrap{display:flex;align-items:center;min-height:34px;gap:18px;padding:0 40px}
+.util .wrap{display:flex;align-items:center;min-height:34px;gap:18px;padding:0 var(--gutter)}
 .util .l,.util .r{display:flex;gap:18px;align-items:center}
 .util .r{margin-left:auto}
 .util a{color:var(--on-head-2)}
@@ -103,14 +107,14 @@ header,footer{width:100%;max-width:100%}
    change did that job on its own, and on white nothing does. */
 .head{background:var(--head);color:var(--on-head);position:relative;z-index:30;
   border-bottom:1px solid var(--head-line-2)}
-.head .wrap{display:flex;align-items:center;justify-content:center;gap:14px;min-height:72px;
-  padding:14px 40px;min-width:0}
+.head .wrap{display:flex;align-items:center;justify-content:space-between;max-width:none;gap:14px;min-height:72px;
+  padding-top:14px;padding-bottom:14px;padding-left:var(--gutter);padding-right:var(--gutter);min-width:0}
 .brand{display:flex;align-items:center;gap:9px;flex:0 0 auto;color:var(--on-head)}
 /* search */
 /* The field is held off the brand and the account controls rather than run
    flush between them: at 1440px it is the widest thing in the header and
    without the gutters it reads as the header rather than as one control in it. */
-.sbox{flex:1;position:relative;min-width:0;max-width:720px}
+.sbox{flex:1;position:relative;min-width:0;max-width:none}
 .srch{display:flex;align-items:center;background:var(--sheet);border:1px solid var(--rule);
   border-radius:8px;overflow:hidden}
 /* Focus is an active state, which is one of the three things --acc is for. */
@@ -689,7 +693,7 @@ tr.best td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
    `--warn` for the resting number: on the light theme it is the deep amber
    (#9a620a) chosen to pass contrast as text, which is exactly this job. Raw
    `--promo-accent` as a text colour on a pale ground would not. */
-.proc{margin-top:28px;list-style:none;background:var(--sheet);border:1px solid var(--rule);
+.proc{margin:28px var(--gutter) 0;list-style:none;background:var(--sheet);border:1px solid var(--rule);
   border-radius:20px;padding:clamp(22px,3vw,34px) clamp(20px,3vw,38px);
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(20px,3vw,44px)}
 .pstep{overflow:visible;animation:stepPulse 8s ease-in-out infinite}
@@ -798,23 +802,23 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
    `DataBoard` already put one. The desktop rule above was always written
    this way; the mobile one was not, and every board on the storefront was
    overflowing below 900px because of it. */
-@media(max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}
+@media(max-width:900px){:root{--gutter:20px}.cols{grid-template-columns:minmax(0,1fr)}
   .filters{position:static;max-height:none}
   .hero{grid-template-columns:1fr;padding:20px}.gauge{display:none}
   .pgrid{grid-template-columns:repeat(2,1fr)}.strip,.sell{grid-template-columns:1fr}
   .sell{padding:20px}.fg{grid-template-columns:1fr 1fr}.fa{grid-column:1 / -1}.hide-sm{display:none}
   /* Header: brand + actions on row 1, search full width on row 2. */
-  .head .wrap{flex-wrap:wrap;height:auto;padding:10px 20px;row-gap:10px}
+  .head .wrap{flex-wrap:wrap;height:auto;padding:10px var(--gutter);row-gap:10px}
   .head .hact{margin-left:auto;flex-shrink:0}
   /* Full-bleed on its own row, so the desktop gutters would only inset it. */
   .head .sbox{flex:1 1 100%;order:10;min-width:0;max-width:none;margin:0}
   /* Utility bar: allow the promo to wrap under the count on narrow screens. */
-  .util .wrap{flex-wrap:wrap;height:auto;padding:8px 20px;row-gap:6px}
+  .util .wrap{flex-wrap:wrap;height:auto;padding:8px var(--gutter);row-gap:6px}
   .util .r{margin-left:auto;flex-wrap:wrap;row-gap:6px}}
 @media(max-width:640px){
-  .wrap{padding:0 16px}
-  .head .wrap{padding:10px 16px}
-  .util .wrap{padding:8px 16px}
+  :root{--gutter:16px}
+  .head .wrap{padding:10px var(--gutter)}
+  .util .wrap{padding:8px var(--gutter)}
   .hide-md{display:none}
   .fg{grid-template-columns:1fr;gap:22px}
   .fa p{max-width:none}
@@ -3030,7 +3034,7 @@ html[data-t="light"] footer .pays span{
    The homepage's way in to the catalogue, straight under the header. Tiles are
    wordmarks, not logos — see the note in `BrandRail.tsx`. */
 .brandrail{background:var(--head);border-bottom:1px solid var(--head-line-2)}
-.brandrail .wrap{padding:20px 40px}
+.brandrail .wrap{padding:20px var(--gutter)}
 .tg-carousel{position:relative;display:flex;align-items:center;gap:10px;min-width:0}
 /* The track scrolls natively; the buttons are a convenience over the top. The
    scrollbar is hidden because the arrows already say the rail moves. */
@@ -3062,10 +3066,10 @@ html[data-t="light"] footer .pays span{
 .brandtile-fallback{font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--plate-ink)}
 
 @media(max-width:900px){
-  .brandrail .wrap{padding:12px 20px}
+  .brandrail .wrap{padding:12px var(--gutter)}
   .tg-carousel-nav{display:none}}
 @media(max-width:640px){
-  .brandrail .wrap{padding:14px 16px}
+  .brandrail .wrap{padding:14px var(--gutter)}
   .brandtile{width:140px;height:116px}
   .brandtile-logo{width:96px;height:36px}}
 
@@ -3574,8 +3578,6 @@ html[data-t="light"] .hero2{
 .pvbtn:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
 .pvbtn:disabled{opacity:.55;cursor:wait;transform:none;box-shadow:none}
 .pv-from{margin:9px 0 0;font-size:11.5px;color:var(--ink-3);line-height:1.5}
-.pv-blocked{margin:16px 0 0;padding:12px 13px;border:1px dashed var(--rule);border-radius:10px;
-  background:var(--sheet-2);font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .pv-trust{margin:14px 0 0;padding-top:13px;border-top:1px dashed var(--rule);
   font-size:12px;color:var(--ink-2);line-height:1.6}
 .pv-trust b{color:var(--ink);font-weight:600}
@@ -3780,3 +3782,28 @@ html[data-t="light"] .hero2{
   border-color:transparent}
 .cartdock-link.acc:hover{filter:brightness(1.06)}
 .cartdock-count{background:var(--promo-accent-ink);color:var(--promo-accent)}
+
+/* ---- tracking: the timeline ---------------------------------------------
+   One rail per consignment, oldest first, drawn by the shared Timeline. What
+   has not happened is a plain list underneath in --ink-4: a step that is
+   still to come is not an event, so it does not get a marker or a time. */
+.dvtl{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule-2)}
+.dvtl h3{margin:0 0 12px;font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
+.dvnext{margin:14px 0 0;padding:0 0 0 20px;display:flex;flex-direction:column;gap:5px;
+  font-size:12.5px;color:var(--ink-4)}
+.dvnext li::marker{color:var(--ink-4)}
+
+/* ---- HEADER: the search outline and Sign up, in the page's amber ----
+   The rule beside `.srch button` already says the header's one primary action
+   is Sign up, and the one beside `.authpop-cta` calls it "the one amber thing
+   in the panel" — both were painted `--acc`, which is teal. These put them in
+   the amber they were described as.
+
+   The search is OUTLINED and not filled, deliberately: a second amber slab in
+   the bar would compete with Sign up for the same job, which is the thing that
+   comment was guarding against. A border is not a call to action. */
+.srch{border-color:var(--promo-accent)}
+.srch:focus-within{border-color:var(--promo-accent);box-shadow:0 0 0 3px var(--promo-accent-soft)}
+.authpop-cta{background:var(--promo-accent);color:var(--promo-accent-ink)}
+.authpop-cta:hover{background:var(--promo-accent);filter:brightness(1.06)}
