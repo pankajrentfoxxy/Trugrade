@@ -170,6 +170,23 @@ export function TaxBody({
   const [editing, setEditing] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [busy, setBusyState] = React.useState(false);
+
+  /**
+   * A billing field edit also drops that field's message — the same rule as
+   * the Delivery card. The sentence was about what was in the box; a red
+   * message left under a box that has since been filled reads as "still
+   * wrong". The next save says whether the new text is right.
+   */
+  const patchBilling = (next: Partial<Postal>): void => {
+    setBilling((b) => ({ ...b, ...next }));
+    setErrors((e) => {
+      const touched = Object.keys(next).filter((k) => k in e);
+      if (touched.length === 0) return e;
+      const rest = { ...e };
+      for (const k of touched) delete rest[k];
+      return rest;
+    });
+  };
   const [error, setError] = React.useState<string | undefined>();
   const verifyRef = React.useRef<() => void>(() => undefined);
   const gstinRef = React.useRef<HTMLInputElement>(null);
@@ -540,13 +557,13 @@ export function TaxBody({
             label="Building and street"
             required
             value={billing.line1}
-            onChange={(e) => setBilling((b) => ({ ...b, line1: e.target.value }))}
+            onChange={(e) => patchBilling({ line1: e.target.value })}
             error={errors.line1}
           />
           <Input
             label="Floor, unit or area"
             value={billing.line2}
-            onChange={(e) => setBilling((b) => ({ ...b, line2: e.target.value }))}
+            onChange={(e) => patchBilling({ line2: e.target.value })}
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
@@ -556,14 +573,14 @@ export function TaxBody({
               inputMode="numeric"
               maxLength={6}
               value={billing.pincode}
-              onChange={(e) => setBilling((b) => ({ ...b, pincode: e.target.value }))}
+              onChange={(e) => patchBilling({ pincode: e.target.value })}
               error={errors.pincode}
             />
             <Input
               label="City"
               required
               value={billing.city}
-              onChange={(e) => setBilling((b) => ({ ...b, city: e.target.value }))}
+              onChange={(e) => patchBilling({ city: e.target.value })}
               error={errors.city}
             />
           </div>
@@ -572,7 +589,7 @@ export function TaxBody({
             required
             options={STATES}
             value={billing.state}
-            onChange={(e) => setBilling((b) => ({ ...b, state: e.target.value }))}
+            onChange={(e) => patchBilling({ state: e.target.value })}
             error={errors.state}
           />
         </>

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config';
+import { BRAND } from '@trugrade/config';
 import { Money } from '@trugrade/contracts';
 import { DataBoard, EmptyState, HubPageHeader, StatusPill, type Column } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
@@ -100,7 +100,13 @@ export function DocumentsBoard({ orderNumber }: { orderNumber: string }): React.
   if (phase.k === 'error') return <Failed message={phase.message} />;
 
   const data = phase.k === 'ready' ? phase.data : null;
-  const rows = data?.documents ?? [];
+  // The per-machine documents — inspection reports and wipe certificates — are
+  // not on this board. They belong to a serial and live on the Machines tab;
+  // listing them here with a dash for a number was two rows that could never
+  // be opened. The figures count what is on the screen, so "1 of 5" is a
+  // statement about these rows and not about a list the buyer cannot see.
+  const rows = (data?.documents ?? []).filter((d) => d.status !== 'ELSEWHERE');
+  const total = rows.length;
   const primary = primaryActionId(rows);
   const awaited = rows.filter((d) => d.status === 'AWAITED').length;
 
@@ -117,7 +123,7 @@ export function DocumentsBoard({ orderNumber }: { orderNumber: string }): React.
 
       <Summary
         issued={data?.issuedCount ?? 0}
-        total={data?.documentCount ?? 0}
+        total={total}
         awaited={awaited}
         loading={data === null}
       />
@@ -127,7 +133,7 @@ export function DocumentsBoard({ orderNumber }: { orderNumber: string }): React.
           caption={
             data === null
               ? 'Reading the documents on this order.'
-              : `${data.issuedCount} of ${data.documentCount} documents on order ${orderNumber} exist so far; the rest say when they will.`
+              : `${data.issuedCount} of ${total} documents on order ${orderNumber} exist so far.`
           }
           columns={columns(primary)}
           rows={rows}
@@ -146,17 +152,6 @@ export function DocumentsBoard({ orderNumber }: { orderNumber: string }): React.
           }
         />
       </div>
-
-      <p className="fnote off docfoot">
-        A tax invoice is raised when machines leave the supply point — that is what s.31(1) of the
-        CGST Act requires of us, and it is why nothing is billed on an order still being picked.
-        Documents open in a new tab through a link that expires in a few minutes, and every one you
-        open is recorded against your account. Questions about a figure go to{' '}
-        <a href={`mailto:${LEGAL_DISCLOSURE.customerCare.email}`}>
-          {LEGAL_DISCLOSURE.customerCare.email}
-        </a>
-        .
-      </p>
     </>
   );
 }
@@ -170,14 +165,12 @@ function columns(primaryId: string | null): readonly Column<OrderDocument>[] {
     {
       key: 'document',
       header: 'Document',
+      // The title alone. The description and the "when it will exist" sentence
+      // the API sends are not drawn: the status chip already says whether a
+      // document exists, and the buyer side asked for the rows to be one line.
       cell: (d) => (
         <div className="docid">
           <span className="doctitle">{d.title}</span>
-          <span className="docdesc">{d.description}</span>
-          {/* The sentence this screen exists for. It appears exactly when the
-              document does not, and it is prose rather than a dash because a
-              dash beside "E-way bill" reads as a document with no number. */}
-          {d.whenItWillExist !== null && <span className="docwhen">{d.whenItWillExist}</span>}
         </div>
       ),
     },
@@ -275,14 +268,6 @@ function Action({
       >
         Open
         <span className="sr-only"> {document.title}</span>
-      </a>
-    );
-  }
-  if (document.elsewherePath !== null) {
-    return (
-      <a className="docelsewhere" href={document.elsewherePath}>
-        On each machine
-        <span className="sr-only"> — open the machines on this order</span>
       </a>
     );
   }

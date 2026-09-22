@@ -14,7 +14,7 @@
     "test:e2e": "turbo run test:e2e",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "db:up": "docker compose -f infra/docker/docker-compose.yml up -d --wait",
+    "db:up": "docker compose -f infra/docker/docker-compose.yml up -d && docker compose -f infra/docker/docker-compose.yml up -d --wait postgres redis minio mailpit",
     "db:down": "docker compose -f infra/docker/docker-compose.yml down",
     "db:migrate": "pnpm --filter @trugrade/api db:migrate",
     "db:seed": "pnpm --filter @trugrade/api db:seed",

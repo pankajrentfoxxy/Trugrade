@@ -169,10 +169,23 @@ export function SidePanel({
  * Timeline
  * ======================================================================== */
 
-export interface TimelineEvent {
+interface TimelineEntry {
   key: string;
   /** What happened, in words a customer would use. Not `ORDER_STATE_CHANGED`. */
   action: React.ReactNode;
+  /**
+   * Why. Present on anything a human chose to do — a grade correction, a
+   * rejection, a cancellation. Absent renders **nothing**: an audit trail that
+   * invents "Reason: not specified" reads as a recorded fact.
+   */
+  reason?: React.ReactNode;
+  /** Anything else worth showing: a serial, a document link, an amount. */
+  detail?: React.ReactNode;
+}
+
+/** Something that happened: it has an actor and a time. */
+export interface TimelineHappened extends TimelineEntry {
+  upcoming?: false;
   /**
    * Who did it — a person, a vendor, or "Trugrade" for a system action.
    *
@@ -185,17 +198,22 @@ export interface TimelineEvent {
   at: string;
   /** ISO 8601, for the `<time datetime>` a machine reads. */
   dateTime?: string;
-  /**
-   * Why. Present on anything a human chose to do — a grade correction, a
-   * rejection, a cancellation. Absent renders **nothing**: an audit trail that
-   * invents "Reason: not specified" reads as a recorded fact.
-   */
-  reason?: React.ReactNode;
-  /** Anything else worth showing: a serial, a document link, an amount. */
-  detail?: React.ReactNode;
   /** The current state of the record. Marked, and announced, not just coloured. */
   current?: boolean;
 }
+
+/**
+ * A stage that has not happened yet, drawn on the same rail so the whole
+ * journey is one list rather than a history and a separate "still to come".
+ *
+ * No actor and no time, because nobody has done it and there is no instant
+ * to print — a hollow marker and muted words, never a dash where a time goes.
+ */
+export interface TimelineUpcoming extends TimelineEntry {
+  upcoming: true;
+}
+
+export type TimelineEvent = TimelineHappened | TimelineUpcoming;
 
 export interface TimelineProps {
   events: readonly TimelineEvent[];
@@ -218,43 +236,66 @@ export function Timeline({ events, label, className }: TimelineProps): React.JSX
     <ol className={cn('flex flex-col', className)} aria-label={label} data-testid="timeline">
       {events.map((event, i) => {
         const last = i === events.length - 1;
+        const upcoming = event.upcoming === true;
         return (
           <li
             key={event.key}
             // The rail is the list item's own left border, so it stretches with
             // the content. An absolutely-positioned line falls out of alignment
-            // the moment one event carries a three-line reason.
-            className={cn('relative flex gap-4 pb-5 pl-5 last:pb-0', !last && 'border-l border-rule')}
-            data-current={event.current || undefined}
+            // the moment one event carries a three-line reason. The segment
+            // below an upcoming stage is dashed: the path is known, the walk
+            // along it has not happened.
+            className={cn(
+              'relative flex gap-4 pb-5 pl-5 last:pb-0',
+              !last && 'border-l border-rule',
+              !last && upcoming && 'border-dashed',
+            )}
+            data-current={(!upcoming && event.current) || undefined}
+            data-upcoming={upcoming || undefined}
           >
             {/* The marker. On the current event it is amber — an active state,
                 the third legitimate use of the accent — and it also carries the
-                word "Current", because colour alone says nothing out loud. */}
+                word "Current", because colour alone says nothing out loud. An
+                upcoming stage is a hollow ring: a place on the path, not a
+                point reached. */}
             <span
               aria-hidden="true"
               className={cn(
-                'absolute -left-[5px] top-1 h-2.5 w-2.5 rounded-full border-2 border-sheet',
-                event.current ? 'bg-acc' : 'bg-ink-4',
+                'absolute -left-[5px] top-1 h-2.5 w-2.5 rounded-full border-2',
+                upcoming
+                  ? 'border-ink-4 bg-sheet'
+                  : event.current
+                    ? 'border-sheet bg-acc'
+                    : 'border-sheet bg-ink-4',
               )}
             />
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex flex-wrap items-baseline gap-3">
-                <span className="text-body-sm font-medium text-ink">{event.action}</span>
-                {event.current ? (
+                <span
+                  className={cn(
+                    'text-body-sm',
+                    upcoming ? 'text-ink-3' : 'font-medium text-ink',
+                  )}
+                >
+                  {event.action}
+                </span>
+                {!upcoming && event.current ? (
                   <span className="font-mono text-label uppercase tracking-[0.13em] text-acc-ink">
                     Current
                   </span>
                 ) : null}
               </div>
-              <p className="text-body-sm text-ink-2">
-                {event.actor}
-                <span aria-hidden="true" className="px-2 text-ink-4">
-                  ·
-                </span>
-                <time dateTime={event.dateTime} className="font-mono text-data tnum text-ink-2">
-                  {event.at}
-                </time>
-              </p>
+              {upcoming ? null : (
+                <p className="text-body-sm text-ink-2">
+                  {event.actor}
+                  <span aria-hidden="true" className="px-2 text-ink-4">
+                    ·
+                  </span>
+                  <time dateTime={event.dateTime} className="font-mono text-data tnum text-ink-2">
+                    {event.at}
+                  </time>
+                </p>
+              )}
               {event.reason ? (
                 <p className="text-body-sm text-ink-2">
                   <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">

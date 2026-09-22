@@ -129,14 +129,22 @@ const ACTOR: Readonly<Record<DeliveryStage, string>> = {
 };
 
 /** A done step with no recorded instant says so. It never borrows a neighbour's time. */
-const toEvent = (step: DeliveryStep): TimelineEvent => ({
-  key: step.stage,
-  action: step.label,
-  actor: ACTOR[step.stage],
-  at: step.at ? when(step.at) : 'Time not recorded',
-  dateTime: step.at ?? undefined,
-  current: step.state === 'current',
-});
+/**
+ * One rail for the whole journey. A stage still to come is an upcoming event
+ * on the same list rather than a second list underneath: the buyer is asking
+ * "where is it", and the answer is a position on a path, which needs the path.
+ */
+const toEvent = (step: DeliveryStep): TimelineEvent =>
+  step.state === 'upcoming'
+    ? { key: step.stage, action: step.label, upcoming: true }
+    : {
+        key: step.stage,
+        action: step.label,
+        actor: ACTOR[step.stage],
+        at: step.at ? when(step.at) : 'Time not recorded',
+        dateTime: step.at ?? undefined,
+        current: step.state === 'current',
+      };
 
 export function Tracking({ orderNumber }: { orderNumber: string }): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
@@ -213,8 +221,12 @@ function Consignment({
   const state = current
     ? { label: current.label, tone: TONE[current.stage] }
     : (STATE[c.status] ?? UNKNOWN_STATE);
-  const happened = c.timeline.filter((s) => s.state !== 'upcoming');
-  const upcoming = c.timeline.filter((s) => s.state === 'upcoming');
+  // What is holding the delivery, in the server's own words. The consignment
+  // sentence first; then each machine that carries its own reason, because
+  // "TGD…397 has a seal we cannot vouch for" and the sentence under that serial
+  // are two different levels of the same fact. Nothing here is decided in the
+  // browser — `blockedReason` arrives already decided.
+  const held = c.machines.filter((m) => m.blockedReason !== null);
 
   return (
     <section className="dvcons" aria-label={c.label}>
@@ -259,13 +271,41 @@ function Consignment({
 
       <div className="dvtl">
         <h3>Where it has got to</h3>
-        <Timeline events={happened.map(toEvent)} label={`${c.label} timeline`} />
-        {upcoming.length > 0 ? (
-          <ol className="dvnext" aria-label="Still to come">
-            {upcoming.map((s) => (
-              <li key={s.stage}>{s.label}</li>
-            ))}
-          </ol>
+        <Timeline events={c.timeline.map(toEvent)} label={`${c.label} timeline`} />
+        {c.blockedReason !== null || held.length > 0 ? (
+          <div className="dvhold" data-testid="delivery-hold">
+            <h4>What is holding it</h4>
+            {c.blockedReason !== null ? <p>{c.blockedReason}</p> : null}
+            {held.length > 0 ? (
+              <ul aria-label="Machines with something to resolve">
+                {held.map((m, i) => (
+                  <li key={m.serialNumber ?? `slot-${i}`}>
+                    <span className="dvholdwho">
+                      {m.serialNumber !== null ? (
+                        <span className="mono">{m.serialNumber}</span>
+                      ) : (
+                        <span className="notmeasured">Serial not assigned yet</span>
+                      )}
+                      {m.title ? <> · {m.title}</> : null}
+                      {m.specSummary ? <span className="dvspec"> · {m.specSummary}</span> : null}
+                    </span>
+                    {/* A seal we cannot vouch for is the one verdict on this
+                        screen and keeps the manifest's red; everything else is
+                        a wait, in --ink-2. */}
+                    <span
+                      className={
+                        m.seal !== null && (m.seal.status === 'BROKEN' || m.seal.status === 'MISSING')
+                          ? 'dvstop'
+                          : 'dvtodo'
+                      }
+                    >
+                      {m.blockedReason}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

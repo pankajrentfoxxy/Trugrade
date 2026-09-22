@@ -98,8 +98,13 @@ interface LineRow {
   grade: string;
   unit_price: string;
   gst_rate: string;
-  unit_id: string;
-  serial_number: string;
+  /**
+   * Both null until a vendor allocates a machine to the slot. An order that
+   * has been placed, paid for, or accepted but not yet picked has every one of
+   * its slots vacant, and the documents on it still have to be readable.
+   */
+  unit_id: string | null;
+  serial_number: string | null;
 }
 
 @Injectable()
@@ -192,7 +197,12 @@ export class OrderDocumentsService {
        WHERE so.order_id = ${order.id}::uuid
        ORDER BY so.sub_order_number, olu.serial_number`;
 
-    const unitIds = rows.map((r) => r.unit_id);
+    // Vacant slots have no unit to look up. Passing their nulls through was the
+    // 500 on every order before allocation: `[null]` is non-empty, so the
+    // length guard in `valuations` let it reach Postgres, which refuses to
+    // cast an all-null array to `uuid[]`. `dispatchLabels` already filters for
+    // itself; the valuations query did not.
+    const unitIds = rows.map((r) => r.unit_id).filter((id): id is string => id !== null);
     const [labels, valuations, party, addresses, descriptions] = await Promise.all([
       dispatchLabels(this.prisma, unitIds),
       this.valuations(unitIds),
@@ -255,14 +265,21 @@ export class OrderDocumentsService {
           const created = {
             freight: row.freight,
             status: row.sub_order_status,
-            label: labels.get(row.unit_id) ?? UNKNOWN_DISPATCH_LABEL,
+            label:
+              (row.unit_id === null ? undefined : labels.get(row.unit_id)) ??
+              UNKNOWN_DISPATCH_LABEL,
             lines: new Map<string, BillingLine>(),
           };
           bySubOrder.set(row.sub_order_id, created);
           return created;
         })();
 
-      const valuation = valuations.get(row.unit_id) ?? { method: 'REGULAR' as const, purchasePrice: null };
+      // A slot with no machine yet is valued at full price, the higher tax:
+      // there is no purchase price to take a margin over until one is bought.
+      const valuation = (row.unit_id === null ? undefined : valuations.get(row.unit_id)) ?? {
+        method: 'REGULAR' as const,
+        purchasePrice: null,
+      };
       const purchasePrice = valuation.method === 'MARGIN' ? valuation.purchasePrice : null;
       const key = `${row.order_line_id}|${valuation.method}|${purchasePrice ?? ''}`;
       const description = descriptions.get(row.sku_id);
@@ -282,8 +299,13 @@ export class OrderDocumentsService {
           purchasePrice,
         } satisfies BillingLine & { serialNumbers: string[] });
 
-      (line.serialNumbers as string[]).push(row.serial_number);
-      line.qty = line.serialNumbers.length;
+      // Quantity counts slots; the serial list names only the machines that
+      // exist. A proforma on an order awaiting allocation charges for every
+      // slot and lists no serials, which is exactly what it is: nothing has been
+      // picked yet. Pushing the null would have printed "null" on the PDF and
+      // counted it in the margin sum.
+      line.qty += 1;
+      if (row.serial_number !== null) (line.serialNumbers as string[]).push(row.serial_number);
       consignment.lines.set(key, line);
     }
 

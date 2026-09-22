@@ -442,9 +442,10 @@ function Consignment({
             <span className="notmeasured">No machine is assigned to this delivery yet.</span>
           </li>
         )}
-        {c.machines.map((m) => (
+        {c.machines.map((m, i) => (
           <Machine
-            key={m.serialNumber}
+            // A slot with no machine yet has no serial to key on.
+            key={m.serialNumber ?? `slot-${i}`}
             machine={m}
             orderNumber={orderNumber}
             canUse={open}
@@ -604,17 +605,26 @@ function Machine({
 }): React.JSX.Element {
   const checked = isChecked(m);
   const compromised = isCompromised(m);
+  // A verdict is only ever reached on a real unit, so a flaggable machine
+  // always has a serial; null here is the type saying so out loud.
   const flagHref =
-    `/returns/new?order=${encodeURIComponent(orderNumber)}` +
-    `&units=${encodeURIComponent(m.serialNumber)}` +
-    (m.verdict === 'MISMATCH' ? '&reason=SPEC_MISMATCH' : '');
+    m.serialNumber === null
+      ? null
+      : `/returns/new?order=${encodeURIComponent(orderNumber)}` +
+        `&units=${encodeURIComponent(m.serialNumber)}` +
+        (m.verdict === 'MISMATCH' ? '&reason=SPEC_MISMATCH' : '');
 
   return (
     <li className={compromised ? 'dvmach bad' : checked ? 'dvmach ok' : 'dvmach'}>
       <div className="dvid">
-        <a className="mono dvserial" href={m.passportPath}>
-          {m.serialNumber}
-        </a>
+        {m.passportPath !== null && m.serialNumber !== null ? (
+          <a className="mono dvserial" href={m.passportPath}>
+            {m.serialNumber}
+          </a>
+        ) : (
+          // A slot nobody has put a machine in. It used to link to `/unit/null`.
+          <span className="notmeasured">Serial not assigned yet</span>
+        )}
         <span className="dvtitle">
           {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
         </span>
@@ -643,7 +653,7 @@ function Machine({
         ) : (
           <StatusPill tone={VERDICT[m.verdict].tone} label={VERDICT[m.verdict].label} />
         )}
-        {(m.verdict === 'MISMATCH' || m.verdict === 'FAIL') && (
+        {flagHref !== null && (m.verdict === 'MISMATCH' || m.verdict === 'FAIL') && (
           // T21 could state the verdict and go no further. This is the action it
           // was missing: the buyer can act on it here, at the door, in one link.
           <a className="dvflag" href={flagHref}>

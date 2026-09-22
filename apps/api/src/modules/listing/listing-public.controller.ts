@@ -58,9 +58,12 @@ interface PublicOfferRow {
   city: string;
   label: string;
   grade: Grade;
-  landedPrice: string;
+  /** Our price for one machine before GST and freight. Always present. */
+  unitPrice: string;
+  /** Null until a pincode is given: no destination, no landed price. */
+  landedPrice: string | null;
   priceLines: PublicMoneyLine[];
-  isInterState: boolean;
+  isInterState: boolean | null;
   valuationMethod: 'REGULAR' | 'MARGIN';
   quality: QualityHeadline;
   batteryHealthPct: { min: number; max: number } | null;
@@ -204,17 +207,20 @@ function presentOffer(offer: BoardOffer): PublicOfferRow {
   // The whole break-up, always, in one answer. `PriceBreakup` in `packages/ui`
   // sums the lines itself and has no `total` prop, so the figure above it and
   // the lines under it cannot disagree — which is why the total is not sent.
-  const priceLines: PublicMoneyLine[] = [
-    { label: 'Unit price', amount: landed.sellingPrice.toString() },
-  ];
-  if (!landed.freight.isZero()) {
-    priceLines.push({ label: 'Freight', amount: landed.freight.toString() });
-  }
-  if (landed.isInterState) {
-    priceLines.push({ label: 'IGST', amount: landed.igst.toString() });
-  } else {
-    priceLines.push({ label: 'CGST', amount: landed.cgst.toString() });
-    priceLines.push({ label: 'SGST', amount: landed.sgst.toString() });
+  // Without a pincode there is no landed figure and no lines: an empty list,
+  // never a unit price standing in for a delivered one.
+  const priceLines: PublicMoneyLine[] = [];
+  if (landed) {
+    priceLines.push({ label: 'Unit price', amount: landed.sellingPrice.toString() });
+    if (!landed.freight.isZero()) {
+      priceLines.push({ label: 'Freight', amount: landed.freight.toString() });
+    }
+    if (landed.isInterState) {
+      priceLines.push({ label: 'IGST', amount: landed.igst.toString() });
+    } else {
+      priceLines.push({ label: 'CGST', amount: landed.cgst.toString() });
+      priceLines.push({ label: 'SGST', amount: landed.sgst.toString() });
+    }
   }
 
   return {
@@ -223,9 +229,10 @@ function presentOffer(offer: BoardOffer): PublicOfferRow {
     city: offer.city,
     label: offer.label,
     grade: offer.grade,
-    landedPrice: landed.total.toString(),
+    unitPrice: offer.unitPrice.toString(),
+    landedPrice: landed ? landed.total.toString() : null,
     priceLines,
-    isInterState: landed.isInterState,
+    isInterState: landed ? landed.isInterState : null,
     valuationMethod: offer.valuationMethod,
     // Already a discriminated union with the small-sample decision made in `qc`.
     // There is no percentage in the NEW_SUPPLIER arm to leak through here.

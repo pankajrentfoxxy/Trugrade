@@ -172,16 +172,22 @@ describe('pending approvals', () => {
  * ======================================================================== */
 
 describe('the ways in', () => {
-  it('reaches every rail destination from Home', () => {
-    const home = read('home', 'Home.tsx');
+  it('reaches every portal screen from the rail, and Home does not repeat the rail', () => {
+    // Home used to carry an "Everything else" list of the rail's own entries,
+    // added so no screen was a dead end. The buyer side asked for it to go: the
+    // rail is on every portal screen, so the eight doors are always one click
+    // away, and a second copy of them on Home was the rail twice. The dead-end
+    // guarantee now rests on the rail itself listing every route that exists.
     const nav = read('shell', 'nav.ts');
     const destinations = [...nav.matchAll(/to: '([^']+)'/g)].map((m) => m[1]!);
     expect(destinations.length).toBe(8);
-    for (const to of destinations) {
-      if (to === '/home') continue;
-      // Either spelling of a link to it.
-      expect(home.includes(`'${to}'`) || home.includes(`"${to}"`)).toBe(true);
-    }
+    for (const to of destinations) expect(route(...to.slice(1).split('/'))).toBe(true);
+
+    // Comments stripped: the docblock that explains why the list went names it.
+    const home = code('home', 'Home.tsx');
+    expect(home).not.toContain('Everything else');
+    // What Home still links to is what it acts on: approvals and the shop.
+    expect(home).toContain("href=\"/approvals\"");
   });
 
   it('keeps a serial’s primary click inside the portal', () => {

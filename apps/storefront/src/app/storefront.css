@@ -1963,14 +1963,114 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .ck .ck-empty p{max-width:56ch;margin:0 auto;font-size:14px;color:var(--ck-muted);line-height:1.55}
 .ck .ck-empty .ck-btn{margin-top:8px}
 .ck-empty-act{padding-top:8px}
-.ck-done{max-width:640px}
-.ck-done-badge{width:58px;height:58px;border-radius:16px;background:var(--ck-acc);display:flex;align-items:center;
-  justify-content:center;box-shadow:0 10px 28px var(--ck-acc-mid);margin-bottom:16px}
-.ck-done-badge svg{width:28px;height:28px;stroke:var(--ck-acc-on)}
-.ck-done .ck-h1{margin-top:12px}
-.ck-done .ck-lede{margin-top:10px}
+/* ---- order placed: the copy beside the carton ---------------------------
+   Two columns from 900px: the confirmation on the left, the packing scene
+   on the right. The scene is decoration with facts on it — the order number
+   and the site on the label, the machine count on the chip — and nothing it
+   draws is a promise the order screen has not already made. */
+.ck-done{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(24px,4vw,60px);
+  align-items:center;max-width:1240px}
+.ck-done-copy{max-width:640px}
+.ck-done-badge{width:64px;height:64px;border-radius:18px;background:var(--ck-acc);display:flex;align-items:center;
+  justify-content:center;box-shadow:0 12px 30px var(--ck-acc-mid);scale:0;
+  animation:ckBadgePop .55s cubic-bezier(.34,1.56,.64,1) forwards .1s}
+.ck-done-badge svg{width:30px;height:30px;stroke:var(--ck-acc-on)}
+@keyframes ckBadgePop{to{scale:1}}
+.ck-eyebrow{display:inline-flex;align-items:center;gap:8px;margin-top:20px;font-family:var(--font-mono);
+  font-size:10.5px;font-weight:700;letter-spacing:.16em;color:var(--ck-acc-deep);background:var(--ck-acc-soft);
+  border:1px solid var(--ck-acc-mid);border-radius:999px;padding:6px 13px}
+.ck-eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--ck-acc);animation:ckBlink 1.4s ease-in-out infinite}
+@keyframes ckBlink{0%,100%{opacity:1}50%{opacity:.3}}
+.ck-done .ck-h1{margin-top:14px;font-size:clamp(27px,3.4vw,40px);line-height:1.06;letter-spacing:-.015em}
+.ck-done-meta{font-size:15px;font-weight:600;line-height:1.6}
+.ck-done-meta span{color:var(--ink);font-weight:700}
 .ck-order-id{color:var(--ck-acc-deep);font-weight:700}
-.ck-done .ck-nav{margin-top:22px}
+.ck-done-next{margin-top:16px;line-height:1.7;max-width:52ch}
+.ck-done .ck-nav{margin-top:28px;gap:18px}
+
+/* the scene */
+.ck-scene{position:relative;height:400px;display:flex;align-items:center;justify-content:center}
+.ck-scene-replay{position:relative;width:300px;height:330px;cursor:pointer;display:block;border-radius:12px;
+  background:none;border:none;padding:0}
+.ck-scene-replay:focus-visible{outline:2px solid var(--ck-acc);outline-offset:8px}
+.ck-rig{position:absolute;inset:0;animation:ckIdle 4s ease-in-out infinite 3.9s}
+@keyframes ckIdle{0%,100%{translate:0 0}50%{translate:0 -6px}}
+.ck-minilap{position:absolute;left:50%;top:0;translate:-50% 0;width:150px;z-index:1;animation:ckDrop 1s ease-in forwards .25s}
+.ck-minilap-scr{height:88px;background:var(--cream-carton-dark);border:2.5px solid var(--cream-carton-shell);
+  border-radius:9px 9px 2px 2px;padding:7px}
+.ck-minilap-scr i{display:block;width:100%;height:100%;background:var(--cream-label);border-radius:4px;
+  background-image:linear-gradient(var(--cream-line) 0 0);background-size:60% 6px;background-repeat:no-repeat;
+  background-position:12px 12px}
+.ck-minilap-base{height:9px;background:var(--cream-carton-shell);border-radius:1px 1px 7px 7px;margin:0 -10px}
+@keyframes ckDrop{to{translate:-50% 132px}}
+.ck-boxx{position:absolute;left:50%;bottom:24px;translate:-50% 0;width:250px;height:160px;z-index:2;
+  animation:ckSeat .5s ease forwards 3.15s}
+.ck-bx-front{position:absolute;inset:0;z-index:2;background:var(--cream-carton);border:2px solid var(--cream-carton-edge);
+  border-radius:8px;box-shadow:0 18px 34px var(--cream-shadow)}
+.ck-bx-front::after{content:"";position:absolute;top:0;bottom:0;left:24px;width:2px;background:var(--cream-line-soft)}
+.ck-bx-inner{position:absolute;left:6px;right:6px;top:-8px;height:16px;background:var(--cream-carton-dark);
+  border-radius:5px 5px 0 0;z-index:3;animation:ckHide .01s linear forwards 2.25s}
+@keyframes ckHide{to{opacity:0}}
+.ck-flap{position:absolute;top:-56px;width:121px;height:54px;background:var(--cream-carton-2);
+  border:2px solid var(--cream-carton-edge);z-index:3;transform-origin:bottom center}
+.ck-flap-l{left:2px;border-radius:8px 6px 0 0;rotate:-14deg;animation:ckClose .55s cubic-bezier(.5,0,.7,.4) forwards 1.45s}
+.ck-flap-r{right:2px;border-radius:6px 8px 0 0;rotate:14deg;animation:ckClose .55s cubic-bezier(.5,0,.7,.4) forwards 1.7s}
+@keyframes ckClose{to{rotate:0deg;scale:1 .08}}
+.ck-lid{position:absolute;left:0;right:0;top:-12px;height:14px;background:var(--cream-carton-2);
+  border:2px solid var(--cream-carton-edge);border-radius:8px 8px 0 0;z-index:4;opacity:0;
+  animation:ckShow .01s linear forwards 2.25s}
+@keyframes ckShow{to{opacity:1}}
+.ck-tape{position:absolute;left:8px;right:8px;top:-9px;height:9px;background:var(--cream-tape);
+  border:1px solid var(--cream-line);transform-origin:left center;scale:0 1;z-index:5;
+  animation:ckTape .5s ease-out forwards 2.35s}
+.ck-tape::after{content:"";position:absolute;top:8px;left:50%;translate:-50% 0;width:24px;height:52px;
+  background:var(--cream-tape-soft);border:1px solid var(--cream-line-soft);border-top:none}
+@keyframes ckTape{to{scale:1 1}}
+.ck-lbl{position:absolute;left:24px;top:38px;width:150px;background:var(--cream-label);border:1.5px solid var(--cream-line);
+  border-radius:6px;padding:9px 11px;z-index:6;rotate:-3deg;scale:0;transform-origin:center;text-align:left;
+  animation:ckStamp .45s cubic-bezier(.34,1.56,.64,1) forwards 2.9s}
+.ck-lbl small{display:block;font-family:var(--font-mono);font-size:8.3px;font-weight:700;letter-spacing:.12em;
+  color:var(--cream-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ck-lbl b{display:block;font-family:var(--font-mono);font-size:12.5px;font-weight:700;color:var(--cream-accent-deep);margin-top:2px}
+.ck-lbl-bars{margin-top:6px;height:14px;opacity:.8;
+  background-image:repeating-linear-gradient(90deg,var(--cream-text) 0 2px,transparent 2px 5px)}
+@keyframes ckStamp{to{rotate:-3deg;scale:1}}
+.ck-frg{position:absolute;right:14px;bottom:16px;font-family:var(--font-mono);font-size:8px;font-weight:700;
+  letter-spacing:.12em;color:var(--cream-accent-deep);border:1.5px solid var(--cream-accent-deep);border-radius:4px;
+  padding:4px 6px;rotate:-4deg;opacity:0;z-index:6;animation:ckShow .01s linear forwards 3.05s}
+@keyframes ckSeat{0%{translate:-50% 0}35%{translate:-50% 5px}70%{translate:-50% -3px}100%{translate:-50% 0}}
+.ck-chip{position:absolute;left:50%;bottom:-14px;translate:-50% 12px;font-family:var(--font-mono);font-size:10.5px;
+  font-weight:700;letter-spacing:.12em;background:var(--cream-text);color:var(--cream-accent);border-radius:999px;
+  padding:8px 15px;white-space:nowrap;opacity:0;z-index:7;animation:ckChip .5s ease forwards 3.35s}
+@keyframes ckChip{to{opacity:1;translate:-50% 0}}
+.ck-conf{position:absolute;left:50%;top:44%;width:9px;height:9px;background:var(--cream-accent);opacity:0;z-index:0;
+  animation:ckBurst .9s ease-out forwards 3.15s}
+.ck-conf-2,.ck-conf-6{background:var(--cream-carton-edge);border-radius:50%}
+.ck-conf-4,.ck-conf-8{background:var(--cream-accent-deep)}
+.ck-conf-1{--tx:-120px;--ty:-90px;--rot:220deg}.ck-conf-2{--tx:-70px;--ty:-140px;--rot:-160deg}
+.ck-conf-3{--tx:120px;--ty:-100px;--rot:200deg}.ck-conf-4{--tx:70px;--ty:-150px;--rot:-220deg}
+.ck-conf-5{--tx:-150px;--ty:-20px;--rot:160deg}.ck-conf-6{--tx:150px;--ty:-30px;--rot:-190deg}
+.ck-conf-7{--tx:-40px;--ty:-170px;--rot:250deg}.ck-conf-8{--tx:40px;--ty:-165px;--rot:-140deg}
+@keyframes ckBurst{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) rotate(var(--rot))}}
+.ck-replay-hint{position:absolute;bottom:-40px;left:50%;translate:-50% 0;font-size:11.5px;color:var(--ck-muted);
+  font-weight:600;white-space:nowrap}
+
+@media (max-width:900px){
+  .ck-done{grid-template-columns:1fr}
+  .ck-scene{order:-1;height:360px}
+}
+@media (prefers-reduced-motion:reduce){
+  .ck-done *{animation:none !important}
+  .ck-done-badge{scale:1}
+  .ck-minilap{translate:-50% 132px}
+  .ck-flap-l,.ck-flap-r{rotate:0deg;scale:1 .08}
+  .ck-bx-inner{opacity:0}
+  .ck-lid,.ck-frg{opacity:1}
+  .ck-tape{scale:1 1}
+  .ck-lbl{scale:1}
+  .ck-chip{opacity:1;translate:-50% 0}
+  .ck-conf{display:none}
+}
 
 /* ---- narrow --------------------------------------------------------------- */
 @media (max-width:1120px){
@@ -2446,20 +2546,13 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   font-variant-numeric:tabular-nums;margin-right:5px}
 
 .doctable{margin-bottom:0}
-/* Comfortable density: the storefront's rows are 60px, and these rows carry
-   three lines of prose in the first cell, so they are taller still. */
-.doctable td{padding:14px 16px;vertical-align:top}
+/* Comfortable density: the storefront's rows are 60px. One line per row now,
+   so the cells centre rather than hang from the top. */
+.doctable td{padding:14px 16px;vertical-align:middle}
 .doctable tbody tr:hover td{background:var(--sheet-2)}
 
 .docid{display:flex;flex-direction:column;gap:3px;min-width:0;max-width:52ch}
 .doctitle{font-size:13.5px;font-weight:500;color:var(--ink)}
-.docdesc{font-size:11.5px;line-height:1.5;color:var(--ink-3)}
-/* The sentence the whole screen exists for: WHEN a document that does not exist
-   yet will exist. --ink-4 is the same ink "Not measured" uses one screen over,
-   because it is the same statement one document up: this is absent, and here is
-   what that means. Never a dash, never a blank, never a tick. */
-.docwhen{font-size:11.5px;line-height:1.5;color:var(--ink-4);
-  border-left:2px solid var(--rule);padding-left:9px;margin-top:3px}
 
 .docnum{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;
   white-space:nowrap}
@@ -2475,16 +2568,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   text-align:right;max-width:22ch}
 
 .docopen{min-height:34px;padding:0 16px;white-space:nowrap}
-/* A document that lives on another screen gets a link, not a button: it is
-   navigation, and dressing it as a download would promise a file. */
-.docelsewhere{font-size:12.5px;color:var(--ink-2);white-space:nowrap;
-  text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px}
-.docelsewhere:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
-
-.docfoot{margin-top:12px;max-width:96ch}
-.docfoot a{text-decoration:underline;text-decoration-color:var(--rule);
-  text-underline-offset:3px;color:var(--ink-2)}
-.docfoot a:hover{color:var(--acc-ink);text-decoration-color:var(--acc)}
 
 .docperm{display:block;margin-bottom:8px;color:var(--ink-2)}
 
@@ -3577,6 +3660,9 @@ html[data-t="light"] .hero2{
 .pvbtn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 20px rgb(0 0 0 / .18)}
 .pvbtn:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
 .pvbtn:disabled{opacity:.55;cursor:wait;transform:none;box-shadow:none}
+/* Shut for a reason the buyer can read, not busy: the pincode is missing, or
+   the lane cannot be served. Focusable, so the reason is announced. */
+.pvbtn[aria-disabled="true"]{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 .pv-from{margin:9px 0 0;font-size:11.5px;color:var(--ink-3);line-height:1.5}
 .pv-trust{margin:14px 0 0;padding-top:13px;border-top:1px dashed var(--rule);
   font-size:12px;color:var(--ink-2);line-height:1.6}
@@ -3617,6 +3703,10 @@ html[data-t="light"] .hero2{
 .mini:hover{transform:translateY(-1px);box-shadow:0 6px 16px var(--promo-accent-mid)}
 .deliver{margin:10px 0 0;font-size:13px;color:var(--ink-2);line-height:1.55}
 .deliver b{color:var(--ink)}
+/* A refused pincode, said under the box in the one ink a refusal gets. */
+.deliver.err{color:var(--fail)}
+.pin-line .field[aria-invalid="true"]{border-color:var(--fail)}
+.pin-line .field[aria-invalid="true"]:focus{box-shadow:0 0 0 3px var(--fail-wash, var(--promo-accent-soft))}
 
 .sec-t{margin:24px 0 11px;font-size:16px;font-weight:800;color:var(--ink)}
 .sec-sub{margin-left:8px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
@@ -3790,9 +3880,19 @@ html[data-t="light"] .hero2{
 .dvtl{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule-2)}
 .dvtl h3{margin:0 0 12px;font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
   letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
-.dvnext{margin:14px 0 0;padding:0 0 0 20px;display:flex;flex-direction:column;gap:5px;
-  font-size:12.5px;color:var(--ink-4)}
-.dvnext li::marker{color:var(--ink-4)}
+/* What is holding the delivery, under the rail. --ink-2 words on a rule, not a
+   red box: a machine not yet assigned is a wait, and only a seal we cannot
+   vouch for is a verdict — that one keeps --fail, as on the manifest. */
+.dvhold{margin:14px 0 0;padding:10px 0 0 14px;border-left:2px solid var(--rule);
+  display:flex;flex-direction:column;gap:8px;max-width:74ch}
+.dvhold h4{margin:0;font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4)}
+.dvhold p{margin:0;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.dvhold ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dvhold li{display:flex;flex-direction:column;gap:2px;font-size:12.5px;line-height:1.55}
+.dvhold .dvholdwho{color:var(--ink);font-weight:500}
+.dvhold .dvholdwho .dvspec{color:var(--ink-3);font-weight:400}
+.dvhold .dvtodo{color:var(--ink-2)}
 
 /* ---- HEADER: the search outline and Sign up, in the page's amber ----
    The rule beside `.srch button` already says the header's one primary action

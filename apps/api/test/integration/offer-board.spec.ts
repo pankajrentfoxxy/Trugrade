@@ -248,7 +248,7 @@ describe('grouping', () => {
     // Not merged: four units and three units, not one row of seven.
     expect(noida?.unitsAvailable).toBe(4);
     expect(faridabad?.unitsAvailable).toBe(3);
-    expect(noida?.landed.total.toString()).not.toBe(faridabad?.landed.total.toString());
+    expect(noida?.landed?.total.toString()).not.toBe(faridabad?.landed?.total.toString());
     expect(offers.filter((o) => o.supplyPointCode === 'F')).toHaveLength(2);
   });
 
@@ -331,7 +331,7 @@ describe('an unmeasured battery', () => {
 describe('the default order', () => {
   it('is landed price ascending', async () => {
     const { offers } = await ask();
-    const prices = offers.map((o) => o.landed.total.paise);
+    const prices = offers.map((o) => o.landed!.total.paise);
     expect([...prices].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))).toEqual(prices);
   });
 
@@ -430,21 +430,21 @@ describe('the landed price', () => {
     const { offers } = await ask();
     const noida = row(offers, 'F', 'Noida')!;
 
-    expect(noida.landed.sellingPrice.toString()).toBe('40000.00');
-    expect(noida.landed.freight.toString()).toBe('149.00');
+    expect(noida.landed!.sellingPrice.toString()).toBe('40000.00');
+    expect(noida.landed!.freight.toString()).toBe('149.00');
     // 18% of 40 149.00, inter-state, so all of it is IGST.
-    expect(noida.landed.igst.toString()).toBe('7226.82');
-    expect(noida.landed.cgst.isZero()).toBe(true);
-    expect(noida.landed.total.toString()).toBe('47375.82');
+    expect(noida.landed!.igst.toString()).toBe('7226.82');
+    expect(noida.landed!.cgst.isZero()).toBe(true);
+    expect(noida.landed!.total.toString()).toBe('47375.82');
   });
 
   it('splits into CGST and SGST when the delivery is in our own state', async () => {
     const { offers } = await ask({ pincode: HARYANA });
     const noida = row(offers, 'F', 'Noida')!;
 
-    expect(noida.landed.isInterState).toBe(false);
-    expect(noida.landed.igst.isZero()).toBe(true);
-    expect(noida.landed.cgst.add(noida.landed.sgst).toString()).toBe('7226.82');
+    expect(noida.landed!.isInterState).toBe(false);
+    expect(noida.landed!.igst.isZero()).toBe(true);
+    expect(noida.landed!.cgst.add(noida.landed!.sgst).toString()).toBe('7226.82');
   });
 
   it('taxes a MARGIN unit on the full value and labels it instead', async () => {
@@ -456,7 +456,7 @@ describe('the landed price', () => {
     // full-value figure and discloses the ITC consequence rather than guessing
     // which machine ships.
     expect(delhi.valuationMethod).toBe('MARGIN');
-    expect(delhi.landed.taxableValue.toString()).toBe('42149.00');
+    expect(delhi.landed!.taxableValue.toString()).toBe('42149.00');
   });
 
   it('prices nothing at all for a pincode we do not serve', async () => {
@@ -482,7 +482,14 @@ describe('the landed price', () => {
 
     expect(answer.delivery.kind).toBe('NONE');
     expect(answer.pincode).toBeNull();
-    expect(answer.offers).toEqual([]);
+    // The rows are there — which supply points hold it, how many, on what
+    // warranty — with no price on any of them. A destination is what a landed
+    // price needs, and nothing here guesses one.
+    expect(answer.offers.length).toBeGreaterThan(0);
+    expect(answer.offers.every((o) => o.landed === null)).toBe(true);
+    // The unit price is on every row regardless: it needs no destination.
+    expect(answer.offers.every((o) => o.unitPrice.paise > 0n)).toBe(true);
+    expect(answer.unpricedSupplyPoints).toBe(answer.offers.length);
     expect(answer.grades.find((g) => g.grade === 'A')?.unitsAvailable).toBe(11);
   });
 });

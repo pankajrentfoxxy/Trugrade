@@ -78,7 +78,8 @@ export interface DeliverySeal {
 }
 
 export interface DeliveryMachine {
-  serialNumber: string;
+  /** Null until a machine is assigned to the slot. */
+  serialNumber: string | null;
   /** Null when the SKU has been withdrawn since. Never an invented title. */
   title: string | null;
   specSummary: string | null;
@@ -100,7 +101,8 @@ export interface DeliveryMachine {
    * has a remedy open.
    */
   verdict: QcVerdict | null;
-  passportPath: string;
+  /** Null until a machine is assigned to the slot: there is no passport to open. */
+  passportPath: string | null;
   /** Null when this machine is ready to be accepted; otherwise why not. */
   blockedReason: string | null;
 }
@@ -183,8 +185,8 @@ interface ConsignmentRow {
 interface MachineRow {
   order_line_unit_id: string;
   sub_order_id: string;
-  unit_id: string;
-  serial_number: string;
+  unit_id: string | null;
+  serial_number: string | null;
   qc_report_id: string | null;
   sku_id: string;
 }
@@ -279,10 +281,16 @@ export class DeliveryCheckService {
     // every seal on the platform would answer "yes, that is a real seal" about a
     // laptop that was never sold to this buyer, which is the opposite of what
     // the person at the door is asking.
-    const match = machines.find((m) => {
-      const seal = m.qc_report_id ? seals.get(m.qc_report_id) : null;
-      return seal?.code === code;
-    });
+    // A seal hangs off a QC report, and a QC report off a real unit, so a match
+    // always has a serial; the guard is what lets the compiler see that a slot
+    // nobody has filled cannot be the machine at the door.
+    const match = machines.find(
+      (m): m is MachineRow & { unit_id: string; serial_number: string } => {
+        if (m.unit_id === null || m.serial_number === null) return false;
+        const seal = m.qc_report_id ? seals.get(m.qc_report_id) : null;
+        return seal?.code === code;
+      },
+    );
     if (!match) {
       throw new ValidationError(
         `Seal ${code} is not on this delivery. Do not accept this machine.`,
@@ -455,8 +463,9 @@ export class DeliveryCheckService {
             specSummary: description?.specSummary ?? null,
             seal,
             verdict: inspection?.verdict ?? null,
-            passportPath: `/unit/${m.serial_number}`,
-            blockedReason: machineBlockedReason(seal, win?.open ?? null),
+            // `/unit/null` was a real link on the manifest before allocation.
+            passportPath: m.serial_number === null ? null : `/unit/${m.serial_number}`,
+            blockedReason: machineBlockedReason(m.serial_number, seal, win?.open ?? null),
           };
         });
 
@@ -466,7 +475,7 @@ export class DeliveryCheckService {
           // The supply point comes from `dispatchLabels`, this module's one
           // definition of the anonymised label, and never from a vendor name.
           label: `Delivery ${index + 1} of ${consignments.length} · ${
-            (own[0] && labels.get(own[0].unit_id)) ?? UNKNOWN_DISPATCH_LABEL
+            (own[0]?.unit_id && labels.get(own[0].unit_id)) || UNKNOWN_DISPATCH_LABEL
           }`,
           status: c.status,
           deliveredAt: c.delivered_at?.toISOString() ?? null,
@@ -611,7 +620,17 @@ export class DeliveryCheckService {
  * handover exactly as a broken one does — for a different reason, said
  * differently.
  */
-function machineBlockedReason(seal: DeliverySeal | null, windowOpen: boolean | null): string | null {
+function machineBlockedReason(
+  serialNumber: string | null,
+  seal: DeliverySeal | null,
+  windowOpen: boolean | null,
+): string | null {
+  // A slot nobody has put a machine in yet. Said before the seal question,
+  // because "no seal recorded — call us and we will collect it" about a machine
+  // that does not exist was an instruction to return nothing.
+  if (serialNumber === null) {
+    return 'No machine has been assigned to this slot yet. There is nothing to check until one is.';
+  }
   // Whole sentences, because this one is rendered on its own under the machine
   // rather than after a serial and a colon — a clause fragment starting in lower
   // case reads as a stray line on a screen somebody is scanning at a lorry door.

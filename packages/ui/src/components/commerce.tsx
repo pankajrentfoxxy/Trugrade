@@ -170,7 +170,14 @@ export interface SupplyPointOffer {
   /** The **dispatch** city, from the facility pincode. Never a registered office. */
   city: string;
   /** Our price + freight + GST. The vendor's ask is not an input to this component. */
-  landedPrice: Money;
+  /**
+   * Null until the buyer gives a delivery pincode. A landed price needs a
+   * destination, so the row carries its evidence and says so where the price
+   * would go — never a unit price dressed as a delivered one.
+   */
+  /** Our price for one machine before GST and freight. Always known. */
+  unitPrice: Money;
+  landedPrice: Money | null;
   priceLines: readonly PriceLine[];
   valuationMethod: ValuationMethod;
   grade: Grade;
@@ -538,7 +545,22 @@ function PriceBreakupMenu({
   );
 }
 
+/**
+ * The price before a pincode has landed it: our unit price, said to be before
+ * tax and delivery so it is never read as the delivered figure. Checkout adds
+ * GST and freight against the buyer's real site.
+ */
+function UnpricedCell({ offer }: { offer: SupplyPointOffer }): React.JSX.Element {
+  return (
+    <span className="offer-unpriced flex flex-col gap-1">
+      <span className="font-mono text-h3 tnum text-ink">{offer.unitPrice.format()}</span>
+      <span className="text-body-sm text-ink-3">before tax and delivery</span>
+    </span>
+  );
+}
+
 function PriceCell({ offer, lowestLanded, itcExplainerHref }: OfferRowProps): React.JSX.Element {
+  if (offer.landedPrice === null) return <UnpricedCell offer={offer} />;
   return (
     <span className="flex flex-col gap-2">
       <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
@@ -657,11 +679,15 @@ export function OfferCard({
           <QualityCell quality={offer.quality} />
         </div>
         <div className="shrink-0 text-right">
-          <span className="flex flex-col items-end gap-2">
-            <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
-            {lowestLanded ? <span className="text-body-sm text-ink-2">Lowest landed</span> : null}
-            <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
-          </span>
+          {offer.landedPrice === null ? (
+            <UnpricedCell offer={offer} />
+          ) : (
+            <span className="flex flex-col items-end gap-2">
+              <span className="font-mono text-h3 tnum text-ink">{offer.landedPrice.format()}</span>
+              {lowestLanded ? <span className="text-body-sm text-ink-2">Lowest landed</span> : null}
+              <PriceBreakupMenu offer={offer} itcExplainerHref={itcExplainerHref} />
+            </span>
+          )}
         </div>
       </div>
 
@@ -753,11 +779,16 @@ export function OfferGrid({
   itcExplainerHref,
   className,
 }: OfferGridProps): React.JSX.Element {
+  // The figure a row is compared on: landed once a pincode priced the lane,
+  // the unit price before that. A board never mixes the two — every row is
+  // landed or none is — so "lowest" is always like against like.
+  const priceOf = (offer: SupplyPointOffer): Money => offer.landedPrice ?? offer.unitPrice;
   const lowest = offers.reduce<Money | null>(
-    (best, offer) => (best === null || offer.landedPrice.lt(best) ? offer.landedPrice : best),
+    (best, offer) => (best === null || priceOf(offer).lt(best) ? priceOf(offer) : best),
     null,
   );
-  const isLowest = (offer: SupplyPointOffer) => lowest !== null && offer.landedPrice.eq(lowest);
+  const isLowest = (offer: SupplyPointOffer) => lowest !== null && priceOf(offer).eq(lowest);
+  const landedBoard = offers.some((o) => o.landedPrice !== null);
   const showTable = layout === 'table' || layout === 'responsive';
   const showCards = layout === 'cards' || layout === 'responsive';
 
@@ -792,7 +823,9 @@ export function OfferGrid({
             <caption className="sr-only">{caption}</caption>
             <thead>
               <tr className="border-b border-rule">
-                {OFFER_COLUMNS.map((column) => (
+                {OFFER_COLUMNS.map((column) =>
+                  column === 'Landed price' && !landedBoard ? 'Unit price' : column,
+                ).map((column) => (
                   <th
                     key={column}
                     scope="col"

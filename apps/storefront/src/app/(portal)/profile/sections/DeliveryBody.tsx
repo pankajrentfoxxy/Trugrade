@@ -154,7 +154,23 @@ export function DeliveryBody({
     onFrame({ index: 1, count: 1, primaryLabel: 'Save' });
   }, [onFrame]);
 
-  const patch = (next: Partial<SiteValues>): void => setSite((s) => ({ ...s, ...next }));
+  /**
+   * A field edit also drops that field's message. The sentence named a
+   * problem with what was in the box; once the box changes it is about text
+   * that is no longer there, and a red message under a box that has since
+   * been filled reads as "still wrong". The next save says whether the new
+   * text is right.
+   */
+  const patch = (next: Partial<SiteValues>): void => {
+    setSite((s) => ({ ...s, ...next }));
+    setErrors((e) => {
+      const touched = Object.keys(next).filter((k) => k in e);
+      if (touched.length === 0) return e;
+      const rest = { ...e };
+      for (const k of touched) delete rest[k];
+      return rest;
+    });
+  };
   const noop = (): void => undefined;
 
   const check = (): Record<string, string> => {

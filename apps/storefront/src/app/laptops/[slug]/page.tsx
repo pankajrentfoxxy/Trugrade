@@ -32,12 +32,20 @@ import { notFound } from 'next/navigation';
 import { RepresentativeImage, RepresentativeImageDisclosure } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { normalisePincode, type Grade } from '@trugrade/contracts';
-import { getOfferBoard, getSkuDetail, type OfferBoard, type SkuDetail } from '../../../lib/api';
+import {
+  getOfferBoard,
+  getSearch,
+  getSkuDetail,
+  type OfferBoard,
+  type SkuDetail,
+} from '../../../lib/api';
 import { Board } from './Board';
 import { ProductCartScope } from './ProductCartScope';
 import { PanelActions } from './PanelActions';
 import { specLine, specRows } from './spec-rows';
 import { PincodeFocusLink } from './PincodeFocusLink';
+import { PincodeForm } from './PincodeForm';
+import { ConfigPicker } from './ConfigPicker';
 // import { SupplyPointPicker } from './SupplyPointPicker';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
@@ -100,6 +108,17 @@ export default async function ProductPage({
   // is wrong, and a page that renders chrome around nothing says otherwise.
   if (!sku) notFound();
 
+  // Every configuration of this model we hold: the search index, asked for
+  // the brand and model by name and then held to an exact match on both, so
+  // a "Latitude 5420" never picks up a "Latitude 5420 2-in-1". Its failure is
+  // the pills' absence, never the page's.
+  const siblings = await getSearch(
+    new URLSearchParams({ q: `${sku.brandName} ${sku.modelName}`, per: '48' }).toString(),
+  );
+  const variants = (siblings?.results ?? []).filter(
+    (r) => r.brand === sku.brandName && r.model === sku.modelName,
+  );
+
   if (board === null) {
     return (
       <>
@@ -143,7 +162,28 @@ export default async function ProductPage({
 
   // The headline figure. Before a pincode there is no landed price to quote —
   // see the note at the top of this file on why we do not print one anyway.
-  const priced = board.delivery.kind === 'DELIVERABLE' && lowest !== null;
+  const priced =
+    board.delivery.kind === 'DELIVERABLE' && lowest !== null && lowest.landedPrice !== null;
+
+  // What the panel acts on, and the figure it carries into the cart. A row
+  // is buyable with or without a pincode: our unit price is known before a
+  // destination is, and checkout lands it against the buyer's real site. Only
+  // a lane we cannot serve, or no stock at this grade, leaves nothing to add.
+  const buyable = lowest !== null && board.delivery.kind !== 'UNSERVICEABLE' ? lowest : null;
+  const buyablePrice = buyable ? (buyable.landedPrice ?? buyable.unitPrice) : null;
+
+  // Why the panel cannot add anything yet, in one sentence, or null when it can.
+  const blocked = buyable
+    ? null
+    : board.delivery.kind === 'UNSERVICEABLE'
+      ? {
+          reason: `We cannot deliver to ${board.pincode} yet. Try another pincode.`,
+          needsPincode: true,
+        }
+      : {
+          reason: 'Nothing sealed at this grade right now. The other grades still have stock.',
+          needsPincode: false,
+        };
 
   const batteryValues = board.offers.flatMap((o) =>
     o.batteryHealthPct ? [o.batteryHealthPct.min, o.batteryHealthPct.max] : [],
@@ -202,18 +242,19 @@ export default async function ProductPage({
               </div>
 
               <PanelActions
-                listingId={priced && lowest ? lowest.listingId : null}
+                listingId={buyable ? buyable.listingId : null}
                 city={lowest?.city ?? null}
+                blocked={blocked}
                 snapshot={
-                  priced && lowest
+                  buyable && buyablePrice !== null
                     ? {
-                        listingId: lowest.listingId,
+                        listingId: buyable.listingId,
                         title: `${sku.brandName} ${sku.modelName}`,
                         specSummary: specLine(sku),
-                        grade: lowest.grade,
-                        unitPrice: lowest.landedPrice,
-                        supplyPoint: `Supply Point ${lowest.supplyPointCode.toUpperCase()} · ${lowest.city}`,
-                        dispatch: lowest.dispatchCommitment,
+                        grade: buyable.grade,
+                        unitPrice: buyablePrice,
+                        supplyPoint: `Supply Point ${buyable.supplyPointCode.toUpperCase()} · ${buyable.city}`,
+                        dispatch: buyable.dispatchCommitment,
                       }
                     : null
                 }
@@ -237,7 +278,9 @@ export default async function ProductPage({
                   <dt>GST</dt>
                   <dd className="mono">
                     18%
-                    {board.offers[0] && (
+                    {/* Which split applies is a fact about the lane, so it
+                        waits for the pincode with everything else. */}
+                    {board.offers[0] && board.offers[0].isInterState !== null && (
                       <span className="denom">
                         {' '}
                         {board.offers[0].isInterState ? 'IGST' : 'CGST+SGST'}
@@ -290,11 +333,13 @@ export default async function ProductPage({
               <div className="price-blk">
                 <div className="price-line">
                   <span className="price-now mono">
-                    {priced && lowest
+                    {priced && lowest && lowest.landedPrice !== null
                       ? `₹${RUPEES.format(Number(lowest.landedPrice))}`
-                      : shown?.fromPrice
-                        ? `₹${RUPEES.format(Number(shown.fromPrice))}`
-                        : 'Not priced'}
+                      : lowest
+                        ? `₹${RUPEES.format(Number(lowest.unitPrice))}`
+                        : shown?.fromPrice
+                          ? `₹${RUPEES.format(Number(shown.fromPrice))}`
+                          : 'Not priced'}
                   </span>
                   {/*
                   No struck-through "new" price and no percentage off it. We do
@@ -309,44 +354,29 @@ export default async function ProductPage({
                 <p className="price-note">
                   {priced
                     ? `Includes 18% GST and freight to ${board.pincode}. Every supply point is priced on the board below.`
-                    : 'Before tax and delivery. A landed price needs a destination — give us a pincode and every row below fills in.'}
+                    : 'Before tax and delivery — GST and freight are added at checkout against your site. Enter a pincode here to see every row landed first.'}
                 </p>
 
-                <form
-                  className="pin-line"
+                <PincodeForm
                   action={`/laptops/${encodeURIComponent(slug)}`}
-                  method="get"
+                  hidden={[
+                    ...(board.grade ? [{ name: 'grade', value: board.grade }] : []),
+                    ...(selected
+                      ? [
+                          { name: 'sp', value: selected.supplyPointCode },
+                          { name: 'city', value: selected.city },
+                        ]
+                      : []),
+                  ]}
+                  initialPincode={board.pincode ?? askedPin ?? ''}
+                  initialError={
+                    askedPin && pincode === null
+                      ? 'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
+                      : null
+                  }
+                  buttonLabel={board.pincode ? 'Update' : 'Show prices'}
                 >
-                  {board.grade && <input type="hidden" name="grade" value={board.grade} />}
-                  {selected && (
-                    <>
-                      <input type="hidden" name="sp" value={selected.supplyPointCode} />
-                      <input type="hidden" name="city" value={selected.city} />
-                    </>
-                  )}
-                  <label className="sr-only" htmlFor="pin">
-                    Delivery pincode
-                  </label>
-                  <input
-                    id="pin"
-                    name="pin"
-                    className="field mono"
-                    inputMode="numeric"
-                    pattern="[1-9][0-9]{2}[ ]?[0-9]{3}"
-                    maxLength={7}
-                    defaultValue={board.pincode ?? ''}
-                    placeholder="Delivery pincode"
-                    aria-describedby="pinhelp"
-                  />
-                  <button type="submit" className="mini">
-                    {board.pincode ? 'Update' : 'Show prices'}
-                  </button>
-                </form>
-
-                <p id="pinhelp" className="deliver">
-                  {askedPin && pincode === null ? (
-                    'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
-                  ) : board.delivery.kind === 'DELIVERABLE' && lowest ? (
+                  {board.delivery.kind === 'DELIVERABLE' && lowest ? (
                     <>
                       {lowest.dispatchCommitment}
                       {board.delivery.etaDays > 0 ? (
@@ -360,7 +390,7 @@ export default async function ProductPage({
                   ) : (
                     'Six digits. We quote the real freight for the lane, not an average.'
                   )}
-                </p>
+                </PincodeForm>
               </div>
 
               <h2 className="sec-t">Choose grade</h2>
@@ -391,6 +421,20 @@ export default async function ProductPage({
                 })}
               </div>
 
+              {/*
+                Processor, memory and storage, chosen like grade. Each pill is
+                a sibling SKU of this model; the pincode and supply-point
+                selection carry over, the grade follows where it can. Rows
+                appear only where the model differs — see `ConfigPicker`.
+              */}
+              <ConfigPicker
+                variants={variants}
+                current={{ skuId: sku.skuId, grade: board.grade }}
+                hrefFor={(skuId, toGrade) =>
+                  href(skuId, { ...query, grade: toGrade, sp: undefined, city: undefined })
+                }
+              />
+
               <h2 className="sec-t" id="board">
                 Compare supply points
                 <span className="sec-sub">
@@ -400,8 +444,23 @@ export default async function ProductPage({
                 </span>
               </h2>
 
+              {/*
+                Without a pincode the board still lists every supply point —
+                the evidence a buyer compares on does not depend on where it
+                is going — and each row says a landed price needs a pincode
+                where the price would be. The empty box that used to sit here
+                read as "nobody has this machine".
+              */}
+              {board.delivery.kind === 'NONE' && board.offers.length > 0 ? (
+                <p className="deliver" data-testid="board-unpriced">
+                  Unit prices, before tax and delivery — checkout adds GST and freight for your
+                  site. <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink> to see each
+                  row landed here first.
+                </p>
+              ) : null}
+
               <div className="tbl-wrap">
-                {board.delivery.kind === 'NONE' ? (
+                {board.delivery.kind === 'NONE' && board.offers.length === 0 ? (
                   <div className="empty">
                     <p className="retry">
                       <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink>
@@ -436,7 +495,11 @@ export default async function ProductPage({
                         pool="REGULAR"
                         sku={`${sku.brandName} ${sku.modelName}`}
                         spec={specLine(sku)}
-                        caption={`${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
+                        caption={
+                          board.pincode
+                            ? `${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`
+                            : `${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by unit price, lowest first. Prices are before tax and delivery.`
+                        }
                       />
                     )}
                     {margin.length > 0 && (
@@ -446,7 +509,11 @@ export default async function ProductPage({
                         pool="MARGIN"
                         sku={`${sku.brandName} ${sku.modelName}`}
                         spec={specLine(sku)}
-                        caption={`${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`}
+                        caption={
+                          board.pincode
+                            ? `${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`
+                            : `${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by unit price, lowest first. Prices are before tax and delivery.`
+                        }
                       />
                     )}
                   </>

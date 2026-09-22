@@ -121,6 +121,25 @@ describe('Timeline', () => {
     expect(screen.getAllByText('Current')).toHaveLength(1);
   });
 
+  it('draws an upcoming stage on the same rail, with no actor and no time', () => {
+    render(
+      <Timeline
+        events={[...EVENTS, { key: 'next', action: 'Dispatched', upcoming: true }]}
+        label="Unit history"
+      />,
+    );
+    const rows = screen.getAllByRole('listitem');
+    const next = rows[rows.length - 1]!;
+    expect(next).toHaveTextContent('Dispatched');
+    expect(next).toHaveAttribute('data-upcoming', 'true');
+    // Nobody has done it and there is no instant: nothing is printed where a
+    // time would go, rather than a dash that reads as a time we lost.
+    expect(next.querySelector('time')).toBeNull();
+    expect(next).not.toHaveTextContent('Current');
+    // And the one current event is still the one current event.
+    expect(screen.getAllByText('Current')).toHaveLength(1);
+  });
+
   it('has no axe violations', async () => {
     const { container } = render(<Timeline events={EVENTS} label="Unit history" />);
     expect(await axe(container)).toHaveNoViolations();

@@ -20,6 +20,7 @@ import { BRAND } from '@trugrade/config/brand';
 import { Money } from '@trugrade/contracts';
 import { setSessionLostHandler, type ApiFailure } from '../register/api';
 import { HoldCard, useHold } from './Countdown';
+import { PackedScene } from './PackedScene';
 import {
   abandonCheckout,
   confirmCheckout,
@@ -144,10 +145,7 @@ function Flow(): React.JSX.Element {
   }, []);
 
   const onExpired = React.useCallback(() => setPhase({ k: 'expired' }), []);
-  const hold = useHold(
-    phase.k === 'ready' && session ? session.holdExpiresAt : null,
-    onExpired,
-  );
+  const hold = useHold(phase.k === 'ready' && session ? session.holdExpiresAt : null, onExpired);
 
   /* ---------------------------------------------------------------- boot */
 
@@ -353,10 +351,30 @@ function Flow(): React.JSX.Element {
   /* --------------------------------------------------------------- render */
 
   if (phase.k === 'loading') return <CheckoutSkeleton />;
-  if (phase.k === 'signed-out') return <Terminal><SignedOut /></Terminal>;
-  if (phase.k === 'refused') return <Terminal><Refused message={phase.message} /></Terminal>;
-  if (phase.k === 'error') return <Terminal><Failed message={phase.message} /></Terminal>;
-  if (phase.k === 'expired') return <Terminal><Expired cartId={cartId.current} /></Terminal>;
+  if (phase.k === 'signed-out')
+    return (
+      <Terminal>
+        <SignedOut />
+      </Terminal>
+    );
+  if (phase.k === 'refused')
+    return (
+      <Terminal>
+        <Refused message={phase.message} />
+      </Terminal>
+    );
+  if (phase.k === 'error')
+    return (
+      <Terminal>
+        <Failed message={phase.message} />
+      </Terminal>
+    );
+  if (phase.k === 'expired')
+    return (
+      <Terminal>
+        <Expired cartId={cartId.current} />
+      </Terminal>
+    );
   if (phase.k === 'placed') {
     return (
       <Terminal>
@@ -428,7 +446,8 @@ function Flow(): React.JSX.Element {
           <p className="ck-kicker">
             Step{' '}
             <b>
-              <span className="tnum">{index + 1}</span> of <span className="tnum">{STEPS.length}</span>
+              <span className="tnum">{index + 1}</span> of{' '}
+              <span className="tnum">{STEPS.length}</span>
             </b>{' '}
             · <span className="tnum">{session.unitsHeld}</span> held
           </p>
@@ -972,7 +991,9 @@ function ConfirmStep({
               should hold and do not — and using it here would read as a gap. */}
           <Fact
             label="Your PO reference"
-            value={po ? (cc ? `${po} · ${cc}` : po) : 'None — your organisation does not require one'}
+            value={
+              po ? (cc ? `${po} · ${cc}` : po) : 'None — your organisation does not require one'
+            }
           />
           <Fact label="Paying by" value={mode?.label ?? null} />
         </dl>
@@ -988,14 +1009,11 @@ function ConfirmStep({
           <h3>The tax split is not resolved yet</h3>
           <p>
             The place of supply is {tax.placeOfSupplyState} (
-            <span className="tnum">{tax.placeOfSupplyStateCode}</span>) against our
-            registration in state <span className="tnum">{tax.ourStateCode}</span>, so this
-            would be{' '}
-            {tax.ourStateCode === tax.placeOfSupplyStateCode
-              ? 'CGST and SGST'
-              : 'IGST'}{' '}
-            — but we cannot deliver there, so there is no taxable value to split and no total to
-            agree to. Choose a site we can reach and the resolved split appears here.
+            <span className="tnum">{tax.placeOfSupplyStateCode}</span>) against our registration in
+            state <span className="tnum">{tax.ourStateCode}</span>, so this would be{' '}
+            {tax.ourStateCode === tax.placeOfSupplyStateCode ? 'CGST and SGST' : 'IGST'} — but we
+            cannot deliver there, so there is no taxable value to split and no total to agree to.
+            Choose a site we can reach and the resolved split appears here.
           </p>
           <p className="dim">Not resolved</p>
         </div>
@@ -1279,45 +1297,85 @@ function Placed({
 }): React.JSX.Element {
   const awaiting = order.status === 'AWAITING_APPROVAL';
   const count = order.units || order.serials.length;
+  const siteName = site ? (site.label ?? site.city) : null;
 
   return (
     <div className="ck-done" role="status" aria-live="polite">
-      <div className="ck-done-badge" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m4.5 12.5 5 5L19.5 7" />
-        </svg>
+      <div className="ck-done-copy">
+        <div className="ck-done-badge" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m4.5 12.5 5 5L19.5 7" />
+          </svg>
+        </div>
+        <span className="ck-eyebrow">
+          <i aria-hidden="true" />
+          {awaiting ? 'AWAITING APPROVAL' : 'ORDER PLACED'}
+        </span>
+        <h1 className="ck-h1">
+          {awaiting
+            ? 'Sent for approval. The machines stay held.'
+            : 'Order placed. The machines are yours.'}
+        </h1>
+        <p className="ck-lede ck-done-meta">
+          Order <b className="ck-order-id tnum">{order.orderNumber}</b> ·{' '}
+          <span className="tnum">{rupees(order.grandTotal)}</span> · <span>{machines(count)}</span>
+          {paidBy ? (
+            <>
+              {' '}
+              · <span>{paidBy}</span>
+            </>
+          ) : null}
+        </p>
+        <p className="ck-lede ck-done-next">
+          {awaiting ? (
+            <>
+              <b>{BRAND.name}</b> has your request. Nothing is charged until your approver signs
+              off, and stock stays held while they decide.
+            </>
+          ) : (
+            <>
+              Your order is with <b>{BRAND.legalEntity}</b> — we now raise the purchase orders, the
+              machines are picked, and dispatch follows
+              {siteName ? (
+                <>
+                  {' '}
+                  to <b>{siteName}</b>
+                </>
+              ) : null}
+              . Serial numbers are named as each machine is attached to this order, and your{' '}
+              <b>GST invoice</b>{' '}
+              {poNumber ? (
+                <>
+                  carries your reference <b className="tnum">{poNumber}</b>
+                </>
+              ) : (
+                'follows'
+              )}
+              .
+            </>
+          )}
+        </p>
+        <div className="ck-nav">
+          <a className="ck-btn" href={`/orders/${order.orderNumber}`}>
+            View your order
+          </a>
+          <a className="ck-leave" href="/">
+            Back to marketplace
+          </a>
+        </div>
       </div>
-      <StatusPill
-        tone={awaiting ? 'warn' : 'info'}
-        label={awaiting ? 'Awaiting approval' : 'Order placed'}
+
+      <PackedScene
+        orderNumber={order.orderNumber}
+        shipTo={siteName ?? 'Your site'}
+        chip={awaiting ? 'HELD FOR APPROVAL' : machines(count).toUpperCase()}
       />
-      <h1 className="ck-h1">
-        {awaiting ? 'Sent for approval. The machines stay held.' : 'Order placed. The machines are yours.'}
-      </h1>
-      <p className="ck-lede">
-        Order <span className="ck-order-id tnum">{order.orderNumber}</span> ·{' '}
-        <span className="tnum">{rupees(order.grandTotal)}</span> · {machines(count)}
-        {paidBy ? <> · {paidBy}</> : null}
-      </p>
-      <p className="ck-lede">
-        {awaiting
-          ? `${BRAND.name} has your request. Nothing is charged until your approver signs off, and stock stays held while they decide.`
-          : `Your order is with ${BRAND.legalEntity} — we now raise the purchase orders, the machines are picked, and dispatch follows${site ? ` to ${site.label ?? site.city}` : ''}. Serial numbers are named when a machine is attached to this order, and your GST invoice ${poNumber ? `carries your reference ${poNumber}` : 'follows'}.`}
-      </p>
-      <div className="ck-nav">
-        <a className="ck-btn" href={`/orders/${order.orderNumber}`}>
-          View your order
-        </a>
-        <a className="ck-leave" href="/">
-          Back to marketplace
-        </a>
-      </div>
     </div>
   );
 }

@@ -599,3 +599,46 @@ describe('the purchase-order answer', () => {
     expect((answers as { poRequired: boolean }).poRequired).toBe(false);
   });
 });
+
+/* ==========================================================================
+ * 5. A message is about what is in the box
+ * ======================================================================== */
+
+describe('a field message on the Delivery card', () => {
+  it('goes the moment the field is edited, and only that field’s', async () => {
+    let submit: () => void = () => undefined;
+    render(
+      <DeliveryBody
+        {...shared}
+        registerSubmit={(fn) => {
+          submit = fn;
+        }}
+        initial={{}}
+        accountHolder={ACCOUNT}
+        blockingReason={null}
+      />,
+    );
+
+    // Save with nothing typed: every required box says what it needs.
+    await act(async () => {
+      submit();
+    });
+    expect(screen.getByText(/Name this site — "Head office"/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Name this site/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/Building and street/i)).toHaveAttribute('aria-invalid', 'true');
+
+    // Typing into the site name answers its message. It used to stay red
+    // under a box that was no longer empty, until the next save.
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Name this site/i), {
+        target: { value: 'Head office' },
+      });
+    });
+    expect(screen.queryByText(/Name this site — "Head office"/)).toBeNull();
+    expect(screen.getByLabelText(/Name this site/i)).not.toHaveAttribute('aria-invalid');
+
+    // The street was not touched, so its message is still true and still there.
+    expect(screen.getByLabelText(/Building and street/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+});

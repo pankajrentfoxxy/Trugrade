@@ -45,7 +45,8 @@ export function Board({
   const offers: SupplyPointOffer[] = rows.map((r) => ({
     supplyPointCode: r.supplyPointCode,
     city: r.city,
-    landedPrice: Money.parse(r.landedPrice),
+    unitPrice: Money.parse(r.unitPrice),
+    landedPrice: r.landedPrice === null ? null : Money.parse(r.landedPrice),
     priceLines: r.priceLines.map((line) => ({
       label: line.label,
       amount: Money.parse(line.amount),
@@ -100,7 +101,9 @@ export function Board({
             title: sku,
             specSummary: spec,
             grade: row.grade,
-            unitPrice: row.landedPrice,
+            // Landed once a pincode has priced the lane; otherwise our unit
+            // price, which checkout then lands against the real site.
+            unitPrice: row.landedPrice ?? row.unitPrice,
             supplyPoint: supplyPointLabel(row.supplyPointCode, row.city),
             dispatch: row.dispatchCommitment,
           });

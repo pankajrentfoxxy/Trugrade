@@ -10,6 +10,7 @@ import { PortalProvider, usePortal } from './PortalContext';
 import { ProfileBanner } from './ProfileBanner';
 import { activePortalEntry, lockLabel, lockOn, portalGroups, type PortalNavEntry } from './nav';
 import { RailIcon, SearchIcon } from './rail-icons';
+import { screenLock, ShutScreen } from './ShutScreen';
 
 /**
  * The buyer portal frame: white masthead, 96px icon rail, completion banner,
@@ -287,10 +288,20 @@ function Checking(): React.JSX.Element {
   );
 }
 
+/**
+ * The frame, and the lock on the screen inside it.
+ *
+ * The rail's padlock used to be the only gate, and a padlock on a link does
+ * nothing to a URL typed by hand: `/orders` rendered for an unverified
+ * organisation and `/team` for a viewer. The same `lockOn` the rail draws from
+ * now decides what goes in the main slot — the page, or a screen that says why
+ * not. A route the rail shows shut is shut.
+ */
 function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
   const pathname = usePathname();
   const active = activePortalEntry(pathname);
-  const { approvalsWaiting } = usePortal();
+  const { session, orgVerified, approvalsWaiting } = usePortal();
+  const lock = screenLock(active, { permissions: session.permissions, orgVerified });
   return (
     <div className="hub-frame">
       <a
@@ -304,7 +315,7 @@ function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
       <div className="hub-body">
         <Rail active={active} counts={{ '/approvals': approvalsWaiting }} />
         <main id="main" className="hub-main">
-          {children}
+          {active && lock ? <ShutScreen entry={active} lock={lock} /> : children}
         </main>
       </div>
     </div>

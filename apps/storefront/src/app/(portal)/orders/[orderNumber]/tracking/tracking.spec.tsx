@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe('Tracking timeline', () => {
-  it('draws what happened oldest first, marks the latest current, and lists the rest as still to come', async () => {
+  it('draws every stage on one rail, oldest first, with the latest current and the rest upcoming', async () => {
     mockGetDelivery.mockResolvedValue({ ok: true, data: view([consignment()]) });
     render(<Tracking orderNumber="TT-26-00028" />);
 
@@ -76,20 +76,24 @@ describe('Tracking timeline', () => {
       name: 'Delivery 1 of 1 · Supply Point A · Gurugram timeline',
     });
     const rows = within(timeline).getAllByRole('listitem');
+    // Six stages, one list. The three still to come used to be a second list
+    // under the rail, which read as a footnote rather than the rest of the path.
     expect(rows.map((r) => r.textContent)).toEqual([
       expect.stringContaining('Order placed'),
       expect.stringContaining('Confirmed'),
       expect.stringContaining('Being prepared at the supply point'),
-    ]);
-    expect(rows[2]).toHaveTextContent('Current');
-    expect(rows[0]).not.toHaveTextContent('Current');
-
-    const next = screen.getByRole('list', { name: 'Still to come' });
-    expect(within(next).getAllByRole('listitem').map((r) => r.textContent)).toEqual([
       'On its way',
       'Delivered',
       'Receipt confirmed',
     ]);
+    expect(rows[2]).toHaveTextContent('Current');
+    expect(rows[0]).not.toHaveTextContent('Current');
+    // Upcoming stages are marked as such and carry no actor and no time.
+    for (const row of rows.slice(3)) {
+      expect(row).toHaveAttribute('data-upcoming', 'true');
+      expect(row.querySelector('time')).toBeNull();
+    }
+    expect(screen.queryByRole('list', { name: 'Still to come' })).not.toBeInTheDocument();
   });
 
   it('a step that happened with no recorded instant says so instead of showing a time', async () => {
@@ -147,7 +151,49 @@ describe('Tracking timeline', () => {
     expect(rows).toHaveLength(2);
     expect(rows[1]).toHaveTextContent('Cancelled');
     expect(rows[1]).toHaveTextContent('Current');
-    expect(screen.queryByRole('list', { name: 'Still to come' })).not.toBeInTheDocument();
+    expect(rows.every((r) => !r.hasAttribute('data-upcoming'))).toBe(true);
+  });
+
+  it('says what is holding the delivery, from the server and per machine', async () => {
+    mockGetDelivery.mockResolvedValue({
+      ok: true,
+      data: view([
+        consignment({
+          blockedReason:
+            'This delivery has not arrived yet. There is nothing to check until it does.',
+          machines: [
+            {
+              serialNumber: null,
+              title: 'Dell Latitude 5420',
+              specSummary: 'Core i5 · 16 GB · 512 GB NVME_SSD · 14"',
+              seal: null,
+              verdict: null,
+              passportPath: null,
+              blockedReason:
+                'No machine has been assigned to this slot yet. There is nothing to check until one is.',
+            },
+          ],
+        }),
+      ]),
+    });
+    render(<Tracking orderNumber="TT-26-00033" />);
+
+    const hold = await screen.findByTestId('delivery-hold');
+    expect(hold).toHaveTextContent('This delivery has not arrived yet.');
+    // The slot is named honestly — no serial, no invented one, no `/unit/null`.
+    expect(within(hold).getByText('Serial not assigned yet')).toBeInTheDocument();
+    expect(within(hold).getByText(/Dell Latitude 5420/)).toBeInTheDocument();
+    expect(
+      within(hold).getByText(/No machine has been assigned to this slot yet/),
+    ).toBeInTheDocument();
+    expect(within(hold).queryByRole('link')).toBeNull();
+  });
+
+  it('draws no holding block when nothing is holding it', async () => {
+    mockGetDelivery.mockResolvedValue({ ok: true, data: view([consignment()]) });
+    render(<Tracking orderNumber="TT-26-00028" />);
+    await screen.findByRole('list', { name: /timeline$/ });
+    expect(screen.queryByTestId('delivery-hold')).not.toBeInTheDocument();
   });
 
   it('says what went wrong when the order does not load', async () => {

@@ -17,24 +17,62 @@ import type { GuestCartSnapshot } from '../../../lib/guest-cart';
  * Both buttons are dark until a pincode makes a landed price real. Before that
  * there is no lowest row to add — the board has not been priced.
  */
+/** Scroll to the pincode box and put the cursor in it. */
+function focusPincode(): void {
+  document.getElementById('deliver')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('pin')?.focus({ preventScroll: true });
+}
+
 export function PanelActions({
   listingId,
   city,
   snapshot,
+  blocked,
 }: {
   /** The lowest-landed offer's listing, or null before the board is priced. */
   listingId: string | null;
   city: string | null;
   /** What a signed-out basket records for this line. Null when unpriced. */
   snapshot: GuestCartSnapshot | null;
+  /**
+   * Why nothing can be added yet, or null when something can: no pincode, an
+   * unserviceable one, or no stock at this grade. The buttons stay on screen,
+   * shut, with the sentence under them — a panel with no buttons at all read
+   * as a machine that could not be bought.
+   */
+  blocked: { reason: string; needsPincode: boolean } | null;
 }): React.JSX.Element | null {
   const { qtyFor, busyListingId, addListing } = useProductCart();
   const [goingToCart, setGoingToCart] = React.useState(false);
 
-  // Nothing to add yet — no pincode, an unserviceable one, or no stock at this
-  // grade. The panel stays silent: the board below is where that is explained,
-  // and a second copy of it here was the same answer twice.
-  if (!listingId || !snapshot) return null;
+  if (!listingId || !snapshot) {
+    if (!blocked) return null;
+    // `aria-disabled` rather than `disabled`: a disabled button is skipped by
+    // the keyboard and announces nothing, so the reason could never be read.
+    // On the pincode case a click goes to the box that unblocks it.
+    const shut = (label: string, className: string): React.JSX.Element => (
+      <button
+        type="button"
+        className={className}
+        aria-disabled="true"
+        aria-describedby="pv-blocked"
+        onClick={blocked.needsPincode ? focusPincode : undefined}
+      >
+        {label}
+      </button>
+    );
+    return (
+      <>
+        <div className="pv-actions" data-blocked="true">
+          {shut('Add to cart', 'pvbtn pvbtn-cart')}
+          {shut('Buy now', 'pvbtn pvbtn-buy')}
+        </div>
+        <p id="pv-blocked" className="pv-from" data-testid="pv-blocked">
+          {blocked.reason}
+        </p>
+      </>
+    );
+  }
 
   const inCart = qtyFor(listingId);
   const busy = busyListingId === listingId || goingToCart;
@@ -84,7 +122,7 @@ export function PanelActions({
       {/* Which source the two buttons act on. Without this the panel is
           buying from an unnamed one of several. */}
       <p className="pv-from">
-        From the lowest landed row{city ? <> · {city}</> : null}. Other supply points are on the
+        From the lowest-priced row{city ? <> · {city}</> : null}. Other supply points are on the
         board below.
       </p>
     </>

@@ -68,6 +68,7 @@ const priced = (unitPrice: number): Partial<SupplyPointOfferRow> => {
   const lines = linesFor(unitPrice);
   return {
     priceLines: lines,
+    unitPrice: lines[0]?.amount ?? '0.00',
     landedPrice: lines.reduce((total, l) => total + Number(l.amount), 0).toFixed(2),
   };
 };
@@ -78,6 +79,7 @@ const offer = (over: Partial<SupplyPointOfferRow> = {}): SupplyPointOfferRow => 
   city: 'Noida',
   label: 'Supply Point F · Noida',
   grade: 'A',
+  unitPrice: '52149.00',
   landedPrice: '61535.82',
   priceLines: [
     { label: 'Unit price', amount: '52000.00' },

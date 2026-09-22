@@ -341,6 +341,17 @@
     --cream-accent-deep: #b07a00;
     --cream-shadow: rgba(58, 44, 8, 0.25);
     --cream-on-dark: #ffffff;
+    /* Illustration only: the carton on the order-placed screen. Kraft board,
+       its darker flaps and edge, the dark of the open box, and the paper of
+       the shipping label. Nothing but that drawing may read these. */
+    --cream-carton: #e9d3a2;
+    --cream-carton-2: #dcc088;
+    --cream-carton-edge: #bf9c58;
+    --cream-carton-dark: #241c08;
+    --cream-carton-shell: #3b2f0c;
+    --cream-label: #fffdf6;
+    --cream-tape: rgba(255, 246, 227, 0.85);
+    --cream-tape-soft: rgba(255, 246, 227, 0.55);
   }
 
   /* A CONSTANT white, identical in every theme.

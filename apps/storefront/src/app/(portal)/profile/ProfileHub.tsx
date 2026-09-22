@@ -6,6 +6,7 @@ import { Button, EmptyState, HubPageHeader, Skeleton, StatusPill, useToast } fro
 import { usePortal } from '../shell/PortalContext';
 import { SubmitForReview } from './SubmitForReview';
 import { ProfileFlow } from './ProfileFlow';
+import { SectionViewDialog } from './SectionView';
 import {
   PROFILE_SECTIONS,
   sectionBlockingReason,
@@ -37,6 +38,9 @@ const STATUS_LABEL: Readonly<Record<string, string>> = {
 export function ProfileHub(): React.JSX.Element {
   const { session, profile, onboarding, readiness, reload } = usePortal();
   const [open, setOpen] = React.useState<ProfileSectionId | null>(null);
+  // A locked card opens to read, never to edit. Two states rather than a flag on
+  // one, because the two dialogs are different components with different exits.
+  const [viewing, setViewing] = React.useState<ProfileSectionId | null>(null);
   const toast = useToast();
   // The cart sends an unfinished profile here; say why, rather than leaving
   // somebody who pressed "Continue to checkout" wondering how they got here.
@@ -143,7 +147,18 @@ export function ProfileHub(): React.JSX.Element {
                 >
                   {done ? 'Edit' : 'Fill now'}
                 </Button>
-              ) : null}
+              ) : (
+                // Locked is not hidden. A verified buyer could see one line of
+                // their own GSTIN or delivery site and nothing more; this opens
+                // the card to read, with nothing on it that writes.
+                <Button
+                  className="profile-hub-action"
+                  variant="secondary"
+                  onClick={() => setViewing(section.id)}
+                >
+                  View
+                </Button>
+              )}
             </article>
           );
         })}
@@ -151,9 +166,23 @@ export function ProfileHub(): React.JSX.Element {
 
       <ProfileFlow
         start={open}
-        onClose={() => setOpen(null)}
+        // Re-read on every close, not only on a save: a card can change the
+        // account underneath the flow (a rename on the Account card) without
+        // reporting a step saved, and the submit control above the cards is
+        // drawn from that read. Reloading the page to see it was the bug.
+        onClose={() => {
+          setOpen(null);
+          reload();
+        }}
         onStepSaved={() => reload()}
         onFinished={finished}
+      />
+
+      <SectionViewDialog
+        section={PROFILE_SECTIONS.find((s) => s.id === viewing) ?? null}
+        onboarding={onboarding}
+        session={session}
+        onClose={() => setViewing(null)}
       />
     </div>
   );

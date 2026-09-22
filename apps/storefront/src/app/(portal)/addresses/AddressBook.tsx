@@ -12,6 +12,8 @@ import {
   type Address,
 } from '@trugrade/ui';
 import { normaliseMobile, normalisePincode } from '@trugrade/contracts';
+import { PincodeLocalityFields } from '../../register/PincodeLocalityFields';
+import { STATES as STATE_OPTIONS } from '../../register/picklists';
 import { MOBILE_PREFIX, typeMobile } from '../../register/validation';
 import type { ApiFailure } from '../../register/api';
 import { usePortal } from '../shell/PortalContext';
@@ -31,19 +33,9 @@ import {
  * form writes.
  */
 
-/** The two-digit GST state codes we can price a lane to today, plus the rest. */
-const STATES: ReadonlyArray<{ code: string; name: string }> = [
-  { code: '06', name: 'Haryana' },
-  { code: '07', name: 'Delhi' },
-  { code: '09', name: 'Uttar Pradesh' },
-  { code: '08', name: 'Rajasthan' },
-  { code: '27', name: 'Maharashtra' },
-  { code: '29', name: 'Karnataka' },
-  { code: '33', name: 'Tamil Nadu' },
-  { code: '36', name: 'Telangana' },
-  { code: '19', name: 'West Bengal' },
-  { code: '24', name: 'Gujarat' },
-];
+/** The state's name for the payload, from the same picklist the pincode lookup fills. */
+const stateName = (code: string): string | undefined =>
+  STATE_OPTIONS.find((o) => o.value === code && o.value !== '')?.label;
 
 type Phase =
   | { k: 'loading' }
@@ -382,10 +374,11 @@ function validateSiteForm(form: NewAddress): Record<string, string> {
   const out: Record<string, string> = {};
   if (!form.label.trim()) out.label = 'Give this site a name your team will recognise.';
   if (form.line1.trim().length < 4) out.line1 = 'We need the street address, not just a number.';
-  if (!form.city.trim()) out.city = 'Which city is this site in?';
   if (!normalisePincode(form.pincode)) {
     out.pincode = 'A pincode is six digits and never starts with a zero — 122002, for example.';
   }
+  if (!form.city.trim()) out.city = 'Which city is this site in?';
+  if (!form.stateCode) out.stateCode = 'Which state is this site in? The pincode usually tells us.';
   if (form.contactName.trim().length < 2) {
     out.contactName = 'Who does the driver ask for when they arrive?';
   }
@@ -400,7 +393,7 @@ function sitePayload(form: NewAddress): NewAddress {
   return {
     ...form,
     pincode: normalisePincode(form.pincode) ?? form.pincode,
-    state: STATES.find((s) => s.code === form.stateCode)?.name ?? form.state,
+    state: stateName(form.stateCode) ?? form.state,
     line2: form.line2?.trim() || null,
     landmark: form.landmark?.trim() || null,
     gateInstructions: form.gateInstructions?.trim() || null,
@@ -410,10 +403,13 @@ function sitePayload(form: NewAddress): NewAddress {
 function SiteFormFields({
   form,
   set,
+  patch,
   fields,
 }: {
   form: NewAddress;
   set: (key: keyof NewAddress, value: string) => void;
+  /** Several fields at once — the pincode lookup fills city and state together. */
+  patch: (values: Partial<NewAddress>) => void;
   fields: Record<string, string>;
 }): React.JSX.Element {
   return (
@@ -439,35 +435,33 @@ function SiteFormFields({
         value={form.line2 ?? ''}
         onChange={(e) => set('line2', e.target.value)}
       />
-      <Input
-        label="Pincode"
-        mono
-        inputMode="numeric"
-        maxLength={6}
-        value={form.pincode}
-        onChange={(e) => set('pincode', e.target.value.replace(/\D/g, ''))}
-        {...(fields.pincode ? { error: fields.pincode } : {})}
-        required
+      {/*
+        The same pincode lookup every other address form uses: the directory
+        fills the city and the state, and the state is what decides the tax
+        split on the invoice — not the buyer's GSTIN. A saved address is not
+        looked up on open, so an edit never silently rewrites a city the buyer
+        chose; the lookup runs once they touch the pincode.
+      */}
+      <PincodeLocalityFields
+        value={{ pincode: form.pincode, city: form.city, state: form.stateCode }}
+        autoLookup={false}
+        onChange={(next) =>
+          patch({
+            ...(next.pincode !== undefined ? { pincode: next.pincode } : {}),
+            ...(next.city !== undefined ? { city: next.city } : {}),
+            ...(next.state !== undefined
+              ? { stateCode: next.state, state: stateName(next.state) ?? '' }
+              : {}),
+          })
+        }
+        errors={{
+          ...(fields.pincode ? { pincode: fields.pincode } : {}),
+          ...(fields.city ? { city: fields.city } : {}),
+          ...(fields.stateCode ? { state: fields.stateCode } : {}),
+        }}
+        onFocus={() => {}}
+        onBlur={() => {}}
       />
-      <Input
-        label="City"
-        value={form.city}
-        onChange={(e) => set('city', e.target.value)}
-        {...(fields.city ? { error: fields.city } : {})}
-        required
-      />
-
-      <label className="adrsel">
-        <span className="l">State</span>
-        <span className="d">The state decides the tax split on the invoice, not your GSTIN.</span>
-        <select value={form.stateCode} onChange={(e) => set('stateCode', e.target.value)}>
-          {STATES.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.name} · {s.code}
-            </option>
-          ))}
-        </select>
-      </label>
       <Input
         label="Who the driver asks for"
         value={form.contactName}
@@ -543,8 +537,14 @@ function AddSite({
     if (blocked) setOpen(false);
   }, [blocked]);
 
+  // Once a save has been refused, every edit re-runs the check, so a message
+  // leaves the moment its field is fixed rather than waiting for the next save.
+  React.useEffect(() => {
+    setFields((prev) => (Object.keys(prev).length > 0 ? validateSiteForm(form) : prev));
+  }, [form]);
   const set = (key: keyof NewAddress, value: string): void =>
     setForm((f) => ({ ...f, [key]: value }));
+  const patch = (values: Partial<NewAddress>): void => setForm((f) => ({ ...f, ...values }));
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -594,7 +594,7 @@ function AddSite({
             </p>
           )}
 
-          <SiteFormFields form={form} set={set} fields={fields} />
+          <SiteFormFields form={form} set={set} patch={patch} fields={fields} />
 
           <Button type="submit" variant="primary" block loading={busy}>
             Save this site
@@ -633,8 +633,14 @@ function EditSite({
     return () => cancelAnimationFrame(frame);
   }, [address.id]);
 
+  // Once a save has been refused, every edit re-runs the check, so a message
+  // leaves the moment its field is fixed rather than waiting for the next save.
+  React.useEffect(() => {
+    setFields((prev) => (Object.keys(prev).length > 0 ? validateSiteForm(form) : prev));
+  }, [form]);
   const set = (key: keyof NewAddress, value: string): void =>
     setForm((f) => ({ ...f, [key]: value }));
+  const patch = (values: Partial<NewAddress>): void => setForm((f) => ({ ...f, ...values }));
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -675,7 +681,7 @@ function EditSite({
           </p>
         )}
 
-        <SiteFormFields form={form} set={set} fields={fields} />
+        <SiteFormFields form={form} set={set} patch={patch} fields={fields} />
 
         <div className="adrform-actions">
           <Button type="button" variant="ghost" block disabled={busy} onClick={onClose}>

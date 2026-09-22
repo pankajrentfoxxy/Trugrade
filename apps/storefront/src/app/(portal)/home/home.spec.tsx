@@ -280,7 +280,7 @@ describe('every figure on the KPI strip came from the response', () => {
  * 2. The percentage is rendered once, and not here
  * ======================================================================== */
 
-it('renders no percentage of its own, and names what the server is waiting for', async () => {
+it('renders no percentage and no profile card of its own', async () => {
   const body = await show(REAL);
   const text = body.textContent ?? '';
 
@@ -289,10 +289,12 @@ it('renders no percentage of its own, and names what the server is waiting for',
   // second rendering of one number, and this screen is not where it belongs.
   expect(text).not.toMatch(/d+%/);
 
-  // What is useful here is the reason ordering is not open, in the server's
-  // own words, so this and the refusal at checkout cannot disagree.
-  expect(text).toContain('your GSTIN');
-  expect(text).toContain('a delivery address');
+  // The same banner carries the reason ordering is not open, in the server's
+  // own words, above this screen and every other. The dock's "Your profile"
+  // card repeated that sentence directly underneath it and is gone, as is the
+  // "Everything else" list; the rail is the way to the profile.
+  expect(text).not.toContain('Your profile');
+  expect(text).not.toContain('Everything else');
 });
 
 /* ==========================================================================

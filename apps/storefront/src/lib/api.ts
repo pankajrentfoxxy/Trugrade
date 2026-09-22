@@ -347,10 +347,16 @@ export interface SupplyPointOfferRow {
   city: string;
   label: string;
   grade: string;
-  /** Decimal string. Money does not survive a round trip as a float. */
-  landedPrice: string;
+  /** Decimal string: our price for one machine before GST and freight. Always present. */
+  unitPrice: string;
+  /**
+   * Decimal string, or null until a delivery pincode is given. Money does not
+   * survive a round trip as a float, and a landed price does not exist without
+   * a destination.
+   */
+  landedPrice: string | null;
   priceLines: Array<{ label: string; amount: string }>;
-  isInterState: boolean;
+  isInterState: boolean | null;
   valuationMethod: 'REGULAR' | 'MARGIN';
   quality: QualityHeadline;
   batteryHealthPct: { min: number; max: number } | null;

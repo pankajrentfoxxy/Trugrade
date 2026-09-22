@@ -252,11 +252,16 @@ describe('the write controls', () => {
  * ======================================================================== */
 
 describe('a seat refused a read', () => {
-  it('is told so on the home team panel, rather than shown nothing', () => {
-    const source = read('home', 'Home.tsx');
-    expect(source).toContain('The team list is not on this seat');
-    // The bare `if (!team) return null` that made the section disappear.
-    expect(source).not.toMatch(/if \(!team\) return null;/);
+  it('is told so on the Team screen, which is now the only place the team is drawn', () => {
+    // Home used to carry a team panel with its own refusal line. The buyer side
+    // asked for the panel to go, so Home reads no team at all — nothing to be
+    // refused — and a seat without `identity.user.read` meets the sentence on
+    // the screen it actually opens.
+    const home = read('home', 'Home.tsx');
+    expect(home).not.toContain('Your team');
+    expect(home).not.toContain('getTeam(');
+    const team = read('team', 'TeamBoard.tsx');
+    expect(team).toContain('The team is visible to owners and admins');
   });
 });
 

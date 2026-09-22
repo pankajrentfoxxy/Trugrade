@@ -5,6 +5,7 @@ import { Button, cn } from '@trugrade/ui';
 import type { ResumableOnboarding } from '@trugrade/contracts';
 import { submitForReview } from '../../register/api';
 import { usePortal } from '../shell/PortalContext';
+import { GATING_SECTIONS, PROFILE_SECTIONS, type ProfileSectionDef } from './sections.config';
 
 /**
  * Where a finished profile becomes an application.
@@ -20,7 +21,7 @@ import { usePortal } from '../shell/PortalContext';
 const CAN_SUBMIT = new Set(['CUSTOMER_OWNER', 'CUSTOMER_ADMIN']);
 const IN_REVIEW = new Set(['PROFILE_SUBMITTED', 'KYC_SUBMITTED', 'UNDER_REVIEW']);
 
-export type SubmitStage = 'hidden' | 'in-review' | 'ask-owner' | 'ready';
+export type SubmitStage = 'hidden' | 'waiting-on' | 'in-review' | 'ask-owner' | 'ready';
 
 export function submitStage(
   onboarding: ResumableOnboarding,
@@ -28,10 +29,36 @@ export function submitStage(
 ): SubmitStage {
   const { status } = onboarding;
   if (IN_REVIEW.has(status)) return 'in-review';
-  if (status === 'VERIFIED' || status === 'REJECTED' || !onboarding.progress.isSubmittable) {
-    return 'hidden';
+  if (status === 'VERIFIED' || status === 'REJECTED') return 'hidden';
+  if (!onboarding.progress.isSubmittable) {
+    // The server still wants a step. Say so only once every weighted card is
+    // done: that is the moment the banner reads 100% and the buyer looks for
+    // a button that is not there. Before that, the cards themselves say what
+    // is left.
+    return outstandingSection(onboarding) &&
+      GATING_SECTIONS.every((s) => allStepsDone(s, onboarding))
+      ? 'waiting-on'
+      : 'hidden';
   }
   return roles.some((r) => CAN_SUBMIT.has(r)) ? 'ready' : 'ask-owner';
+}
+
+const allStepsDone = (section: ProfileSectionDef, onboarding: ResumableOnboarding): boolean =>
+  section.stepCodes.every(
+    (code) => onboarding.progress.steps.find((s) => s.stepCode === code)?.status === 'COMPLETE',
+  );
+
+/**
+ * The card the server is waiting on, from its own `resumeAt` — the first
+ * required step that is not complete. Preferences carries no weight in the
+ * completion figure, so a profile can read 100% while the server still
+ * requires the DOCUMENTS step behind it; this names the card rather than
+ * leaving a full bar and no button.
+ */
+export function outstandingSection(onboarding: ResumableOnboarding): ProfileSectionDef | null {
+  const code = onboarding.progress.resumeAt;
+  if (!code) return null;
+  return PROFILE_SECTIONS.find((s) => s.stepCodes.includes(code)) ?? null;
 }
 
 /** A review deadline, in the buyer's own time zone. */
@@ -58,6 +85,16 @@ export function SubmitForReview({ className }: { className?: string }): React.JS
   const resubmit = onboarding.status === 'INFO_REQUESTED';
 
   if (stage === 'hidden') return null;
+
+  if (stage === 'waiting-on') {
+    const card = outstandingSection(onboarding);
+    return (
+      <p className={cn('text-body-sm text-ink-2', className)} data-testid="submit-waiting-on">
+        One card to go before you can submit for review:{' '}
+        <span className="text-ink">{card?.title}</span>. Save it and the button appears here.
+      </p>
+    );
+  }
 
   if (stage === 'in-review') {
     return (

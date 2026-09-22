@@ -36,14 +36,16 @@ export interface DeliverySeal {
 }
 
 export interface DeliveryMachine {
-  serialNumber: string;
+  /** Null until a machine is assigned to the slot. */
+  serialNumber: string | null;
   /** Null when the SKU has been withdrawn since. Never an invented title. */
   title: string | null;
   specSummary: string | null;
   /** Null means NO SEAL IS RECORDED. It is never rendered as one that passed. */
   seal: DeliverySeal | null;
   verdict: QcVerdict | null;
-  passportPath: string;
+  /** Null with the serial: there is no passport for a machine not yet chosen. */
+  passportPath: string | null;
   /** Null when this machine is ready to be accepted; otherwise the reason. */
   blockedReason: string | null;
 }

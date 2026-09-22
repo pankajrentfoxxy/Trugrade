@@ -174,12 +174,12 @@ describe('a document that does not exist yet', () => {
     }
   });
 
-  it('says which moment brings it into existence, in its own row', async () => {
+  it('is a row with its status, and no prose about when', async () => {
     await board([TAX_AWAITED, EWAY]);
-    expect(within(rowFor(EWAY.title)).getByText(/generated at pickup/i)).toBeInTheDocument();
-    expect(
-      within(rowFor(TAX_AWAITED.title)).getByText(/leave the supply point/i),
-    ).toBeInTheDocument();
+    // The chip says it is not issued; the sentence about pickup and the lorry
+    // used to sit under the title and was asked off the board.
+    expect(within(rowFor(EWAY.title)).getByText('Not issued yet')).toBeInTheDocument();
+    expect(within(rowFor(EWAY.title)).queryByText(/generated at pickup/i)).toBeNull();
   });
 
   it('does not promise a number for a document that will never carry one', async () => {
@@ -189,11 +189,6 @@ describe('a document that does not exist yet', () => {
     expect(screen.queryByText(/not numbered yet/i)).not.toBeInTheDocument();
   });
 
-  it('sends the reader to where a per-machine document actually lives', async () => {
-    await board([QC]);
-    const link = within(rowFor(QC.title)).getByRole('link');
-    expect(link).toHaveAttribute('href', '/orders/TT-26-00004/units');
-  });
 });
 
 describe('a document that does exist', () => {
@@ -251,12 +246,32 @@ describe('colour', () => {
 });
 
 describe('the figures above the table', () => {
-  it('carries the denominator with every count', async () => {
+  it('carries the denominator with every count, over the rows on the screen', async () => {
     await board([PROFORMA, TAX_ISSUED, TAX_AWAITED, EWAY, QC, CREDIT]);
-    // "2" is not a statement. "2 of 6 documents" is.
+    // "2" is not a statement. "2 of 5 documents" is — five, not the six the API
+    // sent, because the per-machine row is not drawn and a denominator over a
+    // list the buyer cannot see would be a claim about nothing on the screen.
     // Scoped to the figures: the table's own caption says it a third time, for
     // a screen reader, and counting that would make this test pass on its own.
-    expect(screen.getAllByText(/of 6 documents/, { selector: '.denom' })).toHaveLength(2);
+    expect(screen.getAllByText(/of 5 documents/, { selector: '.denom' })).toHaveLength(2);
+  });
+});
+
+describe('what the rows do not say', () => {
+  it('leaves the per-machine documents to the Machines tab', async () => {
+    await board([PROFORMA, TAX_ISSUED, TAX_AWAITED, EWAY, QC, CREDIT]);
+    // Inspection reports and wipe certificates belong to a serial. A row here
+    // with a dash for a number and a link away was a document that could not
+    // be opened, twice.
+    expect(screen.queryByText(QC.title)).toBeNull();
+    expect(screen.queryByText(/On each machine/)).toBeNull();
+  });
+
+  it('draws the title, and neither the description nor the wait', async () => {
+    await board([PROFORMA, TAX_ISSUED, TAX_AWAITED, EWAY, QC, CREDIT]);
+    expect(screen.getByText(PROFORMA.title, { selector: '.doctitle' })).toBeInTheDocument();
+    expect(screen.queryByText(PROFORMA.description)).toBeNull();
+    expect(screen.queryByText(EWAY.whenItWillExist!)).toBeNull();
   });
 });
 

@@ -87,7 +87,14 @@ export interface BoardOffer {
   city: string;
   label: string;
   grade: Grade;
-  landed: LandedPrice;
+  /**
+   * Our selling price for one machine, before GST and freight. Always present:
+   * it needs no destination, and it is what the board shows until a pincode
+   * turns it into a landed figure.
+   */
+  unitPrice: Money;
+  /** Null when no pincode was given: the row's evidence without its landed price. */
+  landed: LandedPrice | null;
   valuationMethod: 'REGULAR' | 'MARGIN';
   quality: QualityHeadline;
   batteryHealthPct: { min: number; max: number } | null;
@@ -165,32 +172,33 @@ export class OfferBoardService {
     const grade = query.grade ?? grades[0]!.grade;
     const forGrade = units.filter((u) => u.grade === grade);
 
+    // "Cannot deliver there" is a refusal and returns no rows. "Nobody has
+    // said where" is not: the board's evidence — which supply points hold the
+    // machine, how many, inspected when, on what warranty — stands without a
+    // destination. Only the landed price needs one, so without a pincode every
+    // row comes back with `landed: null` and the screen asks for the pincode
+    // beside a price it cannot yet give, rather than beside an empty table.
     const refusal: BoardDelivery | null = query.pincode
       ? await this.serviceability(query.pincode)
-      : { kind: 'NONE' };
+      : null;
 
-    if (refusal || !query.pincode) {
-      // The evidence still stands — how many units, how many supply points, at
-      // what grades. Only the prices are missing, and they are missing because
-      // nothing has been asked to price them to.
+    if (refusal) {
       return {
         skuId: query.skuId,
         grade,
         grades,
         pincode: query.pincode ?? null,
-        delivery: refusal ?? { kind: 'NONE' },
+        delivery: refusal,
         offers: [],
         unitsAvailable: forGrade.length,
         supplyPoints: countSupplyPoints(forGrade),
         unpricedSupplyPoints: countSupplyPoints(forGrade),
       };
     }
-    const pincode = query.pincode;
+    const pincode = query.pincode ?? null;
 
     const groups = this.group(forGrade);
 
-    // `(code, city)` pairs, deduplicated: two valuation pools at one supply
-    // point are one quality record, asked for once.
     const points = [
       ...new Map(
         groups.map((g) => [`${g.city}|${g.supplyPointCode}`, { code: g.supplyPointCode, city: g.city }]),
@@ -200,7 +208,10 @@ export class OfferBoardService {
     const [quality, facts, freightBy] = await Promise.all([
       this.qc.qualityForSupplyPoints(points, { skuId: query.skuId, grade }),
       this.listings.publicPricingFacts([...new Set(groups.map((g) => g.listingId))]),
-      this.quoteLanes(groups, pincode),
+      // No destination, no lane: nothing is quoted and nothing is invented.
+      pincode === null
+        ? Promise.resolve(new Map<string, FreightQuote>())
+        : this.quoteLanes(groups, pincode),
     ]);
     const warranties = await this.pricing.customerWarrantyMonths([...facts.values()]);
     const qualityBy = new Map(quality.map((q) => [`${q.city}|${q.supplyPointCode}`, q]));
@@ -210,10 +221,21 @@ export class OfferBoardService {
 
     for (const group of groups) {
       const fact = facts.get(group.listingId);
+      if (!fact) {
+        unpriced += 1;
+        continue;
+      }
+      const q = qualityBy.get(`${group.city}|${group.supplyPointCode}`);
+
+      if (pincode === null) {
+        // The row without its price. Counted as unpriced, because it is.
+        unpriced += 1;
+        offers.push(this.toOffer(group, fact.sellingPrice, null, q, warranties.get(group.listingId)));
+        continue;
+      }
+
       const lane = freightBy.get(group.pickupLocationId);
-      // No quote, no row. Publishing a landed price that is missing its freight
-      // is the price misrepresentation the whole freight union exists to stop.
-      if (!fact || !lane || !lane.serviceable) {
+      if (!lane || !lane.serviceable) {
         unpriced += 1;
         continue;
       }
@@ -224,14 +246,15 @@ export class OfferBoardService {
         freight: lane.amount,
       });
 
-      const q = qualityBy.get(`${group.city}|${group.supplyPointCode}`);
-      offers.push(this.toOffer(group, landed, q, warranties.get(group.listingId)));
+      offers.push(this.toOffer(group, fact.sellingPrice, landed, q, warranties.get(group.listingId)));
     }
 
+    // Unpriced rows all compare equal on price, so dispatch time and then the
+    // stable id decide their order — the same tie-break a priced board uses.
     offers.sort((a, b) =>
       compareOffers(
-        { landedPaise: a.landed.total.paise, dispatchHours: a.dispatchHours, id: idOf(groups, a) },
-        { landedPaise: b.landed.total.paise, dispatchHours: b.dispatchHours, id: idOf(groups, b) },
+        { landedPaise: (a.landed?.total ?? a.unitPrice).paise, dispatchHours: a.dispatchHours, id: idOf(groups, a) },
+        { landedPaise: (b.landed?.total ?? b.unitPrice).paise, dispatchHours: b.dispatchHours, id: idOf(groups, b) },
       ),
     );
 
@@ -240,10 +263,8 @@ export class OfferBoardService {
       grade,
       grades,
       pincode,
-      // The transit band the carrier published for the lanes we could price.
-      // The slowest of them, because a range a buyer plans around must not be
-      // its most optimistic member.
-      delivery: { kind: 'DELIVERABLE', etaDays: slowestEta(freightBy) },
+      delivery:
+        pincode === null ? { kind: 'NONE' } : { kind: 'DELIVERABLE', etaDays: slowestEta(freightBy) },
       offers,
       unitsAvailable: forGrade.length,
       supplyPoints: countSupplyPoints(forGrade),
@@ -363,7 +384,8 @@ export class OfferBoardService {
 
   private toOffer(
     group: Group,
-    landed: LandedPrice,
+    unitPrice: Money,
+    landed: LandedPrice | null,
     quality: SupplyPointQuality | undefined,
     warrantyMonths: number | undefined,
   ): BoardOffer {
@@ -380,6 +402,7 @@ export class OfferBoardService {
       city: group.city,
       label: supplyPointLabel(group.supplyPointCode, group.city),
       grade: group.grade,
+      unitPrice,
       landed,
       valuationMethod: group.valuationMethod,
       // No quality row at all means nothing has been inspected under this supply

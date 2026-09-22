@@ -151,6 +151,7 @@ function offer(overrides: Partial<SupplyPointOffer> = {}): SupplyPointOffer {
   return {
     supplyPointCode: 'A',
     city: 'Gurugram',
+    unitPrice: Money.parse('24480.00'),
     landedPrice: Money.parse('28886.40'),
     priceLines: REGULAR_LINES,
     valuationMethod: 'REGULAR',
@@ -380,5 +381,60 @@ describe('OfferGrid — add to cart actions', () => {
     const adds = within(table).getAllByRole('button', { name: /Add .* to cart/ });
     expect(adds.length).toBeGreaterThan(1);
     expect(adds.every((b) => b.className.includes('bg-acc'))).toBe(true);
+  });
+});
+
+describe('OfferGrid — before there is a pincode', () => {
+  it('shows the unit price, said to be before tax and delivery, under a "Unit price" head', () => {
+    render(
+      <OfferGrid
+        layout="table"
+        offers={[offer({ landedPrice: null, priceLines: [] })]}
+        caption="1 supply point. Prices before tax and delivery."
+        onAdd={() => undefined}
+      />,
+    );
+    expect(screen.getByText('₹24,480.00')).toBeInTheDocument();
+    expect(screen.getByText('before tax and delivery')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Unit price' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Landed price' })).toBeNull();
+    // No break-up to open: there is nothing landed to break up yet.
+    expect(screen.queryByRole('button', { name: /break-up/i })).toBeNull();
+  });
+
+  it('still lets the buyer add to cart — checkout lands the price against their site', () => {
+    const onAdd = jest.fn();
+    render(
+      <OfferGrid
+        layout="table"
+        offers={[offer({ landedPrice: null, priceLines: [] })]}
+        caption="1 supply point."
+        onAdd={onAdd}
+      />,
+    );
+    const add = screen.getByRole('button', { name: /Add .* to cart/ });
+    expect(add).not.toHaveAttribute('aria-disabled');
+    add.click();
+    expect(onAdd).toHaveBeenCalled();
+  });
+
+  it('marks the lowest by unit price when nothing is landed', () => {
+    render(
+      <OfferGrid
+        layout="table"
+        offers={[
+          offer({ landedPrice: null, priceLines: [] }),
+          offer({
+            supplyPointCode: 'B',
+            city: 'Noida',
+            landedPrice: null,
+            priceLines: [],
+            unitPrice: Money.parse('23900.00'),
+          }),
+        ]}
+        caption="2 supply points."
+      />,
+    );
+    expect(screen.getAllByText('Lowest')).toHaveLength(1);
   });
 });

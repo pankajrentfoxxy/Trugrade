@@ -170,7 +170,10 @@ export function sectionSummary(
       return done ? 'Saved' : 'No delivery site yet';
     }
     case 'preferences': {
-      if (!done) return 'Optional — nothing here blocks an order';
+      // Weightless in the completion figure, but the server requires the step
+      // before it takes a submission — "optional" here sent buyers looking for
+      // a submit button that could not appear yet.
+      if (!done) return 'A minute of questions, needed before you can submit for review';
       const po = answers.DOCUMENTS?.poRequired === true;
       return po ? 'Purchase order number required on orders' : 'No purchase order number needed';
     }
