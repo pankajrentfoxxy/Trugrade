@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { normalisePincode } from '@trugrade/contracts';
+import { PINCODE_DEMAND_EVENT, PINCODE_DEMAND_MESSAGE, scrollToPincode } from './pincode-demand';
 
 /**
  * The delivery pincode, checked before it leaves the page.
@@ -37,6 +38,28 @@ export function PincodeForm({
   const [value, setValue] = React.useState(initialPincode);
   const [error, setError] = React.useState<string | null>(initialError);
 
+  // The pincode can change under the form without a reload: a signed-in
+  // buyer's default site is put in the URL after first paint, and the page
+  // re-renders in place. The box must show what the board is now priced to.
+  React.useEffect(() => {
+    setValue(initialPincode);
+  }, [initialPincode]);
+  // True for the length of one shake. Re-armed on every demand, so a second
+  // click on Buy now shakes again rather than being ignored.
+  const [shaking, setShaking] = React.useState(false);
+
+  React.useEffect(() => {
+    const onDemand = (): void => {
+      setError(PINCODE_DEMAND_MESSAGE);
+      setShaking(false);
+      // Next frame, so a shake already running restarts instead of continuing.
+      requestAnimationFrame(() => setShaking(true));
+      scrollToPincode();
+    };
+    window.addEventListener(PINCODE_DEMAND_EVENT, onDemand);
+    return () => window.removeEventListener(PINCODE_DEMAND_EVENT, onDemand);
+  }, []);
+
   const problem = (raw: string): string | null => {
     const trimmed = raw.trim();
     if (trimmed === '') return 'Enter a delivery pincode to see landed prices and add to cart.';
@@ -71,7 +94,8 @@ export function PincodeForm({
         <input
           id="pin"
           name="pin"
-          className="field mono"
+          className={shaking ? 'field mono shake' : 'field mono'}
+          onAnimationEnd={() => setShaking(false)}
           inputMode="numeric"
           maxLength={7}
           value={value}

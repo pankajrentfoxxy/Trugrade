@@ -27,6 +27,17 @@ import {
   type PurchaseOrderDemand,
   type PurchaseOrderDetail,
 } from './api';
+import {
+  asMoneyString,
+  draftsComplete,
+  emptyDrafts,
+  lineError,
+  lineKey,
+  owedFor,
+  submitLabel,
+  tdsOn,
+  toPayload,
+} from './orders/availability';
 
 /**
  * ARCHETYPE C — Record. Identity header + evidence panel + actions side panel.
@@ -174,11 +185,24 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
 
   const canAcknowledge = principal?.permissions.includes('procurement.po.acknowledge') ?? false;
 
-  async function acknowledge(): Promise<void> {
+  // One box per line, empty until the vendor types. Empty is "not answered",
+  // which is neither 0 nor "all", and the button says so until every box is.
+  const [drafts, setDrafts] = React.useState<Map<string, string>>(new Map());
+  React.useEffect(() => {
+    if (!data || data.status !== 'RAISED') return;
+    setDrafts(emptyDrafts(data.lineGroups));
+  }, [data?.poId, data?.status]);
+
+  async function confirmAvailability(): Promise<void> {
+    if (!po || !draftsComplete(po.lineGroups, drafts)) return;
     setBusy(true);
     setActionError(null);
     try {
-      setAccepted(await postJson<PurchaseOrderDetail>(API.acknowledgePo(poId), {}));
+      setAccepted(
+        await postJson<PurchaseOrderDetail>(API.confirmPoAvailability(poId), {
+          lines: toPayload(po.lineGroups, drafts),
+        }),
+      );
       setReloadKey((k) => k + 1);
     } catch (e) {
       setActionError((e as Error).message);
@@ -252,7 +276,7 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
           ) : po?.status === 'RAISED' ? (
             <Button
               variant="secondary"
-              disabledReason="Accept this purchase order first. Attaching a machine is available after you accept."
+              disabledReason="Confirm what you can supply first. Attaching a machine is available after you confirm."
             >
               Attach device
             </Button>
@@ -281,7 +305,9 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
   if (!po) {
     return (
       <div className="tg-stack">
-        <Breadcrumb items={[{ label: 'Purchase orders', href: '/vendor/orders' }, { label: '…' }]} />
+        <Breadcrumb
+          items={[{ label: 'Purchase orders', href: '/vendor/orders' }, { label: '…' }]}
+        />
         <RecordHeader title="Purchase order" subtitle="Loading the machines on this order." />
         <Board>
           <div className="flex flex-col gap-3 p-4">
@@ -334,11 +360,11 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
             ),
           },
           {
-            label: 'Accepted',
+            label: 'Answered',
             value: po.acknowledgedAt ? (
               onDate(po.acknowledgedAt)
             ) : (
-              <NotMeasured why="You have not accepted this purchase order yet" label="Not yet" />
+              <NotMeasured why="You have not answered this purchase order yet" label="Not yet" />
             ),
           },
         ]}
@@ -403,23 +429,23 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
         </div>
 
         <SidePanel
-          title={settled ? 'This order is accepted' : 'Accept this order'}
+          title={settled ? 'You have answered this order' : 'Confirm what you can supply'}
           description={
             settled
               ? remaining > 0
                 ? `Attach the remaining ${remaining} ${remaining === 1 ? 'machine' : 'machines'} from your listings.`
                 : 'Every machine on this order has been attached.'
-              : 'Accepting tells us you will produce these machines. After you accept, attach each one from your listings.'
+              : 'Enter how many of each line you can supply — 0 for a line you cannot. The buyer sees the quantity you confirm on their order. After you confirm, attach each machine from your listings.'
           }
           footnote={
             settled ? undefined : po.acknowledgeBy ? (
               <>
-                Accept by <span className="font-mono tnum">{onDate(po.acknowledgeBy)}</span>.
+                Answer by <span className="font-mono tnum">{onDate(po.acknowledgeBy)}</span>.
               </>
             ) : (
               <span className="text-ink-4">
-                No acceptance deadline has been set for purchase orders on this platform, so there
-                is none to show and none to miss.
+                No deadline has been set for answering purchase orders on this platform, so there is
+                none to show and none to miss.
               </span>
             )
           }
@@ -431,18 +457,77 @@ export function VendorPurchaseOrderRoute(): React.JSX.Element {
           )}
 
           {!settled && (
-            <Button
-              variant="primary"
-              loading={busy}
-              disabledReason={
-                canAcknowledge
-                  ? ''
-                  : 'Accepting a purchase order needs the Operations, Admin or Owner role. Ask an owner in your organisation.'
-              }
-              onClick={() => void acknowledge()}
-            >
-              Accept {po.poNumber}
-            </Button>
+            <div className="flex flex-col gap-4">
+              <ul className="flex list-none flex-col gap-3 p-0">
+                {po.lineGroups.map((g) => {
+                  const key = lineKey(g);
+                  const raw = drafts.get(key) ?? '';
+                  const problem = lineError(raw, g.qty);
+                  const inputId = `po-avail-${key}`;
+                  return (
+                    <li key={key} className="flex flex-col gap-1">
+                      <label htmlFor={inputId} className="text-body-sm text-ink">
+                        {g.title ?? g.skuCode ?? 'Unknown model'}{' '}
+                        <span className="text-ink-3">
+                          · Grade {g.gradeAtPo.replace('_PLUS', '+')} · asked for{' '}
+                          <span className="font-mono tnum">{g.qty}</span>
+                        </span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={inputId}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={g.qty}
+                          step={1}
+                          aria-invalid={problem ? true : undefined}
+                          aria-describedby={problem ? `${inputId}-error` : undefined}
+                          className="w-20 rounded border border-rule bg-sheet px-3 py-2 font-mono tnum text-ink"
+                          placeholder={`0–${g.qty}`}
+                          value={raw}
+                          disabled={!canAcknowledge}
+                          onChange={(e) => setDrafts((m) => new Map(m).set(key, e.target.value))}
+                        />
+                        <span className="font-mono tnum text-ink-2">of {g.qty}</span>
+                      </div>
+                      {problem && (
+                        <p id={`${inputId}-error`} className="text-body-sm text-fail" role="alert">
+                          {problem}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {draftsComplete(po.lineGroups, drafts) && (
+                <Datum label="You are owed for what you confirmed, after TDS">
+                  {rupees(
+                    asMoneyString(
+                      owedFor(po.lineGroups, drafts).sub(
+                        tdsOn(owedFor(po.lineGroups, drafts), po.tdsRatePct),
+                      ),
+                    ),
+                  )}
+                </Datum>
+              )}
+
+              <Button
+                variant="primary"
+                loading={busy}
+                disabledReason={
+                  !canAcknowledge
+                    ? 'Answering a purchase order needs the Operations, Admin or Owner role. Ask an owner in your organisation.'
+                    : draftsComplete(po.lineGroups, drafts)
+                      ? ''
+                      : 'Enter the quantity available for every line first.'
+                }
+                onClick={() => void confirmAvailability()}
+              >
+                {submitLabel(po.lineGroups, drafts)}
+              </Button>
+            </div>
           )}
           {/* Pick list is stood down while attach is how a machine is named. */}
         </SidePanel>

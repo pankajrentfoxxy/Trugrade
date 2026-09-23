@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { BRAND } from '@trugrade/config';
 import { Money } from '@trugrade/contracts';
-import { DataBoard, EmptyState, HubPageHeader, StatusPill, type Column } from '@trugrade/ui';
+import { DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
 import { getOrderDocuments, type OrderDocument, type OrderDocuments } from './api';
 
@@ -112,46 +112,43 @@ export function DocumentsBoard({ orderNumber }: { orderNumber: string }): React.
 
   return (
     <>
-      <HubPageHeader
-        title={
-          <>
-            Documents on order <span className="font-mono tnum">{orderNumber}</span>
-          </>
-        }
-        subtitle={`${BRAND.legalEntity} is the seller, so every invoice here is ours.`}
-      />
-
-      <Summary
-        issued={data?.issuedCount ?? 0}
-        total={total}
-        awaited={awaited}
-        loading={data === null}
-      />
-
-      <div className="tbl doctable">
-        <DataBoard
-          caption={
-            data === null
-              ? 'Reading the documents on this order.'
-              : `${data.issuedCount} of ${total} documents on order ${orderNumber} exist so far.`
-          }
-          columns={columns(primary)}
-          rows={rows}
-          rowKey={(d) => d.id}
+      <section className="od-card" aria-labelledby="doc-head">
+        <header className="od-card__head">
+          <h2 id="doc-head">Documents on this order</h2>
+          <span>{BRAND.legalEntity} is the seller, so every invoice here is ours.</span>
+        </header>
+        <Summary
+          issued={data?.issuedCount ?? 0}
+          total={total}
+          awaited={awaited}
           loading={data === null}
-          skeletonRows={6}
-          // Unreachable by design and kept honest anyway: every order has the
-          // same document list, and one that does not exist yet is a ROW with a
-          // reason rather than an absence. If this ever renders, the API stopped
-          // answering the question rather than the order having no documents.
-          empty={
-            <EmptyState
-              title="We could not list the documents on this order"
-              body="Every order has the same set of documents, so an empty list here is a fault on our side rather than a fact about your order. Try again, or raise a ticket and we will look."
-            />
-          }
         />
-      </div>
+
+        <div className="tbl doctable">
+          <DataBoard
+            caption={
+              data === null
+                ? 'Reading the documents on this order.'
+                : `${data.issuedCount} of ${total} documents on order ${orderNumber} exist so far.`
+            }
+            columns={columns(primary)}
+            rows={rows}
+            rowKey={(d) => d.id}
+            loading={data === null}
+            skeletonRows={6}
+            // Unreachable by design and kept honest anyway: every order has the
+            // same document list, and one that does not exist yet is a ROW with a
+            // reason rather than an absence. If this ever renders, the API stopped
+            // answering the question rather than the order having no documents.
+            empty={
+              <EmptyState
+                title="We could not list the documents on this order"
+                body="Every order has the same set of documents, so an empty list here is a fault on our side rather than a fact about your order. Try again, or raise a ticket and we will look."
+              />
+            }
+          />
+        </div>
+      </section>
     </>
   );
 }

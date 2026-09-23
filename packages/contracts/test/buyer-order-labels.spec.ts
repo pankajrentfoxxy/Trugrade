@@ -9,9 +9,12 @@ describe('sentenceCaseLabel', () => {
 
 describe('buyerOrderStatusLabel', () => {
   it('maps known statuses and sentence-cases fallbacks', () => {
-    expect(buyerOrderStatusLabel('PAYMENT_PENDING')).toBe('Placed · Payment pending');
+    expect(buyerOrderStatusLabel('PAYMENT_PENDING')).toBe('Payment pending');
     expect(buyerOrderStatusLabel('DELIVERED')).toBe('Delivered');
-    expect(buyerOrderStatusLabel('IN_TRANSIT')).toBe('In transit');
+    expect(buyerOrderStatusLabel('IN_TRANSIT')).toBe('On its way');
+    // The enum says vendor; the buyer never reads it.
+    expect(buyerOrderStatusLabel('VENDOR_ACCEPTED')).toBe('Being prepared');
+    expect(buyerOrderStatusLabel('SOMETHING_NEW')).toBe('Something new');
   });
 });
 

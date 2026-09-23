@@ -10,17 +10,18 @@ import { permissionsFor } from '@trugrade/contracts';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
 import { PrismaService } from '../../src/shared/db/prisma.service';
-import { ContextModule, RequestContextService, type Principal } from '../../src/shared/db/org-scope';
+import {
+  ContextModule,
+  RequestContextService,
+  type Principal,
+} from '../../src/shared/db/org-scope';
 import { AdaptersModule } from '../../src/shared/adapters/adapters.module';
 import { AuthModule } from '../../src/shared/auth/auth.module';
 import { EventBusModule } from '../../src/shared/events/event-bus';
 import { RedisModule } from '../../src/shared/redis/redis.service';
 import { ProcurementModule } from '../../src/modules/procurement';
 import { ProcurementController } from '../../src/modules/procurement/procurement.controller';
-import {
-  PreconditionFailedError,
-  ValidationError,
-} from '../../src/shared/errors/domain-errors';
+import { PreconditionFailedError, ValidationError } from '../../src/shared/errors/domain-errors';
 import {
   closeTestDb,
   migrateTestDatabase,
@@ -314,5 +315,79 @@ describe('POST /vendor/purchase-orders/:poId/dispatch', () => {
     );
     expect(out.status).toBe('DISPATCHED');
     expect(out.consignmentAwb).toBe('AWB999');
+  });
+});
+
+describe('POST /vendor/purchase-orders/:poId/availability', () => {
+  it('turns a quantity per line into accepted and refused machines, and tells the buyer', async () => {
+    const fx = await seedThreeLinePo();
+    // Three lines, each its own SKU: supply two of them, none of the third.
+    const detail = await as(fx.vendorOrgId, () =>
+      controller.confirmAvailability(fx.poId, {
+        lines: [
+          { skuId: fx.skuIds[0]!, grade: 'A', qtyAvailable: 1 },
+          { skuId: fx.skuIds[1]!, grade: 'A', qtyAvailable: 1 },
+          { skuId: fx.skuIds[2]!, grade: 'A', qtyAvailable: 0 },
+        ],
+      }),
+    );
+    expect(detail.status).toBe('PARTIAL');
+    expect(Number(String(detail.totals.owedIfAccepted))).toBe(60000);
+    const bySku = new Map(detail.lineGroups.map((g) => [g.skuId, g]));
+    expect(bySku.get(fx.skuIds[0]!)?.qtyAvailable).toBe(1);
+    expect(bySku.get(fx.skuIds[2]!)?.qtyAvailable).toBe(0);
+    expect(bySku.get(fx.skuIds[2]!)?.lineStatus).toBe('REJECTED');
+
+    // The buyer's order carries the same answer through ordering's own columns.
+    const [line] = await raw.$queryRaw<Array<{ cancelled_qty: number; status: string }>>`
+      SELECT cancelled_qty, status::text AS status
+        FROM ordering.order_line WHERE sku_id = ${fx.skuIds[2]!}::uuid`;
+    expect(line).toMatchObject({ cancelled_qty: 1, status: 'CANCELLED' });
+    const [sub] = await raw.$queryRaw<Array<{ accepted_at: Date | null }>>`
+      SELECT accepted_at FROM ordering.sub_order WHERE vendor_org_id = ${fx.vendorOrgId}::uuid`;
+    expect(sub?.accepted_at).not.toBeNull();
+  });
+
+  it('reads back as "not confirmed" until the vendor answers', async () => {
+    const fx = await seedThreeLinePo();
+    const before = await as(fx.vendorOrgId, () => controller.detail(fx.poId));
+    expect(before.lineGroups.every((g) => g.qtyAvailable === null)).toBe(true);
+  });
+
+  it('refuses more than the line asked for, naming the limit', async () => {
+    const fx = await seedThreeLinePo();
+    await expect(
+      as(fx.vendorOrgId, () =>
+        controller.confirmAvailability(fx.poId, {
+          lines: [
+            { skuId: fx.skuIds[0]!, grade: 'A', qtyAvailable: 2 },
+            { skuId: fx.skuIds[1]!, grade: 'A', qtyAvailable: 1 },
+            { skuId: fx.skuIds[2]!, grade: 'A', qtyAvailable: 1 },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/asks for 1 machine/);
+  });
+
+  it('refuses an answer that leaves a line out, rather than defaulting it', async () => {
+    const fx = await seedThreeLinePo();
+    await expect(
+      as(fx.vendorOrgId, () =>
+        controller.confirmAvailability(fx.poId, {
+          lines: [{ skuId: fx.skuIds[0]!, grade: 'A', qtyAvailable: 1 }],
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    const untouched = await as(fx.vendorOrgId, () => controller.detail(fx.poId));
+    expect(untouched.status).toBe('RAISED');
+  });
+
+  it('is answered once, like the per-line form it rides on', async () => {
+    const fx = await seedThreeLinePo();
+    const all = fx.skuIds.map((skuId) => ({ skuId, grade: 'A' as const, qtyAvailable: 1 }));
+    await as(fx.vendorOrgId, () => controller.confirmAvailability(fx.poId, { lines: all }));
+    await expect(
+      as(fx.vendorOrgId, () => controller.confirmAvailability(fx.poId, { lines: all })),
+    ).rejects.toBeInstanceOf(PreconditionFailedError);
   });
 });

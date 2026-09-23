@@ -25,13 +25,42 @@ import * as React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { findVendorIdentityLeaks, type VendorIdentity } from '@trugrade/contracts';
+import { OrderChrome } from './OrderChrome';
 import { OrderRecord } from './OrderRecord';
+import { PortalContext, type PortalState } from '../../shell/PortalContext';
 import type { OrderApproval, OrderRecord as Order } from './api';
 
 jest.mock('./api', () => ({
   ...jest.requireActual('./api'),
   getOrder: jest.fn(),
 }));
+
+// The chrome above the record draws the tab strip, which asks the router where it is.
+jest.mock('next/navigation', () => ({ usePathname: () => '/orders/TT-26-00002' }));
+
+/**
+ * The tab strip reads `session.permissions` to decide whether the Documents
+ * tab is offered at all. These cases are about what the record SAYS, so they
+ * run as a seat that can see every tab.
+ */
+const portalState = (): PortalState =>
+  ({
+    session: {
+      userId: 'u1',
+      orgId: 'o1',
+      orgType: 'BUYER',
+      roles: ['CUSTOMER_OWNER'],
+      permissions: ['payment.invoice.read_own'],
+      mfaRequired: false,
+    },
+    profile: null,
+    onboarding: null,
+    readiness: null,
+    approvalsWaiting: 0,
+    approvals: [],
+    reload: () => undefined,
+    setSession: () => undefined,
+  }) as unknown as PortalState;
 
 import { getOrder } from './api';
 
@@ -133,6 +162,26 @@ const CONFIRMED: Order = {
       ],
     },
   ],
+  supply: [
+    {
+      label: 'Supply Point L · Gurugram',
+      title: 'Dell Latitude 5420',
+      specSummary: 'Core i5 · 16 GB · 512 GB NVME_SSD · 14"',
+      grade: 'A',
+      qtyOrdered: 1,
+      qtyAvailable: 1,
+      answeredAt: '2026-08-30T04:10:00.000Z',
+    },
+    {
+      label: 'Supply Point W · New Delhi',
+      title: 'Dell Latitude 5420',
+      specSummary: 'Core i5 · 16 GB · 512 GB NVME_SSD · 14"',
+      grade: 'A',
+      qtyOrdered: 2,
+      qtyAvailable: null,
+      answeredAt: null,
+    },
+  ],
   approval: null,
 };
 
@@ -161,7 +210,14 @@ const awaiting = (over: Partial<OrderApproval> = {}): Order => ({
 
 const shown = async (order: Order): Promise<HTMLElement> => {
   mockGet.mockResolvedValue({ ok: true, data: order });
-  const { container } = render(<OrderRecord orderNumber={order.orderNumber} />);
+  const { container } = render(
+    <PortalContext.Provider value={portalState()}>
+      {/* As the layout mounts it: the chrome reads the order once, the record draws the body. */}
+      <OrderChrome orderNumber={order.orderNumber}>
+        <OrderRecord orderNumber={order.orderNumber} />
+      </OrderChrome>
+    </PortalContext.Provider>,
+  );
   await screen.findByRole('heading', { name: `Order ${order.orderNumber}` });
   return container as HTMLElement;
 };
@@ -264,7 +320,9 @@ describe('an order awaiting approval never describes itself as confirmed or paid
     const container = await shown(awaiting());
     const text = container.textContent ?? '';
     expect(screen.getByText('What this order would come to')).toBeInTheDocument();
-    expect(text).toContain('Nothing has been charged');
+    // The money card no longer carries its own footnote; the approval panel and
+    // the banner above it both still say it, in their own case.
+    expect(text).toMatch(/nothing has been charged/i);
   });
 
   it('says what is held, for whom, until when, who asked, and what happens if nobody answers', async () => {
@@ -382,5 +440,44 @@ describe('the states that are not the record', () => {
     expect(alert.textContent).toContain('That is our problem, not yours');
     expect(alert.textContent).toContain('the order itself is unaffected');
     expect(alert.textContent).toContain('nothing has been charged');
+  });
+});
+
+describe('what each dispatch point can send', () => {
+  it('shows the confirmed quantity with its denominator, and an unanswered line as an absence', async () => {
+    const container = await shown(CONFIRMED);
+    expect(screen.getByText('What each dispatch point can send')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 lines confirmed so far')).toBeInTheDocument();
+
+    const text = container.textContent ?? '';
+    expect(text).toContain('1 of 1 confirmed');
+    expect(text).toContain('2 ordered');
+    expect(screen.getByText('not confirmed yet')).toHaveClass('notmeasured');
+    // Still no supplier vocabulary, and still nothing that reaches procurement.
+    expect(text.toLowerCase()).not.toContain('vendor');
+    expect(text.toLowerCase()).not.toContain('supplier');
+  });
+
+  it('says a short line is short, and that the buyer is not charged extra for it', async () => {
+    const container = await shown({
+      ...CONFIRMED,
+      supply: [
+        {
+          ...CONFIRMED.supply[0]!,
+          qtyOrdered: 3,
+          qtyAvailable: 2,
+        },
+      ],
+    });
+    expect(screen.getByText(/1 of 1 lines short/)).toBeInTheDocument();
+    // The numbers are mono spans inside the sentence, so read the sentence whole.
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/can send 2 of the 3 you ordered/);
+    expect(text).toMatch(/nothing extra is charged/);
+  });
+
+  it('is absent while the order is held for approval, because nothing has been asked yet', async () => {
+    await shown(awaiting());
+    expect(screen.queryByText('What each dispatch point can send')).not.toBeInTheDocument();
   });
 });

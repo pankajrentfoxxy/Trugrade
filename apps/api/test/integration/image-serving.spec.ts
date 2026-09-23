@@ -339,3 +339,70 @@ describe('the twelve areas, and the ones nobody measured', () => {
     }
   });
 });
+
+/* ==========================================================================
+ * PUT /api/objects/:token — where a presigned upload lands in development
+ *
+ * `presignUpload` on the local store used to return `memory://upload/<key>`,
+ * which no browser can open, so every bulk photograph upload in development
+ * failed at the first byte. The presign now points here.
+ * ======================================================================== */
+
+describe('PUT /api/objects/:token', () => {
+  beforeEach(async () => {
+    await limiter.reset({ name: 'object-upload', limit: 0, windowSeconds: 0 }, LOCAL_IP);
+  });
+
+  it('stores the bytes under the presigned key, and a download token then reads them back', async () => {
+    const key = `catalog/condition/${Date.now()}.png`;
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    const grant = await store.presignUpload(key, 'image/png', 5 * 1024 * 1024);
+    expect(grant.url.startsWith('memory://')).toBe(false);
+
+    const put = await request(app.getHttpServer())
+      .put(pathOf(grant.url))
+      .set('content-type', 'image/png')
+      .send(bytes);
+    expect(put.status).toBe(200);
+    expect(await store.exists(key)).toBe(true);
+
+    const url = await store.presignDownload(key, 300);
+    const got = await request(app.getHttpServer()).get(pathOf(url)).buffer(true);
+    expect(got.status).toBe(200);
+    expect(got.headers['content-type']).toContain('image/png');
+    expect(Buffer.from(got.body as Buffer).equals(bytes)).toBe(true);
+  });
+
+  it('will not take a download token as permission to overwrite', async () => {
+    const before = await store.get(conditionImageKey);
+    const download = await store.presignDownload(conditionImageKey, 300);
+    const put = await request(app.getHttpServer())
+      .put(pathOf(download))
+      .set('content-type', 'image/svg+xml')
+      .send(Buffer.from('<svg/>'));
+    expect(put.status).toBe(404);
+    expect((await store.get(conditionImageKey)).equals(before)).toBe(true);
+  });
+
+  it('will not serve an upload token as a download', async () => {
+    const key = `catalog/condition/${Date.now()}-b.png`;
+    const grant = await store.presignUpload(key, 'image/png', 1024);
+    await request(app.getHttpServer())
+      .put(pathOf(grant.url))
+      .set('content-type', 'image/png')
+      .send(Buffer.from([1, 2, 3]));
+    const res = await request(app.getHttpServer()).get(pathOf(grant.url));
+    expect(res.status).toBe(404);
+  });
+
+  it('refuses an empty body rather than storing nothing under a real key', async () => {
+    const key = `catalog/condition/${Date.now()}-c.png`;
+    const grant = await store.presignUpload(key, 'image/png', 1024);
+    const put = await request(app.getHttpServer())
+      .put(pathOf(grant.url))
+      .set('content-type', 'image/png')
+      .send(Buffer.alloc(0));
+    expect(put.status).toBe(422);
+    expect(await store.exists(key)).toBe(false);
+  });
+});

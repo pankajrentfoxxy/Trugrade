@@ -13,6 +13,7 @@ import {
   PINCODE,
   PAN_HOLDER_TYPE,
   PASSWORD_BLOCKLIST_WORDS,
+  SUPPLIER_PASSWORD,
   isValidGstin,
   normaliseEmail,
   normaliseGstin,
@@ -174,18 +175,34 @@ function hasRun(value: string): boolean {
  * `missing` is the point of the return value. A bar that fills up tells someone
  * they failed; the list tells them what to type next.
  */
-export function measurePassword(
-  password: string,
-  context: { email?: string; mobile?: string } = {},
-): PasswordStrength {
+export type PasswordPolicy = 'standard' | 'supplier';
+
+export interface PasswordContext {
+  email?: string;
+  mobile?: string;
+  /**
+   * `supplier` is VR-045a — a letter and a digit, no length floor — and is what
+   * the supplier signup chooses against. Everything else measures the full
+   * VR-044/045 rule. The server applies the same split per `orgType`.
+   */
+  policy?: PasswordPolicy;
+}
+
+export function measurePassword(password: string, context: PasswordContext = {}): PasswordStrength {
   const missing: string[] = [];
 
-  if (password.length < 12) missing.push('Make it at least twelve characters long.');
-  if (!/[a-z]/.test(password)) missing.push('One lower-case letter.');
-  if (!/[A-Z]/.test(password)) missing.push('One capital letter.');
-  if (!/[0-9]/.test(password)) missing.push('One digit.');
-  if (!/[!@#$%^&*()_+\-=[\]{};':",./<>?]/.test(password))
-    missing.push('One symbol, such as ! or #.');
+  if (context.policy === 'supplier') {
+    if (!/[A-Za-z]/.test(password)) missing.push('One letter.');
+    if (!/[0-9]/.test(password)) missing.push('One number.');
+    if (password.length > SUPPLIER_PASSWORD.max!) missing.push('Keep it under 128 characters.');
+  } else {
+    if (password.length < 12) missing.push('Make it at least twelve characters long.');
+    if (!/[a-z]/.test(password)) missing.push('One lower-case letter.');
+    if (!/[A-Z]/.test(password)) missing.push('One capital letter.');
+    if (!/[0-9]/.test(password)) missing.push('One digit.');
+    if (!/[!@#$%^&*()_+\-=[\]{};':",./<>?]/.test(password))
+      missing.push('One symbol, such as ! or #.');
+  }
 
   const lower = password.toLowerCase();
 
@@ -206,11 +223,17 @@ export function measurePassword(
 
   if (password.length === 0) return { score: 0, label: 'Not measured', missing };
 
-  // Length past the 12-character floor is the only thing that still adds
-  // strength once every rule above is satisfied, so it is what separates 3 from 4.
+  // Length past the floor is the only thing that still adds strength once every
+  // rule above is satisfied, so it is what separates the top scores. The supplier
+  // rule has no floor, so length alone moves it from 2 to 4.
   let score: PasswordStrength['score'] = 0;
-  if (missing.length === 0) score = password.length >= 16 ? 4 : 3;
-  else if (missing.length === 1) score = 2;
+  if (missing.length === 0) {
+    if (context.policy === 'supplier') {
+      score = password.length >= 12 ? 4 : password.length >= 8 ? 3 : 2;
+    } else {
+      score = password.length >= 16 ? 4 : 3;
+    }
+  } else if (missing.length === 1) score = 2;
   else if (missing.length === 2) score = 1;
 
   const LABELS = ['Too weak', 'Weak', 'Fair', 'Strong', 'Very strong'] as const;

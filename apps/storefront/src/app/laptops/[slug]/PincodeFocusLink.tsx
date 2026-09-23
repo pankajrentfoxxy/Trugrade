@@ -1,8 +1,10 @@
 'use client';
 
+import { scrollToPincode } from './pincode-demand';
+
 /**
- * Scrolls to the deliver panel and focuses the pincode field — the empty-board
- * CTA should land the reader in the input, not just at the section heading.
+ * Scrolls to the pincode field and focuses it — the empty-board CTA should
+ * land the reader in the input, not just at the section heading.
  */
 export function PincodeFocusLink({
   children,
@@ -15,12 +17,7 @@ export function PincodeFocusLink({
     <button
       type="button"
       className={className}
-      onClick={() => {
-        document
-          .getElementById('deliver')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        document.getElementById('pin')?.focus({ preventScroll: true });
-      }}
+      onClick={scrollToPincode}
     >
       {children}
     </button>

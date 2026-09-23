@@ -1,11 +1,13 @@
-import { OrderNav } from './OrderNav';
+import { OrderChrome } from './OrderChrome';
 
 /**
- * The record's sub-navigation, and nothing else.
+ * The order's chrome — header, progress, next step and sub-navigation — and
+ * nothing else.
  *
- * `03_UX_SPEC.md` §3A.3 hangs four sub-routes off this record — `/units`,
- * `/documents`, `/tracking`, `/delivery` — and they all need the same way back
- * to each other, so the nav belongs here rather than on any one page.
+ * `03_UX_SPEC.md` §3A.3 hangs five sub-routes off this record — `/sales-order`,
+ * `/units`, `/documents`, `/tracking`, `/delivery` — and they all need the same
+ * way back to each other, and the same identity above them, so both belong here
+ * rather than on any one page. `OrderChrome` reads the order once for all of it.
  *
  * **`SiteHeader` is deliberately absent.** `/layout.tsx` already renders
  * it for everything under `/home`, and this file rendered a second one from
@@ -21,10 +23,5 @@ export default async function OrderLayout({
   params: Promise<{ orderNumber: string }>;
 }): Promise<React.JSX.Element> {
   const { orderNumber } = await params;
-  return (
-    <>
-      <OrderNav orderNumber={decodeURIComponent(orderNumber)} />
-      {children}
-    </>
-  );
+  return <OrderChrome orderNumber={decodeURIComponent(orderNumber)}>{children}</OrderChrome>;
 }

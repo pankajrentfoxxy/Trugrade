@@ -140,6 +140,7 @@ const board = (rows: SupplyPointOfferRow[] = ROWS, pool: 'REGULAR' | 'MARGIN' = 
     <Board
       rows={rows}
       pool={pool}
+      pincode="110001"
       sku="Dell Latitude 5420"
       spec='i5-1135G7 · 16 GB · 512 GB NVMe SSD · 14"'
       layout="table"

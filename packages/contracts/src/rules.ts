@@ -278,6 +278,21 @@ export const PASSWORD_COMPOSITION = rule({
   enforcedAt: ['C', 'D'],
 });
 
+/**
+ * VR-045a. The supplier self-service signup asks for less than VR-044/045: one
+ * letter and one digit, no length floor. Only `POST /auth/register` with
+ * `orgType: VENDOR` reads this — buyer signup, password reset and the account
+ * page all keep the full composition rule.
+ */
+export const SUPPLIER_PASSWORD = rule({
+  id: 'VR-045a',
+  field: 'identity.user_account.password',
+  pattern: /^(?=.*[A-Za-z])(?=.*[0-9]).+$/,
+  max: 128,
+  message: 'Include at least one letter and one number.',
+  enforcedAt: ['C', 'D', 'S'],
+});
+
 /** VR-046. Brand words are rejected in passwords; the list follows the brand token. */
 export const PASSWORD_BLOCKLIST_WORDS = Object.freeze([
   'trugrade',
@@ -934,6 +949,7 @@ export const RULES: Readonly<Record<string, Rule>> = Object.freeze({
   [FULL_NAME.id]: FULL_NAME,
   [PASSWORD.id]: PASSWORD,
   [PASSWORD_COMPOSITION.id]: PASSWORD_COMPOSITION,
+  [SUPPLIER_PASSWORD.id]: SUPPLIER_PASSWORD,
   [PASSWORD_BLOCKLIST.id]: PASSWORD_BLOCKLIST,
   [PASSWORD_HISTORY.id]: PASSWORD_HISTORY,
   [OTP_CODE.id]: OTP_CODE,

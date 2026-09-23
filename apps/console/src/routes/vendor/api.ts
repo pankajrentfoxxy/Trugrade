@@ -116,6 +116,8 @@ export const API = {
   pickList: (poId: string) => `/api/vendor/purchase-orders/${poId}/pick-list`,
   acknowledgePo: (poId: string) => `/api/vendor/purchase-orders/${poId}/acknowledge`,
   respondPo: (poId: string) => `/api/vendor/purchase-orders/${poId}/respond`,
+  /** "Of the N you asked for, I can supply K" — per model and grade. */
+  confirmPoAvailability: (poId: string) => `/api/vendor/purchase-orders/${poId}/availability`,
   dispatchPo: (poId: string) => `/api/vendor/purchase-orders/${poId}/dispatch`,
   attachableUnits: (poId: string, skuId: string, grade: string) =>
     `/api/vendor/purchase-orders/${poId}/attachable-units?skuId=${encodeURIComponent(skuId)}&grade=${encodeURIComponent(grade)}`,
@@ -534,14 +536,6 @@ export const PO_STATUSES = [
   'DISPUTED',
 ] as const;
 
-export const PO_LINE_REJECTION_REASONS = [
-  { value: 'OUT_OF_STOCK', label: 'Out of stock' },
-  { value: 'GRADE_MISMATCH', label: 'Grade does not match' },
-  { value: 'PRICE_DISPUTED', label: 'Price disputed' },
-  { value: 'DISPATCH_DATE', label: 'Cannot meet the dispatch date' },
-  { value: 'OTHER', label: 'Other' },
-] as const;
-
 export interface PoKpis {
   openOrders: number;
   waitingOrders: number;
@@ -562,6 +556,11 @@ export interface PoLineGroup {
   lineTotal: MoneyString;
   lineStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'MIXED';
   rejectionReason: string | null;
+  /**
+   * How many of `qty` the vendor said they can supply. Null until they have
+   * answered — and null renders as "not confirmed", never as a number.
+   */
+  qtyAvailable: number | null;
   attachedCount: number;
   serials: Array<{ unitId: string; serialNumber: string | null }>;
 }

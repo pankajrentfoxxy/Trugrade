@@ -91,6 +91,7 @@ describe('configChoices', () => {
     render(
       <ConfigPicker
         variants={VARIANTS}
+        catalogue={[]}
         current={here}
         hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
       />,
@@ -103,23 +104,65 @@ describe('configChoices', () => {
   it('draws nothing for a model with one configuration', () => {
     expect(configChoices([row({})], here)).toEqual([]);
     const { container } = render(
-      <ConfigPicker variants={[row({})]} current={here} hrefFor={() => '/x'} />,
+      <ConfigPicker variants={[row({})]} catalogue={[]} current={here} hrefFor={() => '/x'} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('draws a configuration the catalogue holds but nobody has sealed, greyed and not a link', () => {
+    // The catalogue declares a 32 GB build; the index has never seen one sealed.
+    const catalogue = [
+      { skuId: 'i5-16-512', cpuFamily: 'Core i5', cpuModel: 'i5-1135G7', ramGb: 16, storageGb: 512, storageType: 'NVME_SSD' },
+      { skuId: 'i5-32-512', cpuFamily: 'Core i5', cpuModel: 'i5-1135G7', ramGb: 32, storageGb: 512, storageType: 'NVME_SSD' },
+    ];
+    const ram = configChoices(VARIANTS, here, catalogue).find((c) => c.key === 'ram')!;
+    expect(ram.options.map((o) => o.value)).toEqual(['8', '16', '32']);
+    expect(ram.options.find((o) => o.value === '32')).toMatchObject({
+      skuId: 'i5-32-512',
+      available: false,
+      unitsAvailable: 0,
+    });
+    expect(ram.options.find((o) => o.value === '16')).toMatchObject({ available: true });
+
+    render(
+      <ConfigPicker
+        variants={VARIANTS}
+        catalogue={catalogue}
+        current={here}
+        hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
+      />,
+    );
+    const memory = within(screen.getByTestId('config-ram'));
+    expect(memory.queryByRole('link', { name: /32 GB RAM/ })).toBeNull();
+    const greyed = memory.getByText('32 GB RAM').closest('.gpill')!;
+    expect(greyed).toHaveAttribute('aria-disabled', 'true');
+    expect(greyed).toHaveTextContent('No units sealed');
+  });
+
+  it('only draws a row when the catalogue itself differs — one declared build is not a choice', () => {
+    const one = [
+      { skuId: 'i5-16-512', cpuFamily: 'Core i5', cpuModel: 'i5-1135G7', ramGb: 16, storageGb: 512, storageType: 'NVME_SSD' },
+    ];
+    // The index row must carry the line the shared helper builds, as a real
+    // search row does; the fixture's short form above is not what search says.
+    expect(configChoices([row({ cpuLine: 'Intel Core i5-1135G7' })], here, one)).toEqual([]);
   });
 
   it('marks the configuration being viewed and counts what each pill opens', () => {
     render(
       <ConfigPicker
         variants={VARIANTS}
+        catalogue={[]}
         current={here}
         hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
       />,
     );
     const memory = within(screen.getByTestId('config-ram'));
     expect(memory.getByRole('link', { name: /16 GB RAM/ })).toHaveAttribute('aria-current', 'true');
-    expect(memory.getByRole('link', { name: /8 GB RAM/ })).toHaveTextContent(
-      '3 units · 1 supply point',
-    );
+    // The count is what the pill's target carries; the pill itself no longer
+    // prints it. The board the click opens is where a buyer reads stock.
+    const eight = memory.getByRole('link', { name: /8 GB RAM/ });
+    expect(eight).toHaveAttribute('href', '/laptops/i5-8-256?grade=B');
+    expect(eight).not.toHaveTextContent(/units?/);
   });
 });

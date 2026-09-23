@@ -3,14 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
-import {
-  EmptyState,
-  HubPageHeader,
-  Skeleton,
-  StatusPill,
-  Timeline,
-  type TimelineEvent,
-} from '@trugrade/ui';
+import { EmptyState, Skeleton, StatusPill, Timeline, type TimelineEvent } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
 import {
   getDelivery,
@@ -163,20 +156,14 @@ export function Tracking({ orderNumber }: { orderNumber: string }): React.JSX.El
   }, [orderNumber]);
 
   if (phase.k === 'loading') {
-    return (
-      <>
-        <HubPageHeader title="Tracking" />
-        <Skeleton className="h-64 w-full rounded-lg" />
-      </>
-    );
+    return <Skeleton className="h-64 w-full rounded-xl" />;
   }
 
   if (phase.k === 'error') {
     return (
-      <>
-        <HubPageHeader title="Tracking" />
+      <div className="ostate">
         <EmptyState title="This order did not load" body={phase.message} />
-      </>
+      </div>
     );
   }
 
@@ -184,20 +171,13 @@ export function Tracking({ orderNumber }: { orderNumber: string }): React.JSX.El
 
   return (
     <>
-      <HubPageHeader
-        title="Tracking"
-        subtitle={
-          consignments.length === 1 ? '1 consignment' : `${consignments.length} consignments`
-        }
-      />
-
       {consignments.length === 0 ? (
         <EmptyState
           title="Nothing has been dispatched yet"
           body="When the machines on this order leave a supply point, each consignment appears here with where it went and when it arrived."
         />
       ) : (
-        <div className="tg-stack">
+        <div className="od-col">
           {consignments.map((c) => (
             <Consignment key={c.index} consignment={c} orderNumber={orderNumber} />
           ))}
@@ -229,106 +209,109 @@ function Consignment({
   const held = c.machines.filter((m) => m.blockedReason !== null);
 
   return (
-    <section className="dvcons" aria-label={c.label}>
-      <div className="dvconshead">
+    <section className="od-card dvcons" aria-label={c.label}>
+      <header className="od-card__head dvconshead">
         <h2>{c.label}</h2>
         <StatusPill tone={state.tone} label={state.label} />
-      </div>
+      </header>
 
-      <dl className="facts">
-        <div>
-          <dt>Machines</dt>
-          <dd className="mono">{c.machines.length}</dd>
-        </div>
-        <div>
-          <dt>Arrived</dt>
-          {/* A delivery that has not happened says so. It is never "today". */}
-          <dd className={c.deliveredAt ? 'mono' : 'ink4'}>
-            {c.deliveredAt ? when(c.deliveredAt) : 'Not yet'}
-          </dd>
-        </div>
-        <div>
-          <dt>Signed for</dt>
-          <dd className={c.receiptConfirmedAt ? 'mono' : 'ink4'}>
-            {c.receiptConfirmedAt ? when(c.receiptConfirmedAt) : 'Not yet'}
-          </dd>
-        </div>
-        {c.window ? (
+      <div className="od-card__body">
+        <dl className="od-kv od-kv--row">
           <div>
-            <dt>Inspection window</dt>
-            <dd>
-              {c.window.open ? (
-                <>
-                  <span className="mono">{c.window.hoursRemaining}</span> hours left
-                </>
-              ) : (
-                'Closed'
-              )}
+            <dt>Machines</dt>
+            <dd className="mono">{c.machines.length}</dd>
+          </div>
+          <div>
+            <dt>Arrived</dt>
+            {/* A delivery that has not happened says so. It is never "today". */}
+            <dd className={c.deliveredAt ? 'mono' : 'ink4'}>
+              {c.deliveredAt ? when(c.deliveredAt) : 'Not yet'}
             </dd>
           </div>
-        ) : null}
-      </dl>
+          <div>
+            <dt>Signed for</dt>
+            <dd className={c.receiptConfirmedAt ? 'mono' : 'ink4'}>
+              {c.receiptConfirmedAt ? when(c.receiptConfirmedAt) : 'Not yet'}
+            </dd>
+          </div>
+          {c.window ? (
+            <div>
+              <dt>Inspection window</dt>
+              <dd>
+                {c.window.open ? (
+                  <>
+                    <span className="mono">{c.window.hoursRemaining}</span> hours left
+                  </>
+                ) : (
+                  'Closed'
+                )}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
 
-      <div className="dvtl">
-        <h3>Where it has got to</h3>
-        <Timeline events={c.timeline.map(toEvent)} label={`${c.label} timeline`} />
-        {c.blockedReason !== null || held.length > 0 ? (
-          <div className="dvhold" data-testid="delivery-hold">
-            <h4>What is holding it</h4>
-            {c.blockedReason !== null ? <p>{c.blockedReason}</p> : null}
-            {held.length > 0 ? (
-              <ul aria-label="Machines with something to resolve">
-                {held.map((m, i) => (
-                  <li key={m.serialNumber ?? `slot-${i}`}>
-                    <span className="dvholdwho">
-                      {m.serialNumber !== null ? (
-                        <span className="mono">{m.serialNumber}</span>
-                      ) : (
-                        <span className="notmeasured">Serial not assigned yet</span>
-                      )}
-                      {m.title ? <> · {m.title}</> : null}
-                      {m.specSummary ? <span className="dvspec"> · {m.specSummary}</span> : null}
-                    </span>
-                    {/* A seal we cannot vouch for is the one verdict on this
+        <div className="dvtl">
+          <h3>Where it has got to</h3>
+          <Timeline events={c.timeline.map(toEvent)} label={`${c.label} timeline`} />
+          {c.blockedReason !== null || held.length > 0 ? (
+            <div className="dvhold" data-testid="delivery-hold">
+              <h4>What is holding it</h4>
+              {c.blockedReason !== null ? <p>{c.blockedReason}</p> : null}
+              {held.length > 0 ? (
+                <ul aria-label="Machines with something to resolve">
+                  {held.map((m, i) => (
+                    <li key={m.serialNumber ?? `slot-${i}`}>
+                      <span className="dvholdwho">
+                        {m.serialNumber !== null ? (
+                          <span className="mono">{m.serialNumber}</span>
+                        ) : (
+                          <span className="notmeasured">Serial not assigned yet</span>
+                        )}
+                        {m.title ? <> · {m.title}</> : null}
+                        {m.specSummary ? <span className="dvspec"> · {m.specSummary}</span> : null}
+                      </span>
+                      {/* A seal we cannot vouch for is the one verdict on this
                         screen and keeps the manifest's red; everything else is
                         a wait, in --ink-2. */}
-                    <span
-                      className={
-                        m.seal !== null && (m.seal.status === 'BROKEN' || m.seal.status === 'MISSING')
-                          ? 'dvstop'
-                          : 'dvtodo'
-                      }
-                    >
-                      {m.blockedReason}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+                      <span
+                        className={
+                          m.seal !== null &&
+                          (m.seal.status === 'BROKEN' || m.seal.status === 'MISSING')
+                            ? 'dvstop'
+                            : 'dvtodo'
+                        }
+                      >
+                        {m.blockedReason}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
-      {/*
+        {/*
         The half of tracking this product cannot answer, said plainly rather
         than left as an empty row that reads like a value we have.
         `documents/api.ts` carries a `whenItWillExist` sentence per document for
         exactly this reason; this is the same grammar.
       */}
-      <p className="fnote off">
-        {c.deliveredAt
-          ? 'Carrier scans are not recorded on this order. What is above is what our own people logged at the door.'
-          : 'No carrier scan has reached us, so there is no courier reference or estimated date to show. We record the arrival ourselves when the machines reach you.'}
-      </p>
+        <p className="fnote off">
+          {c.deliveredAt
+            ? 'Carrier scans are not recorded on this order. What is above is what our own people logged at the door.'
+            : 'No carrier scan has reached us, so there is no courier reference or estimated date to show. We record the arrival ourselves when the machines reach you.'}
+        </p>
 
-      <p className="dvgo">
-        <Link
-          href={`/orders/${encodeURIComponent(orderNumber)}/delivery` as Route}
-          className="hub-link"
-        >
-          Check the seals on this delivery
-        </Link>
-      </p>
+        <p className="dvgo">
+          <Link
+            href={`/orders/${encodeURIComponent(orderNumber)}/delivery` as Route}
+            className="hub-link"
+          >
+            Check the seals on this delivery
+          </Link>
+        </p>
+      </div>
     </section>
   );
 }

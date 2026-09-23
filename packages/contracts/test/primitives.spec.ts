@@ -15,6 +15,7 @@ import {
   verificationCodeSchema,
   vehicleNumberSchema,
   passwordSchema,
+  supplierPasswordSchema,
   otpCodeSchema,
   moneySchema,
   vendorNetPayoutSchema,
@@ -203,6 +204,20 @@ describe('VR-045 — password composition', () => {
     ['no symbol', 'Str0ngPassw0rdd'],
   ])('rejects %s', (_why, bad) => {
     expect(() => passwordSchema.parse(bad)).toThrow();
+  });
+});
+
+describe('VR-045a — supplier signup password', () => {
+  it('accepts a letter and a digit with no length floor', () => {
+    expect(supplierPasswordSchema.parse('ab1')).toBe('ab1');
+  });
+  it.each([
+    ['no letter', '123456'],
+    ['no digit', 'Zephyr'],
+    ['empty', ''],
+    ['over 128 characters', `a1${'x'.repeat(127)}`],
+  ])('rejects %s', (_why, bad) => {
+    expect(() => supplierPasswordSchema.parse(bad)).toThrow();
   });
 });
 

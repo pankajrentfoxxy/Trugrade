@@ -7,7 +7,7 @@
  * 1. **The board must reproduce itself from the URL alone.** That is the whole
  *    of CLAUDE.md's rule — a buyer sends a colleague a link and it shows what
  *    they saw. So the test hands the component nothing but a query string and
- *    demands that the request, the search box, the applied chips, the ticked
+ *    demands that the request, the search box, the pressed status tab, the chosen site,
  *    facet, the sort control and the header's `aria-sort` all agree with it,
  *    and that a second query string with none of the first's values leaves
  *    nothing of the first behind. A component holding board state locally
@@ -101,7 +101,7 @@ const list = (over: Partial<OrderList> = {}): OrderList => ({
   facets: {
     status: [
       { value: 'AWAITING_APPROVAL', label: 'Awaiting approval', count: 4 },
-      { value: 'PAYMENT_PENDING', label: 'Placed · Payment pending', count: 9 },
+      { value: 'PAYMENT_PENDING', label: 'Payment pending', count: 9 },
     ],
     site: [
       { value: SITE_ID, label: 'Gurugram IT campus', count: 7 },
@@ -129,7 +129,8 @@ afterEach(cleanup);
  * ======================================================================== */
 
 describe('the board reproduces its state from the URL alone', () => {
-  const QUERY = 'q=TGD88B6C311&status=AWAITING_APPROVAL&site=' + SITE_ID + '&sort=value&page=2&per=25';
+  const QUERY =
+    'q=TGD88B6C311&status=AWAITING_APPROVAL&site=' + SITE_ID + '&sort=value&page=2&per=25';
 
   it('asks the server for exactly what the address bar says, unchanged', async () => {
     await show(QUERY);
@@ -138,18 +139,19 @@ describe('the board reproduces its state from the URL alone', () => {
     expect(mockGet).toHaveBeenCalledWith(QUERY);
   });
 
-  it('shows the search term, the chips, the tick, the sort and the header arrow', async () => {
+  it('shows the search term, the pressed tab, the site, the sort and the header arrow', async () => {
     await show(QUERY);
 
     expect(screen.getByLabelText('Find an order')).toHaveValue('TGD88B6C311');
 
-    // One chip per applied filter, each in the facet's own words.
-    expect(screen.getByRole('button', { name: /“TGD88B6C311”/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Awaiting approval/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Gurugram IT campus/ })).toBeInTheDocument();
-
-    expect(screen.getByRole('checkbox', { name: /Awaiting approval/ })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /Placed · Payment pending/ })).not.toBeChecked();
+    // The status tabs ARE the status filter, and the site is the select.
+    expect(
+      screen.getByRole('button', { name: /Awaiting approval/, pressed: true }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Payment pending/, pressed: false }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Delivery site')).toHaveValue(SITE_ID);
 
     expect(screen.getByLabelText('Sort')).toHaveValue('value');
     expect(screen.getByRole('columnheader', { name: /Order value/ })).toHaveAttribute(
@@ -175,8 +177,10 @@ describe('the board reproduces its state from the URL alone', () => {
     await screen.findByRole('table');
 
     expect(screen.getByLabelText('Find an order')).toHaveValue('');
-    expect(screen.queryByRole('button', { name: /“TGD88B6C311”/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /Awaiting approval/ })).not.toBeChecked();
+    expect(screen.getByLabelText('Delivery site')).toHaveValue('');
+    expect(
+      screen.getByRole('button', { name: /Awaiting approval/, pressed: false }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Sort')).toHaveValue('oldest');
     expect(screen.getByRole('columnheader', { name: /^Order$/ })).toHaveAttribute(
       'aria-sort',
@@ -187,7 +191,7 @@ describe('the board reproduces its state from the URL alone', () => {
   it('puts every control change back into the URL rather than into itself', async () => {
     await show('');
 
-    screen.getByRole('checkbox', { name: /Awaiting approval/ }).click();
+    screen.getByRole('button', { name: /Awaiting approval/ }).click();
     expect(push).toHaveBeenCalledWith('/orders?status=AWAITING_APPROVAL', {
       scroll: false,
     });
@@ -199,7 +203,7 @@ describe('the board reproduces its state from the URL alone', () => {
     zero.facets.status[1] = { ...zero.facets.status[1]!, count: 0 };
     await show('status=AWAITING_APPROVAL', zero);
 
-    const option = screen.getByRole('checkbox', { name: /Placed · Payment pending/ });
+    const option = screen.getByRole('button', { name: /Payment pending/ });
     expect(option).toBeInTheDocument();
     expect(option).toBeDisabled();
   });
@@ -250,7 +254,10 @@ it('renders a missing PO reference as an absence, never as a blank cell', async 
 });
 
 it('says which serial matched, so a serial search has a visible reason', async () => {
-  await show('q=TGD88B6C311', list({ orders: [{ ...HELD, matchedSerials: ['TGD88B6C311'] }], total: 1, pages: 1 }));
+  await show(
+    'q=TGD88B6C311',
+    list({ orders: [{ ...HELD, matchedSerials: ['TGD88B6C311'] }], total: 1, pages: 1 }),
+  );
   expect(screen.getByText(/matched TGD88B6C311/)).toBeInTheDocument();
 });
 

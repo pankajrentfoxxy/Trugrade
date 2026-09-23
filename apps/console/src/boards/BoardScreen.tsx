@@ -26,21 +26,34 @@ const nf = new Intl.NumberFormat('en-IN');
 export function BoardScreen<Row>({
   config,
   onOpen,
+  reloadToken = 0,
 }: {
   config: BoardConfig<Row>;
   /** Opens the record drawer. Absent leaves rows unclickable. */
   onOpen?: (row: Row) => void;
+  /**
+   * Bump it to fetch the page again. The record drawer a screen puts over this
+   * board writes through its own endpoint, and the row it wrote to is still on
+   * the page underneath — so without this the operator closes the drawer and
+   * reads the state from before their own action.
+   */
+  reloadToken?: number;
 }): React.JSX.Element {
   const principal = usePrincipal();
   const facetKeys = useMemo(() => (config.facets ?? []).map((f) => f.key), [config.facets]);
   const board = useBoard<Row>(config.endpoint, facetKeys);
-  const { state, data, error, set, clearFilters, filtered } = board;
+  const { state, data, error, set, clearFilters, filtered, reload } = board;
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [mode, setMode] = useState<'table' | 'pipeline'>('table');
   const [typed, setTyped] = useState(state.q);
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
+
+  // Zero is the initial value, and the mount already fetched.
+  useEffect(() => {
+    if (reloadToken > 0) reload();
+  }, [reloadToken, reload]);
 
   useEffect(() => setTyped(state.q), [state.q]);
   // A page of rows the operator can no longer see is not a selection.

@@ -4,9 +4,7 @@ import * as React from 'react';
 import {
   EmptyState,
   InfoPopover,
-  RecordHeader,
   SealChip,
-  SidePanel,
   Skeleton,
   StatusPill,
   type SealStatus,
@@ -223,23 +221,10 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
 
   return (
     <>
-      <RecordHeader
-        title="Check the seals before you sign"
-        subtitle={
-          arrived.length === 0
-            ? 'Nothing on this order has arrived yet, so there is nothing to check.'
-            : 'Compare each code below against the sticker on the machine in front of you. A seal we applied and nobody has looked at is not a seal that has been checked.'
-        }
-        identifiers={[
-          { label: 'Order', value: orderNumber, href: `/orders/${orderNumber}` },
-          {
-            label: 'Deliveries',
-            value: `${arrived.length} of ${data.consignments.length} arrived`,
-          },
-          { label: 'Checked at', value: when(data.asOf) },
-        ]}
-        status={
-          compromised.length > 0 ? (
+      <section className="od-card" aria-labelledby="dv-head">
+        <header className="od-card__head">
+          <h2 id="dv-head">Check the seals before you sign</h2>
+          {compromised.length > 0 ? (
             <StatusPill
               tone="fail"
               label={`${compromised.length} seal${compromised.length === 1 ? '' : 's'} we cannot vouch for`}
@@ -260,13 +245,31 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
             <StatusPill tone="neutral" label={`${neverChecked.length} never checked`} />
           ) : (
             <StatusPill tone="pass" label="Every seal checked" />
-          )
-        }
-        className="dvhead"
-      />
+          )}
+        </header>
+        <div className="od-card__body">
+          <p className="od-lead">
+            {arrived.length === 0
+              ? 'Nothing on this order has arrived yet, so there is nothing to check.'
+              : 'Compare each code below against the sticker on the machine in front of you. A seal we applied and nobody has looked at is not a seal that has been checked.'}
+          </p>
+          <dl className="od-facts">
+            <div>
+              <dt>Deliveries</dt>
+              <dd className="mono">
+                {arrived.length} of {data.consignments.length} arrived
+              </dd>
+            </div>
+            <div>
+              <dt>Checked at</dt>
+              <dd className="mono">{when(data.asOf)}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
 
-      <div className="rec dvrec">
-        <main className="evid">
+      <div className="od-grid">
+        <div className="od-col">
           {refusal && <Refusal failure={refusal} />}
           {recorded && !refusal && <Recorded {...recorded} />}
 
@@ -288,67 +291,67 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
               />
             ))
           )}
-        </main>
+        </div>
 
-        <SidePanel
-          title="Signing for this delivery"
-          description={
-            compromised.length > 0
-              ? 'A seal we cannot vouch for stops the handover. Take-back on those machines is ours and is not something you have to argue for — do not accept them.'
-              : unchecked.length > 0
-                ? 'Check every seal first. A machine we sealed and nobody has looked at since is not a machine that has been verified.'
-                : signable.length > 0
-                  ? 'Every seal on this delivery has been looked at and none of them is broken.'
-                  : 'There is nothing waiting on you here.'
-          }
-          // Tier 3: the consequence of finding a broken seal, in twelve words.
-          footnote="A broken seal is our problem. We collect and settle it."
-          className="dvside"
-        >
-          {data.consignments.map((c) =>
-            c.receiptConfirmedAt !== null ? (
-              <p key={c.index} className="dvsigned">
-                <span className="l">Delivery {c.index} signed for</span>
-                <span className="mono">{when(c.receiptConfirmedAt)}</span>
-              </p>
-            ) : !canRecord ? (
-              // POST .../receipt checks `platform.ticket.write`. An approver and
-              // a viewer hold none, and used to press this and be refused.
-              <p key={c.index} className="dvcannot">
-                <span className="l">Delivery {c.index}</span>
-                <span className="d">Your seat cannot sign for a delivery.</span>
-              </p>
-            ) : c.blockedReason === null ? (
-              <button
-                key={c.index}
-                type="button"
-                className={primaryDelivery === c.index ? 'pill acc dvsign' : 'pill wire dvsign'}
-                disabled={busy}
-                onClick={() => void sign(c.index)}
-              >
-                {busy ? 'Recording…' : `Confirm receipt of delivery ${c.index}`}
-              </button>
-            ) : (
-              <p key={c.index} className="dvcannot">
-                <span className="l">Delivery {c.index}</span>
-                <span className="d">{c.blockedReason}</span>
-              </p>
-            ),
-          )}
+        <aside className="od-col">
+          <section className="od-card od-summary dvside" aria-labelledby="dv-sign">
+            <h2 id="dv-sign">Signing for this delivery</h2>
+            <p className="od-lead">
+              {compromised.length > 0
+                ? 'A seal we cannot vouch for stops the handover. Take-back on those machines is ours and is not something you have to argue for — do not accept them.'
+                : unchecked.length > 0
+                  ? 'Check every seal first. A machine we sealed and nobody has looked at since is not a machine that has been verified.'
+                  : signable.length > 0
+                    ? 'Every seal on this delivery has been looked at and none of them is broken.'
+                    : 'There is nothing waiting on you here.'}
+            </p>
+            {data.consignments.map((c) =>
+              c.receiptConfirmedAt !== null ? (
+                <p key={c.index} className="dvsigned">
+                  <span className="l">Delivery {c.index} signed for</span>
+                  <span className="mono">{when(c.receiptConfirmedAt)}</span>
+                </p>
+              ) : !canRecord ? (
+                // POST .../receipt checks `platform.ticket.write`. An approver and
+                // a viewer hold none, and used to press this and be refused.
+                <p key={c.index} className="dvcannot">
+                  <span className="l">Delivery {c.index}</span>
+                  <span className="d">Your seat cannot sign for a delivery.</span>
+                </p>
+              ) : c.blockedReason === null ? (
+                <button
+                  key={c.index}
+                  type="button"
+                  className={primaryDelivery === c.index ? 'pill acc dvsign' : 'pill wire dvsign'}
+                  disabled={busy}
+                  onClick={() => void sign(c.index)}
+                >
+                  {busy ? 'Recording…' : `Confirm receipt of delivery ${c.index}`}
+                </button>
+              ) : (
+                <p key={c.index} className="dvcannot">
+                  <span className="l">Delivery {c.index}</span>
+                  <span className="d">{c.blockedReason}</span>
+                </p>
+              ),
+            )}
 
-          <a
-            className="pill wire dvside-a"
-            href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}
-          >
-            Report a discrepancy
-          </a>
-          <a
-            className="pill wire dvside-a"
-            href={`/returns?order=${encodeURIComponent(orderNumber)}`}
-          >
-            Returns on this order
-          </a>
-        </SidePanel>
+            <a
+              className="pill wire dvside-a"
+              href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}
+            >
+              Report a discrepancy
+            </a>
+            <a
+              className="pill wire dvside-a"
+              href={`/returns?order=${encodeURIComponent(orderNumber)}`}
+            >
+              Returns on this order
+            </a>
+            {/* Tier 3: the consequence of finding a broken seal, in twelve words. */}
+            <p className="od-why">A broken seal is our problem. We collect and settle it.</p>
+          </section>
+        </aside>
       </div>
 
       {/* Tier 4. Worth saying once to somebody who asks, not on every visit to
@@ -392,68 +395,73 @@ function Consignment({
   const unchecked = c.machines.filter((m) => !isChecked(m));
 
   return (
-    <section className="dvcons" aria-labelledby={`dvc${c.index}`}>
-      <header className="dvconshead">
+    <section className="od-card dvcons" aria-labelledby={`dvc${c.index}`}>
+      <header className="od-card__head dvconshead">
         <h2 id={`dvc${c.index}`}>{c.label}</h2>
         <Window window={c.window} windowHours={windowHours} deliveredAt={c.deliveredAt} />
       </header>
 
-      {c.deliveredAt === null ? (
-        <p className="dvnote">
-          This delivery has not arrived yet. The 48-hour inspection window starts when it does — not
-          when the order was placed and not when it left the supply point.
-        </p>
-      ) : c.receiptConfirmedAt !== null ? (
-        // Signed for. The check is over, and leaving an empty scan box on a
-        // finished delivery is a control that invites work nobody has to do.
-        <p className="dvnote">
-          You signed for this delivery on <span className="mono">{when(c.receiptConfirmedAt)}</span>
-          . If something turns up now, it is still inside the inspection window —{' '}
-          <a href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}>report a discrepancy</a>{' '}
-          and we will collect the machine.
-        </p>
-      ) : !canRecord ? (
-        <p className="dvnote">
-          Your seat can read this delivery and cannot record a seal check. Anyone on your team who
-          can raise a return or a claim can do it.
-        </p>
-      ) : open ? (
-        <ScanBox
-          code={code}
-          setCode={setCode}
-          busy={busy}
-          primary={primary && unchecked.length > 0}
-          onCheck={onCheck}
-        />
-      ) : (
-        <p className="dvnote">
-          {/* Neutral, and with the way forward beside it. An expired window is
+      <div className="od-card__body">
+        {c.deliveredAt === null ? (
+          <p className="dvnote">
+            This delivery has not arrived yet. The 48-hour inspection window starts when it does —
+            not when the order was placed and not when it left the supply point.
+          </p>
+        ) : c.receiptConfirmedAt !== null ? (
+          // Signed for. The check is over, and leaving an empty scan box on a
+          // finished delivery is a control that invites work nobody has to do.
+          <p className="dvnote">
+            You signed for this delivery on{' '}
+            <span className="mono">{when(c.receiptConfirmedAt)}</span>. If something turns up now,
+            it is still inside the inspection window —{' '}
+            <a href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}>
+              report a discrepancy
+            </a>{' '}
+            and we will collect the machine.
+          </p>
+        ) : !canRecord ? (
+          <p className="dvnote">
+            Your seat can read this delivery and cannot record a seal check. Anyone on your team who
+            can raise a return or a claim can do it.
+          </p>
+        ) : open ? (
+          <ScanBox
+            code={code}
+            setCode={setCode}
+            busy={busy}
+            primary={primary && unchecked.length > 0}
+            onCheck={onCheck}
+          />
+        ) : (
+          <p className="dvnote">
+            {/* Neutral, and with the way forward beside it. An expired window is
               not a failure and must not be drawn as one — the machine is still
               under warranty and a fault found today still costs nothing. */}
-          The inspection window on this delivery has closed, so the seal check at the door is over.
-          The machines are still under warranty: if one of them has a fault, raise a{' '}
-          <a href="/warranty">warranty claim</a> and we handle it at our cost.
-        </p>
-      )}
-
-      <ul className="dvmachines">
-        {c.machines.length === 0 && (
-          <li className="dvempty">
-            <span className="notmeasured">No machine is assigned to this delivery yet.</span>
-          </li>
+            The inspection window on this delivery has closed, so the seal check at the door is
+            over. The machines are still under warranty: if one of them has a fault, raise a{' '}
+            <a href="/warranty">warranty claim</a> and we handle it at our cost.
+          </p>
         )}
-        {c.machines.map((m, i) => (
-          <Machine
-            // A slot with no machine yet has no serial to key on.
-            key={m.serialNumber ?? `slot-${i}`}
-            machine={m}
-            orderNumber={orderNumber}
-            canUse={open}
-            arrived={c.deliveredAt !== null}
-            onUseCode={setCode}
-          />
-        ))}
-      </ul>
+
+        <ul className="dvmachines">
+          {c.machines.length === 0 && (
+            <li className="dvempty">
+              <span className="notmeasured">No machine is assigned to this delivery yet.</span>
+            </li>
+          )}
+          {c.machines.map((m, i) => (
+            <Machine
+              // A slot with no machine yet has no serial to key on.
+              key={m.serialNumber ?? `slot-${i}`}
+              machine={m}
+              orderNumber={orderNumber}
+              canUse={open}
+              arrived={c.deliveredAt !== null}
+              onUseCode={setCode}
+            />
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
@@ -742,12 +750,12 @@ function Recorded({
 function LoadingRecord(): React.JSX.Element {
   return (
     <>
-      <Skeleton className="h-24 w-full rounded-lg" />
-      <div className="rec dvrec">
-        <main className="evid">
-          <Skeleton className="h-72 w-full rounded-lg" />
-        </main>
-        <Skeleton className="h-56 w-full rounded-lg" />
+      <Skeleton className="h-32 w-full rounded-xl" />
+      <div className="od-grid" aria-busy="true">
+        <div className="od-col">
+          <Skeleton className="h-72 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-56 w-full rounded-xl" />
       </div>
     </>
   );

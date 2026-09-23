@@ -58,6 +58,7 @@ const PO: PurchaseOrderDetail = {
       lineTotal: '10000.00',
       lineStatus: 'ACCEPTED',
       rejectionReason: null,
+      qtyAvailable: 2,
       attachedCount: 0,
       serials: [],
     },
@@ -203,5 +204,145 @@ describe('the attach picker', () => {
     await waitFor(() => expect(posted).toHaveLength(2));
     const unitIds = posted.map((b) => (JSON.parse(b) as { unitId: string }).unitId).sort();
     expect(unitIds).toEqual(['u-reserved', 'u-listed-2'].sort());
+  });
+});
+
+/* ==========================================================================
+ * The vendor's answer: a quantity per line, not an accept or a reject
+ * ======================================================================== */
+
+const RAISED: PurchaseOrderDetail = {
+  ...PO,
+  status: 'RAISED',
+  acknowledgedAt: null,
+  units: 3,
+  lineGroups: [
+    { ...PO.lineGroups[0]!, lineStatus: 'PENDING', qtyAvailable: null },
+    {
+      ...PO.lineGroups[0]!,
+      lineIds: ['line-3'],
+      skuId: 'sku-2',
+      skuCode: 'HP-EB840-I51135G7-16-512',
+      title: 'HP EliteBook 840 G8',
+      gradeAtPo: 'B',
+      qty: 1,
+      unitPrice: '4000.00',
+      lineTotal: '4000.00',
+      lineStatus: 'PENDING',
+      qtyAvailable: null,
+    },
+  ],
+  totals: {
+    orderTotal: '14000.00',
+    rejectedTotal: '0.00',
+    tdsAmount: '0.00',
+    owedIfAccepted: '14000.00',
+  },
+};
+
+function mockRaised(posted: string[], permissions: string[] = CAN_ACK): void {
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+    const url = String(input);
+    if (url.includes('/api/auth/session')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          userId: 'u1',
+          orgId: 'o1',
+          orgType: 'VENDOR',
+          roles: ['VENDOR_OWNER'],
+          permissions,
+          mfaRequired: false,
+          fullName: 'Harpreet Singh',
+        }),
+      } as Response);
+    }
+    if (url.includes('/purchase-orders/po-1/availability')) {
+      posted.push(String((init?.body as string | undefined) ?? ''));
+      return Promise.resolve({ ok: true, status: 200, json: async () => PO } as Response);
+    }
+    if (url.includes('/purchase-orders/po-1')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => RAISED } as Response);
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) } as Response);
+  });
+}
+
+describe('answering a purchase order with a quantity per line', () => {
+  it('offers no accept or reject — one box per line and one button that waits for every box', async () => {
+    mockRaised([]);
+    render(
+      <AuthProvider>
+        <PoDetailDialog poId="po-1" open onClose={() => {}} onUpdated={() => {}} />
+      </AuthProvider>,
+    );
+    await screen.findByText('PO-26-00027');
+
+    expect(screen.queryByText('Accept')).toBeNull();
+    expect(screen.queryByText('Reject')).toBeNull();
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+
+    const button = screen.getByRole('button', { name: 'Update availability' });
+    expect(button).toHaveAttribute('title', 'Enter the quantity available for every line first.');
+  });
+
+  it('refuses more than the line asked for, on the line, in a sentence', async () => {
+    const user = userEvent.setup();
+    mockRaised([]);
+    render(
+      <AuthProvider>
+        <PoDetailDialog poId="po-1" open onClose={() => {}} onUpdated={() => {}} />
+      </AuthProvider>,
+    );
+    await screen.findByText('PO-26-00027');
+
+    await user.type(screen.getByLabelText(/Quantity available of Dell Latitude 3420/), '5');
+    expect(
+      await screen.findByText('This line asks for 2 machines. Enter a quantity between 0 and 2.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Update availability' })).toHaveAttribute('title');
+  });
+
+  it('names what is being confirmed, what is owed for it, and posts the quantities', async () => {
+    const user = userEvent.setup();
+    const posted: string[] = [];
+    mockRaised(posted);
+    render(
+      <AuthProvider>
+        <PoDetailDialog poId="po-1" open onClose={() => {}} onUpdated={() => {}} />
+      </AuthProvider>,
+    );
+    await screen.findByText('PO-26-00027');
+
+    await user.type(screen.getByLabelText(/Quantity available of Dell Latitude 3420/), '1');
+    await user.type(screen.getByLabelText(/Quantity available of HP EliteBook 840 G8/), '0');
+
+    // 1 × 5,000 confirmed, 1 × 5,000 + 1 × 4,000 not available.
+    expect(screen.getByText('You are owed for 1 of 3')).toBeTruthy();
+    expect(screen.getByText('Not available (2 of 3)')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm 1 of 3 available' }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(JSON.parse(posted[0]!)).toEqual({
+      lines: [
+        { skuId: 'sku-1', grade: 'A', qtyAvailable: 1 },
+        { skuId: 'sku-2', grade: 'B', qtyAvailable: 0 },
+      ],
+    });
+  });
+
+  it('shows a line nobody has answered as not confirmed, never as a number', async () => {
+    mockRaised([], ['procurement.po.read_own']);
+    render(
+      <AuthProvider>
+        <PoDetailDialog poId="po-1" open onClose={() => {}} onUpdated={() => {}} />
+      </AuthProvider>,
+    );
+    await screen.findByText('PO-26-00027');
+
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    expect(screen.getAllByText('Not confirmed')).toHaveLength(2);
   });
 });

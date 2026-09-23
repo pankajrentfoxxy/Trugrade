@@ -119,10 +119,16 @@ it('lets a signed-out visitor and a seat that may not read readiness through', a
 });
 
 it('never recomputes the rule from the profile cards', () => {
-  const source = readFileSync(join(__dirname, 'CheckoutGate.tsx'), 'utf8');
-  // The import, not the word: the docblock names the old call deliberately,
-  // because the history is the reason this file reads the server instead.
-  expect(source).not.toMatch(/^import .*profileCompletionPct/m);
-  expect(source).not.toContain('profileCompletionPct(onboarding');
-  expect(source).toContain('getOrderReadiness');
+  const gate = readFileSync(join(__dirname, 'CheckoutGate.tsx'), 'utf8');
+  // The rule lives in `checkout-entry.ts` so the product page's Buy now can
+  // share it; the gate must go through it and nothing else.
+  const entry = readFileSync(join(__dirname, 'checkout-entry.ts'), 'utf8');
+  for (const source of [gate, entry]) {
+    // The import, not the word: the docblock names the old call deliberately,
+    // because the history is the reason this file reads the server instead.
+    expect(source).not.toMatch(/^import .*profileCompletionPct/m);
+    expect(source).not.toContain('profileCompletionPct(onboarding');
+  }
+  expect(gate).toMatch(/^import .*checkoutDestination/m);
+  expect(entry).toContain('getOrderReadiness');
 });

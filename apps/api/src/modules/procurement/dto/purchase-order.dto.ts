@@ -47,6 +47,32 @@ export const respondPoLinesSchema = z.object({
 
 export type RespondPoLinesDto = z.infer<typeof respondPoLinesSchema>;
 
+/**
+ * "This is how many of each I can supply."
+ *
+ * Per SKU + grade rather than per PO line, because that is the unit the vendor
+ * thinks in: a PO line is one machine, and a vendor with five of a model does
+ * not want to click five times. The service turns the count back into per-line
+ * accept/reject so every downstream consequence — the buyer's order, the
+ * payable, the released stock — stays on the one path that already handles it.
+ */
+export const confirmPoAvailabilitySchema = z.object({
+  lines: z
+    .array(
+      z.object({
+        skuId: uuidSchema,
+        grade: gradeSchema,
+        qtyAvailable: z
+          .number({ invalid_type_error: 'Enter a whole number of machines.' })
+          .int('Enter a whole number of machines.')
+          .min(0, 'A quantity cannot be negative.'),
+      }),
+    )
+    .min(1, 'Enter the quantity available for at least one line.'),
+});
+
+export type ConfirmPoAvailabilityDto = z.infer<typeof confirmPoAvailabilitySchema>;
+
 export const dispatchPoSchema = z.object({
   carrier: z.string().trim().min(1, 'Enter the courier name.'),
   awb: z.string().trim().min(1, 'Enter the AWB or tracking number.'),

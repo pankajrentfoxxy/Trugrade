@@ -21,6 +21,8 @@
  * Dell row tells them nothing at all.
  */
 
+import { cpuDisplayLine } from '@trugrade/contracts';
+
 /** One sellable unit, joined to the specification of the SKU behind it. */
 export interface SearchRow {
   /* --- listing's half: what was measured --- */
@@ -362,14 +364,6 @@ const RESOLUTION_PIXELS: Readonly<Record<string, string>> = {
   WUXGA: '1920x1200',
 };
 
-function cpuLine(r: Pick<SearchRow, 'cpuFamily' | 'cpuModel'>): string {
-  if (/^i[3579]-/.test(r.cpuModel)) return `Intel Core ${r.cpuModel}`;
-  if (/^ryzen/i.test(r.cpuModel)) return `AMD ${r.cpuModel}`;
-  const isAmd = /ryzen|amd/i.test(r.cpuFamily);
-  const brand = isAmd ? 'AMD' : 'Intel';
-  return `${brand} ${r.cpuFamily} ${r.cpuModel}`.replace(/\s+/g, ' ').trim();
-}
-
 function displayLine(r: Pick<SearchRow, 'screenInch' | 'resolution'>): string {
   const inch = r.screenInch % 1 === 0 ? String(r.screenInch) : r.screenInch.toFixed(1);
   const px = RESOLUTION_PIXELS[r.resolution];
@@ -630,7 +624,9 @@ function aggregate(rows: readonly SearchRow[]): SearchResult[] {
       ramGb: first.ramGb,
       storageGb: first.storageGb,
       storageType: first.storageType,
-      cpuLine: cpuLine(first),
+      // Shared with the storefront's configuration picker, which rebuilds the
+      // same line from a catalogue SKU to match it against these rows.
+      cpuLine: cpuDisplayLine(first),
       displayLine: displayLine(first),
     };
   });

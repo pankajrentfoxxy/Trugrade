@@ -16,15 +16,15 @@ import { PROFILE_SECTIONS } from '../vendor/profile/sections.config';
 import {
   liveFieldError,
   mobileSubscriberDigits,
-  signupPasswordRules,
-  signupPasswordStrength,
+  supplierPasswordRules,
+  supplierPasswordStrength,
   toE164,
   type SignupFieldKey,
   typeFullName,
   validateEmail,
   validateFullName,
   validateMobile,
-  validateSignupPassword,
+  validateSupplierPassword,
 } from './signup-validation';
 import '../auth/auth-split.css';
 import '../auth/auth-wizard.css';
@@ -258,7 +258,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     liveFieldError(
       'password',
       password,
-      (value) => validateSignupPassword(value, passwordContext),
+      (value) => validateSupplierPassword(value, passwordContext),
       focused,
       active,
     ) ?? serverErrors.password;
@@ -355,7 +355,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     markActive('password');
     markActive('confirm');
     const nameErr = validateFullName(fullName);
-    const passErr = validateSignupPassword(password, passwordContext);
+    const passErr = validateSupplierPassword(password, passwordContext);
     if (nameErr) {
       shake('fullName');
       return;
@@ -503,10 +503,10 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
     setRefusal(null);
   };
 
-  const strength = signupPasswordStrength(password, passwordContext);
-  const rules = signupPasswordRules(password);
+  const strength = supplierPasswordStrength(password, passwordContext);
+  const rules = supplierPasswordRules(password);
   const passwordEngaged = focused === 'password' || active.password;
-  const passwordOk = password.length > 0 && !validateSignupPassword(password, passwordContext);
+  const passwordOk = password.length > 0 && !validateSupplierPassword(password, passwordContext);
   const stepFourBanner = error && step === 4 ? error : undefined;
 
   const stepHead =
@@ -911,7 +911,7 @@ export function SupplierSignup({ onSessionEstablished }: SupplierSignupProps): R
                       <p className={`hint${passwordOk ? ' ok' : ''}`} id="sup-password-hint">
                         {passwordOk
                           ? 'Good — that’ll do.'
-                          : '12+ characters, one lowercase, one capital, one number, one symbol.'}
+                          : 'At least one letter and one number.'}
                       </p>
                     )}
 

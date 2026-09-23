@@ -123,7 +123,7 @@ async function open(cart: CartView = view()) {
   const rendered = render(<CartScreen />);
   // Wait for the cart read to land — the rail's subtitle is only in the ready
   // state (the skeleton carries the rail's title, hidden).
-  await screen.findByText('Every charge is named here. Nothing is added later.');
+  await screen.findByText('Goods value now. GST and freight are shown in full at checkout.');
   return rendered;
 }
 
@@ -229,11 +229,15 @@ describe('the hold, and the absence of a scarcity device', () => {
 });
 
 describe('every charge on one screen', () => {
-  it('names freight and GST rather than revealing them later', async () => {
+  it('says GST and freight exist and where they are shown, without rows that can only say "later"', async () => {
     const { container } = await open();
-    expect(container.textContent).toContain('Freight');
-    expect(container.textContent).toContain('18%, IGST or CGST + SGST');
+    // Both charges are named, and named as shown in full at checkout: the
+    // card no longer carries a GST row and a freight row whose only value was
+    // "at checkout", which named a charge without giving it.
+    expect(container.textContent).toContain('GST and freight are shown in full at checkout.');
     expect(container.textContent).toContain('There is no third charge.');
+    expect(container.textContent).not.toContain('Split shown at checkout');
+    expect(container.textContent).not.toContain('Priced to your pincode at checkout');
     // And the figure that is not the landed total is not called the total.
     expect(screen.getAllByText('Goods value').length).toBeGreaterThan(0);
   });

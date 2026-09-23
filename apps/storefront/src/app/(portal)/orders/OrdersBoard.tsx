@@ -6,16 +6,15 @@ import { useRouter } from 'next/navigation';
 import {
   DataBoard,
   EmptyState,
-  HubPageHeader,
   Pagination,
-  StatusPill,
+  Skeleton,
   type Column,
   type SortDirection,
 } from '@trugrade/ui';
-import { Money, buyerOrderStatusLabel } from '@trugrade/contracts';
+import { Money, buyerOrderStatusLabel, hasReached } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { inIst } from '../../../lib/deadline';
-import { getOrders, type OrderFacetOption, type OrderList, type OrderSummary } from '../api';
+import { getOrders, type OrderList, type OrderSummary } from '../api';
 
 /**
  * The order board. See `page.tsx` for the archetype and the rules.
@@ -26,11 +25,30 @@ import { getOrders, type OrderFacetOption, type OrderList, type OrderSummary } f
  * which read it off the URL, and every control here pushes the router rather
  * than setting anything. Reproducing the screen from the address bar alone is
  * the requirement; holding none of it locally is what makes that true.
+ *
+ * The shape: a row of status tabs that ARE the status filter, each carrying
+ * the server's count for it; a banner when orders are waiting on the buyer's
+ * own payment; one search box, the site and the sort; then the table in a
+ * card with its own footer. The status counts and the site list are the
+ * facets the API computes with every other filter applied, so nothing here is
+ * a number the screen made up.
  */
 
 const rupees = (decimal: string): string => Money.parse(decimal).format();
 
-/** Parameters that are not filters, so they never appear as an applied chip. */
+/** "23 Sep 2026, 3:11 pm", on the IST calendar. The board column has no room for the zone; the record states it. */
+const DATE = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+});
+const boardDate = (iso: string): string => DATE.format(new Date(iso)).replace('Sept', 'Sep');
+
+/** Parameters that are not filters, so an empty result knows whether one applied. */
 const NOT_A_FILTER = new Set(['sort', 'page', 'per']);
 
 /**
@@ -39,10 +57,10 @@ const NOT_A_FILTER = new Set(['sort', 'page', 'per']);
  * "cheapest first" has to survive being sent to somebody.
  */
 const SORTS = [
-  { value: 'recent', label: 'Most recently placed' },
+  { value: 'recent', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
-  { value: 'value', label: 'Order value, high to low' },
-  { value: 'value_asc', label: 'Order value, low to high' },
+  { value: 'value', label: 'Value: high to low' },
+  { value: 'value_asc', label: 'Value: low to high' },
 ] as const;
 
 const SORT_LABEL = (value: string): string =>
@@ -63,6 +81,36 @@ const sortState = (sort: string): { key: string; direction: SortDirection } | un
 };
 
 const PER_PAGE = [10, 25, 50] as const;
+
+/** The statuses under which an order is over without having been delivered. */
+const OVER = new Set(['CANCELLED', 'VENDOR_REJECTED', 'RTO']);
+
+/**
+ * What a status tab says under its count, and whether it is a hold-up.
+ *
+ * The two `warn` states are the ones waiting on the buyer's own organisation —
+ * an approver's signature or a payment. Everything else is with us or the
+ * carrier, and the tab says what happens next rather than colouring it.
+ */
+type Tone = 'warn' | 'info' | 'ok' | 'neutral';
+
+/** The badge family a status belongs to: a hold-up, in motion, arrived, or over. */
+function toneOf(status: string): Tone {
+  if (status === 'AWAITING_APPROVAL' || status === 'PAYMENT_PENDING') return 'warn';
+  if (OVER.has(status)) return 'neutral';
+  if (hasReached(status, 'DELIVERED')) return 'ok';
+  return 'info';
+}
+
+function metaFor(status: string): { text: string; dot: Tone } {
+  const dot = toneOf(status);
+  if (status === 'AWAITING_APPROVAL') return { text: 'Held until your approver answers', dot };
+  if (status === 'PAYMENT_PENDING') return { text: 'Machines held until you pay', dot };
+  if (OVER.has(status)) return { text: 'Nothing more is owed', dot };
+  if (hasReached(status, 'DELIVERED')) return { text: 'Run delivery check', dot };
+  if (hasReached(status, 'DISPATCHED')) return { text: 'On its way', dot };
+  return { text: 'Getting ready to ship', dot };
+}
 
 type Phase =
   | { k: 'loading' }
@@ -126,6 +174,7 @@ export function OrdersBoard({ query }: { query: string }): React.JSX.Element {
   const href = (key: string, value: string): Route => {
     const next = new URLSearchParams(params);
     next.set(key, value);
+    next.delete('page');
     return `/orders?${next.toString()}` as Route;
   };
 
@@ -134,126 +183,266 @@ export function OrdersBoard({ query }: { query: string }): React.JSX.Element {
 
   const list = phase.k === 'ready' ? phase.list : null;
   const sort = params.get('sort') ?? 'recent';
+  const status = params.get('status') ?? '';
+  const site = params.get('site') ?? '';
+  const q = params.get('q') ?? '';
   const applied = [...params.entries()].filter(([k, v]) => !NOT_A_FILTER.has(k) && v !== '');
 
-  return (
-    <>
-      <HubPageHeader
-        title="Your orders"
-        subtitle={
-          list === null
-            ? undefined
-            : `${list.total.toLocaleString('en-IN')} ${list.total === 1 ? 'order' : 'orders'}`
-        }
-      />
+  const statusFacets = list?.facets.status ?? null;
+  const siteFacets = list?.facets.site ?? null;
+  // The counts arrive with every OTHER filter applied but not the status's
+  // own, so their sum is what "All orders" would return.
+  const everything = statusFacets === null ? null : statusFacets.reduce((n, o) => n + o.count, 0);
+  const pending = statusFacets?.find((o) => o.value === 'PAYMENT_PENDING') ?? null;
+  const from = list === null || list.total === 0 ? 0 : (list.page - 1) * list.per + 1;
+  const to = list === null ? 0 : Math.min(list.page * list.per, list.total);
 
-      <div className="cols">
-        <Rail
-          params={params}
-          applied={applied}
-          facets={list?.facets ?? null}
-          onSet={setValue}
-          onClear={() => commit(new URLSearchParams())}
+  return (
+    <div className="ol">
+      <div className="ol-head">
+        <div>
+          <h1 className="ol-title">Orders</h1>
+          <p className="ol-sub">
+            <Sub list={list} />
+          </p>
+        </div>
+      </div>
+
+      {/* The status filter. Radio behaviour on buttons: an order has exactly
+          one status, so pressing a tab replaces the last one. A zero-count
+          tab is DISABLED and dimmed, never removed — disappearing options make
+          people think the site is broken. */}
+      <div className="ol-tabs" role="group" aria-label="Filter by status">
+        <button
+          type="button"
+          className="ol-tab"
+          aria-pressed={status === ''}
+          onClick={() => setValue('status', '')}
+        >
+          <span className="ol-tab__top">
+            <span className="ol-dot ol-dot--all" aria-hidden="true" />
+            All orders
+          </span>
+          <span className="ol-tab__count mono">
+            {everything === null ? <Skeleton className="h-7 w-10 rounded" /> : everything}
+          </span>
+          <span className="ol-tab__meta">Every order on your account</span>
+        </button>
+        {statusFacets === null
+          ? [0, 1, 2].map((i) => (
+              <div key={i} className="ol-tab ol-tab--skeleton" aria-hidden="true">
+                <Skeleton className="h-4 w-28 rounded" />
+                <Skeleton className="h-7 w-10 rounded" />
+                <Skeleton className="h-3 w-32 rounded" />
+              </div>
+            ))
+          : statusFacets.map((o) => {
+              const on = status === o.value;
+              const empty = o.count === 0 && !on;
+              const meta = metaFor(o.value);
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  className={meta.dot === 'warn' ? 'ol-tab ol-tab--warn' : 'ol-tab'}
+                  aria-pressed={on}
+                  disabled={empty}
+                  onClick={() => setValue('status', on ? '' : o.value)}
+                >
+                  <span className="ol-tab__top">
+                    <span className={`ol-dot ol-dot--${meta.dot}`} aria-hidden="true" />
+                    {o.label}
+                  </span>
+                  <span className="ol-tab__count mono">{o.count}</span>
+                  <span className="ol-tab__meta">{meta.text}</span>
+                </button>
+              );
+            })}
+      </div>
+
+      {pending !== null && pending.count > 0 && status !== 'PAYMENT_PENDING' && (
+        <div className="ol-alert" role="status">
+          <AlertIcon />
+          <p className="ol-alert__text">
+            <strong>
+              <span className="mono">{pending.count}</span>{' '}
+              {pending.count === 1 ? 'order is' : 'orders are'} waiting for payment.
+            </strong>{' '}
+            Machines are held for you, but will not ship until you pay.
+          </p>
+          <a href={href('status', 'PAYMENT_PENDING')}>Show these orders →</a>
+        </div>
+      )}
+
+      <div className="ol-toolbar">
+        {/*
+          A real `<form>` with a submit button, not a debounced input. An order
+          number is typed in full and then looked for; re-running the query on
+          every keystroke of "TT-26-000" would show four wrong boards on the way
+          to the right one.
+        */}
+        <form
+          className="ol-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const value = new FormData(e.currentTarget).get('q');
+            setValue('q', typeof value === 'string' ? value.trim() : '');
+          }}
+        >
+          <SearchIcon />
+          <label htmlFor="oq" className="sr-only">
+            Find an order
+          </label>
+          <input
+            id="oq"
+            name="q"
+            type="search"
+            // `key` so a cleared or shared URL resets the box: an uncontrolled
+            // input keeps whatever was typed into it across a navigation, and
+            // a board whose search field disagrees with its results is the
+            // specific failure the URL rule exists to stop.
+            key={q}
+            defaultValue={q}
+            placeholder="Search by order no., your PO reference or machine serial"
+            autoComplete="off"
+          />
+          <button type="submit" className="ol-btn ol-btn--sm">
+            Find
+          </button>
+        </form>
+
+        <div className="ol-select">
+          <label htmlFor="osite">Delivery site</label>
+          <div className="ol-select__box">
+            <select
+              id="osite"
+              value={site}
+              onChange={(e) => setValue('site', e.target.value)}
+              disabled={siteFacets === null}
+            >
+              <option value="">All sites</option>
+              {(siteFacets ?? []).map((o) => (
+                <option key={o.value} value={o.value} disabled={o.count === 0 && site !== o.value}>
+                  {o.label} ({o.count})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="ol-select">
+          <label htmlFor="osort">Sort</label>
+          <div className="ol-select__box">
+            <select id="osort" value={sort} onChange={(e) => setValue('sort', e.target.value)}>
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="ol-card">
+        <DataBoard
+          className="ol-table"
+          caption={
+            list === null
+              ? 'Loading your orders.'
+              : `${list.orders.length} order${list.orders.length === 1 ? '' : 's'} on this page of ${list.total}, sorted by ${SORT_LABEL(sort).toLowerCase()}.`
+          }
+          columns={COLUMNS}
+          rows={list?.orders ?? []}
+          rowKey={(o) => o.orderNumber}
+          loading={list === null}
+          skeletonRows={8}
+          sort={sortState(sort)}
+          onSort={(key) => {
+            const pair = COLUMN_SORT[key];
+            if (!pair) return;
+            setValue('sort', sort === pair.desc ? pair.asc : pair.desc);
+          }}
+          empty={
+            <Nothing applied={applied.length > 0} onClear={() => commit(new URLSearchParams())} />
+          }
         />
 
-        <main>
-          <div className="rbar">
-            <span className="cnt">
-              {list === null ? (
-                <span className="ink4">Counting your orders…</span>
-              ) : (
-                <>
-                  <b className="mono">{list.total.toLocaleString('en-IN')}</b> order
-                  {list.total === 1 ? '' : 's'}
-                  {applied.length > 0 && (
-                    <>
-                      {' '}
-                      {list.total === 1 ? 'matches' : 'match'}{' '}
-                      {applied.length === 1 ? 'that filter' : 'those filters'}
-                    </>
-                  )}
-                </>
-              )}
+        {list !== null && list.total > 0 && (
+          <div className="ol-foot">
+            <span>
+              Showing{' '}
+              <strong className="mono">
+                {from}–{to}
+              </strong>{' '}
+              of <strong className="mono">{list.total.toLocaleString('en-IN')}</strong>{' '}
+              {list.total === 1 ? 'order' : 'orders'}
             </span>
-            <div className="r">
-              <label htmlFor="osort">Sort</label>
-              <select id="osort" value={sort} onChange={(e) => setValue('sort', e.target.value)}>
-                {SORTS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+            <div className="ol-pager">
+              <div className="ol-select">
+                <label htmlFor="oper">Per page</label>
+                <div className="ol-select__box">
+                  <select
+                    id="oper"
+                    value={String(list.per)}
+                    onChange={(e) => setValue('per', e.target.value)}
+                  >
+                    {PER_PAGE.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {list.pages > 1 && (
+                <Pagination
+                  page={list.page}
+                  pageCount={list.pages}
+                  hrefFor={(target) => {
+                    const next = new URLSearchParams(params);
+                    next.set('page', String(target));
+                    return `/orders?${next.toString()}` as Route;
+                  }}
+                  onPage={(target) => {
+                    const next = new URLSearchParams(params);
+                    next.set('page', String(target));
+                    commit(next, { keepPage: true });
+                  }}
+                  label="Order board pages"
+                />
+              )}
             </div>
           </div>
-
-          {list !== null && list.total === 0 ? (
-            <Nothing applied={applied.length > 0} onClear={() => commit(new URLSearchParams())} />
-          ) : (
-            <div className="tbl oboard">
-              <DataBoard
-                caption={
-                  list === null
-                    ? 'Loading your orders.'
-                    : `${list.orders.length} order${list.orders.length === 1 ? '' : 's'} on this page of ${list.total}, sorted by ${SORT_LABEL(sort).toLowerCase()}.`
-                }
-                columns={COLUMNS}
-                rows={list?.orders ?? []}
-                rowKey={(o) => o.orderNumber}
-                loading={list === null}
-                skeletonRows={8}
-                sort={sortState(sort)}
-                onSort={(key) => {
-                  const pair = COLUMN_SORT[key];
-                  if (!pair) return;
-                  setValue('sort', sort === pair.desc ? pair.asc : pair.desc);
-                }}
-              />
-            </div>
-          )}
-
-          {list !== null && list.total > 0 && (
-            <div className="pager">
-              {list.pages <= 1 ? (
-                <p className="shown">
-                  Showing {list.total === 1 ? 'the only' : 'all'}{' '}
-                  <b className="mono">{list.total}</b> order{list.total === 1 ? '' : 's'}
-                </p>
-              ) : (
-                <p className="shown">
-                  Page <b className="mono">{list.page}</b> of <b className="mono">{list.pages}</b> ·{' '}
-                  <b className="mono">{list.total}</b> orders
-                </p>
-              )}
-              <Pagination
-                page={list.page}
-                pageCount={list.pages}
-                hrefFor={(target) => href('page', String(target))}
-                onPage={(target) => {
-                  const next = new URLSearchParams(params);
-                  next.set('page', String(target));
-                  commit(next, { keepPage: true });
-                }}
-                label="Order board pages"
-              />
-              <div className="perpage">
-                <label htmlFor="oper">Per page</label>
-                <select
-                  id="oper"
-                  value={String(list.per)}
-                  onChange={(e) => setValue('per', e.target.value)}
-                >
-                  {PER_PAGE.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </main>
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The line under the title: how many orders, and where they go when that is
+ * one place. Read off the site facet, never off the rows on this page.
+ */
+function Sub({ list }: { list: OrderList | null }): React.JSX.Element {
+  if (list === null) return <>Counting your orders…</>;
+  const sites = list.facets.site.filter((o) => o.count > 0);
+  const n = list.total.toLocaleString('en-IN');
+  return (
+    <>
+      <span className="mono">{n}</span> {list.total === 1 ? 'order' : 'orders'}
+      {sites.length === 1 && (
+        <>
+          {' '}
+          · {list.total === 1 ? 'shipping' : 'all shipping'} to {sites[0]!.label}
+        </>
+      )}
+      {sites.length > 1 && (
+        <>
+          {' '}
+          · <span className="mono">{sites.length}</span> delivery sites
+        </>
+      )}
     </>
   );
 }
@@ -262,15 +451,22 @@ export function OrdersBoard({ query }: { query: string }): React.JSX.Element {
  * The columns
  * ======================================================================== */
 
-const NONE_GIVEN = <span className="notmeasured">None given</span>;
+// The dash the reference draws, with the words behind it for a screen reader.
+const NONE_GIVEN = (
+  <>
+    <span className="ol-empty notmeasured" aria-hidden="true">
+      —
+    </span>
+    <span className="sr-only notmeasured">None given</span>
+  </>
+);
 
 /**
  * Seven columns.
  *
- * Storefront density is comfortable, so every column costs 40px of gutter
- * before it holds anything. Facts that qualify another fact ride in its cell
- * rather than taking a column of their own: the date under the order number,
- * the city under the site, the deadline under the status.
+ * Facts that qualify another fact ride in its cell rather than taking a column
+ * of their own: the date under the order number, the city under the site, the
+ * deadline under the status.
  *
  * There is no dispatch-point column. The count of warehouses behind an order
  * is a real fact and it is on the order screen, where the machines are named
@@ -283,15 +479,15 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     header: 'Order',
     sortable: true,
     cell: (o) => (
-      <span className="obord">
-        <a className="mono" href={`/orders/${o.orderNumber}`}>
+      <span className="ol-order">
+        <a className="ol-id mono" href={`/orders/${o.orderNumber}`}>
           {o.orderNumber}
         </a>
-        <span className="obwhen">{inIst(o.placedAt)}</span>
+        <span className="ol-date">{boardDate(o.placedAt)}</span>
         {/* Why this row is in a serial search. A result with no visible reason
             reads as a mistake. */}
         {o.matchedSerials.length > 0 && (
-          <span className="obhit">matched {o.matchedSerials.join(', ')}</span>
+          <span className="ol-hit mono">matched {o.matchedSerials.join(', ')}</span>
         )}
       </span>
     ),
@@ -302,17 +498,31 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     cell: (o) => {
       const state = statusOf(o);
       return (
-        <span className="obord">
-          <StatusPill tone={state.tone} label={state.label} />
+        <span className="ol-status">
+          <Pill tone={state.tone} label={state.label} />
           {/* The one deadline this product imposes on a buyer. Stated as the
               instant, not as a ticking clock — a board is read down a column,
               and ten counters racing each other is noise, not information. */}
           {o.approval?.status === 'PENDING' && (
-            <span className="obdue">held until {inIst(o.approval.expiresAt)}</span>
+            <span className="ol-due mono">held until {inIst(o.approval.expiresAt)}</span>
           )}
         </span>
       );
     },
+  },
+  {
+    key: 'site',
+    header: 'Delivery site',
+    cell: (o) => (
+      <span className="ol-siteCell">
+        <span className="ol-site">
+          {o.deliverySiteLabel ?? (
+            <span className="notmeasured">Site no longer on your account</span>
+          )}
+        </span>
+        {o.deliveryCity && <span className="ol-site-city">{o.deliveryCity}</span>}
+      </span>
+    ),
   },
   {
     key: 'machines',
@@ -321,31 +531,31 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     cell: (o) => <span className="mono">{o.unitsAllocated}</span>,
   },
   {
-    key: 'site',
-    header: 'Delivery site',
-    cell: (o) => (
-      <span className="obsite">
-        {o.deliverySiteLabel ?? <span className="notmeasured">Site no longer on your account</span>}
-        {o.deliveryCity && <span>{o.deliveryCity}</span>}
-      </span>
-    ),
-  },
-  {
     key: 'po',
-    header: 'Your PO reference',
+    header: (
+      <>
+        <span aria-hidden="true">Your PO</span>
+        <span className="sr-only">Your PO reference</span>
+      </>
+    ),
     // An absence renders as an absence. An empty cell reads as a recorded
     // value, and this one prints on our invoice.
     cell: (o) => (o.buyerPoNumber ? <span className="mono">{o.buyerPoNumber}</span> : NONE_GIVEN),
   },
   {
     key: 'value',
-    header: 'Order value',
+    header: (
+      <>
+        <span aria-hidden="true">Value</span>
+        <span className="sr-only">Order value</span>
+      </>
+    ),
     numeric: true,
     sortable: true,
     cell: (o) => (
-      <span className="money">
-        {rupees(o.grandTotal)}
-        <small>incl. GST</small>
+      <span className="ol-valueCell">
+        <span className="ol-value mono">{rupees(o.grandTotal)}</span>
+        <span className="ol-value-note">incl. GST</span>
       </span>
     ),
   },
@@ -353,232 +563,48 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     key: 'action',
     header: 'Open',
     headerHidden: true,
-    cell: (o) => (
-      <a className="sel gh" href={`/orders/${o.orderNumber}`}>
-        Open
-      </a>
-    ),
+    // An unpaid order's row action goes to the sales order, which is where
+    // the payment lives. Filled, as the reference draws it.
+    cell: (o) =>
+      o.status === 'PAYMENT_PENDING' && o.paymentStatus !== 'PAID' ? (
+        <a className="ol-btn ol-btn--primary" href={`/orders/${o.orderNumber}/sales-order`}>
+          Pay now
+        </a>
+      ) : (
+        <a className="ol-btn" href={`/orders/${o.orderNumber}`}>
+          View
+        </a>
+      ),
   },
 ];
 
 /**
  * The pill.
  *
- * `warn` on a live approval because it is a genuine hold-up somebody has to act
- * on. Neutral everywhere else: green and red are PASS and FAIL, and an order
- * state is neither a pass nor a failure. This is `OrderRecord.statusOf` said
- * again over the list's narrower payload — the same words for the same facts,
- * because a board and a record that disagree about a status is worse than
- * either being wrong alone.
+ * `warn` on a live approval and on an unpaid order, because each is a genuine
+ * hold-up somebody has to act on. Neutral everywhere else: green and red are
+ * PASS and FAIL, and an order state is neither a pass nor a failure. This is
+ * the record's `statusOf` said again over the list's narrower payload — the
+ * same words for the same facts, because a board and a record that disagree
+ * about a status is worse than either being wrong alone.
  */
-function statusOf(order: OrderSummary): { tone: 'neutral' | 'warn'; label: string } {
+function statusOf(order: OrderSummary): { tone: Tone; label: string } {
   const approval = order.approval;
   if (approval?.status === 'PENDING') return { tone: 'warn', label: 'Awaiting approval' };
   if (approval?.status === 'REJECTED') return { tone: 'neutral', label: 'Approval declined' };
   if (approval?.status === 'EXPIRED') return { tone: 'neutral', label: 'Approval expired' };
-  return { tone: 'neutral', label: buyerOrderStatusLabel(order.status) };
+  if (order.status === 'PAYMENT_PENDING') return { tone: 'warn', label: 'Payment pending' };
+  return { tone: toneOf(order.status), label: buyerOrderStatusLabel(order.status) };
 }
 
-/* ==========================================================================
- * The rail
- * ======================================================================== */
-
-/**
- * Two facets, and only two, because two is what this product can honestly
- * filter an order list on: the status it is in and the site it goes to.
- *
- * A zero-count option is DISABLED and dimmed, never removed —
- * 09_FRONTEND_LOCKED.md §6 is explicit that disappearing options make people
- * think the site is broken. The counts arrive computed with every OTHER filter
- * applied but not the group's own, so ticking a status leaves the sites
- * countable.
- */
-function Rail({
-  params,
-  applied,
-  facets,
-  onSet,
-  onClear,
-}: {
-  params: URLSearchParams;
-  applied: ReadonlyArray<[string, string]>;
-  facets: OrderList['facets'] | null;
-  onSet: (key: string, value: string) => void;
-  onClear: () => void;
-}): React.JSX.Element {
-  const [sheetOpen, setSheetOpen] = React.useState(false);
-  const q = params.get('q') ?? '';
-
+/** The reference's badge: a tinted capsule with a dot, one family per state. */
+function Pill({ tone, label }: { tone: Tone; label: string }): React.JSX.Element {
   return (
-    <div className="railzone">
-      {/* Under 900px the rail is a full-screen sheet behind this button. It is
-          hidden on desktop by CSS, never by a resize listener in JavaScript. */}
-      <button
-        type="button"
-        className="fsheetbtn"
-        onClick={() => setSheetOpen(true)}
-        aria-expanded={sheetOpen}
-        aria-controls="order-filters"
-      >
-        Filters {applied.length > 0 && <span className="mono">({applied.length})</span>}
-      </button>
-
-      <aside
-        id="order-filters"
-        className={sheetOpen ? 'filters open' : 'filters'}
-        aria-label="Order filters"
-      >
-        <div className="fhead">
-          <b>Filters</b>
-          <span className="n mono">{applied.length} applied</span>
-          <button type="button" className="clr" onClick={onClear} disabled={applied.length === 0}>
-            Clear all
-          </button>
-          <button type="button" className="fclose" onClick={() => setSheetOpen(false)}>
-            <span aria-hidden="true">&times;</span>
-            <span className="sr-only">Close filters</span>
-          </button>
-        </div>
-
-        {/*
-          A real `<form>` with a submit button, not a debounced input. An order
-          number is typed in full and then looked for; re-running the query on
-          every keystroke of "TT-26-000" would show four wrong boards on the way
-          to the right one.
-        */}
-        <form
-          className="obsearch"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const value = new FormData(e.currentTarget).get('q');
-            onSet('q', typeof value === 'string' ? value.trim() : '');
-          }}
-        >
-          <label htmlFor="oq">Find an order</label>
-          <div className="obrow">
-            <input
-              id="oq"
-              name="q"
-              type="search"
-              // `key` so a cleared or shared URL resets the box: an
-              // uncontrolled input keeps whatever was typed into it across a
-              // navigation, and a board whose search field disagrees with its
-              // results is the specific failure the URL rule exists to stop.
-              key={q}
-              defaultValue={q}
-              placeholder="TT-26-00004"
-              autoComplete="off"
-            />
-            <button type="submit" className="sel gh">
-              Find
-            </button>
-          </div>
-          <p className="d">
-            One box over three numbers: our order number, your own PO reference, or the serial of
-            one machine.
-          </p>
-        </form>
-
-        {applied.length > 0 && (
-          <div className="applied">
-            {applied.map(([k, v]) => (
-              <button key={`${k}=${v}`} type="button" className="ftag" onClick={() => onSet(k, '')}>
-                {chipLabel(facets, k, v)} <i aria-hidden="true">&times;</i>
-                <span className="sr-only">Remove filter</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <details open>
-          <summary>Status</summary>
-          <div className="fbody">
-            <Options
-              options={facets?.status ?? null}
-              selected={params.get('status')}
-              onPick={(v) => onSet('status', v)}
-            />
-          </div>
-        </details>
-
-        <details open>
-          <summary>Delivery site</summary>
-          <div className="fbody">
-            <Options
-              options={facets?.site ?? null}
-              selected={params.get('site')}
-              onPick={(v) => onSet('site', v)}
-            />
-          </div>
-        </details>
-
-        <div className="fdone">
-          <button type="button" onClick={() => setSheetOpen(false)}>
-            Show these orders
-          </button>
-        </div>
-      </aside>
-
-      {sheetOpen && (
-        <button
-          type="button"
-          className="fscrim"
-          aria-label="Close filters"
-          onClick={() => setSheetOpen(false)}
-        />
-      )}
-    </div>
+    <span className={`ol-pill ol-pill--${tone}`}>
+      <span className={`ol-dot ol-dot--${tone}`} aria-hidden="true" />
+      {label}
+    </span>
   );
-}
-
-/**
- * One facet group. Radio behaviour rather than checkbox, because an order has
- * exactly one status and goes to exactly one site — a list of checkboxes would
- * promise an OR the server does not offer.
- */
-function Options({
-  options,
-  selected,
-  onPick,
-}: {
-  options: readonly OrderFacetOption[] | null;
-  selected: string | null;
-  onPick: (value: string) => void;
-}): React.JSX.Element {
-  // Not "no options": we have not read them yet, and a facet group that
-  // rendered empty while loading would say the dimension does not exist.
-  if (options === null) return <p className="fnote">Counting…</p>;
-  if (options.length === 0) {
-    return <p className="fnote">Nothing on your account has one of these yet.</p>;
-  }
-
-  return (
-    <>
-      {options.map((o) => {
-        const on = selected === o.value;
-        const empty = o.count === 0 && !on;
-        return (
-          <label key={o.value} className={empty ? 'fopt off' : 'fopt'}>
-            <input
-              type="checkbox"
-              checked={on}
-              disabled={empty}
-              onChange={() => onPick(on ? '' : o.value)}
-            />
-            {o.label}
-            <span className="c mono">{o.count}</span>
-          </label>
-        );
-      })}
-    </>
-  );
-}
-
-/** What an applied chip says. The facet's own words where we have them. */
-function chipLabel(facets: OrderList['facets'] | null, key: string, value: string): string {
-  if (key === 'q') return `“${value}”`;
-  const group = key === 'status' ? facets?.status : key === 'site' ? facets?.site : undefined;
-  return group?.find((o) => o.value === value)?.label ?? value;
 }
 
 /* ==========================================================================
@@ -594,7 +620,7 @@ function Nothing({
 }): React.JSX.Element {
   if (!applied) {
     return (
-      <div className="empty">
+      <div className="empty ol-empty">
         <h3>No orders yet</h3>
         <p>
           Nothing has been ordered on your organisation&rsquo;s account. When something is, it
@@ -609,12 +635,12 @@ function Nothing({
     );
   }
   return (
-    <div className="empty">
+    <div className="empty ol-empty">
       <h3>No order on your account matches that</h3>
       <p>
-        Every option in the rail still shows how many orders it would return on its own, so the one
-        that took the count to zero is the one reading <span className="mono">0</span>. Remove it,
-        or clear the filters and start again. If you were looking for a specific number, check it
+        Every status tab still shows how many orders it would return on its own, so the one that
+        took the count to zero is the one reading <span className="mono">0</span>. Pick another, or
+        clear the filters and start again. If you were looking for a specific number, check it
         against your confirmation — ours look like <span className="mono">TT-26-00004</span>.
       </p>
       <p className="retry">
@@ -656,5 +682,47 @@ function Failed({ message }: { message: string }): React.JSX.Element {
         </p>
       </div>
     </div>
+  );
+}
+
+/* ==========================================================================
+ * Icons — stroke only, inherit colour, never carry meaning on their own
+ * ======================================================================== */
+
+function AlertIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5" />
+      <path d="M12 16.5v.01" />
+    </svg>
+  );
+}
+
+function SearchIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </svg>
   );
 }

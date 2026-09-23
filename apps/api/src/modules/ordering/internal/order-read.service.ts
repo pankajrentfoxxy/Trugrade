@@ -4,12 +4,14 @@ import {
   Money,
   resolveTaxSplit,
   stateTaxLabel,
+  supplyPointLabel,
   type Grade,
 } from '@trugrade/contracts';
 import { ClockPort } from '../../../shared/clock';
 import { RequestContextService } from '../../../shared/db/org-scope';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ForbiddenError, NotFoundError } from '../../../shared/errors/domain-errors';
+import { ListingService } from '../../listing';
 import { CatalogLookup } from './catalog-lookup';
 import { dispatchLabels, UNKNOWN_DISPATCH_LABEL } from './dispatch-label';
 
@@ -70,6 +72,92 @@ export interface DispatchGroupView {
   /** `Supply Point F · Noida`. A dispatch point, never a seller. */
   label: string;
   machines: OrderedMachineView[];
+}
+
+/**
+ * One line of the order as the dispatch point answered it.
+ *
+ * **Built from `ordering` alone.** When a supply point answers our purchase
+ * order, `OrderPropagationService` writes the shortfall to
+ * `order_line.cancelled_qty` and the answer's moment to `sub_order.accepted_at`
+ * / `rejected_at`. Those columns are ours, so this view reads them and never
+ * reads the purchase order itself — which keeps the rule at the top of this
+ * file true while still telling the buyer what they can expect.
+ *
+ * `qtyAvailable` is null until the dispatch point has answered. An unanswered
+ * line is neither "0" nor "all"; the screen says it has not been confirmed.
+ */
+export interface SupplyLineView {
+  /** `Supply Point F · Noida`. A dispatch point, never a seller. */
+  label: string;
+  title: string | null;
+  specSummary: string | null;
+  grade: Grade;
+  qtyOrdered: number;
+  qtyAvailable: number | null;
+  /** ISO 8601, when the dispatch point answered. Null until it has. */
+  answeredAt: string | null;
+}
+
+/**
+ * One line of the sales order: what was ordered, what the dispatch point
+ * confirmed, and what the confirmed quantity comes to.
+ *
+ * Amounts are for the CONFIRMED quantity — the sales order is what we will
+ * invoice, and we do not invoice machines nobody can supply. `qtyConfirmed`
+ * and the three amounts are null until the dispatch point has answered.
+ */
+export interface SalesOrderLineView {
+  label: string;
+  title: string | null;
+  specSummary: string | null;
+  grade: Grade;
+  qtyOrdered: number;
+  qtyConfirmed: number | null;
+  unitPrice: string;
+  gstRatePct: number;
+  /** `qtyConfirmed × unitPrice`, before GST. */
+  lineNet: string | null;
+  lineGst: string | null;
+  lineTotal: string | null;
+}
+
+export interface SalesOrderTotalsView {
+  subtotal: string;
+  freight: string;
+  tax: OrderTaxView;
+  grandTotal: string;
+}
+
+/**
+ * The sales order — the booking as the dispatch points confirmed it.
+ *
+ * `WAITING` until every dispatch point on the order has answered: a sales
+ * order that totals two confirmed consignments and silently omits a third
+ * nobody has answered yet is a figure the buyer would be asked to pay against
+ * and then have to pay again. `READY` carries totals for the confirmed
+ * quantities; `CANCELLED` is an order every dispatch point refused.
+ */
+export interface SalesOrderView {
+  orderNumber: string;
+  state: 'WAITING' | 'READY' | 'CANCELLED';
+  dispatchPoints: number;
+  dispatchPointsAnswered: number;
+  /** When the last dispatch point answered. Null while any is outstanding. */
+  confirmedAt: string | null;
+  lines: SalesOrderLineView[];
+  /** Null unless `READY`. Never a total of a partly answered order. */
+  totals: SalesOrderTotalsView | null;
+  payment: {
+    mode: string;
+    status: string;
+    /**
+     * True when the sales order is ready and money is still owed on it.
+     * Credit-terms orders are never payable here: they are invoiced and paid on
+     * the agreed terms, not at a button.
+     */
+    payable: boolean;
+  };
 }
 
 export interface OrderPartyView {
@@ -145,6 +233,8 @@ export interface OrderRecordView {
   deliveryAddress: OrderAddressView;
   unitsAllocated: number;
   dispatchGroups: DispatchGroupView[];
+  /** What each dispatch point said it can supply, line by line. */
+  supply: SupplyLineView[];
   /**
    * The approval, when the policy fired. **`order.stock_hold_expires_at` is
    * deliberately not exposed.** On a confirmed order it still holds the spent
@@ -188,6 +278,21 @@ interface AllocatedRow {
   gst_rate: string;
 }
 
+/** One `order_line` with its consignment's answer. `ordering` only. */
+interface OrderLineRow {
+  sub_order_id: string;
+  sub_status: string;
+  listing_id: string;
+  sku_id: string;
+  grade: string;
+  qty: number;
+  cancelled_qty: number;
+  unit_price: string;
+  gst_rate: string;
+  accepted_at: Date | null;
+  rejected_at: Date | null;
+}
+
 @Injectable()
 export class OrderReadService {
   constructor(
@@ -195,6 +300,7 @@ export class OrderReadService {
     private readonly clock: ClockPort,
     private readonly ctx: RequestContextService,
     private readonly catalog: CatalogLookup,
+    private readonly listings: ListingService,
   ) {}
 
   /**
@@ -219,10 +325,11 @@ export class OrderReadService {
     if (!order) throw new NotFoundError('order', { reason: 'no_such_order_for_this_org' });
 
     const allocated = await this.allocated(order.id);
-    const [billedTo, addresses, approval] = await Promise.all([
+    const [billedTo, addresses, approval, supply] = await Promise.all([
       this.party(order.billing_gst_profile_id),
       this.addresses([order.billing_address_id, order.shipping_address_id]),
       this.approval(order.id),
+      this.supply(order.id),
     ]);
 
     const billingAddress = addresses.get(order.billing_address_id);
@@ -273,13 +380,179 @@ export class OrderReadService {
       deliveryAddress,
       unitsAllocated: allocated.length,
       dispatchGroups: await this.groups(allocated),
+      supply,
       approval,
+    };
+  }
+
+  /**
+   * The sales order: the booking as the dispatch points confirmed it.
+   *
+   * Same scoping and the same 404-not-403 rule as `byNumber`. Everything here
+   * is `ordering`'s own: the consignment's `accepted_at` / `rejected_at` say
+   * whether a dispatch point has answered, `cancelled_qty` says how short it
+   * was, and the line's own price and GST rate say what the rest comes to.
+   */
+  async salesOrder(orderNumber: string): Promise<SalesOrderView> {
+    const orgId = this.buyerOrgId();
+    const [order] = await this.prisma.$queryRaw<OrderRow[]>`
+      SELECT id, order_number, status::text AS status, payment_mode::text AS payment_mode,
+             payment_status::text AS payment_status, buyer_po_number, cost_centre,
+             subtotal::text AS subtotal, gst_total::text AS gst_total,
+             freight_total::text AS freight_total, grand_total::text AS grand_total,
+             placed_at, billing_gst_profile_id, billing_address_id, shipping_address_id
+        FROM ordering."order"
+       WHERE order_number = ${orderNumber} AND buyer_org_id = ${orgId}::uuid`;
+    if (!order) throw new NotFoundError('order', { reason: 'no_such_order_for_this_org' });
+
+    const [rows, addresses] = await Promise.all([
+      this.lineRows(order.id),
+      this.addresses([order.shipping_address_id]),
+    ]);
+    const deliveryAddress = addresses.get(order.shipping_address_id);
+    if (!deliveryAddress) {
+      throw new NotFoundError('order', { reason: 'order_references_a_removed_record' });
+    }
+    const { availability, descriptions } = await this.lineContext(rows);
+
+    // One answer per consignment, not per line: a dispatch point answers the
+    // whole of what it was asked for at once.
+    const consignments = new Map<string, { answeredAt: Date | null; refused: boolean }>();
+    for (const row of rows) {
+      consignments.set(row.sub_order_id, {
+        answeredAt: row.accepted_at ?? row.rejected_at,
+        refused: row.sub_status === 'VENDOR_REJECTED',
+      });
+    }
+    const answers = [...consignments.values()];
+    const answered = answers.filter((c) => c.answeredAt !== null);
+    const everyoneAnswered = answers.length > 0 && answered.length === answers.length;
+    const everyoneRefused = everyoneAnswered && answers.every((c) => c.refused);
+    const state: SalesOrderView['state'] = !everyoneAnswered
+      ? 'WAITING'
+      : everyoneRefused || order.status === 'CANCELLED'
+        ? 'CANCELLED'
+        : 'READY';
+    const confirmedAt = everyoneAnswered
+      ? new Date(Math.max(...answered.map((c) => c.answeredAt!.getTime()))).toISOString()
+      : null;
+
+    const lines: SalesOrderLineView[] = rows.map((row) => {
+      const stock = availability.get(row.listing_id);
+      const description = descriptions.get(row.sku_id) ?? null;
+      const isAnswered = (row.accepted_at ?? row.rejected_at) !== null;
+      const qtyConfirmed = isAnswered ? row.qty - row.cancelled_qty : null;
+      const unitPrice = Money.parse(row.unit_price);
+      const net = qtyConfirmed === null ? null : unitPrice.times(qtyConfirmed);
+      const gst = net === null ? null : Money.percentOf(net, Number(row.gst_rate));
+      return {
+        label:
+          stock?.supplyPointCode && stock.city
+            ? supplyPointLabel(stock.supplyPointCode, stock.city)
+            : UNKNOWN_DISPATCH_LABEL,
+        title: description?.title ?? null,
+        specSummary: description?.specSummary ?? null,
+        grade: row.grade as Grade,
+        qtyOrdered: row.qty,
+        qtyConfirmed,
+        unitPrice: row.unit_price,
+        gstRatePct: Number(row.gst_rate),
+        lineNet: net?.toString() ?? null,
+        lineGst: gst?.toString() ?? null,
+        lineTotal: net && gst ? net.add(gst).toString() : null,
+      };
+    });
+
+    let totals: SalesOrderTotalsView | null = null;
+    if (state === 'READY') {
+      const subtotal = Money.sum(lines.map((l) => Money.parse(l.lineNet ?? '0')));
+      const freight = Money.parse(order.freight_total);
+      const ratePct = Number(rows[0]?.gst_rate ?? 18);
+      // The same two facts and the same function that decided the heads at
+      // checkout: our state and the delivery state. Freight is taxed with the
+      // goods, as it was on the booking.
+      const split = resolveTaxSplit({
+        supplierState: OUR_STATE_CODE,
+        placeOfSupply: deliveryAddress.stateCode,
+        taxableAmount: subtotal.add(freight),
+        ratePct,
+        basis: 's.10(1)(a) IGST Act — place of supply is where the movement terminates',
+      });
+      const gstTotal = split.igst.add(split.cgst).add(split.sgst);
+      totals = {
+        subtotal: subtotal.toString(),
+        freight: freight.toString(),
+        tax: {
+          interState: split.interState,
+          igst: split.igst.toString(),
+          cgst: split.cgst.toString(),
+          sgst: split.sgst.toString(),
+          stateTaxLabel: stateTaxLabel(deliveryAddress.stateCode),
+          ratePct,
+          ourStateCode: OUR_STATE_CODE,
+          placeOfSupplyStateCode: deliveryAddress.stateCode,
+          placeOfSupplyState: deliveryAddress.state,
+          basis: split.basis,
+        },
+        grandTotal: subtotal.add(freight).add(gstTotal).toString(),
+      };
+    }
+
+    const owed = ['PENDING', 'FAILED', 'PARTIALLY_PAID'].includes(order.payment_status);
+    return {
+      orderNumber: order.order_number,
+      state,
+      dispatchPoints: answers.length,
+      dispatchPointsAnswered: answered.length,
+      confirmedAt,
+      lines,
+      totals,
+      payment: {
+        mode: order.payment_mode,
+        status: order.payment_status,
+        payable: state === 'READY' && order.payment_mode !== 'CREDIT' && owed,
+      },
     };
   }
 
   /* ----------------------------------------------------------------------
    * The parts
    * ------------------------------------------------------------------- */
+
+  /** Every line on the order with its consignment's answer. Inside `ordering` only. */
+  private async lineRows(orderId: string): Promise<OrderLineRow[]> {
+    return this.prisma.$queryRaw<OrderLineRow[]>`
+      SELECT so.id AS sub_order_id, so.status::text AS sub_status,
+             ol.listing_id, ol.sku_id, ol.grade::text AS grade, ol.qty, ol.cancelled_qty,
+             ol.unit_price::text AS unit_price, ol.gst_rate::text AS gst_rate,
+             so.accepted_at, so.rejected_at
+        FROM ordering.order_line ol
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${orderId}::uuid
+       ORDER BY so.sub_order_number, ol.id`;
+  }
+
+  /**
+   * The anonymised dispatch label per listing and the catalog words per SKU.
+   *
+   * The label comes through `listing`'s own view of the listing — the same
+   * seam checkout uses — so no vendor id crosses into here.
+   */
+  private async lineContext(rows: readonly OrderLineRow[]): Promise<{
+    availability: Map<string, { supplyPointCode: string | null; city: string | null }>;
+    descriptions: Map<string, { title: string; specSummary: string } | null>;
+  }> {
+    if (rows.length === 0) return { availability: new Map(), descriptions: new Map() };
+    const [availability, descriptions] = await Promise.all([
+      this.listings.availabilityByListing([...new Set(rows.map((r) => r.listing_id))]),
+      Promise.all(
+        [...new Set(rows.map((r) => r.sku_id))].map(
+          async (id) => [id, await this.catalog.describe(id)] as const,
+        ),
+      ).then((pairs) => new Map(pairs)),
+    ]);
+    return { availability, descriptions };
+  }
 
   private buyerOrgId(): string {
     const p = this.ctx.requirePrincipal();
@@ -313,7 +586,10 @@ export class OrderReadService {
    */
   private async groups(rows: readonly AllocatedRow[]): Promise<DispatchGroupView[]> {
     if (rows.length === 0) return [];
-    const labels = await dispatchLabels(this.prisma, rows.map((r) => r.unit_id));
+    const labels = await dispatchLabels(
+      this.prisma,
+      rows.map((r) => r.unit_id),
+    );
     const descriptions = new Map(
       await Promise.all(
         [...new Set(rows.map((r) => r.sku_id))].map(
@@ -339,6 +615,38 @@ export class OrderReadService {
     return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
   }
 
+  /**
+   * What each dispatch point said it can supply, line by line.
+   *
+   * `cancelled_qty` is written by the propagation of the supply point's answer;
+   * `accepted_at` / `rejected_at` on the consignment are the moment it answered.
+   * Until one of those is set the line is unanswered and `qtyAvailable` stays
+   * null. The label is resolved through `listing`'s own anonymised view of the
+   * listing, the same seam checkout uses, so no vendor id crosses into here.
+   */
+  private async supply(orderId: string): Promise<SupplyLineView[]> {
+    const rows = await this.lineRows(orderId);
+    if (rows.length === 0) return [];
+    const { availability, descriptions } = await this.lineContext(rows);
+
+    return rows.map((row) => {
+      const stock = availability.get(row.listing_id);
+      const description = descriptions.get(row.sku_id) ?? null;
+      const answeredAt = row.accepted_at ?? row.rejected_at;
+      return {
+        label:
+          stock?.supplyPointCode && stock.city
+            ? supplyPointLabel(stock.supplyPointCode, stock.city)
+            : UNKNOWN_DISPATCH_LABEL,
+        title: description?.title ?? null,
+        specSummary: description?.specSummary ?? null,
+        grade: row.grade as Grade,
+        qtyOrdered: row.qty,
+        qtyAvailable: answeredAt ? row.qty - row.cancelled_qty : null,
+        answeredAt: answeredAt ? answeredAt.toISOString() : null,
+      };
+    });
+  }
 
   /** Who the invoice will name. The buyer's own entity, from their GSTIN. */
   private async party(gstProfileId: string): Promise<OrderPartyView | null> {
@@ -420,7 +728,8 @@ export class OrderReadService {
     if (!row) return null;
 
     const names = await this.names([row.approver_user_id, row.requested_by]);
-    const expired = row.status === 'PENDING' && row.expires_at.getTime() <= this.clock.now().getTime();
+    const expired =
+      row.status === 'PENDING' && row.expires_at.getTime() <= this.clock.now().getTime();
 
     return {
       status: expired ? 'EXPIRED' : (row.status as OrderApprovalView['status']),

@@ -5,10 +5,10 @@
  * The product page, and the screen the whole model rests on: a Dell Latitude
  * 5420 is held by ten different supply points at ten different prices, and the
  * buyer's job here is to decide which of them to buy from, on evidence.
- * Everything on the page serves that decision — the photographs say what the
- * grade looks like, the specification says what the machine is, the board says
- * what each source costs landed and how each has performed, and the serial list
- * says which exact machines are behind the row they picked.
+ * Everything on the page serves that decision — the photographs in the sticky
+ * panel say what the grade looks like, the specification says what the machine
+ * is, the board says what each source costs and how each has performed, and
+ * the serials behind each row open the exact machines' own passports.
  *
  * **The whole of the state is in the URL** — grade, delivery pincode, and the
  * selected supply point. A buyer must be able to send a colleague a link that
@@ -29,15 +29,13 @@
 import type { Metadata, Route } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { RepresentativeImage, RepresentativeImageDisclosure } from '@trugrade/ui';
-import { BRAND } from '@trugrade/config/brand';
-import { normalisePincode, type Grade } from '@trugrade/contracts';
+import { GRADES as ALL_GRADES, normalisePincode, type Grade } from '@trugrade/contracts';
 import {
+  getModelSkus,
   getOfferBoard,
   getSearch,
   getSkuDetail,
   type OfferBoard,
-  type SkuDetail,
 } from '../../../lib/api';
 import { Board } from './Board';
 import { ProductCartScope } from './ProductCartScope';
@@ -46,7 +44,7 @@ import { specLine, specRows } from './spec-rows';
 import { PincodeFocusLink } from './PincodeFocusLink';
 import { PincodeForm } from './PincodeForm';
 import { ConfigPicker } from './ConfigPicker';
-// import { SupplyPointPicker } from './SupplyPointPicker';
+import { PanelGallery } from './PanelGallery';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
@@ -110,11 +108,17 @@ export default async function ProductPage({
 
   // Every configuration of this model we hold: the search index, asked for
   // the brand and model by name and then held to an exact match on both, so
-  // a "Latitude 5420" never picks up a "Latitude 5420 2-in-1". Its failure is
-  // the pills' absence, never the page's.
-  const siblings = await getSearch(
-    new URLSearchParams({ q: `${sku.brandName} ${sku.modelName}`, per: '48' }).toString(),
-  );
+  // a "Latitude 5420" never picks up a "Latitude 5420 2-in-1". Beside it, the
+  // catalogue's own list of the model's configurations — the index only holds
+  // what is sealed, and a configuration with nothing sealed must still be
+  // drawn, greyed, or the buyer concludes it was never made. Either failure
+  // is the pills' absence, never the page's.
+  const [siblings, catalogue] = await Promise.all([
+    getSearch(
+      new URLSearchParams({ q: `${sku.brandName} ${sku.modelName}`, per: '48' }).toString(),
+    ),
+    getModelSkus(sku.modelId),
+  ]);
   const variants = (siblings?.results ?? []).filter(
     (r) => r.brand === sku.brandName && r.model === sku.modelName,
   );
@@ -149,8 +153,14 @@ export default async function ProductPage({
 
   const shown = board.grades.find((g) => g.grade === board.grade);
   const selected = selectedOffer(board, first(query.sp), first(query.city));
-  const regular = board.offers.filter((o) => o.valuationMethod === 'REGULAR');
-  const margin = board.offers.filter((o) => o.valuationMethod === 'MARGIN');
+  // Cheapest unit price first. The API orders a priced board by landed price,
+  // and this page shows unit prices only, so it orders on what it shows —
+  // a "lowest" pill on a row that is not the lowest figure in the column is
+  // a claim the reader cannot check.
+  const byUnitPrice = (a: { unitPrice: string }, b: { unitPrice: string }): number =>
+    Number(a.unitPrice) - Number(b.unitPrice);
+  const regular = board.offers.filter((o) => o.valuationMethod === 'REGULAR').sort(byUnitPrice);
+  const margin = board.offers.filter((o) => o.valuationMethod === 'MARGIN').sort(byUnitPrice);
 
   const gradeLabel = GRADE_LABEL[board.grade] ?? board.grade;
 
@@ -160,17 +170,16 @@ export default async function ProductPage({
   // pool when regular is empty.
   const lowest = regular[0] ?? margin[0] ?? null;
 
-  // The headline figure. Before a pincode there is no landed price to quote —
-  // see the note at the top of this file on why we do not print one anyway.
-  const priced =
-    board.delivery.kind === 'DELIVERABLE' && lowest !== null && lowest.landedPrice !== null;
+  // Whether the lane can be served. The pincode's one job on this page: the
+  // prices stay unit prices, and GST and freight are added at checkout.
+  const deliverable = board.delivery.kind === 'DELIVERABLE';
 
   // What the panel acts on, and the figure it carries into the cart. A row
   // is buyable with or without a pincode: our unit price is known before a
   // destination is, and checkout lands it against the buyer's real site. Only
   // a lane we cannot serve, or no stock at this grade, leaves nothing to add.
   const buyable = lowest !== null && board.delivery.kind !== 'UNSERVICEABLE' ? lowest : null;
-  const buyablePrice = buyable ? (buyable.landedPrice ?? buyable.unitPrice) : null;
+  const buyablePrice = buyable ? buyable.unitPrice : null;
 
   // Why the panel cannot add anything yet, in one sentence, or null when it can.
   const blocked = buyable
@@ -193,8 +202,6 @@ export default async function ProductPage({
       ? `${Math.min(...batteryValues)}–${Math.max(...batteryValues)}%`
       : null;
 
-  const warrantyMonths = board.offers.map((o) => o.totalWarrantyMonths);
-
   return (
     <>
       <div className="body">
@@ -215,35 +222,28 @@ export default async function ProductPage({
             because the decision it carries is the one the rest of the page is
             evidence for.
           */}
-            <aside className="pv">
-              <div className="pv-img">
-                <span className="pv-grade mono">{gradeLabel}</span>
-                <span className="pv-seal">Tamper-sealed &middot; photographed</span>
+            <aside className="rail">
+              <div className="pv">
                 {/*
-                A drawing, deliberately, and not a photograph. Every real frame
-                we hold is of a DIFFERENT machine of this grade, and
-                `RepresentativeImage` exists to say so in a caption. A caption
-                does not survive being shrunk into a product panel, so the
-                photographs stay in their own block below where the caption
-                reads, and this slot carries no claim at all.
-              */}
-                <svg viewBox="0 0 150 80" fill="none" aria-hidden="true" className="pv-draw">
-                  <rect
-                    x="27"
-                    y="10"
-                    width="96"
-                    height="56"
-                    rx="3"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                  <path d="M12 70 h126 l-8 -4 H20 z" stroke="currentColor" strokeWidth="2" />
-                </svg>
-              </div>
+                  The condition photographs for this grade, one frame at a time
+                  with the rest as thumbnails. Every frame is of a DIFFERENT
+                  machine of this grade, and the set's disclosure under the
+                  strip says so once — see `PanelGallery`. The passport link
+                  goes to the board, where every serial behind a row opens its
+                  own inspection photographs.
+                */}
+                <PanelGallery
+                  images={sku.images}
+                  grade={board.grade as Grade}
+                  gradeLabel={gradeLabel}
+                  machine={`${sku.brandName} ${sku.modelName}`}
+                  passportHref={board.offers.length > 0 ? '#board' : undefined}
+                />
 
-              <PanelActions
+                <PanelActions
                 listingId={buyable ? buyable.listingId : null}
                 city={lowest?.city ?? null}
+                pincode={board.pincode}
                 blocked={blocked}
                 snapshot={
                   buyable && buyablePrice !== null
@@ -259,52 +259,7 @@ export default async function ProductPage({
                     : null
                 }
               />
-
-              <p className="pv-trust">
-                Sold by <b>{BRAND.legalEntity}</b> &middot; one GST invoice, every serial listed
-                &middot; <b>48-hour</b> inspect-and-reject window.
-              </p>
-
-              <dl className="pv-facts">
-                <div>
-                  <dt>Sealed at this grade</dt>
-                  <dd className="mono">{board.unitsAvailable}</dd>
-                </div>
-                <div>
-                  <dt>Supply points</dt>
-                  <dd className="mono">{board.supplyPoints}</dd>
-                </div>
-                <div>
-                  <dt>GST</dt>
-                  <dd className="mono">
-                    18%
-                    {/* Which split applies is a fact about the lane, so it
-                        waits for the pincode with everything else. */}
-                    {board.offers[0] && board.offers[0].isInterState !== null && (
-                      <span className="denom">
-                        {' '}
-                        {board.offers[0].isInterState ? 'IGST' : 'CGST+SGST'}
-                      </span>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Warranty</dt>
-                  <dd className="mono">
-                    {warrantyMonths.length > 0 ? (
-                      <>
-                        {Math.min(...warrantyMonths)}
-                        {Math.min(...warrantyMonths) === Math.max(...warrantyMonths)
-                          ? ''
-                          : `–${Math.max(...warrantyMonths)}`}{' '}
-                        mo
-                      </>
-                    ) : (
-                      <span className="notmeasured">Per supply point</span>
-                    )}
-                  </dd>
-                </div>
-              </dl>
+              </div>
             </aside>
 
             {/* RIGHT — what the machine is, what it costs landed, and the board. */}
@@ -333,13 +288,11 @@ export default async function ProductPage({
               <div className="price-blk">
                 <div className="price-line">
                   <span className="price-now mono">
-                    {priced && lowest && lowest.landedPrice !== null
-                      ? `₹${RUPEES.format(Number(lowest.landedPrice))}`
-                      : lowest
-                        ? `₹${RUPEES.format(Number(lowest.unitPrice))}`
-                        : shown?.fromPrice
-                          ? `₹${RUPEES.format(Number(shown.fromPrice))}`
-                          : 'Not priced'}
+                    {lowest
+                      ? `₹${RUPEES.format(Number(lowest.unitPrice))}`
+                      : shown?.fromPrice
+                        ? `₹${RUPEES.format(Number(shown.fromPrice))}`
+                        : 'Not priced'}
                   </span>
                   {/*
                   No struck-through "new" price and no percentage off it. We do
@@ -347,14 +300,14 @@ export default async function ProductPage({
                   we cannot source beside a discount off it is the invented
                   saving the CCPA guidelines name.
                 */}
-                  <span className="price-off">
-                    {priced ? 'lowest landed' : shown?.fromPrice ? 'from' : ''}
-                  </span>
+                  <span className="price-off">{lowest || shown?.fromPrice ? 'from' : ''}</span>
                 </div>
                 <p className="price-note">
-                  {priced
-                    ? `Includes 18% GST and freight to ${board.pincode}. Every supply point is priced on the board below.`
-                    : 'Before tax and delivery — GST and freight are added at checkout against your site. Enter a pincode here to see every row landed first.'}
+                  {deliverable && board.pincode
+                    ? `Unit price, before tax and delivery. We deliver to ${board.pincode} — GST and freight are added at checkout against your site.`
+                    : board.delivery.kind === 'UNSERVICEABLE'
+                      ? `Unit price, before tax and delivery. We cannot deliver to ${board.pincode} yet — try another pincode.`
+                      : 'Unit price, before tax and delivery — GST and freight are added at checkout against your site. Enter a pincode to check we deliver there.'}
                 </p>
 
                 <PincodeForm
@@ -374,11 +327,11 @@ export default async function ProductPage({
                       ? 'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
                       : null
                   }
-                  buttonLabel={board.pincode ? 'Update' : 'Show prices'}
+                  buttonLabel={board.pincode ? 'Update' : 'Check delivery'}
                 >
                   {board.delivery.kind === 'DELIVERABLE' && lowest ? (
                     <>
-                      {lowest.dispatchCommitment}
+                      <b>Delivery available.</b> {lowest.dispatchCommitment}
                       {board.delivery.etaDays > 0 ? (
                         <>
                           , then <b>{board.delivery.etaDays}</b> day
@@ -394,8 +347,25 @@ export default async function ProductPage({
               </div>
 
               <h2 className="sec-t">Choose grade</h2>
+              {/*
+                All three grades, always. The board only names the grades with
+                stock behind them; a grade it leaves out is drawn greyed with
+                the reason, because "A+ is out right now" and "this machine is
+                never graded A+" are different statements and a missing pill
+                reads as the second.
+              */}
               <div className="grades" role="group" aria-label="Inspected grade">
-                {board.grades.map((g) => {
+                {ALL_GRADES.map((code) => {
+                  const g = board.grades.find((x) => x.grade === code);
+                  const label = GRADE_LABEL[code] ?? code;
+                  if (!g) {
+                    return (
+                      <span key={code} className="gpill off" aria-disabled="true">
+                        <b>Grade {label}</b>
+                        <small>No units sealed</small>
+                      </span>
+                    );
+                  }
                   const on = g.grade === board.grade;
                   return (
                     <Link
@@ -411,11 +381,7 @@ export default async function ProductPage({
                         }) as Route
                       }
                     >
-                      <b>Grade {GRADE_LABEL[g.grade] ?? g.grade}</b>
-                      <small className="mono">
-                        {g.unitsAvailable} unit{g.unitsAvailable === 1 ? '' : 's'} &middot;{' '}
-                        {g.supplyPoints} supply point{g.supplyPoints === 1 ? '' : 's'}
-                      </small>
+                      <b>Grade {label}</b>
                     </Link>
                   );
                 })}
@@ -429,6 +395,7 @@ export default async function ProductPage({
               */}
               <ConfigPicker
                 variants={variants}
+                catalogue={catalogue ?? []}
                 current={{ skuId: sku.skuId, grade: board.grade }}
                 hrefFor={(skuId, toGrade) =>
                   href(skuId, { ...query, grade: toGrade, sp: undefined, city: undefined })
@@ -438,8 +405,8 @@ export default async function ProductPage({
               <h2 className="sec-t" id="board">
                 Compare supply points
                 <span className="sec-sub">
-                  {board.pincode
-                    ? `· Grade ${gradeLabel} · landed to ${board.pincode}`
+                  {deliverable && board.pincode
+                    ? `· Grade ${gradeLabel} · delivering to ${board.pincode}`
                     : `· Grade ${gradeLabel}`}
                 </span>
               </h2>
@@ -451,14 +418,6 @@ export default async function ProductPage({
                 where the price would be. The empty box that used to sit here
                 read as "nobody has this machine".
               */}
-              {board.delivery.kind === 'NONE' && board.offers.length > 0 ? (
-                <p className="deliver" data-testid="board-unpriced">
-                  Unit prices, before tax and delivery — checkout adds GST and freight for your
-                  site. <PincodeFocusLink>Enter a delivery pincode</PincodeFocusLink> to see each
-                  row landed here first.
-                </p>
-              ) : null}
-
               <div className="tbl-wrap">
                 {board.delivery.kind === 'NONE' && board.offers.length === 0 ? (
                   <div className="empty">
@@ -493,13 +452,10 @@ export default async function ProductPage({
                         layout="table"
                         rows={regular}
                         pool="REGULAR"
+                        pincode={board.pincode}
                         sku={`${sku.brandName} ${sku.modelName}`}
                         spec={specLine(sku)}
-                        caption={
-                          board.pincode
-                            ? `${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`
-                            : `${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by unit price, lowest first. Prices are before tax and delivery.`
-                        }
+                        caption={`${regular.length} supply point${regular.length === 1 ? '' : 's'} offering ${sku.brandName} ${sku.modelName} at Grade ${gradeLabel}, sorted by unit price, lowest first. Prices are before tax and delivery.${deliverable && board.pincode ? ` Delivery to ${board.pincode} is available.` : ''}`}
                       />
                     )}
                     {margin.length > 0 && (
@@ -507,13 +463,10 @@ export default async function ProductPage({
                         layout="table"
                         rows={margin}
                         pool="MARGIN"
+                        pincode={board.pincode}
                         sku={`${sku.brandName} ${sku.modelName}`}
                         spec={specLine(sku)}
-                        caption={
-                          board.pincode
-                            ? `${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by landed price, lowest first. Prices include GST and freight to ${board.pincode}.`
-                            : `${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by unit price, lowest first. Prices are before tax and delivery.`
-                        }
+                        caption={`${margin.length} supply point${margin.length === 1 ? '' : 's'} offering the same machine under the margin scheme, sorted by unit price, lowest first. Prices are before tax and delivery.${deliverable && board.pincode ? ` Delivery to ${board.pincode} is available.` : ''}`}
                       />
                     )}
                   </>
@@ -552,150 +505,10 @@ export default async function ProductPage({
                   ))}
                 </dl>
               </details>
-
-              <details className="acc">
-                <summary className="acc-h">
-                  Condition photographs &middot; Grade {gradeLabel}
-                  {sku.images?.images?.length ? (
-                    <span className="acc-count mono">
-                      {sku.images.images.length} frame{sku.images.images.length === 1 ? '' : 's'}
-                    </span>
-                  ) : null}
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </summary>
-                <div className="acc-b acc-b-pad">
-                  <Gallery sku={sku} grade={board.grade} hasUnits={board.offers.length > 0} />
-                </div>
-              </details>
             </main>
           </div>
         </ProductCartScope>
       </div>
-    </>
-  );
-}
-
-/* ==========================================================================
- * Pieces
- * ======================================================================== */
-
-/**
- * The condition photographs for the selected grade.
- *
- * `RepresentativeImage` carries the mandatory caption and cannot be made to drop
- * it — that is the component's whole reason for existing. It also widens the
- * caption when the photograph came from a broader anchor than this SKU, because
- * a model-level shot is a photograph of a *different machine* and showing it
- * unlabelled is the r.7(2) misrepresentation.
- *
- * When nothing resolved, ONE placeholder is rendered rather than six identical
- * ones. Six copies of "we have not photographed this yet" is the same sentence
- * six times, and the reader stops reading it after the first.
- */
-function Gallery({
-  sku,
-  grade,
-  hasUnits,
-}: {
-  sku: SkuDetail;
-  grade: string;
-  /** No offers, no serial list — so no anchor to send the reader to. */
-  hasUnits: boolean;
-}): React.JSX.Element {
-  const resolved = sku.images;
-  const held = resolved?.images ?? [];
-  const label = GRADE_LABEL[grade] ?? grade;
-  const passportHref = hasUnits ? '#units' : undefined;
-
-  // Nothing catalogued for this grade. ONE placeholder, not one per view — six
-  // copies of the same sentence is the same sentence six times, and the reader
-  // stops after the first.
-  if (held.length === 0) {
-    return (
-      <div className="gal one">
-        <RepresentativeImage
-          grade={grade as Grade}
-          match="PLACEHOLDER"
-          alt={`No photograph of Grade ${label} condition for the ${sku.brandName} ${sku.modelName}`}
-          passportHref={passportHref}
-        />
-        <p className="fnote">
-          {resolved?.placeholderReason ??
-            `No condition photographs are catalogued for Grade ${label} on this model.`}{' '}
-          {hasUnits
-            ? 'Every unit’s own inspection photographs are on its passport, below, before you buy.'
-            : 'Every unit’s own inspection photographs are on its passport, reachable before you buy.'}
-        </p>
-      </div>
-    );
-  }
-
-  // The real photographs, at last.
-  //
-  // This block used to be unconditionally the placeholder above, on the grounds
-  // — written in a comment here — that "nothing serves an S3 key to a browser
-  // and the dev bucket holds zero objects". Both halves stopped being true when
-  // the image pipeline landed: `catalog` replaces the key with an opaque
-  // encrypted object token, `GET /api/objects/:token` serves the bytes, and the
-  // store holds an object for every catalogued frame. So the page was showing a
-  // placeholder over a library that was working.
-  //
-  // Every frame goes through `RepresentativeImage`, which is what stops any of
-  // them being presented as the machine the buyer will receive. The caption
-  // repeats, and that is the component's contract rather than an oversight — see
-  // the note on a one-caption gallery in the build ledger.
-  // ONE disclosure for the set, above the frames, instead of the same sentence
-  // repeated under all six. Each figure still points at it through
-  // `aria-describedby`, so a screen reader announces it per image as before.
-  const disclosureId = 'grade-frames-disclosure';
-
-  return (
-    <>
-      <RepresentativeImageDisclosure
-        id={disclosureId}
-        grade={grade as Grade}
-        match={resolved?.match ?? 'SKU'}
-        count={held.length}
-        passportHref={passportHref}
-        className="gal-disclosure"
-      />
-      <div className="gal">
-        {held.map((image) => (
-          <RepresentativeImage
-            key={image.id}
-            src={image.url}
-            alt={image.altText}
-            grade={grade as Grade}
-            match={resolved?.match ?? 'SKU'}
-            passportHref={passportHref}
-            captionedBy={disclosureId}
-          />
-        ))}
-      </div>
-      <p className="fnote">
-        <b className="mono">{held.length}</b> condition photograph
-        {held.length === 1 ? '' : 's'} for Grade {label}
-        {/* `match`, not `isGeneric`: the two differ, and the difference is the
-            whole claim. MODEL means another machine of the same model; SERIES
-            means a different model entirely, and calling both "this range"
-            under-states the second. */}
-        {resolved?.match === 'MODEL'
-          ? ' — of this model rather than of this exact configuration'
-          : resolved?.match === 'SERIES'
-            ? ' — of this range rather than of this model'
-            : ''}
-        .
-      </p>
     </>
   );
 }

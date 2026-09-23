@@ -5,6 +5,7 @@ import {
   mobileSchema,
   otpCodeSchema,
   passwordSchema,
+  supplierPasswordSchema,
 } from '@trugrade/contracts';
 
 /**
@@ -44,14 +45,21 @@ import {
  * `orgType` is VENDOR or BUYER only. INTERNAL accounts are never self-served —
  * staff are created by an administrator, and letting the enum through would let
  * anyone mint themselves an internal org.
+ *
+ * The password rule follows `orgType`: a supplier chooses against VR-045a (a
+ * letter and a digit, no length floor), a buyer against the full VR-045. The
+ * discriminated union keeps the `password` path on the error, so the form still
+ * gets a field-level message.
  */
-export const registerSchema = z.object({
-  orgType: z.enum(['VENDOR', 'BUYER']),
+const registerContact = {
   fullName: fullNameSchema,
   email: emailSchema,
   mobile: mobileSchema,
-  password: passwordSchema,
-});
+};
+export const registerSchema = z.discriminatedUnion('orgType', [
+  z.object({ orgType: z.literal('VENDOR'), ...registerContact, password: supplierPasswordSchema }),
+  z.object({ orgType: z.literal('BUYER'), ...registerContact, password: passwordSchema }),
+]);
 export type RegisterDto = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({

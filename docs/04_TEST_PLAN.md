@@ -257,6 +257,7 @@ The shared Zod schema and the DTO decorators are generated from **one source of 
 |---|---|---|---|---|
 | VR-044 | `password` length | 12–128 chars | "Password must be at least 12 characters." | C, D |
 | VR-045 | `password` composition | ≥ 1 lower, ≥ 1 upper, ≥ 1 digit, ≥ 1 of `!@#$%^&*()_+-=[]{};':",./<>?` | "Include an uppercase letter, a lowercase letter, a number and a symbol." | C, D |
+| VR-045a | `password` composition, supplier signup only | ≥ 1 letter, ≥ 1 digit, ≤ 128 chars, no minimum length. Applies to `POST /auth/register` with `orgType: VENDOR`; VR-046 still applies | "Include at least one letter and one number." | C, D, S |
 | VR-046 | `password` blocklist | Not in the top-100k breached list (`zxcvbn` score ≥ 3); must not contain the email local-part, mobile, or brand words `gorefurbo`/`truetech` | "That password is too easy to guess. Try something less predictable." | C, D, S |
 | VR-047 | `password` history | Must differ from the last 5 hashes | "You've used this password before. Choose a new one." | S, DB |
 | VR-048 | `password` hashing | Argon2id, m=64 MiB, t=3, p=1; never logged, never returned | (n/a) | S |

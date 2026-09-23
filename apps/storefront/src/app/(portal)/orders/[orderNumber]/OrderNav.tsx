@@ -38,7 +38,11 @@ interface OrderTabDef extends OrderTab {
 }
 
 const TABS: readonly OrderTabDef[] = [
-  { segment: '', label: 'Order' },
+  // The record itself is the booking: what was ordered, held and allocated.
+  // The sales order beside it is what the dispatch points confirmed and what
+  // is owed for it — two documents, two tabs, one URL each.
+  { segment: '', label: 'Booking order' },
+  { segment: '/sales-order', label: 'Sales order' },
   { segment: '/units', label: 'Machines' },
   // GET /buyer/orders/:n/documents checks `payment.invoice.read_own`, which an
   // approver and a viewer do not hold. The tab used to render for them and 403.

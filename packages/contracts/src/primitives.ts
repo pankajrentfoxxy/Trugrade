@@ -27,6 +27,7 @@ import {
   OTP_CODE,
   PAN,
   PASSWORD_COMPOSITION,
+  SUPPLIER_PASSWORD,
   PINCODE,
   QC_AREAS,
   QC_AREA_OUTCOMES,
@@ -167,6 +168,8 @@ export const fullNameSchema = zodFromRule(FULL_NAME);
 // ---------------------------------------------------------------------------
 
 export const passwordSchema = zodFromRule(PASSWORD_COMPOSITION);
+/** VR-045a: the supplier signup only. See `SUPPLIER_PASSWORD` for why it is looser. */
+export const supplierPasswordSchema = zodFromRule(SUPPLIER_PASSWORD);
 export const otpCodeSchema = zodFromRule(OTP_CODE);
 
 // ---------------------------------------------------------------------------
@@ -310,6 +313,7 @@ export const RULE_BOUND_SCHEMAS: Readonly<Record<string, { _trugradeRule: Rule }
   addressLine2: addressLine2Schema,
   fullName: fullNameSchema,
   password: passwordSchema,
+  supplierPassword: supplierPasswordSchema,
   otpCode: otpCodeSchema,
   serialNumber: serialNumberSchema,
   listingQty: listingQtySchema,

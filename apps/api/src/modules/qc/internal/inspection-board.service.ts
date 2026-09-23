@@ -128,7 +128,7 @@ export class InspectionBoardService {
     );
 
     const vendors = await this.orgNames(rows.map((r) => r.vendor_org_id));
-    const techs = await this.userNames(
+    const techs = await this.technicianNames(
       rows.map((r) => r.technician_id).filter((v): v is string => v !== null),
     );
     const listings = await this.listingsForVisits(rows.map((r) => r.id));
@@ -228,6 +228,28 @@ export class InspectionBoardService {
     const rows = await this.prisma.$queryRaw<Array<{ id: string; full_name: string }>>`
       SELECT id, full_name FROM identity.user_account WHERE id = ANY(${[...new Set(ids)]}::uuid[])`;
     return new Map(rows.map((r) => [r.id, r.full_name]));
+  }
+
+  /**
+   * Technician id -> the person's name.
+   *
+   * `qc_visit.technician_id` is a `qc.qc_technician.id`, not a user id. Looked
+   * up straight in `identity.user_account` it matched nothing, so every assigned
+   * visit came back `technicianName: null` and the board printed "Unassigned"
+   * against a row whose status already said the technician was booked. The hop
+   * through `qc_technician.user_id` is the one `technicianFacet()` has always
+   * made. A technician whose account has no name still has an employee code,
+   * and a code beats a blank that reads as nobody.
+   */
+  private async technicianNames(ids: string[]): Promise<Map<string, string>> {
+    if (!ids.length) return new Map();
+    const techs = await this.prisma.$queryRaw<
+      Array<{ id: string; user_id: string; employee_code: string }>
+    >`
+      SELECT id, user_id, employee_code FROM qc.qc_technician
+       WHERE id = ANY(${[...new Set(ids)]}::uuid[])`;
+    const names = await this.userNames(techs.map((t) => t.user_id));
+    return new Map(techs.map((t) => [t.id, names.get(t.user_id) ?? t.employee_code]));
   }
 
   /** Which listings a visit is holding up. One statement, `listing` schema only. */

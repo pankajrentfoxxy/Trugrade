@@ -2,280 +2,109 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import {
-  AddressCard,
-  EmptyState,
-  InfoPopover,
-  GradeBadge,
-  PriceBreakup,
-  RecordHeader,
-  SidePanel,
-  Skeleton,
-  StatusPill,
-  type Address,
-  type PriceLine,
-} from '@trugrade/ui';
+import { EmptyState, GradeBadge, InfoPopover, Skeleton, StatusPill } from '@trugrade/ui';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
-import { Money, buyerOrderStatusLabel, type Grade } from '@trugrade/contracts';
-import type { ApiFailure } from '../../../register/api';
+import { Money } from '@trugrade/contracts';
 import { Deadline, inIst } from '../../../../lib/deadline';
+import { useSharedOrder } from './OrderChrome';
+import { FileIcon, LaptopIcon, LinesIcon, PinIcon } from './icons';
+import { isGrade, problem, rupees, standing, type OrderPhase, type Standing } from './order-state';
 import {
   getOrder,
   type DispatchGroup,
   type OrderAddress,
   type OrderApproval,
   type OrderRecord as Order,
+  type SupplyLine,
 } from './api';
 
 /**
  * One order, read back. See `page.tsx` for the archetype and the rules.
  *
+ * The body under the order's chrome: machines, what each dispatch point can
+ * send, delivery and documents on the left; the money and the billing entity on
+ * the right. The header, the progress strip, the next-step banner and the tab
+ * strip are `OrderChrome`'s, mounted by the layout, so they are the same on
+ * every tab of this order.
+ *
  * A client component because the call is authenticated, because it can come back
  * 401 — a signed-out visitor is a state this screen renders, not a crash — and
- * because the approval deadline has to stay true while the tab is open.
+ * because the approval deadline has to stay true while the tab is open. Inside
+ * the chrome it reads the order the chrome already fetched; rendered on its own
+ * (tests, or any future host) it fetches for itself.
  */
-
-const rupees = (decimal: string): string => Money.parse(decimal).format();
-
-const isGrade = (g: string): g is Grade => g === 'A_PLUS' || g === 'A' || g === 'B';
-
-const machines = (n: number): string => `${n} machine${n === 1 ? '' : 's'}`;
-
-type Phase =
-  | { k: 'loading' }
-  /** No session. Not a failure: a path exists and it comes back here. */
-  | { k: 'signed-out' }
-  /** No such order on this account. Deliberately the same screen either way. */
-  | { k: 'missing' }
-  | { k: 'error'; message: string }
-  | { k: 'ready'; order: Order };
-
-/**
- * What went wrong, in the server's words where it had any.
- *
- * `call`'s fallback for `UNKNOWN` and `NETWORK` describes a registration form,
- * and a refusal that describes the wrong screen is worse than a plain one.
- */
-const problem = (failure: ApiFailure): string =>
-  failure.code === 'UNKNOWN' || failure.code === 'NETWORK'
-    ? 'We could not reach your order just now. That is our problem, not yours — the order itself is unaffected.'
-    : failure.message;
 
 /* ==========================================================================
  * The screen
  * ======================================================================== */
 
 export function OrderRecord({ orderNumber }: { orderNumber: string }): React.JSX.Element {
-  const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
+  const shared = useSharedOrder();
+  const [own, setOwn] = React.useState<OrderPhase>({ k: 'loading' });
+  const standalone = shared === null;
 
   React.useEffect(() => {
+    if (!standalone) return;
     let live = true;
     void (async () => {
       const result = await getOrder(orderNumber);
       if (!live) return;
-      if (result.ok) setPhase({ k: 'ready', order: result.data });
-      else if (result.status === 401) setPhase({ k: 'signed-out' });
-      else if (result.status === 404 || result.status === 422) setPhase({ k: 'missing' });
-      else setPhase({ k: 'error', message: problem(result) });
+      if (result.ok) setOwn({ k: 'ready', order: result.data });
+      else if (result.status === 401) setOwn({ k: 'signed-out' });
+      else if (result.status === 404 || result.status === 422) setOwn({ k: 'missing' });
+      else setOwn({ k: 'error', message: problem(result) });
     })();
     return () => {
       live = false;
     };
-  }, [orderNumber]);
+  }, [orderNumber, standalone]);
+
+  const phase = shared ?? own;
 
   if (phase.k === 'loading') return <OrderSkeleton />;
   if (phase.k === 'signed-out') return <SignedOut orderNumber={orderNumber} />;
   if (phase.k === 'missing') return <Missing orderNumber={orderNumber} />;
   if (phase.k === 'error') return <Failed message={phase.message} />;
 
-  return <Record order={phase.order} />;
+  return <Body order={phase.order} />;
 }
 
 /* ==========================================================================
  * The record
  * ======================================================================== */
 
-function Record({ order }: { order: Order }): React.JSX.Element {
-  const held = order.approval !== null && order.approval.status === 'PENDING';
-  const released =
-    order.approval !== null &&
-    (order.approval.status === 'EXPIRED' || order.approval.status === 'REJECTED');
-  const state = statusOf(order);
+function Body({ order }: { order: Order }): React.JSX.Element {
+  const at = standing(order);
+  const pdf = `/api/buyer/orders/${encodeURIComponent(order.orderNumber)}/confirmation.pdf`;
 
   return (
-    <>
-      <RecordHeader
-        title={`Order ${order.orderNumber}`}
-        subtitle={<Headline order={order} />}
-        identifiers={[
-          { label: 'Placed', value: inIst(order.placedAt) },
-          { label: 'Machines', value: String(order.unitsAllocated) },
-          {
-            label: 'Dispatch points',
-            value: String(order.dispatchGroups.length),
-          },
-        ]}
-        status={<StatusPill tone={state.tone} label={state.label} />}
-      />
+    <div className="od-grid">
+      <div className="od-col">
+        {order.approval && <ApprovalPanel approval={order.approval} order={order} />}
 
-      <div className="rec">
-        <main className="evid">
-          {/* The approval comes first, above the machines, because until it is
-              answered it is the only thing about this order that is not yet
-              settled. */}
-          {order.approval && <ApprovalPanel approval={order.approval} order={order} />}
+        <MachinesCard order={order} at={at} />
 
-          <section aria-labelledby="machines">
-            <div className="sh">
-              <div className="shrow">
-                <h2 id="machines">
-                  {held
-                    ? // NOT "your machines". They are off sale to everyone else
-                      // and committed to nobody until the approval lands.
-                      'The machines held against this order'
-                    : released
-                      ? 'The machines this order asked for'
-                      : 'The machines allocated to you'}
-                </h2>
-                <span className="sub">
-                  {order.dispatchGroups.length === 1
-                    ? 'All from one dispatch point'
-                    : `From ${order.dispatchGroups.length} dispatch points, so they can arrive on different days`}
-                </span>
-              </div>
-            </div>
-            <div className="omach">
-              {order.dispatchGroups.map((group) => (
-                <DispatchBlock
-                  key={group.label}
-                  group={group}
-                  released={released}
-                  orderNumber={order.orderNumber}
-                />
-              ))}
-            </div>
-          </section>
+        {/* Only once the order is placed: a held or released order has no
+            consignment for a dispatch point to answer, so there is nothing
+            honest to show. */}
+        {at.placed && order.supply.length > 0 && <SupplySection lines={order.supply} />}
 
-          <section aria-labelledby="delivery">
-            <div className="sh">
-              <div className="shrow">
-                <h2 id="delivery">Where it goes</h2>
-                <span className="sub">
-                  The delivery state is what decided the tax split, not the GSTIN
-                </span>
-              </div>
-            </div>
-            <AddressCard address={asAddress(order.deliveryAddress)} />
-            {/* /addresses had zero inbound links: the rail was its only entry. */}
-            <p className="fnote off">
-              <Link className="hub-link" href="/addresses">
-                Your delivery sites
-              </Link>
-            </p>
-          </section>
+        <DeliveryCard address={order.deliveryAddress} />
 
-          <Documents order={order} />
-        </main>
-
-        <div className="sidep">
-          <SidePanel
-            title={
-              held
-                ? 'What this order would come to'
-                : released
-                  ? 'What this order would have come to'
-                  : 'What this order comes to'
-            }
-            description={
-              held
-                ? 'Nothing is charged while it is with your approver, and this is the figure they were asked to sign off.'
-                : released
-                  ? 'Kept here so the figure that was asked for is on the record. No invoice was raised against it.'
-                  : 'Every charge on this order is named here. Nothing was added afterwards.'
-            }
-            footnote={<Footnote order={order} />}
-          >
-            <Breakup order={order} />
-            <dl className="facts">
-              <div>
-                <dt>Billed to</dt>
-                <dd>{order.billedTo.legalName}</dd>
-              </div>
-              <div>
-                <dt>
-                  GSTIN <span className="denom">decides the billing entity</span>
-                </dt>
-                <dd className="mono">{order.billedTo.gstin}</dd>
-              </div>
-              <div>
-                <dt>
-                  Place of supply
-                  {/* Tier 4. The citation and the reasoning behind a `?`, not a
-                      paragraph under a fact most readers already accept. */}
-                  <InfoPopover label="Why this state decides the tax">
-                    {order.tax.basis}
-                  </InfoPopover>
-                </dt>
-                <dd>
-                  {order.tax.placeOfSupplyState}{' '}
-                  <span className="mono">{order.tax.placeOfSupplyStateCode}</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Payment</dt>
-                <dd>{PAYMENT_MODE[order.paymentMode] ?? order.paymentMode}</dd>
-              </div>
-              <div>
-                <dt>Cost centre</dt>
-                {/* An absence renders as an absence. Never a blank that reads
-                    as a recorded value. */}
-                <dd className={order.costCentre ? undefined : 'notmeasured'}>
-                  {order.costCentre ?? 'Not recorded'}
-                </dd>
-              </div>
-            </dl>
-          </SidePanel>
-        </div>
+        <Documents order={order} pdf={pdf} />
       </div>
-    </>
-  );
-}
 
-/** The one sentence under the order number. It changes with the state, entirely. */
-function Headline({ order }: { order: Order }): React.JSX.Element {
-  const approval = order.approval;
-  if (approval?.status === 'PENDING') {
-    return (
-      <>
-        <b className="mono">{order.unitsAllocated}</b> machines are held while{' '}
-        <b>{approval.approverName}</b> signs this off. Nothing is committed, nothing is charged, and
-        they are on sale to nobody else until then.
-      </>
-    );
-  }
-  if (approval?.status === 'REJECTED') {
-    return (
-      <>
-        <b>{approval.approverName}</b> declined this order, so the hold on those{' '}
-        <b className="mono">{order.unitsAllocated}</b> machines was released and they went back on
-        sale. Nothing was charged.
-      </>
-    );
-  }
-  if (approval?.status === 'EXPIRED') {
-    return (
-      <>
-        The 24 hours we hold stock for an approval ran out before <b>{approval.approverName}</b>{' '}
-        answered, so those <b className="mono">{order.unitsAllocated}</b> machines went back on
-        sale. Nothing was charged.
-      </>
-    );
-  }
-  return (
-    <>
-      {machines(order.unitsAllocated)} allocated to you by serial number, from {BRAND.legalEntity}{' '}
-      on one invoice.
-    </>
+      <aside className="od-col">
+        <Summary order={order} at={at} />
+        <Billing order={order} />
+        <p className="od-help">
+          Questions about this order?{' '}
+          <a className="hub-link" href={`mailto:${BRAND.support}`}>
+            Contact support
+          </a>
+        </p>
+      </aside>
+    </div>
   );
 }
 
@@ -294,123 +123,123 @@ function ApprovalPanel({
   return (
     <section
       aria-labelledby="approval"
-      className={pending ? 'oappr pending' : 'oappr'}
+      className={pending ? 'od-card oappr pending' : 'od-card oappr'}
       // Not `alert`: nothing here is urgent enough to interrupt a screen
       // reader mid-sentence, and the region is announced when it is reached.
       role="status"
     >
-      <div className="sh">
-        <div className="shrow">
-          <h2 id="approval">
-            {pending
-              ? 'This order needs a signature before it can be placed'
-              : approval.status === 'REJECTED'
-                ? 'This order was declined'
-                : approval.status === 'EXPIRED'
-                  ? 'The approval window closed'
-                  : 'This order was approved'}
-          </h2>
-        </div>
-      </div>
+      <header className="od-card__head">
+        <h2 id="approval">
+          {pending
+            ? 'This order needs a signature before it can be placed'
+            : approval.status === 'REJECTED'
+              ? 'This order was declined'
+              : approval.status === 'EXPIRED'
+                ? 'The approval window closed'
+                : 'This order was approved'}
+        </h2>
+      </header>
+      <div className="od-card__body">
+        <p className="oapprlead">
+          {pending ? (
+            <>
+              At <span className="mono">{rupees(approval.orderValue)}</span> this order is over the
+              limit your organisation set for orders you may place on your own, so it sits at{' '}
+              <b>awaiting approval</b>. It is <b>not confirmed</b>, nothing has been charged, and we
+              have not bought anything on your behalf. What we have done is take the exact machines
+              below off sale so they are still there when the answer comes.
+            </>
+          ) : approval.status === 'REJECTED' ? (
+            <>
+              The hold was released the moment it was declined, and those machines went back on sale
+              to everyone. Nothing was charged and no order was placed.
+            </>
+          ) : approval.status === 'EXPIRED' ? (
+            <>
+              Stock cannot be held indefinitely waiting for an answer, so an approval expires after
+              24 hours and the hold releases. Nothing was charged and no order was placed. If you
+              still need these machines, put them in a cart again — we will hold whatever is still
+              there.
+            </>
+          ) : (
+            <>The hold became an allocation, and the machines below are yours by serial number.</>
+          )}
+        </p>
 
-      <p className="oapprlead">
-        {pending ? (
-          <>
-            At <span className="mono">{rupees(approval.orderValue)}</span> this order is over the
-            limit your organisation set for orders you may place on your own, so it sits at{' '}
-            <b>awaiting approval</b>. It is <b>not confirmed</b>, nothing has been charged, and we
-            have not bought anything on your behalf. What we have done is take the exact machines
-            below off sale so they are still there when the answer comes.
-          </>
-        ) : approval.status === 'REJECTED' ? (
-          <>
-            The hold was released the moment it was declined, and those machines went back on sale
-            to everyone. Nothing was charged and no order was placed.
-          </>
-        ) : approval.status === 'EXPIRED' ? (
-          <>
-            Stock cannot be held indefinitely waiting for an answer, so an approval expires after 24
-            hours and the hold releases. Nothing was charged and no order was placed. If you still
-            need these machines, put them in a cart again — we will hold whatever is still there.
-          </>
-        ) : (
-          <>The hold became an allocation, and the machines below are yours by serial number.</>
-        )}
-      </p>
-
-      <dl className="oapprfacts">
-        <div>
-          <dt>What is held</dt>
-          <dd>
-            {pending ? (
-              <>
-                <span className="mono">{order.unitsAllocated}</span> machines,{' '}
-                <span className="mono">{rupees(approval.orderValue)}</span>
-              </>
-            ) : (
-              <span className="notmeasured">
-                Nothing — {approval.status === 'APPROVED' ? 'allocated' : 'the hold was released'}
-              </span>
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>Who was asked</dt>
-          <dd>{approval.approverName}</dd>
-        </div>
-        <div>
-          <dt>Who asked</dt>
-          <dd>{approval.requestedByName}</dd>
-        </div>
-        <div>
-          <dt>Sent</dt>
-          <dd className="mono">{inIst(approval.requestedAt)}</dd>
-        </div>
-        <div>
-          <dt>
-            {pending ? 'Held until' : approval.status === 'EXPIRED' ? 'Expired' : 'Deadline was'}
-          </dt>
-          <dd className="mono">
-            {inIst(approval.expiresAt)}
-            {pending && (
-              <>
-                {' · '}
-                <Deadline expiresAt={approval.expiresAt} />
-              </>
-            )}
-          </dd>
-        </div>
-        {approval.decidedAt && (
+        <dl className="oapprfacts">
           <div>
-            <dt>Answered</dt>
-            <dd className="mono">{inIst(approval.decidedAt)}</dd>
-          </div>
-        )}
-        {/* Only once somebody actually answered — which `decidedAt` is the
-            record of, and an expiry is not. "Note from the approver — none
-            recorded" against a request nobody opened reads as though they
-            looked at it and chose to say nothing. */}
-        {approval.decidedAt !== null && (
-          <div>
-            <dt>{approval.status === 'REJECTED' ? 'Reason given' : 'Note from the approver'}</dt>
-            {/* A missing reason is a missing reason. Inventing "not specified"
-                would read as a recorded fact. */}
-            <dd className={approval.comment ? undefined : 'notmeasured'}>
-              {approval.comment ?? 'None recorded'}
+            <dt>What is held</dt>
+            <dd>
+              {pending ? (
+                <>
+                  <span className="mono">{order.unitsAllocated}</span> machines,{' '}
+                  <span className="mono">{rupees(approval.orderValue)}</span>
+                </>
+              ) : (
+                <span className="notmeasured">
+                  Nothing — {approval.status === 'APPROVED' ? 'allocated' : 'the hold was released'}
+                </span>
+              )}
             </dd>
           </div>
-        )}
-      </dl>
+          <div>
+            <dt>Who was asked</dt>
+            <dd>{approval.approverName}</dd>
+          </div>
+          <div>
+            <dt>Who asked</dt>
+            <dd>{approval.requestedByName}</dd>
+          </div>
+          <div>
+            <dt>Sent</dt>
+            <dd className="mono">{inIst(approval.requestedAt)}</dd>
+          </div>
+          <div>
+            <dt>
+              {pending ? 'Held until' : approval.status === 'EXPIRED' ? 'Expired' : 'Deadline was'}
+            </dt>
+            <dd className="mono">
+              {inIst(approval.expiresAt)}
+              {pending && (
+                <>
+                  {' · '}
+                  <Deadline expiresAt={approval.expiresAt} />
+                </>
+              )}
+            </dd>
+          </div>
+          {approval.decidedAt && (
+            <div>
+              <dt>Answered</dt>
+              <dd className="mono">{inIst(approval.decidedAt)}</dd>
+            </div>
+          )}
+          {/* Only once somebody actually answered — which `decidedAt` is the
+              record of, and an expiry is not. "Note from the approver — none
+              recorded" against a request nobody opened reads as though they
+              looked at it and chose to say nothing. */}
+          {approval.decidedAt !== null && (
+            <div>
+              <dt>{approval.status === 'REJECTED' ? 'Reason given' : 'Note from the approver'}</dt>
+              {/* A missing reason is a missing reason. Inventing "not specified"
+                  would read as a recorded fact. */}
+              <dd className={approval.comment ? undefined : 'notmeasured'}>
+                {approval.comment ?? 'None recorded'}
+              </dd>
+            </div>
+          )}
+        </dl>
 
-      {pending && (
-        <p className="fnote off">
-          If {approval.approverName} does not answer by{' '}
-          <span className="mono">{inIst(approval.expiresAt)}</span>, the hold releases on its own,
-          those machines go back on sale to everyone, and you are told. Nothing else happens — there
-          is no charge and no order to cancel. This is the only deadline on this screen, and it is
-          one we set ourselves so that stock is not held out of the market indefinitely.
-        </p>
-      )}
+        {pending && (
+          <p className="fnote off">
+            If {approval.approverName} does not answer by{' '}
+            <span className="mono">{inIst(approval.expiresAt)}</span>, the hold releases on its own,
+            those machines go back on sale to everyone, and you are told. Nothing else happens —
+            there is no charge and no order to cancel. This is the only deadline on this screen, and
+            it is one we set ourselves so that stock is not held out of the market indefinitely.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -419,67 +248,298 @@ function ApprovalPanel({
  * The machines
  * ======================================================================== */
 
+function MachinesCard({ order, at }: { order: Order; at: Standing }): React.JSX.Element {
+  const n = order.unitsAllocated;
+  return (
+    <section className="od-card" aria-labelledby="machines">
+      <header className="od-card__head">
+        <h2 id="machines">
+          {at.held
+            ? 'The machines held against this order'
+            : at.released
+              ? 'The machines that were held'
+              : n === 1
+                ? 'Your machine'
+                : 'Your machines'}
+        </h2>
+        <span>
+          {at.held
+            ? 'Off sale to everyone else until the answer comes'
+            : at.released
+              ? 'The hold is gone'
+              : 'Allocated by serial number'}
+        </span>
+      </header>
+      {order.dispatchGroups.map((g, i) => (
+        <DispatchBlock
+          key={`${g.label}-${i}`}
+          group={g}
+          supply={order.supply.filter((l) => l.label === g.label)}
+          at={at}
+          orderNumber={order.orderNumber}
+        />
+      ))}
+    </section>
+  );
+}
+
 function DispatchBlock({
   group,
-  released,
+  supply,
+  at,
   orderNumber,
 }: {
   group: DispatchGroup;
-  released: boolean;
+  /** This dispatch point's lines, for the stock pill. Empty until it is asked. */
+  supply: SupplyLine[];
+  at: Standing;
   /** So a serial can link to this order's own machines board. */
   orderNumber: string;
 }): React.JSX.Element {
   return (
-    <div className="tbl odisp">
-      <div className="tbh">
-        <b>{group.label}</b>
-        <span className="m">
-          {group.machines.length} {group.machines.length === 1 ? 'machine' : 'machines'}
-        </span>
-      </div>
-      <ul className="omlist">
-        {group.machines.map((m) => (
-          <li key={m.serialNumber}>
-            <div className="omid">
-              {/*
-                The serial is the link, and it stays inside the portal.
+    <div className="od-dispatch">
+      {group.machines.map((m, i) => (
+        <div className="od-machine" key={`${m.serialNumber}-${i}`}>
+          <div className="od-thumb" aria-hidden="true">
+            <LaptopIcon />
+          </div>
+          <div className="od-machine__body">
+            <div className="od-machine__name">
+              {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
+              {isGrade(m.grade) ? (
+                <GradeBadge grade={m.grade} />
+              ) : (
+                <span className="notmeasured od-machine__nograde">Grade not recorded</span>
+              )}
+            </div>
+            {m.specSummary && (
+              <div className="od-specs">
+                {m.specSummary.split(' · ').map((part, j) => (
+                  <span key={`${part}-${j}`}>{part}</span>
+                ))}
+              </div>
+            )}
+            {/*
+              The serial is the link, and it stays inside the portal.
 
-                It used to go straight to `/unit/[serial]` — the PUBLIC
-                passport, outside the portal chrome — so a buyer checking one
-                machine on their own order left the portal without meaning to.
-                The primary click is this order's own machines board, which
-                carries the QC verdict, the battery health and the seal. The
-                passport is still one click from there.
-              */}
+              It used to go straight to `/unit/[serial]` — the PUBLIC passport,
+              outside the portal chrome — so a buyer checking one machine on
+              their own order left the portal without meaning to. The primary
+              click is this order's own machines board, which carries the QC
+              verdict, the battery health and the seal. The passport is still
+              one click from there.
+            */}
+            {m.serialNumber ? (
               <Link
-                className="mono omserial"
+                className="mono od-serial"
                 href={`/orders/${encodeURIComponent(orderNumber)}/units#${m.serialNumber}`}
               >
                 {m.serialNumber}
               </Link>
-              <span className="omtitle">
-                {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
-              </span>
-              {m.specSummary && <span className="omspec">{m.specSummary}</span>}
-            </div>
-            <div className="omright">
-              {isGrade(m.grade) ? (
-                <GradeBadge grade={m.grade} />
-              ) : (
-                <span className="notmeasured">Grade not recorded</span>
-              )}
-              <span className="mono omprice">{rupees(m.unitPrice)}</span>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {released && (
-        <p className="omreleased">
+            ) : (
+              // A line the dispatch point has not yet put a serial against.
+              // An absence, never an empty link.
+              <span className="notmeasured od-serial">Serial not yet allocated</span>
+            )}
+          </div>
+          <div className="od-price">
+            <div className="od-price__amt mono">{rupees(m.unitPrice)}</div>
+            <div className="od-price__note">excl. GST</div>
+          </div>
+        </div>
+      ))}
+      <div className="od-ship">
+        <PinIcon />
+        <span>
+          {at.placed ? 'Ships from' : 'Held at'} <strong>{group.label}</strong>
+        </span>
+        {/* Once it has left, what the dispatch point said beforehand is history:
+            the chip says so rather than contradicting the progress strip. */}
+        {at.placed &&
+          (at.shipped ? (
+            <StatusPill tone="neutral" label="Shipped" className="od-stock" />
+          ) : (
+            <StockPill lines={supply} />
+          ))}
+      </div>
+      {at.released && (
+        <p className="od-ship od-ship--note">
           These serials are no longer held. They are back on sale and may already have gone to
           someone else.
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * What this dispatch point has said about its lines, in one chip.
+ *
+ * Unanswered is an absence — "not confirmed yet" in `--ink-4` — never a count.
+ * Confirmed always carries its denominator.
+ */
+function StockPill({ lines }: { lines: SupplyLine[] }): React.JSX.Element | null {
+  if (lines.length === 0) return null;
+  const unanswered = lines.some((l) => l.qtyAvailable === null);
+  if (unanswered) {
+    return <span className="od-stock notmeasured">Stock not confirmed yet</span>;
+  }
+  const ordered = lines.reduce((n, l) => n + l.qtyOrdered, 0);
+  const confirmed = lines.reduce((n, l) => n + (l.qtyAvailable ?? 0), 0);
+  return (
+    <StatusPill
+      tone="neutral"
+      label={confirmed === ordered ? 'Stock confirmed' : `${confirmed} of ${ordered} confirmed`}
+      className="od-stock"
+    />
+  );
+}
+
+/* ==========================================================================
+ * Supply — what each dispatch point said it can send
+ * ======================================================================== */
+
+/**
+ * Line by line: what was ordered, and how many the dispatch point confirmed.
+ *
+ * An unanswered line is neither "0" nor "all of them". It renders as an
+ * absence, in `--ink-4`, until the dispatch point has answered — and once it
+ * has, the confirmed quantity always carries its denominator.
+ */
+function SupplySection({ lines }: { lines: SupplyLine[] }): React.JSX.Element {
+  const answered = lines.filter((l) => l.qtyAvailable !== null);
+  const short = answered.filter((l) => (l.qtyAvailable ?? 0) < l.qtyOrdered);
+  return (
+    <section className="od-card" aria-labelledby="supply">
+      <header className="od-card__head">
+        <h2 id="supply">What each dispatch point can send</h2>
+        <span>
+          {answered.length === 0
+            ? 'Waiting for the dispatch points to confirm'
+            : answered.length < lines.length
+              ? `${answered.length} of ${lines.length} lines confirmed so far`
+              : short.length === 0
+                ? 'Every line confirmed in full'
+                : `${short.length} of ${lines.length} lines short — we are sourcing the rest`}
+        </span>
+      </header>
+      <ul className="od-sup">
+        {lines.map((l, i) => {
+          const isShort = l.qtyAvailable !== null && l.qtyAvailable < l.qtyOrdered;
+          return (
+            <li key={`${l.label}-${l.title ?? ''}-${l.grade}-${i}`}>
+              <div className="od-sup__row">
+                <div className="od-sup__id">
+                  <span className="od-sup__label">{l.label}</span>
+                  <span className="od-sup__title">
+                    {l.title ?? <span className="notmeasured">Model no longer catalogued</span>}
+                    {isGrade(l.grade) ? (
+                      <GradeBadge grade={l.grade} />
+                    ) : (
+                      <span className="notmeasured">Grade not recorded</span>
+                    )}
+                  </span>
+                  {l.specSummary && <span className="od-sup__spec">{l.specSummary}</span>}
+                </div>
+                <div className="od-sup__qty">
+                  {l.qtyAvailable === null ? (
+                    <span>
+                      <span className="mono">{l.qtyOrdered}</span> ordered ·{' '}
+                      <span className="notmeasured">not confirmed yet</span>
+                    </span>
+                  ) : (
+                    <>
+                      <span>
+                        <span className="mono">{l.qtyAvailable}</span> of{' '}
+                        <span className="mono">{l.qtyOrdered}</span> confirmed
+                      </span>
+                      {l.answeredAt && (
+                        <span className="od-sup__when mono">{inIst(l.answeredAt)}</span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+              {isShort && (
+                <p className="od-sup__short">
+                  This dispatch point can send <span className="mono">{l.qtyAvailable}</span> of the{' '}
+                  <span className="mono">{l.qtyOrdered}</span> you ordered. We are sourcing the
+                  rest, and nothing extra is charged until it is settled.
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/* ==========================================================================
+ * Delivery
+ * ======================================================================== */
+
+function DeliveryCard({ address }: { address: OrderAddress }): React.JSX.Element {
+  return (
+    <section className="od-card" aria-labelledby="delivery">
+      <header className="od-card__head">
+        <h2 id="delivery">Delivery</h2>
+        {/* /addresses had zero inbound links: the rail was its only entry. */}
+        <Link className="hub-link od-card__link" href="/addresses">
+          Your delivery sites
+        </Link>
+      </header>
+      <div className="od-delivery">
+        <div>
+          <div className="od-block">
+            <div className="od-label">Deliver to</div>
+            <div className="od-addr-name">{address.label ?? `${address.city} site`}</div>
+            <address className="od-addr">
+              {address.line1}
+              {address.line2 && (
+                <>
+                  <br />
+                  {address.line2}
+                </>
+              )}
+              <br />
+              {address.city}, {address.state} <span className="mono">{address.pincode}</span>
+            </address>
+          </div>
+          <div className="od-block">
+            <div className="od-label">Receiver</div>
+            <div className="od-addr">{address.contactName}</div>
+            <a className="mono od-tel" href={`tel:${address.contactMobile}`}>
+              {address.contactMobile}
+            </a>
+          </div>
+        </div>
+        <div>
+          <dl className="od-kv">
+            {/* Every absence below is an absence, in --ink-4 — never a blank
+                that reads as a recorded value. */}
+            <div>
+              <dt>Receiving hours</dt>
+              <dd className={address.receivingHours ? undefined : 'notmeasured'}>
+                {address.receivingHours ?? 'Not added'}
+              </dd>
+            </div>
+            <div>
+              <dt>Gate instructions</dt>
+              <dd className={address.gateInstructions ? undefined : 'notmeasured'}>
+                {address.gateInstructions ?? 'None added'}
+              </dd>
+            </div>
+            <div>
+              <dt>Landmark</dt>
+              <dd className={address.landmark ? undefined : 'notmeasured'}>
+                {address.landmark ?? 'None added'}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -493,10 +553,10 @@ function DispatchBlock({
  * PHASE_06 Task 6 lists three documents and warns that they must not be
  * confused. Two of them belong to the buyer and are here: **their own PO
  * reference**, which their procurement system issued and which prints on our
- * invoice, and **our order confirmation to them**, which is this page. The
- * third — our purchase order to a supply point — is vendor-and-admin-only, and
- * the way that stays true is that no buyer-reachable endpoint reads it, so there
- * is nothing on this screen to omit.
+ * invoice, and **our order confirmation to them**. The third — our purchase
+ * order to a supply point — is vendor-and-admin-only, and the way that stays
+ * true is that no buyer-reachable endpoint reads it, so there is nothing on
+ * this screen to omit.
  *
  * The proforma, the tax invoice and the e-way bill are NOT restated here. They
  * were hard-coded to "not issued yet" while nothing could issue one; T22 built
@@ -504,62 +564,54 @@ function DispatchBlock({
  * points at it rather than keeping a second copy that would go stale the first
  * time an invoice was raised.
  */
-function Documents({ order }: { order: Order }): React.JSX.Element {
+function Documents({ order, pdf }: { order: Order; pdf: string }): React.JSX.Element {
   return (
-    <section aria-labelledby="documents">
-      <div className="sh">
-        <div className="shrow">
-          <h2 id="documents">Documents on this order</h2>
-          <span className="sub">One seller, one invoice</span>
+    <section className="od-card" aria-labelledby="documents">
+      <header className="od-card__head">
+        <h2 id="documents">Documents</h2>
+        <span>One seller, one invoice</span>
+      </header>
+      <div className="od-doc">
+        <div className="od-doc__icon od-doc__icon--on" aria-hidden="true">
+          <FileIcon />
         </div>
-      </div>
-      <div className="tbl odocs">
-        <dl>
-          <div>
-            <dt>
-              Your PO reference
-              <span className="d">
-                Issued by your procurement system. It prints on our invoice.
-              </span>
-            </dt>
-            <dd className={order.buyerPoNumber ? 'mono' : 'notmeasured'}>
-              {order.buyerPoNumber ?? 'None given'}
-            </dd>
+        <div className="od-doc__body">
+          <div className="od-doc__title">Our order confirmation</div>
+          <div className="od-doc__meta">
+            Issued by {LEGAL_DISCLOSURE.legalName} against{' '}
+            <span className="mono">{order.orderNumber}</span> · PDF
           </div>
-          <div>
-            <dt>
-              Our order confirmation
-              <span className="d">
-                What {LEGAL_DISCLOSURE.legalName} has recorded against{' '}
-                <span className="mono">{order.orderNumber}</span>.
-              </span>
-            </dt>
-            {/*
-              This used to read, as the value of a named document, the literal
-              words "This page".
-
-              `OrderPdfService` has rendered a real confirmation all along and
-              was reachable from no buyer route. It is rendered per request from
-              the order itself, so it cannot go stale.
-            */}
-            <dd>
-              <a
-                className="hub-link"
-                href={`/api/buyer/orders/${encodeURIComponent(order.orderNumber)}/confirmation.pdf`}
-              >
-                Open the PDF
-              </a>
-            </dd>
-          </div>
-        </dl>
-        <p className="fnote off">
-          {BRAND.legalEntity} is the seller, so the invoice is ours.{' '}
-          <InfoPopover label="Where the other documents are">
-            The proforma, the tax invoice per delivery and the e-way bill are on the Documents tab,
-            each with its number and its date — or the moment that brings it into existence.
-          </InfoPopover>
-        </p>
+        </div>
+        {/*
+          `OrderPdfService` renders a real confirmation per request from the
+          order itself, so it cannot go stale. This used to read, as the value
+          of a named document, the literal words "This page".
+        */}
+        <a className="od-doc__action hub-link" href={pdf}>
+          Open the PDF
+        </a>
       </div>
+      <div className="od-doc">
+        <div className="od-doc__icon" aria-hidden="true">
+          <LinesIcon />
+        </div>
+        <div className="od-doc__body">
+          <div className="od-doc__title">Your PO reference</div>
+          <div className="od-doc__meta">
+            Issued by your procurement system. It prints on our invoice.
+          </div>
+        </div>
+        <span className={order.buyerPoNumber ? 'mono od-doc__value' : 'notmeasured od-doc__value'}>
+          {order.buyerPoNumber ?? 'None given'}
+        </span>
+      </div>
+      <p className="od-doc__note fnote off">
+        {BRAND.legalEntity} is the seller, so the invoice is ours.{' '}
+        <InfoPopover label="Where the other documents are">
+          The proforma, the tax invoice per delivery and the e-way bill are on the Documents tab,
+          each with its number and its date — or the moment that brings it into existence.
+        </InfoPopover>
+      </p>
     </section>
   );
 }
@@ -568,62 +620,117 @@ function Documents({ order }: { order: Order }): React.JSX.Element {
  * Money
  * ======================================================================== */
 
-function Breakup({ order }: { order: Order }): React.JSX.Element {
-  const lines: PriceLine[] = [
-    { label: 'Machines', amount: Money.parse(order.subtotal) },
-    {
-      label: 'Freight',
-      amount: Money.parse(order.freight),
-      note: `to ${order.deliveryAddress.pincode}`,
-    },
-  ];
-  if (order.tax.interState) {
-    lines.push({ label: `IGST ${order.tax.ratePct}%`, amount: Money.parse(order.tax.igst) });
-  } else {
-    lines.push({ label: `CGST ${order.tax.ratePct / 2}%`, amount: Money.parse(order.tax.cgst) });
-    lines.push({
-      label: `${order.tax.stateTaxLabel} ${order.tax.ratePct / 2}%`,
-      amount: Money.parse(order.tax.sgst),
-    });
-  }
+function Summary({ order, at }: { order: Order; at: Standing }): React.JSX.Element {
+  const taxable = Money.parse(order.subtotal).add(Money.parse(order.freight));
+  const tax = order.tax;
   return (
-    <PriceBreakup
-      lines={lines}
-      valuationMethod="REGULAR"
-      taxNote={
-        order.tax.interState
-          ? `Inter-state supply — we are registered in ${LEGAL_DISCLOSURE.registeredOffice.state} (${order.tax.ourStateCode}) and the movement terminates in ${order.tax.placeOfSupplyState} (${order.tax.placeOfSupplyStateCode}), so the whole tax is IGST.`
-          : `Intra-state supply — the movement terminates in ${order.tax.placeOfSupplyState} (${order.tax.placeOfSupplyStateCode}), where we are registered too, so it splits into CGST and ${order.tax.stateTaxLabel}.`
-      }
-    />
+    <section className="od-card od-summary" aria-labelledby="summary">
+      <h2 id="summary">
+        {at.held
+          ? 'What this order would come to'
+          : at.released
+            ? 'What this order would have come to'
+            : 'Payment summary'}
+      </h2>
+      <dl className="od-lines">
+        <div>
+          <dt>
+            Machines (<span className="mono">{order.unitsAllocated}</span>)
+          </dt>
+          <dd>{rupees(order.subtotal)}</dd>
+        </div>
+        <div>
+          <dt>
+            Freight to <span className="mono">{order.deliveryAddress.pincode}</span>
+          </dt>
+          <dd>{rupees(order.freight)}</dd>
+        </div>
+        <div className="sep">
+          <dt>Taxable value</dt>
+          <dd>{taxable.format()}</dd>
+        </div>
+        {tax.interState ? (
+          <div>
+            <dt>
+              IGST <span className="mono">{tax.ratePct}%</span>
+            </dt>
+            <dd>{rupees(tax.igst)}</dd>
+          </div>
+        ) : (
+          <>
+            <div>
+              <dt>
+                CGST <span className="mono">{tax.ratePct / 2}%</span>
+              </dt>
+              <dd>{rupees(tax.cgst)}</dd>
+            </div>
+            <div>
+              <dt>
+                {tax.stateTaxLabel} <span className="mono">{tax.ratePct / 2}%</span>
+              </dt>
+              <dd>{rupees(tax.sgst)}</dd>
+            </div>
+          </>
+        )}
+      </dl>
+      <div className="od-total">
+        <div>
+          <div className="od-total__label">
+            {at.held
+              ? 'Would come to'
+              : at.released
+                ? 'Would have come to'
+                : order.paymentStatus === 'PAID'
+                  ? 'Total paid'
+                  : 'Total payable'}
+          </div>
+          <div className="od-total__note">Landed price, incl. tax &amp; freight</div>
+        </div>
+        <div className="od-total__amt mono">{rupees(order.grandTotal)}</div>
+      </div>
+    </section>
   );
 }
 
-function Footnote({ order }: { order: Order }): React.JSX.Element {
-  if (order.approval?.status === 'PENDING') {
-    return (
-      <>
-        <b>Nothing has been charged.</b> This is what the order would come to if it is approved. If
-        the price of a machine changes between now and then, the figure on the confirmation is the
-        one we honour.
-      </>
-    );
-  }
-  if (order.approval?.status === 'REJECTED' || order.approval?.status === 'EXPIRED') {
-    return (
-      <>
-        <b>Nothing was charged.</b> This is what the order would have come to. No invoice exists and
-        none will.
-      </>
-    );
-  }
+function Billing({ order }: { order: Order }): React.JSX.Element {
   return (
-    <>
-      {/* The statutory basis is not restated here: it sits behind the `?` on
-          "Place of supply", which is the fact it is about. */}
-      <b>Nothing has been charged yet.</b> This is the figure the invoice will carry, and it is the
-      whole of it.
-    </>
+    <section className="od-card od-billing" aria-labelledby="billing">
+      <h2 id="billing">Billing</h2>
+      <dl className="od-kv">
+        <div>
+          <dt>Billed to</dt>
+          <dd className="strong">{order.billedTo.legalName}</dd>
+        </div>
+        <div>
+          <dt>GSTIN</dt>
+          <dd className="mono od-kv__gstin">{order.billedTo.gstin}</dd>
+        </div>
+        <div>
+          <dt>
+            Place of supply
+            {/* The citation and the reasoning behind a `?`, not a paragraph
+                under a fact most readers already accept. */}
+            <InfoPopover label="Why this state decides the tax">{order.tax.basis}</InfoPopover>
+          </dt>
+          <dd>
+            {order.tax.placeOfSupplyState} (
+            <span className="mono">{order.tax.placeOfSupplyStateCode}</span>)
+          </dd>
+        </div>
+        <div>
+          <dt>Payment terms</dt>
+          <dd>{PAYMENT_MODE[order.paymentMode] ?? order.paymentMode}</dd>
+        </div>
+        <div>
+          <dt>Cost centre</dt>
+          {/* An absence renders as an absence. Never a blank that reads as a
+              recorded value. */}
+          <dd className={order.costCentre ? undefined : 'notmeasured'}>
+            {order.costCentre ?? 'Not recorded'}
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
@@ -633,16 +740,15 @@ function Footnote({ order }: { order: Order }): React.JSX.Element {
 
 export function OrderSkeleton(): React.JSX.Element {
   return (
-    <div className="recskel">
-      <Skeleton className="h-9 w-72 rounded" />
-      <div className="rec">
-        <div className="evid">
-          <Skeleton className="h-44 w-full rounded-lg" />
-          <Skeleton className="h-64 w-full rounded-lg" />
-        </div>
-        <div className="sidep">
-          <Skeleton className="h-72 w-full rounded-lg" />
-        </div>
+    <div className="od-grid" aria-busy="true">
+      <div className="od-col">
+        <Skeleton className="h-44 w-full rounded-xl" />
+        <Skeleton className="h-52 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </div>
+      <div className="od-col">
+        <Skeleton className="h-80 w-full rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-xl" />
       </div>
     </div>
   );
@@ -727,32 +833,3 @@ const PAYMENT_MODE: Record<string, string> = {
   PARTIAL_ADVANCE: 'Part advance, balance before dispatch',
   CREDIT: 'On our credit terms',
 };
-
-/**
- * The pill.
- *
- * `warn` on a live approval because it is a genuine hold-up somebody has to act
- * on. Neutral everywhere else: green and red are PASS and FAIL, and an order
- * state is neither a pass nor a failure. In particular an order awaiting a
- * signature never carries a word suggesting it is confirmed or paid.
- */
-function statusOf(order: Order): { tone: 'neutral' | 'warn'; label: string } {
-  const approval = order.approval;
-  if (approval?.status === 'PENDING') return { tone: 'warn', label: 'Awaiting approval' };
-  if (approval?.status === 'REJECTED') return { tone: 'neutral', label: 'Approval declined' };
-  if (approval?.status === 'EXPIRED') return { tone: 'neutral', label: 'Approval expired' };
-  return { tone: 'neutral', label: buyerOrderStatusLabel(order.status) };
-}
-
-const asAddress = (a: OrderAddress): Address => ({
-  label: a.label ?? `${a.city} site`,
-  line1: a.line1,
-  ...(a.line2 ? { line2: a.line2 } : {}),
-  city: a.city,
-  state: a.state,
-  pincode: a.pincode,
-  ...(a.landmark ? { landmark: a.landmark } : {}),
-  contactName: a.contactName,
-  contactMobile: a.contactMobile,
-  ...(a.gateInstructions ? { gateInstructions: a.gateInstructions } : {}),
-});

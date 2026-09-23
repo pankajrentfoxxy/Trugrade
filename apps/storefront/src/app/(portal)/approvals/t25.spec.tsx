@@ -129,6 +129,7 @@ const record = (over: Partial<ApprovalRow> = {}): Record_ => ({
         ],
       },
     ],
+    supply: [],
     approval: null,
   },
 });

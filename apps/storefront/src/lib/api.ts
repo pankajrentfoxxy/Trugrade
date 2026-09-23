@@ -292,6 +292,8 @@ export interface ResolvedImages {
 
 export interface SkuDetail {
   skuId: string;
+  /** The model this configuration belongs to; the key to its siblings. */
+  modelId: string;
   skuCode: string;
   brandName: string;
   seriesName: string;
@@ -324,6 +326,15 @@ export interface SkuDetail {
  */
 export const getSkuDetail = (skuId: string, grade: string): Promise<SkuDetail | null> =>
   get<SkuDetail>(`/catalog/skus/${skuId}?grade=${grade}`, 60);
+
+/**
+ * Every active configuration of one model, as the catalogue declares it —
+ * including the ones nobody has sealed a unit for. The search index only
+ * holds what is for sale, so this is the list that lets the configuration
+ * picker draw "32 GB — nothing sealed" instead of no 32 GB at all.
+ */
+export const getModelSkus = (modelId: string): Promise<SkuDetail[] | null> =>
+  get<SkuDetail[]>(`/catalog/models/${modelId}/skus`, 60);
 
 export type QualityHeadline =
   | { kind: 'SCORE'; avgQcScore: number; gradeAccuracyPct: number; unitsInspected: number }

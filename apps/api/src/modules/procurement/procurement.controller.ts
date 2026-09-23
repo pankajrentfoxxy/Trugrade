@@ -5,12 +5,14 @@ import { ZodValidationPipe } from '../../shared/http/http';
 import {
   attachPoUnitSchema,
   attachableUnitsQuerySchema,
+  confirmPoAvailabilitySchema,
   dispatchPoSchema,
   listPurchaseOrdersQuerySchema,
   poStatusSchema,
   respondPoLinesSchema,
   type AttachPoUnitDto,
   type AttachableUnitsQueryDto,
+  type ConfirmPoAvailabilityDto,
   type DispatchPoDto,
   type ListPurchaseOrdersQueryDto,
   type RespondPoLinesDto,
@@ -138,6 +140,23 @@ export class ProcurementController {
     @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
   ): Promise<VendorPoDetail> {
     return this.pos.acknowledge(poId);
+  }
+
+  /**
+   * The vendor's answer as a quantity per model and grade.
+   *
+   * This is the route the vendor's screen uses. `respond` below is kept for
+   * the per-machine form of the same answer; both end on the same repository
+   * transaction, so there is one place a response changes anything.
+   */
+  @Post(':poId/availability')
+  @HttpCode(200)
+  @RequirePermissions('procurement.po.acknowledge')
+  confirmAvailability(
+    @Param('poId', new ZodValidationPipe(uuidSchema)) poId: string,
+    @Body(new ZodValidationPipe(confirmPoAvailabilitySchema)) body: ConfirmPoAvailabilityDto,
+  ): Promise<VendorPoDetail> {
+    return this.pos.confirmAvailability(poId, body.lines);
   }
 
   @Post(':poId/respond')

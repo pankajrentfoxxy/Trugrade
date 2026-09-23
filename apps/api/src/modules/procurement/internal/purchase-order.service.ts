@@ -152,6 +152,14 @@ export interface VendorPoLineGroupView {
   lineTotal: Money;
   lineStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'MIXED';
   rejectionReason: string | null;
+  /**
+   * How many of `qty` the vendor said they can supply.
+   *
+   * Null until the vendor has answered — a line nobody has confirmed is not
+   * "0 available" and it is not "all available", and the screen says "not
+   * confirmed" rather than either number.
+   */
+  qtyAvailable: number | null;
   attachedCount: number;
   serials: Array<{ unitId: string; serialNumber: string | null }>;
 }
@@ -414,6 +422,93 @@ export class PurchaseOrderService {
     }
 
     return this.detail(poId);
+  }
+
+  /**
+   * "Of the N you asked for, I can supply K" — per model and grade.
+   *
+   * A PO line is one machine, so a count per SKU + grade becomes K accepted
+   * lines and (N − K) rejected as out of stock, and the answer then travels the
+   * same path as a per-line response: the payable, the buyer's order, the
+   * released stock and the ops task all come from `respondLines`, which is the
+   * one place a response changes anything.
+   *
+   * Lines that already have a machine attached are the first ones kept. A
+   * vendor who has named a serial for a slot has told us which machine that
+   * slot is, and refusing that slot while accepting a vacant one would throw
+   * away the only concrete fact on the order.
+   *
+   * Every group must be answered, in one call. A group left out is not "zero"
+   * and not "all" — it is a question the vendor has not answered, and a
+   * response that silently defaults it either way puts words in their mouth.
+   */
+  async confirmAvailability(
+    poId: string,
+    input: ReadonlyArray<{ skuId: string; grade: string; qtyAvailable: number }>,
+  ): Promise<VendorPoDetail> {
+    const po = await this.mine(poId);
+    const rows = await this.repo.linesOf(poId);
+
+    const groups = new Map<string, PoLineRow[]>();
+    for (const row of rows) {
+      const key = `${row.sku_id}:${row.grade_at_po}`;
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(row);
+      else groups.set(key, [row]);
+    }
+
+    const answered = new Map<string, number>();
+    for (const line of input) {
+      const key = `${line.skuId}:${line.grade}`;
+      // Field errors are keyed by the line (`skuId:grade`) so a screen can put
+      // the sentence on the row it is about rather than at the top of the form.
+      if (answered.has(key)) {
+        throw new ValidationError(
+          'The same model and grade was answered twice. Give each line one quantity.',
+          { [key]: 'Answered twice.' },
+        );
+      }
+      const bucket = groups.get(key);
+      if (!bucket) {
+        throw new ValidationError(
+          `${po.po_number} has no line for that model and grade. Reload the order and try again.`,
+          { [key]: 'Not on this purchase order.' },
+        );
+      }
+      if (line.qtyAvailable > bucket.length) {
+        const message = `This line asks for ${bucket.length} ${bucket.length === 1 ? 'machine' : 'machines'}. Enter a quantity between 0 and ${bucket.length}.`;
+        throw new ValidationError(message, { [key]: message });
+      }
+      answered.set(key, line.qtyAvailable);
+    }
+
+    const missing = [...groups.keys()].filter((key) => !answered.has(key));
+    if (missing.length > 0) {
+      throw new ValidationError(
+        `Enter the quantity available for every line on ${po.po_number}. ${missing.length} ${missing.length === 1 ? 'line is' : 'lines are'} unanswered.`,
+        Object.fromEntries(missing.map((key) => [key, 'Enter the quantity available.'])),
+      );
+    }
+
+    const payload: Array<{ lineId: string; accept: boolean; reason?: string }> = [];
+    for (const [key, bucket] of groups) {
+      const keep = answered.get(key) ?? 0;
+      const ordered = [...bucket].sort((a, b) => {
+        // Attached lines first; then a stable order so the same answer keeps
+        // the same machines on a retry.
+        if (!!a.unit_id !== !!b.unit_id) return a.unit_id ? -1 : 1;
+        return a.id.localeCompare(b.id);
+      });
+      ordered.forEach((row, index) => {
+        payload.push(
+          index < keep
+            ? { lineId: row.id, accept: true }
+            : { lineId: row.id, accept: false, reason: 'OUT_OF_STOCK' },
+        );
+      });
+    }
+
+    return this.respond(poId, payload);
   }
 
   async dispatch(
@@ -735,6 +830,9 @@ export class PurchaseOrderService {
           lineStatus === 'REJECTED'
             ? (bucket.find((l) => l.rejectionReason)?.rejectionReason ?? null)
             : null,
+        qtyAvailable: statuses.has('PENDING')
+          ? null
+          : bucket.filter((l) => l.lineStatus !== 'REJECTED').length,
         attachedCount: bucket.filter((l) => l.unitId).length,
         serials: bucket
           .filter((l) => l.unitId)

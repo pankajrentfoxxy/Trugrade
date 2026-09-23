@@ -262,13 +262,21 @@ export class FakeObjectStore extends ObjectStorePort {
     return join(this.root, createHash('sha256').update(key).digest('hex'));
   }
 
+  /**
+   * A URL a browser can PUT to. It used to be `memory://upload/<key>`, which
+   * no browser can open — so every bulk photograph upload in development
+   * failed at the first byte. The token is the key with a `put:` prefix,
+   * signed with an expiry like a download; `ObjectsController` accepts the
+   * PUT, strips the prefix and writes the bytes here. The prefix keeps a
+   * download token from ever being usable to overwrite an object.
+   */
   async presignUpload(
     key: string,
     contentType: string,
     maxBytes: number,
   ): Promise<{ url: string; fields?: Record<string, string> }> {
     return {
-      url: `memory://upload/${key}`,
+      url: this.signer.sign(`put:${key}`, 900),
       fields: { 'content-type': contentType, 'max-bytes': String(maxBytes) },
     };
   }

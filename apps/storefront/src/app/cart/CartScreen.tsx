@@ -396,7 +396,10 @@ function CartOrderPanel({
   return (
     <aside className="sum" aria-labelledby="sum-title">
       <h2 id="sum-title">This order</h2>
-      <p className="sum-sub">Every charge is named here. Nothing is added later.</p>
+      {/* GST and freight are not rows here: both need the delivery address,
+          and a row that can only say "at checkout" names a charge without
+          giving it. The note under the total says where they are shown. */}
+      <p className="sum-sub">Goods value now. GST and freight are shown in full at checkout.</p>
 
       <ul className="sum-rows">
         <li>
@@ -408,18 +411,6 @@ function CartOrderPanel({
         <li>
           <span>Dispatch points</span>
           <b>{groups.length}</b>
-        </li>
-        <li>
-          <span>
-            GST<small>18%, IGST or CGST + SGST</small>
-          </span>
-          <b className="pending">Split shown at checkout</b>
-        </li>
-        <li>
-          <span>
-            Freight<small>per lane, by weight</small>
-          </span>
-          <b className="pending">Priced to your pincode at checkout</b>
         </li>
         <li className="total">
           <span>Goods value</span>

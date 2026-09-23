@@ -66,7 +66,11 @@ import {
   type DeliveryView,
   type SealCheckResult,
 } from './internal/delivery-check.service';
-import { OrderReadService, type OrderRecordView } from './internal/order-read.service';
+import {
+  OrderReadService,
+  type OrderRecordView,
+  type SalesOrderView,
+} from './internal/order-read.service';
 import { OrderUnitsService, type OrderUnitsView } from './internal/order-units.service';
 import { RfqIntakeService, type RequirementIntakeResult } from './internal/rfq-intake.service';
 
@@ -308,6 +312,22 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<OrderRecordView> {
     return this.orders.byNumber(orderNumber);
+  }
+
+  /**
+   * The sales order: the booking as the dispatch points confirmed it.
+   *
+   * `WAITING` until every dispatch point has answered, then the confirmed
+   * quantities priced with GST and freight. Reads `ordering` only — the answer
+   * reaches it through the columns the purchase-order response writes, never
+   * through the purchase order itself.
+   */
+  @Get('orders/:orderNumber/sales-order')
+  @RequirePermissions('ordering.own.read')
+  salesOrder(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<SalesOrderView> {
+    return this.orders.salesOrder(orderNumber);
   }
 
   /**

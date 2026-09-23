@@ -9,7 +9,6 @@ import {
   EmptyState,
   GradeBadge,
   QcChip,
-  HubPageHeader,
   InfoPopover,
   SealChip,
   StatusPill,
@@ -208,98 +207,103 @@ export function UnitsBoard({
 
   return (
     <>
-      <HubPageHeader
-        title={
-          <>
-            Machines on order <span className="font-mono tnum">{orderNumber}</span>
-          </>
-        }
-        subtitle={
-          data === null ? undefined : `${all.length} ${all.length === 1 ? 'machine' : 'machines'}`
-        }
-      />
+      <section className="od-card" aria-labelledby="ub-head">
+        <header className="od-card__head">
+          <h2 id="ub-head">Machines on this order</h2>
+          <span>
+            {data === null
+              ? 'Every figure below was measured on the serial'
+              : `${all.length} ${all.length === 1 ? 'machine' : 'machines'}, every figure measured on the serial`}
+          </span>
+        </header>
+        <Summary units={all} flagged={flagged.length} loading={data === null} />
+      </section>
 
-      <Summary units={all} flagged={flagged.length} loading={data === null} />
+      <section className="od-card" aria-label="The machines, one row per serial">
+        <div className="rbar ubbar">
+          <span className="cnt">
+            {data === null ? (
+              <span className="ink4">Reading the inspections…</span>
+            ) : (
+              <>
+                <b className="mono">{rows.length}</b> of <b className="mono">{all.length}</b>{' '}
+                {all.length === 1 ? 'machine' : 'machines'}
+                {attentionOnly && ' need a look'}
+              </>
+            )}
+          </span>
 
-      <div className="rbar ubbar">
-        <span className="cnt">
-          {data === null ? (
-            <span className="ink4">Reading the inspections…</span>
-          ) : (
-            <>
-              <b className="mono">{rows.length}</b> of <b className="mono">{all.length}</b>{' '}
-              {all.length === 1 ? 'machine' : 'machines'}
-              {attentionOnly && ' need a look'}
-            </>
-          )}
-        </span>
+          <div className="ubfilters" role="group" aria-label="Filter these machines">
+            <button
+              type="button"
+              className={attentionOnly ? 'chipf' : 'chipf on'}
+              aria-pressed={!attentionOnly}
+              onClick={() => setValue('show', '')}
+            >
+              All machines
+            </button>
+            <button
+              type="button"
+              className={attentionOnly ? 'chipf on' : 'chipf'}
+              aria-pressed={attentionOnly}
+              onClick={() => setValue('show', 'attention')}
+              // Disabled only when it is NOT the current filter: a chip that is
+              // both active and disabled reads as broken, and a buyer who arrived
+              // on this link needs the way back to it to stay live.
+              disabled={data !== null && flagged.length === 0 && !attentionOnly}
+            >
+              Needs a look <span className="mono">{data === null ? '—' : flagged.length}</span>
+            </button>
+          </div>
 
-        <div className="ubfilters" role="group" aria-label="Filter these machines">
-          <button
-            type="button"
-            className={attentionOnly ? 'chipf' : 'chipf on'}
-            aria-pressed={!attentionOnly}
-            onClick={() => setValue('show', '')}
-          >
-            All machines
-          </button>
-          <button
-            type="button"
-            className={attentionOnly ? 'chipf on' : 'chipf'}
-            aria-pressed={attentionOnly}
-            onClick={() => setValue('show', 'attention')}
-            // Disabled only when it is NOT the current filter: a chip that is
-            // both active and disabled reads as broken, and a buyer who arrived
-            // on this link needs the way back to it to stay live.
-            disabled={data !== null && flagged.length === 0 && !attentionOnly}
-          >
-            Needs a look <span className="mono">{data === null ? '—' : flagged.length}</span>
-          </button>
+          <ExportButton orderNumber={orderNumber} units={rows} disabled={data === null} />
         </div>
 
-        <ExportButton orderNumber={orderNumber} units={rows} disabled={data === null} />
-      </div>
-
-      <div className="tbl ubtable">
-        <DataBoard
-          caption={
-            data === null
-              ? 'Reading the inspections on this order.'
-              : `${rows.length} of ${all.length} machines on order ${orderNumber}, sorted by ${SORT_CAPTION[sortKey]}, ${direction === 'asc' ? 'lowest first' : 'highest first'}.`
-          }
-          columns={columnsFor(orderNumber)}
-          rows={rows}
-          rowKey={(u) => u.serialNumber}
-          sort={{ key: sortKey, direction }}
-          onSort={onSort}
-          loading={data === null}
-          skeletonRows={6}
-          empty={
-            attentionOnly ? (
-              <EmptyState
-                title="Nothing on this order needs a second look"
-                body={
-                  <>
-                    Every machine came back a clean pass with its seal intact and every measurement
-                    recorded. <span className="mono">{all.length}</span> of{' '}
-                    <span className="mono">{all.length}</span>.
-                  </>
-                }
-                action={
-                  <button type="button" className="pill wire" onClick={() => setValue('show', '')}>
-                    Show all machines
-                  </button>
-                }
-              />
-            ) : (
-              <EmptyState
-                title="No machines are assigned to this order yet"
-                body="Machines are assigned by serial number when your order is confirmed. Until then there is nothing to inspect or export — no serial has been set aside for you."
-              />
-            )
-          }
-        />
-      </div>
+        <div className="tbl ubtable">
+          <DataBoard
+            caption={
+              data === null
+                ? 'Reading the inspections on this order.'
+                : `${rows.length} of ${all.length} machines on order ${orderNumber}, sorted by ${SORT_CAPTION[sortKey]}, ${direction === 'asc' ? 'lowest first' : 'highest first'}.`
+            }
+            columns={columnsFor(orderNumber)}
+            rows={rows}
+            rowKey={(u) => u.serialNumber}
+            sort={{ key: sortKey, direction }}
+            onSort={onSort}
+            loading={data === null}
+            skeletonRows={6}
+            empty={
+              attentionOnly ? (
+                <EmptyState
+                  title="Nothing on this order needs a second look"
+                  body={
+                    <>
+                      Every machine came back a clean pass with its seal intact and every
+                      measurement recorded. <span className="mono">{all.length}</span> of{' '}
+                      <span className="mono">{all.length}</span>.
+                    </>
+                  }
+                  action={
+                    <button
+                      type="button"
+                      className="pill wire"
+                      onClick={() => setValue('show', '')}
+                    >
+                      Show all machines
+                    </button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="No machines are assigned to this order yet"
+                  body="Machines are assigned by serial number when your order is confirmed. Until then there is nothing to inspect or export — no serial has been set aside for you."
+                />
+              )
+            }
+          />
+        </div>
+      </section>
 
       <p className="fnote off ubfoot">
         <InfoPopover label="Where these figures come from">

@@ -27,7 +27,16 @@ export type ProductCartValue = {
    * written down with it. A signed-in buyer's add ignores it — the server
    * prices the line.
    */
-  addListing: (listingId: string, qty: number, snapshot: GuestCartSnapshot) => Promise<void>;
+  /**
+   * Resolves to the cart's id once the server has the line, so a caller can
+   * go straight on to `/checkout?cart=`. Null for a guest — their basket has
+   * no server id — and when the add did not land.
+   */
+  addListing: (
+    listingId: string,
+    qty: number,
+    snapshot: GuestCartSnapshot,
+  ) => Promise<string | null>;
   updateListingQty: (listingId: string, qty: number) => Promise<void>;
   dismissCartDock: () => void;
   /** `null` until the session probe answers. */
@@ -114,14 +123,14 @@ function useProductCartState(): ProductCartValue {
   }, []);
 
   const addListing = React.useCallback(
-    async (listingId: string, qty: number, snapshot: GuestCartSnapshot): Promise<void> => {
+    async (listingId: string, qty: number, snapshot: GuestCartSnapshot): Promise<string | null> => {
       // Signed out: the basket is theirs and it stays on their machine. No
       // request is made, so there is no 401 to hang on and no sign-in wall
       // between a buyer and a decision they have already made.
       if (signedIn === false) {
         setGuestLines(addGuestLine(snapshot, qty));
         setCartDockDismissed(false);
-        return;
+        return null;
       }
       setBusyListingId(listingId);
       const result = await setCartLine(listingId, qty);
@@ -129,7 +138,10 @@ function useProductCartState(): ProductCartValue {
       if (result.ok) {
         applyView(result.data);
         setCartDockDismissed(false);
-      } else if (result.status === 401) signInRedirect();
+        return result.data.id;
+      }
+      if (result.status === 401) signInRedirect();
+      return null;
     },
     [applyView, signInRedirect, signedIn],
   );

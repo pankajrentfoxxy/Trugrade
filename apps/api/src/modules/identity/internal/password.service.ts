@@ -6,6 +6,7 @@ import {
   PASSWORD_BLOCKLIST_WORDS,
   PASSWORD_COMPOSITION,
   PASSWORD_HISTORY,
+  SUPPLIER_PASSWORD,
 } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
@@ -86,6 +87,20 @@ export interface PasswordCheckResult {
   reason?: string;
 }
 
+/**
+ * Which composition rule a password is chosen against. `supplier` is VR-045a,
+ * read only by supplier self-service signup; everything else is `standard`
+ * (VR-044/045). The blocklist and personal-data checks apply to both.
+ */
+export type PasswordPolicy = 'standard' | 'supplier';
+
+export interface PasswordContext {
+  email?: string | null;
+  mobile?: string | null;
+  fullName?: string | null;
+  policy?: PasswordPolicy;
+}
+
 @Injectable()
 export class PasswordService {
   constructor(
@@ -97,18 +112,24 @@ export class PasswordService {
    * VR-044 to VR-046, checked in the order a person would hit them, so the first
    * message they see is about the first thing they can fix.
    */
-  check(
-    password: string,
-    context: { email?: string | null; mobile?: string | null; fullName?: string | null } = {},
-  ): PasswordCheckResult {
-    if (password.length < PASSWORD.min!) {
-      return { ok: false, reason: PASSWORD.message };
-    }
-    if (password.length > PASSWORD.max!) {
-      return { ok: false, reason: 'Password must be 128 characters or fewer.' };
-    }
-    if (!PASSWORD_COMPOSITION.pattern!.test(password)) {
-      return { ok: false, reason: PASSWORD_COMPOSITION.message };
+  check(password: string, context: PasswordContext = {}): PasswordCheckResult {
+    if (context.policy === 'supplier') {
+      if (password.length > SUPPLIER_PASSWORD.max!) {
+        return { ok: false, reason: 'Password must be 128 characters or fewer.' };
+      }
+      if (!SUPPLIER_PASSWORD.pattern!.test(password)) {
+        return { ok: false, reason: SUPPLIER_PASSWORD.message };
+      }
+    } else {
+      if (password.length < PASSWORD.min!) {
+        return { ok: false, reason: PASSWORD.message };
+      }
+      if (password.length > PASSWORD.max!) {
+        return { ok: false, reason: 'Password must be 128 characters or fewer.' };
+      }
+      if (!PASSWORD_COMPOSITION.pattern!.test(password)) {
+        return { ok: false, reason: PASSWORD_COMPOSITION.message };
+      }
     }
 
     const lower = password.toLowerCase();
@@ -214,12 +235,7 @@ export class PasswordService {
   async setPassword(
     userId: string,
     password: string,
-    context: {
-      email?: string | null;
-      mobile?: string | null;
-      fullName?: string | null;
-      rotationDays?: number | null;
-    } = {},
+    context: PasswordContext & { rotationDays?: number | null } = {},
   ): Promise<void> {
     const check = this.check(password, context);
     if (!check.ok) throw new ValidationError(check.reason!, { password: check.reason! });

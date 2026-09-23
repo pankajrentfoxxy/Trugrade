@@ -103,6 +103,36 @@
        as a text colour on a light surface. */
     --acc-ink: #1a5f6b;
     --acc-wash: #eef7f9;
+    /* The orders board, matched to its reference design: its own teal, the
+       three status families and its greys. Board-only; nothing else reads
+       these. */
+    --board-acc: #0e7c7b;
+    --board-acc-ink: #0a5f5e;
+    --board-acc-link: #0a6b6a;
+    --board-acc-tint: #e3f3f3;
+    --board-warn: #d97706;
+    --board-warn-ink: #8a4b06;
+    --board-warn-tint: #fdf1de;
+    --board-warn-edge: #f4d9ae;
+    --board-warn-text: #5a3304;
+    --board-info: #2563a8;
+    --board-info-ink: #1e4e86;
+    --board-info-tint: #e6effa;
+    --board-ok: #1f8a4c;
+    --board-ok-ink: #166a3a;
+    --board-ok-tint: #e4f4ea;
+    --board-ink: #16202a;
+    --board-ink-2: #3a4652;
+    --board-muted: #56636f;
+    --board-empty: #8a96a0;
+    --board-line: #e3e7eb;
+    --board-line-soft: #eef1f3;
+    --board-field: #cbd5dc;
+    --board-chip: #f1f5f7;
+    --board-head: #fafbfc;
+    --board-hover: #f8fafb;
+    --board-page: #f4f6f8;
+    --board-sans: 'IBM Plex Sans', system-ui, sans-serif;
     /* Storefront header/footer — #283341; hero/sell keep --chrome above. */
     --storefront-chrome: #283341;
     --storefront-chrome-2: #323f4f;

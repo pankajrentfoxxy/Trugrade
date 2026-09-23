@@ -33,6 +33,25 @@ export interface DispatchGroup {
   machines: OrderedMachine[];
 }
 
+/**
+ * One line of the order as the dispatch point answered it.
+ *
+ * `qtyAvailable` is null until the dispatch point has answered. Null renders as
+ * "not confirmed yet", never as a quantity — an unanswered line is neither
+ * zero nor all.
+ */
+export interface SupplyLine {
+  /** `Supply Point F · Noida`. A dispatch point, never a seller. */
+  label: string;
+  title: string | null;
+  specSummary: string | null;
+  grade: string;
+  qtyOrdered: number;
+  qtyAvailable: number | null;
+  /** ISO 8601, when the dispatch point answered. Null until it has. */
+  answeredAt: string | null;
+}
+
 export interface OrderParty {
   gstin: string;
   legalName: string;
@@ -108,6 +127,8 @@ export interface OrderRecord {
   deliveryAddress: OrderAddress;
   unitsAllocated: number;
   dispatchGroups: DispatchGroup[];
+  /** What each dispatch point said it can supply, line by line. */
+  supply: SupplyLine[];
   approval: OrderApproval | null;
 }
 

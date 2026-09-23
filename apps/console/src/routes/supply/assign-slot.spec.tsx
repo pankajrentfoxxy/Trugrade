@@ -16,7 +16,27 @@ import Inspections from './Inspections';
  * and this dialog only read `error.message`.
  */
 
-const VISIT = {
+interface Visit {
+  id: string;
+  visitNumber: string;
+  status: string;
+  vendorOrgId: string;
+  vendorName: string | null;
+  technicianId: string | null;
+  technicianName: string | null;
+  scheduledDate: string | null;
+  slotFrom: string | null;
+  requestedAt: string;
+  waitingDays: number;
+  unitsRequested: number;
+  unitsInspected: number;
+  unitsPassed: number;
+  unitsFailed: number;
+  unitsGradeCorrected: number;
+  listingIds: string[];
+}
+
+const VISIT: Visit = {
   id: 'visit-1',
   visitNumber: 'QCV-20260903-433E6E96',
   status: 'REQUESTED',
@@ -40,6 +60,9 @@ const LOADS = [{ technicianId: 'tech-1', name: 'Rakesh Kumar', byDay: {}, openVi
 
 let scheduled: { url: string; body: Record<string, unknown> }[] = [];
 let refuse: { status: number; body: unknown } | null = null;
+/** What the board serves. A successful booking rewrites it, as the server would. */
+let row: Visit = VISIT;
+let boardFetches = 0;
 
 function mockApi(): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
@@ -62,14 +85,22 @@ function mockApi(): void {
     if (url.includes('/schedule')) {
       scheduled.push({ url, body: JSON.parse(String(init?.body ?? '{}')) });
       if (refuse) return answer(refuse.body, false, refuse.status);
+      row = {
+        ...VISIT,
+        status: 'TECH_ASSIGNED',
+        technicianId: 'tech-1',
+        technicianName: 'Rakesh Kumar',
+        scheduledDate: '2026-09-19',
+      };
       return answer({ id: 'visit-1' });
     }
     // Only once the dialog is open; until then the hook is passed '' and the
     // browser's own answer to that is not JSON, so nothing lands in `data`.
     if (url.includes('/workload')) return answer(LOADS);
     if (url.includes('/api/qc/inspections')) {
+      boardFetches += 1;
       return answer({
-        rows: [VISIT],
+        rows: [row],
         page: 1,
         per: 40,
         total: 1,
@@ -102,6 +133,8 @@ async function openAssignDialog(user: ReturnType<typeof userEvent.setup>): Promi
 beforeEach(() => {
   scheduled = [];
   refuse = null;
+  row = VISIT;
+  boardFetches = 0;
   mockApi();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -182,5 +215,30 @@ describe('assigning a technician', () => {
     await user.click(screen.getByRole('button', { name: 'Assign' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Expected a time like 09:30.');
+  });
+
+  /**
+   * The row under the drawer used to keep the state from before the booking.
+   * The assignment goes through `/qc/visits/:id/schedule`, the board was never
+   * fetched again, and the operator's next "Open" showed "Unassigned" and the
+   * same "Assign technician" button for a visit they had just booked.
+   */
+  it('refetches the board after a booking, so the row and the record show who', async () => {
+    const user = userEvent.setup();
+    await openAssignDialog(user);
+    expect(boardFetches).toBe(1);
+
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+    // The name lands in the Technician column without a page reload …
+    expect(await screen.findByText('Rakesh Kumar')).toBeInTheDocument();
+    expect(boardFetches).toBe(2);
+    expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+
+    // … and the reopened record knows it is booked.
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByRole('button', { name: 'Reassign' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Assign technician' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Rakesh Kumar').length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -1,8 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { getSession } from '../register/api';
-import { getOrderReadiness } from '../(portal)/api';
+import { checkoutDestination } from './checkout-entry';
 
 /**
  * The cart's way into checkout, with the server asked first.
@@ -20,9 +19,8 @@ import { getOrderReadiness } from '../(portal)/api';
  * "100% complete" here and refused by the API on the next screen, because the
  * API asked for `VERIFIED` and only a human could grant it.
  *
- * It still fails **open**. A signed-out visitor, a refused read, an unreachable
- * server: all go on to checkout, where the door that takes the money makes the
- * real decision. This is a courtesy, not a gate.
+ * The rule itself lives in `checkoutDestination`, which the product page's
+ * Buy now shares, so the two doors into checkout cannot disagree.
  */
 export function CheckoutGate({
   cartId,
@@ -37,25 +35,7 @@ export function CheckoutGate({
 
   const proceed = async (): Promise<void> => {
     setChecking(true);
-    const session = await getSession();
-    // No session: checkout's own door handles that, as it always has.
-    if (!session.ok) {
-      navigate(href);
-      return;
-    }
-    const readiness = await getOrderReadiness();
-    // A seat refused the read cannot be judged here; the server judges it.
-    if (!readiness.ok) {
-      navigate(href);
-      return;
-    }
-    // Prepaid is the mode a cart goes to checkout on. Credit is chosen on the
-    // payment step, and refused there with its own sentence if it is not open.
-    if (!readiness.data.prepaid) {
-      navigate('/profile?reason=checkout');
-      return;
-    }
-    navigate(href);
+    navigate(await checkoutDestination(cartId));
   };
 
   return (

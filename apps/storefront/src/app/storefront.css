@@ -1195,9 +1195,11 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .obrd-cards .offer-card-head .text-right button{margin-left:auto;display:inline-block}
 .obrd td,.obrd th{padding:12px 12px}
 .obrd+.obrd{border-top:1px solid var(--rule)}
-.poolnote{margin:0;padding:12px 16px;background:var(--acc-wash);border-top:1px solid var(--rule);
-  border-bottom:1px solid var(--rule);font-size:12.5px;line-height:1.5;color:var(--ink-2)}
-.poolnote b{color:var(--ink)}
+/* A footnote under the margin-pool rows, not a banner above them. Small and
+   quiet by direction; the ITC consequence is still on every row's price. */
+.poolnote{margin:0;padding:8px 16px 10px;border-top:1px solid var(--rule-2);
+  font-size:10.5px;line-height:1.5;color:var(--ink-3)}
+.poolnote b{color:var(--ink-2)}
 /* A certificate about to lapse, on a serial row. Amber: it is a measured fact
    with a date on it, not a verdict, so it is never --fail. */
 .expsoon{display:block;font-size:10px;color:var(--acc-ink);font-variant-numeric:tabular-nums}
@@ -1653,7 +1655,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   border-bottom:1px dashed var(--cream-line-soft);font-size:.86rem}
 .sum-rows li small{display:block;font-size:.68rem;color:var(--cream-muted);font-weight:500}
 .sum-rows li b{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
-.sum-rows li b.pending{font-weight:600;color:var(--cream-muted);font-size:.78rem;white-space:normal;text-align:right}
 .sum-rows li.total{border-bottom:none;padding-top:12px}
 .sum-rows li.total span{font-weight:800}
 .sum-rows li.total b{font-size:1.2rem;font-weight:800;color:var(--cream-accent-deep)}
@@ -3633,20 +3634,68 @@ html[data-t="light"] .hero2{
    supply-point board, the specification, the condition frames — scrolls on the
    right. The decision the panel carries is the one everything else is evidence
    for, so it does not scroll away from the evidence. */
-.pdp{display:grid;grid-template-columns:390px minmax(0,1fr);gap:26px;align-items:start;
+/* 380px, not 320: the rail now holds a photograph with a row of four
+   thumbnails under it, and at 320 the thumbnails were postage stamps. */
+.pdp{display:grid;grid-template-columns:380px minmax(0,1fr);gap:26px;align-items:start;
   padding-top:22px;padding-bottom:44px}
 
-/* ---- left: the sticky panel ---- */
+/* ---- left: the rail and its sticky panel ---- */
+/* The panel carries the grade's photographs, their disclosure and the two
+   actions, and nothing else. The seller line and the four facts it used to
+   repeat live in the record on the right, where they have their denominators. */
+.rail{min-width:0}
 .pv{position:sticky;top:78px;background:var(--sheet);border:1px solid var(--rule);
-  border-radius:18px;padding:20px}
+  border-radius:14px;padding:14px}
+
+/* The frame. One photograph fills it edge to edge; the badge, the seal, the
+   arrows and the counter sit on the photograph. A fixed 4:3 so the panel does
+   not change height as frames of different sizes step through it. */
 .pv-img{position:relative;background:var(--sheet-2);border:1px solid var(--rule-2);
-  border-radius:14px;padding:30px 18px 24px;display:flex;justify-content:center;color:var(--ink-3)}
-.pv-draw{width:80%;height:auto}
-.pv-grade{position:absolute;top:12px;left:12px;font-weight:800;font-size:13px;
+  border-radius:10px;overflow:hidden;color:var(--ink-3)}
+.pv-img .gal-photo{display:block;gap:0}
+.pv-img .gal-photo img{display:block;width:100%;aspect-ratio:4/3;height:auto;object-fit:cover;
+  border:0;border-radius:0;background:var(--sheet-2)}
+/* Nothing catalogued at this grade: the placeholder says so in its own words,
+   inside the frame, with room around it. */
+.pv-img[data-empty="true"]{padding:44px 14px 14px}
+.ph-big [role="img"]{aspect-ratio:4/3}
+.pv-grade{position:absolute;top:12px;left:12px;z-index:2;font-weight:800;font-size:13px;
   padding:6px 12px;border-radius:9px;background:var(--promo-accent);color:var(--promo-accent-ink)}
-.pv-seal{position:absolute;top:12px;right:12px;font-size:11px;font-weight:700;
+.pv-seal{position:absolute;top:12px;right:12px;z-index:2;font-size:11px;font-weight:700;
   padding:6px 10px;border-radius:999px;background:var(--sheet);border:1px solid var(--rule);
   color:var(--ink-2)}
+/* The arrows. Shut at the ends rather than wrapping, so a press always does
+   what the arrow says; shut is drawn, not hidden, so the row does not shift. */
+.gal-ar{position:absolute;top:50%;z-index:2;translate:0 -50%;width:32px;height:32px;
+  border-radius:999px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);
+  font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;
+  padding:0 0 3px;cursor:pointer;transition:border-color .15s ease,background-color .15s ease,opacity .15s ease}
+.gal-ar.l{left:10px}
+.gal-ar.r{right:10px}
+.gal-ar:hover:not(:disabled){border-color:var(--promo-accent)}
+.gal-ar:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
+.gal-ar:disabled{opacity:.35;cursor:default}
+/* Which view, and where in the set. The count is a count, so it is mono. */
+.gal-count{position:absolute;right:10px;bottom:10px;z-index:2;font-size:11px;font-weight:600;
+  padding:4px 9px;border-radius:999px;background:var(--sheet);border:1px solid var(--rule);
+  color:var(--ink-2)}
+.gal-count .mono{font-size:11px;color:var(--ink)}
+/* The strip. Four across, wrapping: eight frames are two rows, and a row that
+   scrolls sideways hides how many there are. The open frame is amber because
+   an active state is one of the three things amber is allowed to mean. */
+.gal-thumbs{list-style:none;margin:10px 0 0;padding:0;display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.th{display:block;width:100%;aspect-ratio:4/3;padding:0;overflow:hidden;cursor:pointer;
+  border:1px solid var(--rule);border-radius:8px;background:var(--sheet-2);opacity:.7;
+  transition:opacity .15s ease,border-color .15s ease}
+.th img{display:block;width:100%;height:100%;object-fit:cover}
+.th:hover{opacity:1;border-color:var(--promo-accent-mid)}
+.th.on{opacity:1;border-color:var(--promo-accent);box-shadow:0 0 0 2px var(--promo-accent-soft)}
+.th:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
+/* The set's one disclosure, under the strip. Small, but it is there and it is
+   not dismissible: these are photographs of other machines of this grade. */
+.pv-disc{margin:10px 0 0;font-size:11.5px;line-height:1.5;color:var(--ink-3)}
+.pv-disc a{color:var(--acc-ink)}
 .pv-actions{display:flex;gap:10px;margin-top:16px}
 .pvbtn{flex:1;padding:14px 0;border-radius:12px;font-weight:800;font-size:12.5px;
   letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
@@ -3664,14 +3713,6 @@ html[data-t="light"] .hero2{
    the lane cannot be served. Focusable, so the reason is announced. */
 .pvbtn[aria-disabled="true"]{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 .pv-from{margin:9px 0 0;font-size:11.5px;color:var(--ink-3);line-height:1.5}
-.pv-trust{margin:14px 0 0;padding-top:13px;border-top:1px dashed var(--rule);
-  font-size:12px;color:var(--ink-2);line-height:1.6}
-.pv-trust b{color:var(--ink);font-weight:600}
-.pv-facts{margin:13px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
-.pv-facts dt{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--ink-3)}
-.pv-facts dd{margin:3px 0 0;font-size:13px;font-weight:700;color:var(--ink)}
-.pv-facts .denom{font-weight:500;color:var(--ink-3);font-size:11px}
 
 /* ---- right: the record ---- */
 .det{min-width:0}
@@ -3707,19 +3748,35 @@ html[data-t="light"] .hero2{
 .deliver.err{color:var(--fail)}
 .pin-line .field[aria-invalid="true"]{border-color:var(--fail)}
 .pin-line .field[aria-invalid="true"]:focus{box-shadow:0 0 0 3px var(--fail-wash, var(--promo-accent-soft))}
+/* A button sent the buyer here. One shake, then still: the message under the
+   box carries the reason, the motion only says "this one". */
+@keyframes pinshake{
+  10%,90%{translate:-2px 0}20%,80%{translate:4px 0}30%,50%,70%{translate:-6px 0}40%,60%{translate:6px 0}
+}
+.pin-line .field.shake{animation:pinshake .5s cubic-bezier(.36,.07,.19,.97) both}
 
 .sec-t{margin:24px 0 11px;font-size:16px;font-weight:800;color:var(--ink)}
 .sec-sub{margin-left:8px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
 
-.grades{display:flex;flex-wrap:wrap;gap:10px}
+/* Four rows of these sit between the price and the board, so they are kept
+   small: a pill is a switch, not a card, and the board below is the evidence. */
+.grades{display:flex;flex-wrap:wrap;gap:8px}
+.grades+.sec-t{margin-top:16px}
 .gpill{display:block;text-align:left;text-decoration:none;
-  border:1px solid var(--rule);background:var(--sheet);border-radius:12px;padding:11px 16px;
+  border:1px solid var(--rule);background:var(--sheet);border-radius:9px;padding:7px 11px;
   transition:border-color .2s ease,background-color .2s ease}
-.gpill b{display:block;font-size:14px;font-weight:800;color:var(--ink)}
-.gpill small{display:block;margin-top:2px;font-size:11px;font-weight:600;color:var(--ink-3)}
+.gpill b{display:block;font-size:12.5px;font-weight:700;color:var(--ink)}
+.gpill small{display:block;margin-top:1px;font-size:10.5px;font-weight:600;color:var(--ink-3)}
 .gpill:hover{border-color:var(--promo-accent-mid)}
 .gpill.on{border-color:var(--promo-accent);background:var(--promo-accent-soft)}
 .gpill.on b{color:var(--warn)}
+/* Catalogued, but nothing sealed at it right now. Drawn rather than dropped so
+   the buyer learns the configuration exists and is out, not that it never was.
+   Not a link: there is no board to open. */
+.gpill.off{cursor:not-allowed;border-style:dashed;background:transparent}
+.gpill.off:hover{border-color:var(--rule)}
+.gpill.off b{color:var(--ink-3);font-weight:600}
+.gpill.off small{color:var(--ink-4)}
 .gpill:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
 
 /* `contain: paint` as well as `overflow: hidden`. Hidden clips what is
@@ -3753,9 +3810,15 @@ html[data-t="light"] .hero2{
 @media(max-width:960px){
   .pdp{grid-template-columns:1fr;gap:18px}
   .pv{position:static}
+  /* A phone shows the frame full width, so the strip can take six across. */
+  .gal-thumbs{grid-template-columns:repeat(6,minmax(0,1fr))}
+}
+@media(max-width:520px){
+  .gal-thumbs{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
 @media(prefers-reduced-motion:reduce){
-  .pvbtn,.mini,.det .acc>summary svg{transition:none}
+  .pvbtn,.mini,.det .acc>summary svg,.gal-ar,.th{transition:none}
+  .pin-line .field.shake{animation:none}
 }
 
 /* The board carries ten columns into a ~940px record column, so it scrolls
@@ -3907,3 +3970,462 @@ html[data-t="light"] .hero2{
 .srch:focus-within{border-color:var(--promo-accent);box-shadow:0 0 0 3px var(--promo-accent-soft)}
 .authpop-cta{background:var(--promo-accent);color:var(--promo-accent-ink)}
 .authpop-cta:hover{background:var(--promo-accent);filter:brightness(1.06)}
+
+/* --- order record: what each dispatch point can send ------------------- */
+.osuplist{list-style:none;margin:0;padding:0}
+.osuplist li{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--rule)}
+.osuplist li:last-child{border-bottom:0}
+.osuplabel{font-size:12.5px;color:var(--ink)}
+.osupqty{font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;align-items:flex-end;gap:2px;
+  font-variant-numeric:tabular-nums}
+.osupwhen{font-size:11px;color:var(--ink-4)}
+.osupshort{flex-basis:100%;margin:0;padding:10px 12px;border-radius:5px;background:var(--sheet-2);
+  font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+@media (max-width:640px){
+  .osuplist li{align-items:flex-start;flex-direction:column;gap:8px}
+  .osupqty{align-items:flex-start}
+}
+
+/* --- sales order: confirmed quantities, priced ------------------------- */
+.osolist ul{list-style:none;margin:0;padding:0}
+.osolist li{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--rule)}
+.osolist li:last-child{border-bottom:0}
+.osoqty{display:flex;align-items:flex-start;gap:16px;margin-left:auto}
+.osofacts{display:grid;grid-template-columns:repeat(4,auto);gap:2px 18px;margin:0}
+.osofacts>div{display:flex;flex-direction:column;gap:2px;align-items:flex-end}
+.osofacts dt{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4)}
+.osofacts dd{margin:0;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
+.osofacts .osoline dd{font-weight:600}
+.osofacts>div.osoline{grid-column:1 / -1}
+.osopay{margin-top:14px}
+@media (max-width:640px){
+  .osolist li{flex-direction:column}
+  .osoqty{margin-left:0;flex-wrap:wrap}
+  .osofacts{grid-template-columns:repeat(2,auto)}
+  .osofacts>div{align-items:flex-start}
+}
+
+/* ============================================================================
+   The order record — `/orders/[orderNumber]`
+   Header with the one primary action, a five-step progress strip, the
+   what-happens-next banner, the record's tab strip, then two columns. Tokens
+   only; the accent is --acc, and it is spent on the primary action, the
+   current step and the active tab. Nothing else on this screen is amber.
+   ========================================================================= */
+.od{display:flex;flex-direction:column;gap:24px;max-width:1300px;min-width:0}
+.od h1,.od h2,.od dl,.od dd,.od p{margin:0}
+
+/* Header */
+.od-crumb{display:flex;gap:8px;font-size:13px;color:var(--ink-3)}
+.od-crumb a{color:var(--acc-ink)}
+.od-crumb a:hover{text-decoration:underline}
+.od-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;
+  margin-top:14px}
+.od-title-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.od-title{font-size:30px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
+.od-title .mono{font-weight:600;letter-spacing:-.8px}
+.od-sub{font-size:14px;line-height:1.55;color:var(--ink-3);margin-top:8px;max-width:78ch}
+.od-sub b{color:var(--ink);font-weight:600}
+.od-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+/* Buttons. The secondary is a link to the PDF; the primary is the shared
+   Button, given the same radius and height so the pair sits level. */
+.od-btn{height:44px;padding:0 18px;border-radius:10px;display:inline-flex;align-items:center;
+  justify-content:center;gap:8px;font-size:14px;font-weight:500;cursor:pointer;
+  border:1px solid var(--rule);background:var(--sheet);color:var(--ink);white-space:nowrap}
+.od-btn:hover{background:var(--sheet-2);text-decoration:none}
+.od .od-btn--primary{height:44px;border-radius:10px;padding:0 22px;font-weight:600}
+
+/* Card */
+.od-card{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;overflow:hidden;
+  min-width:0}
+.od-card__head{padding:18px 24px;display:flex;align-items:baseline;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--rule-2)}
+.od-card__head h2{font-size:17px;font-weight:600;color:var(--ink)}
+.od-card__head span{font-size:13px;color:var(--ink-3)}
+.od-card__head .od-card__link{font-size:13px}
+.od-card__body{padding:18px 24px}
+
+/* The approval block keeps its own vocabulary, inside a card. Outlined in
+   --warn only while it is live. */
+.od .oappr{padding:0}
+.od .oappr.pending{border-color:var(--warn)}
+
+/* Progress */
+.od-steps{list-style:none;margin:0;padding:22px 28px;display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr))}
+.od-step{display:flex;flex-direction:column;gap:4px;min-width:0}
+.od-step__track{display:flex;align-items:center;margin-bottom:6px}
+.od-step__dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--rule);
+  background:var(--sheet);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  color:var(--acc-on)}
+.od-step__line{flex-grow:1;height:2px;background:var(--rule);margin:0 8px}
+.od-step:last-child .od-step__line{display:none}
+.od-step__label{font-size:14px;font-weight:500;color:var(--ink-2)}
+.od-step__meta{font-size:12px;color:var(--ink-3)}
+.od-step.is-done .od-step__dot{background:var(--acc);border-color:var(--acc)}
+.od-step.is-done .od-step__line{background:var(--acc)}
+.od-step.is-done .od-step__label{font-weight:600;color:var(--ink)}
+/* The current step is the one active state on the strip — amber outline,
+   amber core — and the label carries the weight so colour is not the only
+   channel. */
+.od-step.is-current .od-step__dot{border-color:var(--acc);background:var(--acc-wash)}
+.od-step.is-current .od-step__dot::after{content:"";width:8px;height:8px;border-radius:50%;
+  background:var(--acc)}
+.od-step.is-current .od-step__label{font-weight:600;color:var(--acc-ink)}
+
+/* Next-step banner */
+.od-banner{padding:16px 20px;display:flex;align-items:center;gap:16px;background:var(--acc-wash);
+  border:1px solid var(--acc-2);border-radius:14px}
+.od-banner__icon{width:36px;height:36px;border-radius:10px;background:var(--sheet);
+  color:var(--acc-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.od-banner__text{flex-grow:1;font-size:14px;line-height:1.5;color:var(--ink-2);min-width:0}
+.od-banner__text strong{font-weight:600;color:var(--ink)}
+.od-banner__link{font-size:14px;font-weight:600;white-space:nowrap;color:var(--acc-ink)}
+.od-banner__link:hover{text-decoration:underline}
+
+/* The tab strip, on the record and on every sub-route. Links, not buttons:
+   the router owns which is current, and the 2px rule under the active one
+   carries the state as well as the ink weight. */
+.rectabs{display:flex;flex-wrap:nowrap;gap:4px;border-bottom:1px solid var(--rule);
+  margin-top:14px;overflow-x:auto}
+.rectab{display:inline-flex;align-items:center;min-height:0;padding:12px 16px;border-radius:0;
+  font-size:14px;font-weight:500;color:var(--ink-3);white-space:nowrap;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.rectab:hover{background:transparent;color:var(--ink);text-decoration:none}
+.rectab.on{font-weight:600;color:var(--acc-ink);border-bottom-color:var(--acc)}
+.od .rectabs{margin-top:0}
+
+/* Layout */
+.od-grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:24px;align-items:start}
+.od-col{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+/* Machines */
+.od-dispatch+.od-dispatch{border-top:1px solid var(--rule-2)}
+.od-machine{padding:20px 24px;display:flex;align-items:center;gap:18px}
+.od-machine+.od-machine{border-top:1px solid var(--rule-2)}
+.od-thumb{width:56px;height:56px;border-radius:12px;background:var(--sheet-2);color:var(--ink-2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.od-machine__body{flex-grow:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.od-machine__name{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px;
+  font-weight:600;color:var(--ink)}
+.od-machine__nograde{font-size:12px;font-weight:400}
+.od-specs{display:flex;gap:6px;flex-wrap:wrap}
+.od-specs span{padding:3px 9px;border-radius:6px;background:var(--sheet-2);font-size:12px;
+  color:var(--ink-2)}
+.od-serial{font-size:12.5px;color:var(--acc-ink);align-self:flex-start}
+.od-serial:hover{text-decoration:underline}
+.od-price{text-align:right;flex-shrink:0}
+.od-price__amt{font-size:17px;font-weight:600;color:var(--ink)}
+.od-price__note{font-size:12px;color:var(--ink-3);margin-top:2px}
+.od-ship{padding:14px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--sheet-2);border-top:1px solid var(--rule-2);font-size:13px;color:var(--ink-2)}
+.od-ship svg{color:var(--ink-3);flex-shrink:0}
+.od-ship strong{font-weight:600;color:var(--ink)}
+.od-ship .od-stock{margin-left:auto}
+.od-ship--note{display:block;line-height:1.5}
+.od-stock{font-size:12px}
+
+/* Supply — what each dispatch point can send */
+.od-sup{list-style:none;margin:0;padding:0}
+.od-sup>li{padding:14px 24px;border-bottom:1px solid var(--rule-2)}
+.od-sup>li:last-child{border-bottom:0}
+.od-sup__row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.od-sup__id{display:flex;flex-direction:column;gap:3px;min-width:0}
+.od-sup__label{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-3)}
+.od-sup__title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;
+  font-weight:600;color:var(--ink)}
+.od-sup__spec{font-size:12px;color:var(--ink-3)}
+.od-sup__qty{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:13px;
+  color:var(--ink-2);margin-left:auto}
+.od-sup__when{font-size:11px;color:var(--ink-4)}
+.od-sup__short{margin:10px 0 0;font-size:13px;line-height:1.55;color:var(--ink-2);
+  border-left:2px solid var(--rule);padding-left:10px}
+
+/* Delivery */
+.od-delivery{padding:22px 24px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px}
+.od-label{font-size:12px;font-weight:600;letter-spacing:.6px;color:var(--ink-3);margin-bottom:6px;
+  text-transform:uppercase}
+.od-addr-name{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.od-addr{font-size:14px;line-height:1.55;color:var(--ink-2);font-style:normal}
+.od-tel{font-size:14px;color:var(--acc-ink)}
+.od-tel:hover{text-decoration:underline}
+.od-block+.od-block{margin-top:14px}
+
+/* Key-value lists */
+.od-kv{font-size:14px}
+.od-kv>div{display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+  border-bottom:1px solid var(--rule-2);align-items:baseline}
+.od-kv>div:last-child{border-bottom:none}
+.od-kv dt{color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.od-kv dd{text-align:right;color:var(--ink);min-width:0}
+.od-kv .strong{font-weight:500}
+.od-kv__gstin{font-size:13px}
+
+/* Documents */
+.od-doc{padding:16px 24px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--rule-2)}
+.od-doc__icon{width:38px;height:38px;border-radius:10px;background:var(--sheet-2);color:var(--ink-3);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.od-doc__icon--on{background:var(--acc-wash);color:var(--acc-ink)}
+.od-doc__body{flex-grow:1;min-width:0}
+.od-doc__title{font-size:14px;font-weight:600;color:var(--ink)}
+.od-doc__meta{font-size:13px;color:var(--ink-3)}
+.od-doc__action{font-size:14px;font-weight:600;white-space:nowrap}
+.od-doc__value{font-size:13px;text-align:right}
+.od .od-doc__note{margin:0;padding:12px 24px 14px;border:0;font-size:12px}
+
+/* Summary */
+.od-summary{padding:24px;display:flex;flex-direction:column;gap:18px}
+.od-summary h2,.od-billing h2{font-size:17px;font-weight:600;color:var(--ink)}
+.od-lines{display:flex;flex-direction:column;gap:12px;font-size:14px}
+.od-lines>div{display:flex;justify-content:space-between;gap:12px}
+.od-lines dt{color:var(--ink-2)}
+.od-lines dd{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.od-lines .sep{padding-top:12px;border-top:1px dashed var(--rule)}
+.od-total{padding:16px;border-radius:12px;background:var(--sheet-2);display:flex;
+  align-items:baseline;justify-content:space-between;gap:12px}
+.od-total__label{font-size:14px;font-weight:600;color:var(--ink)}
+.od-total__note{font-size:12px;color:var(--ink-3);margin-top:2px}
+.od-total__amt{font-size:24px;font-weight:600;letter-spacing:-.5px;white-space:nowrap;color:var(--ink)}
+.od-assure{display:flex;gap:10px;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.od-assure b{color:var(--ink)}
+.od-assure svg{flex-shrink:0;margin-top:2px;color:var(--acc-ink)}
+.od-why{padding:14px 16px;border-radius:12px;border:1px solid var(--rule);font-size:13px;
+  line-height:1.55;color:var(--ink-2)}
+.od-why strong{display:block;font-weight:600;color:var(--ink);margin-bottom:4px}
+.od-billing{padding:0 24px 8px}
+.od-billing h2{margin:20px 0 6px}
+.od-help{font-size:13px;color:var(--ink-3);text-align:center}
+
+/* Responsive */
+@media(max-width:1100px){
+  .od-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:720px){
+  .od{gap:20px}
+  .od-title{font-size:24px}
+  .od-actions,.od-actions .od-btn,.od-actions .od-btn--primary{width:100%}
+  .od-steps{grid-template-columns:minmax(0,1fr);gap:14px;padding:20px}
+  .od-step{flex-direction:row;align-items:center;gap:12px}
+  .od-step__track{margin:0}
+  .od-step__line{display:none}
+  .od-step__meta{margin-left:auto;text-align:right}
+  .od-banner{flex-wrap:wrap}
+  .od-machine{flex-wrap:wrap}
+  .od-price{text-align:left;width:100%;padding-left:74px}
+  .od-delivery{grid-template-columns:minmax(0,1fr);gap:20px}
+  .od-ship .od-stock{margin-left:0}
+  .od-summary,.od-billing{padding-left:16px;padding-right:16px}
+  .od-card__head,.od-machine,.od-doc,.od-delivery,.od-ship,.od-card__body,.od-sup>li{
+    padding-left:16px;padding-right:16px}
+}
+
+/* ---- the bodies under the order chrome: sales order, machines, documents,
+   tracking and the delivery check, each drawn as cards ---------------- */
+.od>.hub-page{gap:20px;min-width:0}
+.od-lead{margin:0;font-size:14px;line-height:1.6;color:var(--ink-2);max-width:78ch}
+.od-lead b{color:var(--ink)}
+.od-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px 24px;
+  margin:16px 0 0}
+.od-facts dt{font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:4px}
+.od-facts dd{font-size:14px;color:var(--ink)}
+.od-sup__facts{display:flex;flex-wrap:wrap;gap:4px 22px;margin:0 0 0 auto;justify-content:flex-end}
+.od-sup__facts>div{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.od-sup__facts dt{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4)}
+.od-sup__facts dd{font-size:13px;color:var(--ink)}
+.od-summary .od-kv{font-size:13px}
+.od-summary .od-total p{margin:0}
+.od-kv--row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 24px;
+  margin-bottom:4px}
+.od-kv--row>div{flex-direction:column;align-items:flex-start;gap:3px;padding:0 0 12px;border-bottom:0}
+.od-kv--row dt{font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase}
+.od-kv--row dd{text-align:left;font-size:14px}
+
+/* The two boards keep their figures, filter bar and table; the card is the frame. */
+.od .ubkpi,.od .dockpi{margin:0;border:0;border-radius:0}
+.od .ubkpi>div,.od .dockpi>div{border-right-color:var(--rule-2);border-bottom-color:var(--rule-2)}
+.od .rbar{margin:0;border:0;border-radius:0;border-bottom:1px solid var(--rule-2);
+  background:transparent;padding:14px 24px}
+.od .tbl{border:0;border-radius:0;background:transparent;margin:0}
+.od .ubfoot,.od .dvfoot{margin:0}
+
+/* Tracking and the delivery check: one consignment, one card. */
+.od .dvcons{padding:0}
+.od .dvconshead{padding:18px 24px;border-bottom:1px solid var(--rule-2);align-items:center}
+.od .dvconshead h2{font-size:17px}
+.od .dvcons .od-card__body{padding:18px 24px}
+.od .dvcons .dvnote{margin:0}
+.od .dvcons .dvnote+.dvmachines,.od .dvcons .dvscan{margin-top:16px}
+.od .dvside{gap:14px}
+.od .dvside .od-lead{font-size:13px}
+.od .dvside .pill{justify-content:center;width:100%;text-decoration:none}
+.od .dvalert,.od .dvdone{border-radius:14px;padding:18px 24px}
+@media(max-width:720px){
+  .od .rbar,.od .dvconshead,.od .dvcons .od-card__body,.od .dvalert,.od .dvdone{
+    padding-left:16px;padding-right:16px}
+}
+.od-lead+.od-facts{margin-top:20px}
+.od .dvcons .fnote.off{margin-top:16px}
+.od .dvcons .dvgo{margin:14px 0 0}
+/* ============================================================================
+   The orders board - `/orders`
+   Matched to its reference design value for value: IBM Plex Sans, the tinted
+   dot badges, sentence-case headers, the filled Pay now. Every colour is a
+   --board-* token from globals.css.
+   ========================================================================= */
+.ol{display:flex;flex-direction:column;gap:20px;max-width:1200px;min-width:0;
+  font-family:var(--board-sans);color:var(--board-ink)}
+.ol h1,.ol p{margin:0}
+.ol a{color:var(--board-acc-link);text-decoration:none}
+.ol a:hover{text-decoration:underline}
+.ol .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* Header */
+.ol-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.ol-title{font-size:30px;font-weight:700;letter-spacing:-.4px;color:var(--board-ink)}
+.ol-sub{font-size:14px;color:var(--board-muted);margin-top:6px}
+
+/* Status tabs */
+.ol-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.ol-tab{display:flex;flex-direction:column;gap:6px;padding:16px 18px;text-align:left;
+  background:var(--sheet);border:1px solid var(--board-line);border-radius:14px;font:inherit;
+  color:var(--board-ink);cursor:pointer;min-width:0}
+.ol-tab:hover{border-color:var(--board-field)}
+.ol-tab:disabled{opacity:.5;cursor:not-allowed}
+.ol-tab:disabled:hover{border-color:var(--board-line)}
+.ol-tab--skeleton{cursor:default}
+.ol-tab__top{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--board-muted)}
+.ol-tab__count{font-size:26px;font-weight:600;letter-spacing:-.5px;color:var(--board-ink);line-height:1.2}
+.ol-tab__meta{font-size:12px;color:var(--board-muted)}
+.ol-tab[aria-pressed="true"]{border-color:var(--board-acc);box-shadow:inset 0 0 0 1px var(--board-acc)}
+.ol-tab[aria-pressed="true"] .ol-tab__top{color:var(--board-acc-ink)}
+.ol-tab--warn .ol-tab__meta{color:var(--board-warn-ink);font-weight:600}
+.ol-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--board-muted)}
+.ol-dot--all{background:var(--board-ink-2)}
+.ol-dot--warn{background:var(--board-warn)}
+.ol-dot--info{background:var(--board-info)}
+.ol-dot--ok{background:var(--board-ok)}
+.ol-dot--neutral{background:var(--board-muted)}
+
+/* Needs-attention banner */
+.ol-alert{display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--board-warn-tint);
+  border:1px solid var(--board-warn-edge);border-radius:12px;font-size:14px;color:var(--board-warn-text)}
+.ol-alert svg{color:var(--board-warn);flex-shrink:0}
+.ol-alert strong{font-weight:600}
+.ol-alert__text{flex-grow:1;min-width:0}
+.ol .ol-alert a{color:var(--board-warn-ink);font-weight:600;white-space:nowrap}
+
+/* Toolbar */
+.ol-toolbar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.ol-search{flex-grow:1;min-width:260px;height:44px;padding:0 6px 0 14px;display:flex;align-items:center;
+  gap:10px;background:var(--sheet);border:1px solid var(--board-field);border-radius:10px;color:var(--board-muted)}
+.ol-search:focus-within{border-color:var(--board-acc);box-shadow:0 0 0 3px var(--board-acc-tint)}
+.ol-search input{border:none;outline:none;flex-grow:1;min-width:0;font:inherit;font-size:14px;
+  color:var(--board-ink);background:transparent;height:100%}
+.ol-search input::placeholder{color:var(--board-muted)}
+.ol-select{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--board-muted)}
+.ol-select__box{position:relative}
+.ol-select select{height:44px;padding:0 36px 0 12px;border:1px solid var(--board-field);border-radius:10px;
+  background:var(--sheet);appearance:none;font:inherit;font-size:14px;color:var(--board-ink);cursor:pointer;
+  width:100%}
+.ol-select select:disabled{opacity:.6;cursor:default}
+/* The chevron, drawn rather than embedded, so it is ink and not a literal colour. */
+.ol-select__box::after{content:"";position:absolute;right:14px;top:50%;width:7px;height:7px;
+  border-right:2px solid var(--board-ink-2);border-bottom:2px solid var(--board-ink-2);
+  transform:translateY(-70%) rotate(45deg);pointer-events:none}
+
+/* Buttons */
+.ol-btn{height:36px;padding:0 16px;border-radius:8px;display:inline-flex;align-items:center;
+  justify-content:center;gap:6px;font:inherit;font-size:13px;font-weight:600;white-space:nowrap;
+  border:1px solid var(--board-field);background:var(--sheet);color:var(--board-ink);cursor:pointer}
+.ol .ol-btn{color:var(--board-ink)}
+.ol .ol-btn:hover{background:var(--board-page);text-decoration:none}
+.ol-btn--sm{height:32px;padding:0 12px}
+.ol .ol-btn--primary{background:var(--board-acc);border-color:var(--board-acc);color:var(--sheet)}
+.ol .ol-btn--primary:hover{background:var(--board-acc-ink)}
+
+/* Badges */
+.ol-pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;
+  font-size:13px;font-weight:600;white-space:nowrap;background:var(--board-chip);color:var(--board-ink-2)}
+.ol-pill .ol-dot{width:7px;height:7px}
+.ol-pill--warn{background:var(--board-warn-tint);color:var(--board-warn-ink)}
+.ol-pill--info{background:var(--board-info-tint);color:var(--board-info-ink)}
+.ol-pill--ok{background:var(--board-ok-tint);color:var(--board-ok-ink)}
+
+/* Table */
+.ol-card{background:var(--sheet);border:1px solid var(--board-line);border-radius:14px;overflow:hidden}
+.ol-card table{font-size:14px;font-family:var(--board-sans)}
+.ol-card thead tr{background:var(--board-head);border-bottom:1px solid var(--board-line)}
+.ol-card th{padding:12px 20px;white-space:nowrap;text-align:left}
+.ol-card th,.ol-card th span,.ol-card th button{font-family:var(--board-sans);font-size:12px;font-weight:600;
+  letter-spacing:.4px;text-transform:none;color:var(--board-muted)}
+.ol-card th button{min-height:0;gap:4px;cursor:pointer}
+.ol-card th button:hover,.ol-card th button:hover span{color:var(--board-ink)}
+/* The sort glyph is the reference's chevron, drawn in ink. */
+.ol-card th button>span[aria-hidden]{font-size:0;width:7px;height:7px;border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;transform:rotate(45deg) translate(-2px,-2px);display:inline-block}
+.ol-card th[aria-sort="ascending"] button>span[aria-hidden]{transform:rotate(-135deg) translate(-2px,-2px)}
+.ol-card td{padding:16px 20px;vertical-align:middle;border-bottom:1px solid var(--board-line-soft)}
+.ol-card tbody tr{border:0}
+.ol-card tbody tr:last-child td{border-bottom:none}
+.ol-card tbody tr:hover td{background:var(--board-hover)}
+.ol-order,.ol-status,.ol-siteCell,.ol-valueCell{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ol-valueCell{align-items:flex-end}
+.ol .ol-id{font-size:14px;font-weight:600;color:var(--board-ink)}
+.ol-date{font-size:13px;color:var(--board-muted);margin-top:2px;font-family:var(--board-sans)}
+.ol-hit{font-size:11px;color:var(--board-muted);margin-top:2px}
+.ol-due{font-size:11px;color:var(--board-muted);margin-top:2px}
+.ol-site{font-weight:500;color:var(--board-ink)}
+.ol-site-city{font-size:13px;color:var(--board-muted);margin-top:2px}
+.ol .ol-empty{color:var(--board-empty)}
+.ol-value{font-weight:600;white-space:nowrap;color:var(--board-ink)}
+.ol-value-note{font-size:12px;color:var(--board-muted);margin-top:2px;font-family:var(--board-sans)}
+.ol-card .empty{border:0;border-radius:0}
+
+/* Footer */
+.ol-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;
+  border-top:1px solid var(--board-line);font-size:13px;color:var(--board-muted);flex-wrap:wrap}
+.ol-foot strong{color:var(--board-ink);font-weight:600}
+.ol-pager{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ol-pager .ol-select{flex-direction:row;align-items:center;gap:8px}
+.ol-pager .ol-select select{height:36px;border-radius:8px}
+
+/* Responsive: rows become cards */
+@media(max-width:900px){
+  .ol{gap:16px}
+  .ol-title{font-size:24px}
+  .ol-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ol-alert{flex-wrap:wrap}
+  .ol-card thead{display:none}
+  .ol-card table{min-width:0}
+  .ol-card table,.ol-card tbody{display:block;width:100%}
+  .ol-card tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:16px;
+    border-bottom:1px solid var(--board-line-soft)}
+  .ol-card tbody tr:last-child{border-bottom:none}
+  .ol-card tbody td,.ol-card tbody td.tg-cell{display:block;padding:0;border:none;text-align:left;
+    min-height:0;height:auto;line-height:1.45}
+  .ol-card tbody tr:hover td{background:transparent}
+  .ol-card tbody td:nth-child(2){grid-column:2;grid-row:1;justify-self:end}
+  .ol-card tbody td:nth-child(3),.ol-card tbody td:nth-child(4),.ol-card tbody td:nth-child(5){
+    grid-column:1/-1;font-size:13px}
+  .ol-card tbody td:nth-child(4)::before{content:"Machines: ";color:var(--board-muted)}
+  .ol-card tbody td:nth-child(5)::before{content:"PO: ";color:var(--board-muted)}
+  .ol-siteCell{flex-direction:row;gap:6px;align-items:baseline}
+  .ol-valueCell{align-items:flex-start}
+  .ol-card tbody td:nth-child(6){grid-column:1;grid-row:6;align-self:center}
+  .ol-card tbody td:nth-child(7){grid-column:2;grid-row:6;justify-self:end;align-self:center}
+  .ol-status{align-items:flex-end}
+}
+
+/* The record's loading state, in the record's own geometry (see loading.tsx).
+   The frame and the strip are drawn at their real size so nothing moves when
+   the photographs land. */
+.pv-img-skel{aspect-ratio:4/3;padding:0}
+.pv-img-skel>span,.pv-img-skel>span>span{display:block;height:100%}
+.th-skel{cursor:default;opacity:1;background:var(--rule-2)}
+.tbl-skel{margin-top:24px;padding:16px 20px}
+.pv-actions>span{flex:1}

@@ -386,9 +386,20 @@ function OfferAction({
         </button>
       </span>
       {inCart ? (
-        <span className="text-body-sm font-medium text-ink-2" aria-live="polite">
-          Added to cart
-        </span>
+        // The stepper beside it already says the line is in the cart, at what
+        // quantity. The slot the add button held is the undo: a zero quantity
+        // is how the cart drops a line, on the same path the stepper's minus
+        // takes at one.
+        <Button
+          className="offer-remove"
+          variant="secondary"
+          size="sm"
+          loading={cartBusy}
+          onClick={() => onCartQtyChange?.(0)}
+          aria-label={`Remove ${label} from cart`}
+        >
+          Remove
+        </Button>
       ) : (
         <Button
           className="offer-add"

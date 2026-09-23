@@ -16,6 +16,10 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "storybook-static/**"]
     },
+    "@trugrade/ui#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "typecheck": { "dependsOn": ["^build"] },
     "lint": {},
     "test:unit": { "dependsOn": ["^build"] },

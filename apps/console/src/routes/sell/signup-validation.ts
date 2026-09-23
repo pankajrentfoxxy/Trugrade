@@ -61,6 +61,38 @@ export function signupPasswordStrength(
   return { score: measured.score, label: measured.label };
 }
 
+/* --------------------------------------------------------------------------
+ * Supplier signup — VR-045a. `/sell/register` only; the reset and account
+ * pages keep the `signup*` helpers above because the server holds them to
+ * VR-044/045.
+ * ------------------------------------------------------------------------ */
+
+export function validateSupplierPassword(
+  password: string,
+  context: SignupPasswordContext = {},
+): string | undefined {
+  const { missing } = measurePassword(password, { ...context, policy: 'supplier' });
+  return missing[0];
+}
+
+export function supplierPasswordRules(password: string): SignupPasswordRule[] {
+  return [
+    { id: 'letter', label: 'one letter', met: /[A-Za-z]/.test(password) },
+    { id: 'num', label: 'one number', met: /[0-9]/.test(password) },
+  ];
+}
+
+export function supplierPasswordStrength(
+  password: string,
+  context: SignupPasswordContext = {},
+): {
+  score: 0 | 1 | 2 | 3 | 4;
+  label: string;
+} {
+  const measured = measurePassword(password, { ...context, policy: 'supplier' });
+  return { score: measured.score, label: measured.label };
+}
+
 export type SignupFieldKey = 'mobile' | 'email' | 'fullName' | 'password' | 'confirm';
 
 /** Live validation: surfaces once the field is focused and the user has typed. */

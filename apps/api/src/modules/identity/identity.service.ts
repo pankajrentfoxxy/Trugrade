@@ -246,6 +246,8 @@ export class IdentityService implements IIdentityService {
           email,
           mobile,
           fullName: input.fullName,
+          // VR-045a: a supplier chooses against the lighter rule; a buyer does not.
+          policy: input.orgType === 'VENDOR' ? 'supplier' : 'standard',
           rotationDays: MFA_REQUIRED_ROLES.includes(ownerRole) ? PASSWORD_ROTATION_DAYS : null,
         });
       }

@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { useProductCart } from '../../../lib/use-product-cart';
 import type { GuestCartSnapshot } from '../../../lib/guest-cart';
+import { demandPincode } from './pincode-demand';
+import { checkoutDestination } from '../../cart/checkout-entry';
 
 /**
  * The sticky panel's two buttons.
@@ -14,24 +16,23 @@ import type { GuestCartSnapshot } from '../../../lib/guest-cart';
  * buyer who wants a different source uses the board, where every row has its
  * own control.
  *
- * Both buttons are dark until a pincode makes a landed price real. Before that
- * there is no lowest row to add — the board has not been priced.
+ * Both buttons stay live before a pincode, but neither adds anything until
+ * one is set: a click without it sends the buyer to the pincode box, which
+ * says why. A landed price is what goes in the cart, and the pincode is what
+ * lands it.
  */
-/** Scroll to the pincode box and put the cursor in it. */
-function focusPincode(): void {
-  document.getElementById('deliver')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  document.getElementById('pin')?.focus({ preventScroll: true });
-}
-
 export function PanelActions({
   listingId,
   city,
+  pincode,
   snapshot,
   blocked,
 }: {
   /** The lowest-landed offer's listing, or null before the board is priced. */
   listingId: string | null;
   city: string | null;
+  /** The delivery pincode the board is priced to, or null before one is given. */
+  pincode: string | null;
   /** What a signed-out basket records for this line. Null when unpriced. */
   snapshot: GuestCartSnapshot | null;
   /**
@@ -42,7 +43,7 @@ export function PanelActions({
    */
   blocked: { reason: string; needsPincode: boolean } | null;
 }): React.JSX.Element | null {
-  const { qtyFor, busyListingId, addListing } = useProductCart();
+  const { qtyFor, busyListingId, addListing, signedIn } = useProductCart();
   const [goingToCart, setGoingToCart] = React.useState(false);
 
   if (!listingId || !snapshot) {
@@ -56,7 +57,7 @@ export function PanelActions({
         className={className}
         aria-disabled="true"
         aria-describedby="pv-blocked"
-        onClick={blocked.needsPincode ? focusPincode : undefined}
+        onClick={blocked.needsPincode ? demandPincode : undefined}
       >
         {label}
       </button>
@@ -78,13 +79,37 @@ export function PanelActions({
   const busy = busyListingId === listingId || goingToCart;
 
   const add = (): void => {
+    if (!pincode) {
+      demandPincode();
+      return;
+    }
     void addListing(listingId, 1, snapshot);
   };
 
+  /**
+   * Straight to checkout, not to the cart. Checkout is opened on a cart id,
+   * which only a signed-in buyer's cart has: a guest's line is written to
+   * their basket and they go to sign in with the cart as the way back, where
+   * the basket merges and "Continue to checkout" is one click on.
+   */
   const buy = (): void => {
+    if (!pincode) {
+      demandPincode();
+      return;
+    }
     setGoingToCart(true);
-    void addListing(listingId, 1, snapshot).then(() => {
-      window.location.href = '/cart';
+    void addListing(listingId, 1, snapshot).then(async (cartId) => {
+      if (cartId === null) {
+        if (signedIn === false) {
+          window.location.href = `/sign-in?next=${encodeURIComponent('/cart')}`;
+        } else {
+          // The add did not land and the hook has already said why (a lost
+          // session redirects; anything else leaves the panel to try again).
+          setGoingToCart(false);
+        }
+        return;
+      }
+      window.location.href = await checkoutDestination(cartId);
     });
   };
 

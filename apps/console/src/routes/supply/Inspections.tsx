@@ -131,9 +131,18 @@ const config: BoardConfig<InspectionRow> = {
 
 export default function Inspections(): React.JSX.Element {
   const [open, setOpen] = useState<InspectionRow | null>(null);
+  // The assignment writes through `/qc/visits/:id/schedule`, not through the
+  // board, so the row underneath the drawer still says "Unassigned" until the
+  // page is fetched again. Closing the drawer without that meant the operator's
+  // next "Open" showed the visit as they found it, with the same button.
+  const [reloadToken, setReloadToken] = useState(0);
+  const assigned = (): void => {
+    setOpen(null);
+    setReloadToken((n) => n + 1);
+  };
   return (
     <>
-      <BoardScreen config={config} onOpen={setOpen} />
+      <BoardScreen config={config} onOpen={setOpen} reloadToken={reloadToken} />
       <Drawer
         open={open !== null}
         onClose={() => setOpen(null)}
@@ -149,7 +158,7 @@ export default function Inspections(): React.JSX.Element {
           )
         }
       >
-        {open && <VisitRecord visit={open} onAssigned={() => setOpen(null)} />}
+        {open && <VisitRecord visit={open} onAssigned={assigned} />}
       </Drawer>
     </>
   );
@@ -164,8 +173,19 @@ function VisitRecord({
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-5">
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Fact label="Requested" value={day(visit.requestedAt)} />
+        {/* Who and when, because the one action on this record is to set them,
+            and a record that does not show its own answer looks unanswered. */}
+        <Fact
+          label="Scheduled"
+          value={visit.scheduledDate ? day(visit.scheduledDate) : <Unmeasured label="Not yet" />}
+        />
+        <Fact
+          label="Technician"
+          mono={false}
+          value={visit.technicianName ?? <Unmeasured label="Unassigned" />}
+        />
         <Fact label="Machines" value={String(visit.unitsRequested)} />
         <Fact
           label="Inspected"
@@ -195,11 +215,20 @@ function VisitRecord({
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Fact({
+  label,
+  value,
+  // Dates and counts are numbers and set in mono; a person's name is not.
+  mono = true,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}): React.JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-caption uppercase tracking-wide text-ink-3">{label}</dt>
-      <dd className="mono tnum text-body-sm text-ink">{value}</dd>
+      <dd className={`${mono ? 'mono tnum ' : ''}text-body-sm text-ink`}>{value}</dd>
     </div>
   );
 }
@@ -308,7 +337,9 @@ function AssignTechnician({
   return (
     <>
       <Button size="sm" variant="primary" onClick={() => setOpen(true)}>
-        {visit.technicianName ? 'Reassign' : 'Assign technician'}
+        {/* On the id, not the name: a booked visit is booked whether or not the
+            name lookup found a person to print. */}
+        {visit.technicianId ? 'Reassign' : 'Assign technician'}
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Assign a technician">
         <div className="grid gap-3 sm:grid-cols-3">
