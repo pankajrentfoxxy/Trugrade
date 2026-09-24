@@ -31,7 +31,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GRADES as ALL_GRADES, normalisePincode, type Grade } from '@trugrade/contracts';
 import {
-  getModelSkus,
   getOfferBoard,
   getSearch,
   getSkuDetail,
@@ -45,11 +44,32 @@ import { PincodeFocusLink } from './PincodeFocusLink';
 import { PincodeForm } from './PincodeForm';
 import { ConfigPicker } from './ConfigPicker';
 import { PanelGallery } from './PanelGallery';
+import { ReviewsSection } from './ReviewsSection';
+import { QASection } from './QASection';
+import { RelatedProducts } from './RelatedProducts';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+
+/**
+ * The struck-through figure beside the price is the model's launch price as
+ * the catalogue records it, and nothing else. When the catalogue has none, no
+ * figure is struck and no saving is claimed: a reference price that is not
+ * sourced is the invented saving the CCPA Dark Patterns Guidelines name, and
+ * the site's own rule is that a number comes from the API or does not appear.
+ * Null too when the launch price is not above our price — a "saving" of 0% or
+ * less is not one.
+ */
+function savingAgainstNew(
+  price: number,
+  msrpNewInr: string | null,
+): { was: number; offPct: number } | null {
+  const was = msrpNewInr === null ? NaN : Number(msrpNewInr);
+  if (!Number.isFinite(was) || was <= price) return null;
+  return { was, offPct: Math.round(((was - price) / was) * 100) };
+}
 
 const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 const GRADES = new Set(['A_PLUS', 'A', 'B']);
@@ -106,19 +126,15 @@ export default async function ProductPage({
   // is wrong, and a page that renders chrome around nothing says otherwise.
   if (!sku) notFound();
 
-  // Every configuration of this model we hold: the search index, asked for
-  // the brand and model by name and then held to an exact match on both, so
-  // a "Latitude 5420" never picks up a "Latitude 5420 2-in-1". Beside it, the
-  // catalogue's own list of the model's configurations — the index only holds
-  // what is sealed, and a configuration with nothing sealed must still be
-  // drawn, greyed, or the buyer concludes it was never made. Either failure
-  // is the pills' absence, never the page's.
-  const [siblings, catalogue] = await Promise.all([
-    getSearch(
-      new URLSearchParams({ q: `${sku.brandName} ${sku.modelName}`, per: '48' }).toString(),
-    ),
-    getModelSkus(sku.modelId),
-  ]);
+  // Every configuration of this model that is for sale: the search index,
+  // asked for the brand and model by name and then held to an exact match on
+  // both, so a "Latitude 5420" never picks up a "Latitude 5420 2-in-1". The
+  // index holds only what is sealed, which is exactly the set the switches
+  // should offer — a configuration with nothing sealed at any grade is not
+  // drawn. A failed read is the pills' absence, never the page's.
+  const siblings = await getSearch(
+    new URLSearchParams({ q: `${sku.brandName} ${sku.modelName}`, per: '48' }).toString(),
+  );
   const variants = (siblings?.results ?? []).filter(
     (r) => r.brand === sku.brandName && r.model === sku.modelName,
   );
@@ -126,7 +142,7 @@ export default async function ProductPage({
   if (board === null) {
     return (
       <>
-        <div className="body">
+        <div className="body pdpbody">
           <div className="wrap">
             <div className="empty err">
               <h3>We could not load the supply points for this machine</h3>
@@ -204,7 +220,7 @@ export default async function ProductPage({
 
   return (
     <>
-      <div className="body">
+      <div className="body pdpbody">
         {/*
           ONE cart scope for the whole record, wrapping both the panel and the
           board. It used to be two — one around each — which gave the page two
@@ -215,13 +231,18 @@ export default async function ProductPage({
           viewport.
         */}
         <ProductCartScope>
-          <div className="wrap pdp">
+          <main className="wrap pdp">
             {/*
-            LEFT — the sticky panel. Identity, the grade plate, and the two
-            actions. It stays put while the board and the specification scroll,
-            because the decision it carries is the one the rest of the page is
-            evidence for.
+            The split pane: LEFT is the pinned panel — the photographs, the
+            grade plate, the two actions — at six tenths of the width. RIGHT
+            is the record's head: title, price, switches, pincode and the
+            specification. The page scrolls as one page; nothing scrolls
+            inside a box. The rail is sticky inside a row as tall as that
+            record column, so the photograph holds still while it is read.
+            The board and everything after it come under both, full width.
+            See `.pdp-top` in the stylesheet.
           */}
+            <div className="pdp-top">
             <aside className="rail">
               <div className="pv">
                 {/*
@@ -239,31 +260,11 @@ export default async function ProductPage({
                   machine={`${sku.brandName} ${sku.modelName}`}
                   passportHref={board.offers.length > 0 ? '#board' : undefined}
                 />
-
-                <PanelActions
-                listingId={buyable ? buyable.listingId : null}
-                city={lowest?.city ?? null}
-                pincode={board.pincode}
-                blocked={blocked}
-                snapshot={
-                  buyable && buyablePrice !== null
-                    ? {
-                        listingId: buyable.listingId,
-                        title: `${sku.brandName} ${sku.modelName}`,
-                        specSummary: specLine(sku),
-                        grade: buyable.grade,
-                        unitPrice: buyablePrice,
-                        supplyPoint: `Supply Point ${buyable.supplyPointCode.toUpperCase()} · ${buyable.city}`,
-                        dispatch: buyable.dispatchCommitment,
-                      }
-                    : null
-                }
-              />
               </div>
             </aside>
 
-            {/* RIGHT — what the machine is, what it costs landed, and the board. */}
-            <main className="det">
+            {/* RIGHT — what the machine is, what it costs, and the switches. */}
+            <div className="det">
               <h1 className="det-title">
                 {sku.brandName} {sku.modelName}
               </h1>
@@ -285,31 +286,144 @@ export default async function ProductPage({
                 </span>
               </div>
 
-              <div className="price-blk">
-                <div className="price-line">
-                  <span className="price-now mono">
-                    {lowest
-                      ? `₹${RUPEES.format(Number(lowest.unitPrice))}`
-                      : shown?.fromPrice
-                        ? `₹${RUPEES.format(Number(shown.fromPrice))}`
-                        : 'Not priced'}
-                  </span>
-                  {/*
-                  No struck-through "new" price and no percentage off it. We do
-                  not hold what this model sold for new, and printing a number
-                  we cannot source beside a discount off it is the invented
-                  saving the CCPA guidelines name.
-                */}
-                  <span className="price-off">{lowest || shown?.fromPrice ? 'from' : ''}</span>
-                </div>
-                <p className="price-note">
-                  {deliverable && board.pincode
-                    ? `Unit price, before tax and delivery. We deliver to ${board.pincode} — GST and freight are added at checkout against your site.`
-                    : board.delivery.kind === 'UNSERVICEABLE'
-                      ? `Unit price, before tax and delivery. We cannot deliver to ${board.pincode} yet — try another pincode.`
-                      : 'Unit price, before tax and delivery — GST and freight are added at checkout against your site. Enter a pincode to check we deliver there.'}
-                </p>
+              <div className="mt-5">
+                {(() => {
+                  const price = lowest
+                    ? Number(lowest.unitPrice)
+                    : shown?.fromPrice
+                      ? Number(shown.fromPrice)
+                      : null;
+                  if (price === null) {
+                    return (
+                      <div className="price-line">
+                        <span className="price-now mono">Not priced</span>
+                      </div>
+                    );
+                  }
+                  // Struck only from the catalogue's launch price. See
+                  // `savingAgainstNew`: no source, no strike, no percentage.
+                  const saving = savingAgainstNew(price, sku.msrpNewInr);
+                  return (
+                    <div className="price-line">
+                      <span className="price-now mono">₹{RUPEES.format(price)}</span>
+                      {saving ? (
+                        <>
+                          <s
+                            className="price-was mono"
+                            aria-label={`Launch price ₹${RUPEES.format(saving.was)}`}
+                          >
+                            ₹{RUPEES.format(saving.was)}
+                          </s>
+                          <span className="price-off">
+                            <span className="mono tnum">{saving.offPct}%</span> off
+                          </span>
+                        </>
+                      ) : null}
+                      
+                    </div>
+                  );
+                })()}
+                {/* Tax and freight are said once, under the pincode box below,
+                    where the destination that decides them is entered. */}
+              </div>
 
+              <h2 className="sec-t">Choose grade</h2>
+              {/*
+                All three grades, always, and every one of them a live link.
+                The processor, memory and storage rows below are drawn for the
+                grade chosen here, so a grade chip is the way into that grade's
+                stock even when THIS configuration has none at it: the link
+                then opens the model's nearest configuration that is sealed at
+                that grade — cheapest first, the index's own order — and the
+                rows below show what that grade holds. Only when the whole
+                model has nothing at a grade does the chip open this same
+                configuration there, where the board says so in words.
+              */}
+              <div className="grades" role="group" aria-label="Inspected grade">
+                {ALL_GRADES.map((code) => {
+                  const label = GRADE_LABEL[code] ?? code;
+                  const on = code === board.grade;
+                  const heldHere = board.grades.some((x) => x.grade === code);
+                  const sibling = heldHere ? null : (variants.find((r) => r.grade === code) ?? null);
+                  return (
+                    <Link
+                      key={code}
+                      className={on ? 'gpill on' : 'gpill'}
+                      aria-current={on ? 'true' : undefined}
+                      href={
+                        href(sibling ? sibling.skuId : slug, {
+                          ...query,
+                          grade: code,
+                          sp: undefined,
+                          city: undefined,
+                        }) as Route
+                      }
+                    >
+                      <b>Grade {label}</b>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/*
+                Processor, memory and storage, chosen like grade. Each pill is
+                a sibling SKU of this model; the pincode and supply-point
+                selection carry over, the grade follows where it can. Rows
+                appear only where the model differs — see `ConfigPicker`.
+              */}
+              <ConfigPicker
+                variants={variants}
+                current={{ skuId: sku.skuId, grade: board.grade }}
+                hrefFor={(skuId, toGrade) =>
+                  href(skuId, { ...query, grade: toGrade, sp: undefined, city: undefined })
+                }
+              />
+
+              {/*
+                The declared specification, under the switches in the record
+                column rather than below the board, so what the machine IS sits
+                beside its photographs and the board below is left to prices.
+              */}
+              <details className="acc">
+                <summary className="acc-h">
+                  Specification
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </summary>
+                {/*
+                A definition list rather than a table. A `<table>` here has to
+                resolve its width against a grid column, and a long mono value
+                — `DEL-LAT5420-I51135G7-16-512` — sizes the column from its own
+                content and pushes the record sideways on a phone. Rows of
+                `dt`/`dd` wrap instead.
+              */}
+                <dl className="spec">
+                  {specRows(sku).map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd className="mono">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+
+              {/*
+                The pincode comes last, under the specification: a buyer
+                settles what they want first, then where it is going. The form
+                carries the grade and supply point so the answer lands on the
+                same configuration.
+              */}
+              <h2 className="sec-t">Check delivery</h2>
+              <div className="pin-blk">
                 <PincodeForm
                   action={`/laptops/${encodeURIComponent(slug)}`}
                   hidden={[
@@ -346,62 +460,46 @@ export default async function ProductPage({
                 </PincodeForm>
               </div>
 
-              <h2 className="sec-t">Choose grade</h2>
               {/*
-                All three grades, always. The board only names the grades with
-                stock behind them; a grade it leaves out is drawn greyed with
-                the reason, because "A+ is out right now" and "this machine is
-                never graded A+" are different statements and a missing pill
-                reads as the second.
+                The two actions, last in the record column, under the
+                delivery check. Stuck to the window's bottom edge while the
+                column runs past it, so they are on screen for the whole time
+                the record is being read, and in their own place at the foot
+                of the column once it fits. See `.det-cta`.
               */}
-              <div className="grades" role="group" aria-label="Inspected grade">
-                {ALL_GRADES.map((code) => {
-                  const g = board.grades.find((x) => x.grade === code);
-                  const label = GRADE_LABEL[code] ?? code;
-                  if (!g) {
-                    return (
-                      <span key={code} className="gpill off" aria-disabled="true">
-                        <b>Grade {label}</b>
-                        <small>No units sealed</small>
-                      </span>
-                    );
+              <div className="det-cta">
+                <PanelActions
+                  listingId={buyable ? buyable.listingId : null}
+                  city={lowest?.city ?? null}
+                  pincode={board.pincode}
+                  blocked={blocked}
+                  snapshot={
+                    buyable && buyablePrice !== null
+                      ? {
+                          listingId: buyable.listingId,
+                          title: `${sku.brandName} ${sku.modelName}`,
+                          specSummary: specLine(sku),
+                          grade: buyable.grade,
+                          unitPrice: buyablePrice,
+                          supplyPoint: `Supply Point ${buyable.supplyPointCode.toUpperCase()} · ${buyable.city}`,
+                          dispatch: buyable.dispatchCommitment,
+                        }
+                      : null
                   }
-                  const on = g.grade === board.grade;
-                  return (
-                    <Link
-                      key={g.grade}
-                      className={on ? 'gpill on' : 'gpill'}
-                      aria-current={on ? 'true' : undefined}
-                      href={
-                        href(slug, {
-                          ...query,
-                          grade: g.grade,
-                          sp: undefined,
-                          city: undefined,
-                        }) as Route
-                      }
-                    >
-                      <b>Grade {label}</b>
-                    </Link>
-                  );
-                })}
+                />
               </div>
+            </div>
+            </div>
 
-              {/*
-                Processor, memory and storage, chosen like grade. Each pill is
-                a sibling SKU of this model; the pincode and supply-point
-                selection carry over, the grade follows where it can. Rows
-                appear only where the model differs — see `ConfigPicker`.
-              */}
-              <ConfigPicker
-                variants={variants}
-                catalogue={catalogue ?? []}
-                current={{ skuId: sku.skuId, grade: board.grade }}
-                hrefFor={(skuId, toGrade) =>
-                  href(skuId, { ...query, grade: toGrade, sp: undefined, city: undefined })
-                }
-              />
-
+            {/*
+              UNDER BOTH — the board, the reviews and the questions, across
+              the full width below the split pane. The board carries ten
+              columns; at full width it shows them at once, which is what a
+              comparison needs. The photograph holds still only while the
+              record beside it scrolls; once the reader reaches the board the
+              whole page moves — there is nothing left beside it to hold for.
+            */}
+            <section className="pdp-evidence" aria-label="Supply points">
               <h2 className="sec-t" id="board">
                 Compare supply points
                 <span className="sec-sub">
@@ -473,40 +571,12 @@ export default async function ProductPage({
                 )}
               </div>
 
-              <details className="acc">
-                <summary className="acc-h">
-                  Specification
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </summary>
-                {/*
-                A definition list rather than a table. A `<table>` here has to
-                resolve its width against a grid column, and a long mono value
-                — `DEL-LAT5420-I51135G7-16-512` — sizes the column from its own
-                content and pushes the record sideways on a phone. Rows of
-                `dt`/`dd` wrap instead, and this is what the spec block on the
-                old identity card already used.
-              */}
-                <dl className="spec">
-                  {specRows(sku).map(([label, value]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd className="mono">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
-            </main>
-          </div>
+              <ReviewsSection />
+              <QASection />
+              <RelatedProducts brandName={sku.brandName} modelName={sku.modelName} />
+            </section>
+
+          </main>
         </ProductCartScope>
       </div>
     </>

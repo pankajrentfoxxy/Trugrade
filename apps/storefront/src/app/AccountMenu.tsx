@@ -73,7 +73,7 @@ export function AccountMenu({
             Account
           </Link>
           {/* See the note on the same link in `AuthButtons`. */}
-          <a className="usermenu-item" href="/qc/verify" role="menuitem">
+          <a className="usermenu-item" href="/#verify" role="menuitem">
             Verify a certificate
           </a>
           <Link className="usermenu-item" href="/orders" role="menuitem">

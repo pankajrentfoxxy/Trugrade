@@ -106,6 +106,12 @@ export function StockSection({
     on(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   };
 
+  // "All" is pressed exactly when every brand on offer is picked, so a supplier
+  // who unticks one brand sees it release; pressing it again then clears the
+  // lot rather than leaving them to untick a dozen chips one by one.
+  const allBrands = brandOptions.length > 0 && brandOptions.every((b) => brands.includes(b));
+  const toggleAllBrands = (): void => setBrands(allBrands ? [] : [...brandOptions]);
+
   return (
     <SectionDialog
       open={open}
@@ -124,6 +130,14 @@ export function StockSection({
           <div>
             <p className="mb-2 text-body-sm font-medium text-ink-2">Brands</p>
             <div className="flex flex-wrap gap-2">
+              {brandOptions.length > 0 ? (
+                <Chip
+                  label="All"
+                  count={brandOptions.length}
+                  selected={allBrands}
+                  onToggle={toggleAllBrands}
+                />
+              ) : null}
               {brandOptions.map((brand) => (
                 <Chip
                   key={brand}

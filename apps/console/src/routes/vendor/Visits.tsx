@@ -241,28 +241,10 @@ function Machines({ v }: { v: VendorVisit }): React.JSX.Element {
  * bearing it, or whether nobody has priced the visit — and only one of those is
  * a fact they can rely on when the payout statement arrives.
  */
-function FeeLine({
-  fee,
-  units,
-  brief = false,
-}: {
-  fee: VisitFee;
-  units: number;
-  /**
-   * The board's version: the amount and who bears it, on one line.
-   *
-   * The full sentence is right on a record and wrong on a board — seven rows
-   * each carrying "and we stop charging the fee above 50" is one paragraph
-   * repeated seven times, and a column nobody can scan is a column nobody
-   * reads. The reason lives on the record, one click away, where it is asked
-   * for rather than repeated.
-   */
-  brief?: boolean;
-}): React.JSX.Element {
+function FeeLine({ fee, units }: { fee: VisitFee; units: number }): React.JSX.Element {
   const nothing = Number(fee.amount) === 0;
 
   if (fee.bearer === 'WAIVED' || (nothing && fee.waiverReason)) {
-    if (brief) return <span className="text-ink-2">Waived - no fee</span>;
     return (
       <>
         <span className="text-ink">No fee for this inspection.</span>{' '}
@@ -282,7 +264,6 @@ function FeeLine({
   }
 
   if (fee.bearer === 'TRUETECH') {
-    if (brief) return <span className="text-ink-2">Ours &mdash; nothing to pay</span>;
     // A fee of zero borne by us is "this inspection is at our cost", not
     // "Trugrade is bearing the ₹0.00 visit fee" — which is what naming the
     // amount produces on every visit ops file, because `createVisit` prices
@@ -312,17 +293,6 @@ function FeeLine({
         why="No visit fee has been recorded against this inspection yet"
         label="Not priced yet"
       />
-    );
-  }
-
-  if (brief) {
-    return (
-      <>
-        <span className="font-mono tnum text-ink">{rupees(fee.amount)}</span>
-        <span className="block text-body-sm text-ink-3">
-          {fee.bearer === 'SPLIT' ? 'shared with us' : 'yours to pay'}
-        </span>
-      </>
     );
   }
 
@@ -460,15 +430,6 @@ const BOARD_COLUMNS: ReadonlyArray<Column<VendorVisit>> = [
     ),
   },
   { key: 'machines', header: 'Machines', cell: (v) => <Machines v={v} /> },
-  {
-    key: 'fee',
-    header: 'Visit fee',
-    cell: (v) => (
-      <span className="text-body-sm">
-        <FeeLine fee={v.fee} units={v.unitsRequested} brief />
-      </span>
-    ),
-  },
 ];
 
 export function VendorVisitsRoute(): React.JSX.Element {

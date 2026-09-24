@@ -41,7 +41,7 @@ import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 const BUY = [
   ['All laptops', '/search'],
   ['Bulk requirement', '/bulk'],
-  ['Verify a certificate', '/qc/verify'],
+  ['Verify a certificate', '/#verify'],
   ['Your orders', '/orders'],
 ] as const;
 

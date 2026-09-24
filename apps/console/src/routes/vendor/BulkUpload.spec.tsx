@@ -103,7 +103,7 @@ describe('the dry run and the button quote one number', () => {
     await userEvent.upload(input, fileOf('stock.csv', 'serial_number\nAAA111ZZ\n'));
 
     // The sentence. Read by testid rather than by text, because the numbers in
-    // it are `<span>`s — every number is IBM Plex Mono with tabular figures, so
+    // it are `<span>`s — every number is set with tabular figures, so
     // the sentence is genuinely several elements.
     const sentence = (await screen.findByTestId('dry-run-summary')).textContent ?? '';
     expect(sentence).toContain('5');

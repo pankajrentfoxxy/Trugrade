@@ -220,6 +220,13 @@ export interface SkuDetailView {
   hsnCode: string;
   isActive: boolean;
   /**
+   * The model's launch price in rupees as the catalogue records it, a decimal
+   * string, or null where the catalogue has none. It is the ONLY figure a
+   * "was" price may be struck from: a reference price that is not sourced is
+   * the invented saving the CCPA Dark Patterns Guidelines name.
+   */
+  msrpNewInr: string | null;
+  /**
    * Present only when a grade was asked for. Carries `match` and `isGeneric`,
    * and the caller must render them: a series-level photograph is of a different
    * machine, and showing it unlabelled is the Rule 7(2) misrepresentation the
@@ -629,6 +636,7 @@ export class CatalogController {
     osSupported: string;
     hsnCode: string;
     isActive: boolean;
+    msrpNewInr: string | null;
   }): SkuDetailView {
     return {
       skuId: sku.id,
@@ -652,6 +660,7 @@ export class CatalogController {
       osSupported: sku.osSupported,
       hsnCode: sku.hsnCode,
       isActive: sku.isActive,
+      msrpNewInr: sku.msrpNewInr,
     };
   }
 

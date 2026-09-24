@@ -31,10 +31,11 @@ reference implementation - when it and any written description disagree, the fil
 - Amber `--acc` means exactly three things: a primary action, a measured value, an active state.
   Nothing else. One primary action per screen.
 - **Grades are neutral** (A+/A/B are all sellable). Green/red are reserved for PASS/FAIL only.
-- **Every number is IBM Plex Mono with `tabular-nums`** - prices, serials, scores, counts, percentages,
-  GSTINs, HSN codes. Inter for everything else. Base size 14px.
+- **Lato is the only typeface** (September 2026 decision). Every number keeps `tabular-nums` - prices, serials, scores, counts, percentages,
+  GSTINs, HSN codes. Base size 14px.
 - Every percentage carries its denominator: `98% - 412 units`, never `98%`.
 - **A missing value never renders as a passing one.** "Not measured" in `--ink-4`, never a tick.
+- **No gray text.** Secondary inks (`--ink-2/3/4`, `--on-chrome-2/3`, every `*-muted`) resolve to the surface's full ink: black on light, white on dark. Hierarchy comes from size and weight, not from fading text.
 - Never invent a component. Check `packages/ui` first; if it is missing, add it there, not in the app.
 
 ## Page archetypes

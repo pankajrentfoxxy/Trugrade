@@ -69,11 +69,11 @@ export function N({
   unit?: string;
   absent?: string;
 }): React.JSX.Element {
-  if (value === null) return <span className="text-ink-4">{absent}</span>;
+  if (value === null) return <span className="lg-absent">{absent}</span>;
   return (
-    <span className="tnum text-ink">
+    <span className="tnum">
       {value}
-      {unit ? <span className="text-ink-4">&nbsp;{unit}</span> : null}
+      {unit ? <span className="lg-unit">&nbsp;{unit}</span> : null}
     </span>
   );
 }
@@ -87,21 +87,14 @@ export function N({
  */
 export function Unset({ what }: { what: string }): React.JSX.Element {
   return (
-    <span className="tnum rounded-xs border border-dashed border-rule px-2 py-[1px] text-ink-4">
-      {what} — not yet published
-    </span>
+    <span className="lg-pending tnum">{what} — not yet published</span>
   );
 }
 
 /** An internal cross-reference. Legal documents refer to each other constantly. */
 function Ref({ to, children }: { to: string; children: React.ReactNode }): React.JSX.Element {
   return (
-    <Link
-      href={to as Route}
-      className="text-ink underline decoration-rule underline-offset-4 hover:decoration-acc"
-    >
-      {children}
-    </Link>
+    <Link href={to as Route}>{children}</Link>
   );
 }
 
@@ -112,11 +105,11 @@ function Facts({
   rows: ReadonlyArray<readonly [string, React.ReactNode]>;
 }): React.JSX.Element {
   return (
-    <dl className="mt-4 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+    <dl className="lg-kv">
       {rows.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-body-sm text-ink-3">{term}</dt>
-          <dd className="text-body text-ink-2">{value}</dd>
+        <div key={term}>
+          <dt>{term}</dt>
+          <dd>{value}</dd>
         </div>
       ))}
     </dl>
@@ -126,12 +119,9 @@ function Facts({
 /** A plain bulleted list. Used for coverage, exclusions and reason codes. */
 function List({ items }: { items: ReadonlyArray<React.ReactNode> }): React.JSX.Element {
   return (
-    <ul className="mt-3 flex flex-col gap-2">
+    <ul className="lg-list">
       {items.map((item, i) => (
-        <li key={i} className="flex gap-3 text-body text-ink-2">
-          <span aria-hidden className="mt-[9px] h-px w-3 shrink-0 bg-rule" />
-          <span className="min-w-0">{item}</span>
-        </li>
+        <li key={i}>{item}</li>
       ))}
     </ul>
   );
@@ -140,9 +130,7 @@ function List({ items }: { items: ReadonlyArray<React.ReactNode> }): React.JSX.E
 /** A quoted statutory or contractual sentence, reproduced exactly. */
 function Verbatim({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <p className="mt-4 border-l-2 border-rule bg-sheet-2 px-4 py-3 text-body-sm text-ink-2">
-      {children}
-    </p>
+    <p className="lg-verbatim">{children}</p>
   );
 }
 
@@ -162,6 +150,11 @@ export interface LegalDocument {
   title: string;
   /** One sentence, for the index and for `<meta name="description">`. */
   summary: string;
+  /**
+   * The statute the document answers to, for the header pill — only where
+   * there is one. The pill otherwise carries the title.
+   */
+  kicker?: string;
   /**
    * The version of the text below.
    *
@@ -246,7 +239,7 @@ export function buildDocuments(
 function whoYouContractWith(): React.JSX.Element {
   return (
     <>
-      <p className="text-body text-ink-2">
+      <p>
         {BRAND.name} is a brand of {LEGAL_DISCLOSURE.legalName}. Whatever you buy on this
         marketplace, the seller is {LEGAL_DISCLOSURE.legalName} — not a supplier, not an agent, and
         not a third party we introduced you to. There is one seller, one contract and one invoice.
@@ -255,23 +248,23 @@ function whoYouContractWith(): React.JSX.Element {
         rows={[
           ['Legal name', LEGAL_DISCLOSURE.legalName],
           ['Brand', `${BRAND.name} · ${LEGAL_DISCLOSURE.website}`],
-          ['GSTIN', <span className="tnum text-ink">{LEGAL_DISCLOSURE.gstin}</span>],
+          ['GSTIN', <span className="tnum">{LEGAL_DISCLOSURE.gstin}</span>],
           [
             'CIN',
             LEGAL_DISCLOSURE.cin ? (
-              <span className="tnum text-ink">{LEGAL_DISCLOSURE.cin}</span>
+              <span className="tnum">{LEGAL_DISCLOSURE.cin}</span>
             ) : (
               <Unset what="CIN" />
             ),
           ],
           [
             'Registered office',
-            <span className="tnum text-ink-2">{formatRegisteredOffice()}</span>,
+            <span className="tnum">{formatRegisteredOffice()}</span>,
           ],
           [
             'Branches',
             LEGAL_DISCLOSURE.branches.length === 0 ? (
-              <span className="text-ink-3">
+              <span className="dim">
                 None. We operate from the registered office; stock is held by suppliers and never by
                 us.
               </span>
@@ -283,19 +276,20 @@ function whoYouContractWith(): React.JSX.Element {
             'Customer care',
             <>
               <a
-                className="text-ink underline decoration-rule underline-offset-4 hover:decoration-acc"
                 href={`mailto:${LEGAL_DISCLOSURE.customerCare.email}`}
               >
                 {LEGAL_DISCLOSURE.customerCare.email}
               </a>
               {LEGAL_DISCLOSURE.customerCare.phone ? (
-                <span className="tnum ml-2 text-ink">{LEGAL_DISCLOSURE.customerCare.phone}</span>
+                <a className="tnum lg-gap" href={`tel:${LEGAL_DISCLOSURE.customerCare.phone}`}>
+                  {formatMobile(LEGAL_DISCLOSURE.customerCare.phone)}
+                </a>
               ) : (
-                <span className="ml-2">
+                <span className="lg-gap">
                   <Unset what="Telephone" />
                 </span>
               )}
-              <span className="ml-2 text-ink-3">{LEGAL_DISCLOSURE.customerCare.hours}</span>
+              <span className="lg-gap dim">{LEGAL_DISCLOSURE.customerCare.hours}</span>
             </>,
           ],
         ]}
@@ -326,14 +320,14 @@ function terms_(window: number | null): LegalDocument {
         heading: 'We are the seller, and we hold no stock',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               We operate as principal and merchant of record on a back-to-back basis. We do not hold
               inventory. At the moment you order a particular machine we buy that serial from the
               supplier who holds it and sell it to you on our own invoice; the machine then ships
               directly from the supplier&rsquo;s premises to your delivery address. One physical
               movement, two supplies, and the one you are party to is ours.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               This is not a formality. It decides who answers when something is wrong. You have no
               contract with the supplier, you are never asked to pursue one, and no obligation we owe
               you under these documents is delegated to one.
@@ -346,14 +340,14 @@ function terms_(window: number | null): LegalDocument {
         heading: 'Supply points are not named',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Suppliers appear throughout the site as supply points — <em>Supply Point A —
               Gurugram</em> — with a city and a track record, and never by name. We do not disclose
               which business holds a machine, before or after you buy it. Their identity is not
               withheld from you to your disadvantage: because we are the seller, it is not a fact you
               need in order to enforce anything.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The city is real and it is on the invoice, because the place a machine ships from
               determines the tax treatment and your delivery time.
             </p>
@@ -365,7 +359,7 @@ function terms_(window: number | null): LegalDocument {
         heading: 'Who can buy',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               {BRAND.name} sells to businesses. An account requires a registered organisation with a
               valid GSTIN, and orders are placed by named users under that organisation with the
               permissions it grants them. We do not sell to consumers, and nothing here is offered on
@@ -386,13 +380,13 @@ function terms_(window: number | null): LegalDocument {
         heading: 'What we sell',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Refurbished laptops, and only refurbished laptops. Desktops, monitors and parts are
               marked as coming and are not sold today. Every machine is a specific, individually
               identified unit — a serial or service tag — that has been physically opened, tested and
               graded before it was listed. You are buying that unit, not a model number.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               What the grade means is defined objectively and measurably in{' '}
               <Ref to="/legal/grading">the grading standard</Ref>, which is the document that governs
               any disagreement about condition.
@@ -413,7 +407,7 @@ function terms_(window: number | null): LegalDocument {
                 'Your order may be split into several consignments where the machines are held at different supply points, or where they fall into different tax valuation channels. See the shipping and tax documents below.',
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The exact hold periods are shown on the checkout screen itself, counted down by our
               server rather than by your browser, and{' '}
               <Ref to="/legal/cancellation">the cancellation policy</Ref> says what happens if you
@@ -427,25 +421,25 @@ function terms_(window: number | null): LegalDocument {
         heading: 'What you can do if something is wrong',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Three separate remedies, in the order they become available. They do not replace your
               rights in law; they are what we undertake to do.
             </p>
             <List
               items={[
                 <>
-                  <strong className="text-ink">On arrival</strong> — an inspection window of{' '}
+                  <strong>On arrival</strong> — an inspection window of{' '}
                   <N value={window} unit="hours" /> from delivery, during which you may send a
                   machine back for any of six stated reasons. See{' '}
                   <Ref to="/legal/returns-and-refunds">returns and refunds</Ref>.
                 </>,
                 <>
-                  <strong className="text-ink">After that window</strong> — warranty cover, which we
+                  <strong>After that window</strong> — warranty cover, which we
                   provide ourselves for its whole term. See{' '}
                   <Ref to="/legal/warranty">the warranty</Ref>.
                 </>,
                 <>
-                  <strong className="text-ink">At any time</strong> — the grievance procedure, with a
+                  <strong>At any time</strong> — the grievance procedure, with a
                   named officer and published response times. See{' '}
                   <Ref to="/legal/grievance">grievance redressal</Ref>.
                 </>,
@@ -459,12 +453,12 @@ function terms_(window: number | null): LegalDocument {
         heading: 'Changes to these terms',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               This document carries a version number and a date, both shown at the top of the page.
               When it changes we publish it here under a new version number and a new date. We do not
               change a published document silently.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               We are building a mechanism that asks existing customers to accept a changed version at
               their next sign-in. It is not running yet, and this page does not pretend otherwise —
               until it is, the version and date above are how you can tell whether the document you
@@ -478,14 +472,14 @@ function terms_(window: number | null): LegalDocument {
         heading: 'Governing law',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               These terms are governed by the laws of India.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The forum for disputes and any arbitration clause have not been settled and are not
               stated here. We will not assert a jurisdiction we have not published.
             </p>
-            <p className="mt-3">
+            <p>
               <Unset what="Jurisdiction and dispute resolution" />
             </p>
           </>
@@ -512,7 +506,7 @@ function privacy(): LegalDocument {
         heading: 'Who processes your data',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               {LEGAL_DISCLOSURE.legalName} is the Data Fiduciary for the personal data described
               below, under the Digital Personal Data Protection Act, 2023. Most of what we hold is
               organisation data rather than personal data; this notice is about the part that is
@@ -524,8 +518,7 @@ function privacy(): LegalDocument {
                 [
                   'Contact for data questions',
                   <a
-                    className="text-ink underline decoration-rule underline-offset-4 hover:decoration-acc"
-                    href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}
+                        href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}
                   >
                     {LEGAL_DISCLOSURE.grievanceOfficer.email}
                   </a>,
@@ -557,7 +550,7 @@ function privacy(): LegalDocument {
         heading: 'The purposes you consent to, itemised',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Consent under the DPDP Act is purpose-specific. Blanket consent is not consent, so we
               record each of these separately and you may hold some and not others. These are the
               exact six purposes the platform recognises.
@@ -565,28 +558,28 @@ function privacy(): LegalDocument {
             <List
               items={[
                 <>
-                  <strong className="text-ink">Verifying who you are</strong> — checking your GSTIN,
+                  <strong>Verifying who you are</strong> — checking your GSTIN,
                   PAN and documents against the issuing authorities so that an account can be
                   approved.
                 </>,
                 <>
-                  <strong className="text-ink">Messages about your transactions</strong> — order
+                  <strong>Messages about your transactions</strong> — order
                   confirmations, delivery notifications, invoices, return and claim updates.
                 </>,
                 <>
-                  <strong className="text-ink">Marketing</strong> — stock alerts, offers and
+                  <strong>Marketing</strong> — stock alerts, offers and
                   newsletters.
                 </>,
                 <>
-                  <strong className="text-ink">WhatsApp</strong> — receiving any of the above on
+                  <strong>WhatsApp</strong> — receiving any of the above on
                   WhatsApp rather than only by email.
                 </>,
                 <>
-                  <strong className="text-ink">Credit assessment</strong> — where credit terms are
+                  <strong>Credit assessment</strong> — where credit terms are
                   requested. Credit is not offered today, so this purpose is not currently used.
                 </>,
                 <>
-                  <strong className="text-ink">Sharing with logistics providers</strong> — passing a
+                  <strong>Sharing with logistics providers</strong> — passing a
                   recipient name, address and phone number to whoever carries the machine to you.
                 </>,
               ]}
@@ -599,19 +592,19 @@ function privacy(): LegalDocument {
         heading: 'Withdrawing consent',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               You may withdraw any of the consents above. Write to the address in{' '}
               <Ref to="/legal/grievance">grievance redressal</Ref> naming the purpose you are
               withdrawing.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Two things about withdrawal that are worth being plain about. First, withdrawing a
               consent does not delete the record that you once gave it — that record is the evidence
               that we had a lawful basis at the time, and it is kept, stamped with the moment you
               withdrew. Second, withdrawal is one-way: we cannot un-withdraw a consent, so restoring
               it means giving it again.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Messages about a transaction you have entered into are not sent on the basis of consent
               and do not stop when you withdraw one. If you have ordered a machine, we will tell you
               when it ships whether or not you have opted out of marketing. Only marketing and
@@ -640,19 +633,19 @@ function privacy(): LegalDocument {
         heading: 'How long we keep it',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Tax records — invoices and the transaction data behind them — are retained for the
               period the GST law requires, which is presently six years from the due date of the
               annual return for the relevant year. Consent records are retained for as long as the
               account exists, because a consent artefact that can be deleted is not evidence of
               consent.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               A full retention schedule for everything else — onboarding documents, verification
               responses, audit logs — has not been settled and is not published here. We will not
               publish a period we are not yet enforcing.
             </p>
-            <p className="mt-3">
+            <p>
               <Unset what="General retention schedule" />
             </p>
           </>
@@ -663,13 +656,13 @@ function privacy(): LegalDocument {
         heading: 'Your rights',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Under the DPDP Act you may ask for a summary of the personal data we hold about you and
               how it is processed; ask us to correct or complete it; ask us to erase it where we no
               longer need it for the purpose it was collected for or to meet a legal obligation; and
               nominate someone to exercise these rights if you cannot.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Requests go to the grievance officer, and are answered on the timescales published in{' '}
               <Ref to="/legal/grievance">grievance redressal</Ref>.
             </p>
@@ -683,58 +676,68 @@ function privacy(): LegalDocument {
 /* -------------------------------------------------------------------------- */
 
 function grievance(ackHours: number | null, redressDays: number | null): LegalDocument {
+  const officer = LEGAL_DISCLOSURE.grievanceOfficer;
   return {
     slug: 'grievance',
     title: 'Grievance redressal',
+    kicker: 'Rule 4(5) · Consumer Protection (e-Commerce) Rules 2020',
     summary:
       'The grievance officer required by Rule 4(5) of the Consumer Protection (e-Commerce) Rules 2020, and the times we answer in.',
     version: 'v1.0',
     updated: FIRST_PUBLISHED,
     reconsentOnChange: false,
+    // Not the shared `Facts` and `List` pieces: the officer block, the two
+    // clocks as large figures and the numbered steps are the design's own
+    // shapes for this document (storefront.css, "T48 — /legal/**").
     sections: [
       {
         id: 'officer',
         heading: 'The grievance officer',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Rule 4(5) of the Consumer Protection (e-Commerce) Rules, 2020 requires us to appoint a
               grievance officer resident in India and to publish their name, designation and contact
-              details. The appointment has not been made. We are not going to print a name here
-              before there is a person behind it, because a customer with a problem would spend their
-              attempt on it.
+              details.
             </p>
-            <Facts
-              rows={[
-                ['Name', <Unset what="Officer name" />],
-                ['Designation', LEGAL_DISCLOSURE.grievanceOfficer.designation],
-                [
-                  'Email',
-                  <a
-                    className="text-ink underline decoration-rule underline-offset-4 hover:decoration-acc"
-                    href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}
-                  >
-                    {LEGAL_DISCLOSURE.grievanceOfficer.email}
-                  </a>,
-                ],
-                [
-                  'Telephone',
-                  LEGAL_DISCLOSURE.grievanceOfficer.phone ? (
-                    <span className="tnum text-ink">{LEGAL_DISCLOSURE.grievanceOfficer.phone}</span>
+            <p className="lg-note">
+              <b>The appointment has not been made yet.</b> We are not going to print a name here
+              before there is a person behind it &mdash; a customer with a problem would spend their
+              attempt on it. Until then, the email below is monitored and anything sent to it is
+              treated as a grievance under this policy, on the times further down.
+            </p>
+            <dl className="lg-kv">
+              <div>
+                <dt>Name</dt>
+                <dd>
+                  <span className="lg-pending tnum">Officer name &mdash; not yet published</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Designation</dt>
+                <dd>{officer.designation}</dd>
+              </div>
+              <div>
+                <dt>Email</dt>
+                <dd className="tnum">
+                  <a href={`mailto:${officer.email}`}>{officer.email}</a>
+                </dd>
+              </div>
+              <div>
+                <dt>Telephone</dt>
+                <dd className="tnum">
+                  {officer.phone ? (
+                    <a href={`tel:${officer.phone}`}>{formatMobile(officer.phone)}</a>
                   ) : (
-                    <Unset what="Telephone" />
-                  ),
-                ],
-                [
-                  'Address',
-                  <span className="text-ink-2">{LEGAL_DISCLOSURE.grievanceOfficer.address}</span>,
-                ],
-              ]}
-            />
-            <p className="mt-5 text-body text-ink-2">
-              Until the appointment is made, the email address above is monitored and a grievance
-              sent to it is treated as a grievance under this policy, on the times below.
-            </p>
+                    <span className="lg-pending">Telephone &mdash; not yet published</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Address</dt>
+                <dd>{officer.address}</dd>
+              </div>
+            </dl>
           </>
         ),
       },
@@ -743,25 +746,25 @@ function grievance(ackHours: number | null, redressDays: number | null): LegalDo
         heading: 'How quickly we answer',
         body: (
           <>
-            <Facts
-              rows={[
-                [
-                  'Acknowledgement',
-                  <>
-                    Within <N value={ackHours} unit="hours" /> of receipt
-                  </>,
-                ],
-                [
-                  'Resolution',
-                  <>
-                    Within <N value={redressDays} unit="days" /> of receipt
-                  </>,
-                ],
-              ]}
-            />
-            <p className="mt-5 text-body text-ink-2">
-              Both figures are read from the platform&rsquo;s own configuration when this page is
-              rendered, so what is published here is what the business is set up to do rather than a
+            <dl className="lg-sla">
+              <div>
+                <dt>Acknowledgement</dt>
+                <dd>
+                  <Clock value={ackHours} unit="hours" />
+                  <span>of receipt</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Resolution</dt>
+                <dd>
+                  <Clock value={redressDays} unit="days" />
+                  <span>of receipt</span>
+                </dd>
+              </div>
+            </dl>
+            <p className="dim">
+              Both figures are read from the platform&rsquo;s own configuration when this page
+              renders &mdash; what is published here is what the business is set up to do, not a
               number typed into a document once.
             </p>
           </>
@@ -772,18 +775,48 @@ function grievance(ackHours: number | null, redressDays: number | null): LegalDo
         heading: 'How to raise one',
         body: (
           <>
-            <List
-              items={[
-                'Email the address above. Include your order number, and the serial number of the machine if the grievance is about a particular one — every machine we sell has one and it is on your invoice.',
-                'Tell us what you want to happen. A return, a replacement, a refund, a correction to a record, an explanation.',
-                'You do not need to have raised a return or a claim first. A grievance is not an escalation of those; it is a separate route and it is always open.',
-              ]}
-            />
-            <p className="mt-4 text-body text-ink-2">
-              If your complaint is about a specific machine arriving in the wrong condition, the
-              faster route is usually the inspection window in{' '}
-              <Ref to="/legal/returns-and-refunds">returns and refunds</Ref>, which is a decision we
-              make against a published standard rather than a conversation.
+            <ol className="lg-steps">
+              <li>
+                <span className="lg-num tnum" aria-hidden>
+                  01
+                </span>
+                <div>
+                  <b>Email the address above</b>
+                  <p>
+                    Include your order number, and the serial number of the machine if the grievance
+                    is about a particular one &mdash; every machine we sell has one, and it is on
+                    your invoice.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span className="lg-num tnum" aria-hidden>
+                  02
+                </span>
+                <div>
+                  <b>Tell us what you want to happen</b>
+                  <p>
+                    A return, a replacement, a refund, a correction to a record, an explanation.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span className="lg-num tnum" aria-hidden>
+                  03
+                </span>
+                <div>
+                  <b>No prior return or claim needed</b>
+                  <p>
+                    A grievance is not an escalation of those &mdash; it is a separate route, and it
+                    is always open.
+                  </p>
+                </div>
+              </li>
+            </ol>
+            <p className="lg-note">
+              Machine arrived in the wrong condition? The faster route is usually the inspection
+              window in <Ref to="/legal/returns-and-refunds">returns and refunds</Ref> &mdash; a
+              decision made against a published standard rather than a conversation.
             </p>
           </>
         ),
@@ -792,15 +825,35 @@ function grievance(ackHours: number | null, redressDays: number | null): LegalDo
         id: 'escalation',
         heading: 'If we do not resolve it',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             You may take a consumer complaint to the National Consumer Helpline or file it on the
             e-Daakhil portal operated by the Department of Consumer Affairs. Nothing in this policy
-            limits that, and using our procedure first is not a condition of it.
+            limits that, and using our procedure first is <b>not</b> a condition of it.
           </p>
         ),
       },
     ],
   };
+}
+
+/**
+ * One of the r.4(5) clocks as the design's large figure. `null` renders as an
+ * absence in the muted ink, never as a zero — the config key being unset is a
+ * fact the page must show, not paper over.
+ */
+function Clock({ value, unit }: { value: number | null; unit: string }): React.JSX.Element {
+  if (value === null) return <b className="lg-clock lg-absent">Not published</b>;
+  return (
+    <b className="lg-clock tnum">
+      {value} <i>{unit}</i>
+    </b>
+  );
+}
+
+/** `+91XXXXXXXXXX`, the normalised form config holds, printed the way people read it. */
+function formatMobile(e164: string): string {
+  const m = /^\+91(\d{5})(\d{5})$/.exec(e164);
+  return m ? `+91 ${m[1]} ${m[2]}` : e164;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -820,7 +873,7 @@ function returnsAndRefunds(window: number | null): LegalDocument {
         heading: 'The inspection window',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               You have <N value={window} unit="hours" /> from delivery to inspect every machine on an
               order and send back any that should not have been sent. The window opens when delivery
               is recorded against the consignment and it is counted by our server, on our clock, at
@@ -828,11 +881,11 @@ function returnsAndRefunds(window: number | null): LegalDocument {
               remain, so that a laptop with the wrong date on it cannot cost you a remedy you are
               owed or promise you one you are not.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               It is a window, not a countdown. We do not use the time remaining to hurry you, and a
               machine returned in the last hour is treated exactly as one returned in the first.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The same number decides when we pay the supplier. A supply point&rsquo;s money does not
               become eligible for payout until your window on that machine has closed, which is why
               there is one figure here and not two.
@@ -845,7 +898,7 @@ function returnsAndRefunds(window: number | null): LegalDocument {
         heading: 'The obligation is ours, and it is not delegable',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Rule 7(4) of the Consumer Protection (e-Commerce) Rules, 2020 requires the seller to
               take back goods that are defective, deficient, or that do not match the description
               advertised. We are the seller on every order — see{' '}
@@ -853,7 +906,7 @@ function returnsAndRefunds(window: number | null): LegalDocument {
               pass it to the supply point that shipped the machine, we do not condition it on the
               supply point agreeing, and there is nobody else for you to chase.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Whatever we recover from a supplier afterwards is our business and not yours. It never
               appears in your return, and it never delays it.
             </p>
@@ -865,35 +918,35 @@ function returnsAndRefunds(window: number | null): LegalDocument {
         heading: 'The six reasons',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               A return is raised against a specific machine, by serial, for one of these reasons.
               They are the same six the return form offers.
             </p>
             <List
               items={[
                 <>
-                  <strong className="text-ink">Not as described</strong> — the machine does not meet
+                  <strong>Not as described</strong> — the machine does not meet
                   the grade it was sold as. That grade is defined measurably in{' '}
                   <Ref to="/legal/grading">the grading standard</Ref>, so this is a comparison rather
                   than an opinion.
                 </>,
                 <>
-                  <strong className="text-ink">Physical damage</strong> — damage that was not there
+                  <strong>Physical damage</strong> — damage that was not there
                   when we inspected and sealed it.
                 </>,
                 <>
-                  <strong className="text-ink">Functional failure</strong> — the machine does not
+                  <strong>Functional failure</strong> — the machine does not
                   work on arrival.
                 </>,
                 <>
-                  <strong className="text-ink">Wrong model or specification</strong> — you were sent
+                  <strong>Wrong model or specification</strong> — you were sent
                   something other than what you bought.
                 </>,
                 <>
-                  <strong className="text-ink">Seal broken on arrival</strong> — see below.
+                  <strong>Seal broken on arrival</strong> — see below.
                 </>,
                 <>
-                  <strong className="text-ink">Short shipment</strong> — a machine on the consignment
+                  <strong>Short shipment</strong> — a machine on the consignment
                   did not arrive.
                 </>,
               ]}
@@ -906,14 +959,14 @@ function returnsAndRefunds(window: number | null): LegalDocument {
         heading: 'A broken seal opens a return by itself',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Every machine leaves inspection under a numbered tamper seal that is photographed
               before it ships. When you receive a consignment you are asked to check each seal
               against its code. If you record a seal as broken, missing, or carrying a code that does
               not match, a return is opened on that machine immediately and automatically — one tap
               at the door, not a support call afterwards.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               A broken seal is a custody failure between the supply point and your door. It is
               deliberately a reason of its own rather than a kind of transit damage, because it
               decides who bears the loss, and that is ours to establish rather than yours to argue.
@@ -926,14 +979,14 @@ function returnsAndRefunds(window: number | null): LegalDocument {
         heading: 'What we ask you for',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Two photographs for physical damage, and one photograph of the seal for a broken-seal
               claim. The other four reasons need none.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               There is presently no way to attach a photograph to the return form itself, so we ask
               for them by email after you raise it, and the return records how many are still
-              outstanding. <strong className="text-ink">A return is never refused for want of a
+              outstanding. <strong>A return is never refused for want of a
               photograph you had no way to send us.</strong> When the form can take attachments this
               becomes a requirement at the point of raising, and the numbers above do not change.
             </p>
@@ -953,12 +1006,12 @@ function returnsAndRefunds(window: number | null): LegalDocument {
                 'A rejection always says which finding it turns on — the measurement or the photograph from the original inspection that contradicts the claim — rather than simply declining it.',
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The route and timing of a refund to your account are not yet published. We would rather
               leave that blank than name a number of working days we are not yet in a position to
               hold to.
             </p>
-            <p className="mt-3">
+            <p>
               <Unset what="Refund route and timing" />
             </p>
           </>
@@ -968,7 +1021,7 @@ function returnsAndRefunds(window: number | null): LegalDocument {
         id: 'after',
         heading: 'After the window closes',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             The machine is still covered. Once the inspection window has closed your remedy becomes a
             warranty claim rather than a return, on the term set out in{' '}
             <Ref to="/legal/warranty">the warranty</Ref>. A window that has closed is never the end of
@@ -998,11 +1051,11 @@ function warranty(topUp: number | null, floor: number | null): LegalDocument {
         heading: 'We are the warrantor, for the whole term',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               {LEGAL_DISCLOSURE.legalName} provides the warranty on every machine sold here, for
               every day of its term. There is one warrantor and it is us.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Internally, part of a term may be backed by the supply point the machine came from and
               part funded by us. That split is ours to manage and it is deliberately not on your
               warranty record — there is no field on it naming a provider, because there is no
@@ -1018,7 +1071,7 @@ function warranty(topUp: number | null, floor: number | null): LegalDocument {
         heading: 'How long',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               The term on a machine is the greater of two figures: what its supply point backs plus
               the months we add on top, or the floor we sell regardless.
             </p>
@@ -1028,13 +1081,13 @@ function warranty(topUp: number | null, floor: number | null): LegalDocument {
                 ['Minimum total term', <N value={floor} unit="months" />],
                 [
                   'The term you get',
-                  <span className="text-ink-2">
+                  <span>
                     the greater of (supply point&rsquo;s months + top-up) and the minimum
                   </span>,
                 ],
               ]}
             />
-            <p className="mt-5 text-body text-ink-2">
+            <p>
               The floor is why a machine from a supply point that backs nothing is still covered.
               &ldquo;We have not agreed a top-up here&rdquo; is our problem and it never reaches you
               as &ldquo;no warranty&rdquo;. The exact term for a machine you own is on its record in
@@ -1047,7 +1100,7 @@ function warranty(topUp: number | null, floor: number | null): LegalDocument {
         id: 'start',
         heading: 'When it starts',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             Cover begins on the day the machine is delivered to you, reckoned on the Indian calendar
             — not when you paid, and not when it left the supply point. A term that ran while the
             laptop was on a lorry would be a term we sold you and did not give you. Whether a machine
@@ -1068,7 +1121,7 @@ function warranty(topUp: number | null, floor: number | null): LegalDocument {
                 'Collection from your site and return, both ways.',
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The twelve areas are the ones on the inspection report for that serial, which you can
               open from the machine&rsquo;s record. A warranty that covered fewer things than we
               measured would be an odd document.
@@ -1127,65 +1180,61 @@ function warranty(topUp: number | null, floor: number | null): LegalDocument {
 function grading(grades: readonly GradeDefinition[] | null): LegalDocument {
   const table =
     grades === null || grades.length === 0 ? (
-      <p className="mt-4 rounded border border-dashed border-rule px-4 py-5 text-body text-ink-3">
+      <p className="lg-empty">
         The grade definitions could not be read just now, so they are not shown. This page prints the
         thresholds the inspection engine actually enforces or it prints nothing — a remembered table
         would be the one thing on this document that could be wrong.
       </p>
     ) : (
-      // `legaltbl` re-settles the global data-board table for a row-header
-      // layout — see the block at the end of `storefront.css`. `overflow-x-auto`
-      // keeps a wide table scrolling inside its own container rather than
-      // widening the document.
-      <div className="legaltbl mt-4 overflow-x-auto">
-        <table className="w-full border-collapse text-body-sm">
+      // `.lg-table` scrolls a wide table inside its own container rather than
+      // widening the document, and gives the grade its row header.
+      <div className="lg-table">
+        <table>
           <thead>
-            <tr className="border-b border-rule text-left">
-              <th scope="col" className="py-3 pr-4 font-medium text-ink-3">
+            <tr>
+              <th scope="col">
                 Grade
               </th>
-              <th scope="col" className="py-3 pr-4 font-medium text-ink-3">
+              <th scope="col">
                 Battery health, at least
               </th>
-              <th scope="col" className="py-3 pr-4 font-medium text-ink-3">
+              <th scope="col">
                 Charge cycles, at most
               </th>
-              <th scope="col" className="py-3 pr-4 font-medium text-ink-3">
+              <th scope="col">
                 Cosmetic score, at least
               </th>
-              <th scope="col" className="py-3 font-medium text-ink-3">
+              <th scope="col">
                 Screen defects
               </th>
             </tr>
           </thead>
           <tbody>
             {grades.map((g) => (
-              <tr key={g.grade} className="border-b border-rule-2 align-top">
-                <th scope="row" className="py-4 pr-4 text-left font-semibold text-ink">
+              <tr key={g.grade}>
+                <th scope="row">
                   {g.displayName}
-                  <span className="mt-1 block max-w-[38ch] text-body-sm font-normal text-ink-3">
-                    {g.customerDescription}
-                  </span>
+                  <small>{g.customerDescription}</small>
                 </th>
-                <td className="py-4 pr-4">
+                <td>
                   <N value={g.minBatteryHealthPct} unit="%" absent="Not set" />
                 </td>
-                <td className="py-4 pr-4">
+                <td>
                   <N value={g.maxCycleCount} unit="cycles" absent="Not capped" />
                 </td>
-                <td className="py-4 pr-4">
+                <td>
                   <N value={g.minCosmeticScore} unit="/ 100" absent="Not set" />
                 </td>
-                <td className="py-4 text-ink-2">
+                <td>
                   {g.screenDefectsAllowed ? 'Permitted within the stated limits' : 'None permitted'}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="mt-3 text-body-sm text-ink-3">
+        <p className="dim">
           In effect since{' '}
-          <span className="tnum text-ink-2">{grades[0]?.effectiveFrom ?? '—'}</span>. Read from the
+          <span className="tnum">{grades[0]?.effectiveFrom ?? '—'}</span>. Read from the
           grade definitions the inspection engine uses, at the moment this page was rendered.
         </p>
       </div>
@@ -1205,13 +1254,13 @@ function grading(grades: readonly GradeDefinition[] | null): LegalDocument {
         heading: 'What this document is',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Rule 7(5) of the Consumer Protection (e-Commerce) Rules, 2020 requires a seller to
               ensure that the advertisement of goods is consistent with their actual characteristics.
               A grade is the shortest description we publish and it is the one most likely to be
               relied on, so this page defines each grade against measurements rather than adjectives.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               This is the standard a disagreement is settled against. If a machine does not meet the
               thresholds below for the grade it was sold as, it is not as described, and{' '}
               <Ref to="/legal/returns-and-refunds#reasons">that is a return</Ref>.
@@ -1223,7 +1272,7 @@ function grading(grades: readonly GradeDefinition[] | null): LegalDocument {
         id: 'neutral',
         heading: 'Every grade here is sellable',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             A+, A and B are positions on a scale of cosmetic condition and battery life. They are not
             verdicts. Every machine we list has passed inspection, whatever its grade; a B is not a
             machine that failed, it is a machine with visible wear and an honest description of it.
@@ -1236,7 +1285,7 @@ function grading(grades: readonly GradeDefinition[] | null): LegalDocument {
         heading: 'The thresholds',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               A machine is assigned the highest grade whose thresholds it meets on all counts. Every
               figure below is a measurement taken during inspection, not an assessment.
             </p>
@@ -1262,7 +1311,7 @@ function grading(grades: readonly GradeDefinition[] | null): LegalDocument {
         id: 'inspected-not-declared',
         heading: 'The grade is ours, not the supplier’s',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             A supplier declares a grade when they list a machine. That declaration is not what you
             see. Every grade shown anywhere on this site — on a product card, in a filter count, on
             an invoice — is the grade our inspection assigned after the machine was opened and
@@ -1275,7 +1324,7 @@ function grading(grades: readonly GradeDefinition[] | null): LegalDocument {
         id: 'versioning',
         heading: 'Versions and effective dates',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             Grade definitions are effective-dated. A machine is graded against the definition in
             force on the day it was inspected, and its inspection report records which one that was.
             Changing the thresholds does not retrospectively re-grade machines already sold. If we
@@ -1304,32 +1353,32 @@ function wipeStandard(): LegalDocument {
         heading: 'The standard',
         body: (
           <>
-            <p className="text-body text-ink-2">
-              Storage media are erased to <strong className="text-ink">NIST SP 800-88 Rev. 1,
+            <p>
+              Storage media are erased to <strong>NIST SP 800-88 Rev. 1,
               Purge</strong>, and the erasure is verified after it runs. Where the erasure completed
               and verified, a certificate is issued against the machine&rsquo;s serial and recorded
               with the inspection report.
             </p>
             <Facts
               rows={[
-                ['Standard', <span className="tnum text-ink">NIST SP 800-88 Rev. 1 — Purge</span>],
+                ['Standard', <span className="tnum">NIST SP 800-88 Rev. 1 — Purge</span>],
                 ['Passes', <N value={1} unit="pass" />],
                 [
                   'Verification',
-                  <span className="text-ink-2">
+                  <span>
                     Recorded as a result on the certificate, not assumed from completion
                   </span>,
                 ],
                 [
                   'Integrity',
-                  <span className="text-ink-2">
-                    Each certificate carries a <span className="tnum text-ink">SHA-256</span> digest,
+                  <span>
+                    Each certificate carries a <span className="tnum">SHA-256</span> digest,
                     so a certificate that was altered after issue can be told from one that was not
                   </span>,
                 ],
               ]}
             />
-            <p className="mt-5 text-body text-ink-2">
+            <p>
               Purge, not Clear: the method is chosen to defeat a laboratory recovery attempt rather
               than only a software one. The media stay in the machine — we do not destroy or remove
               drives, so there is no certificate of destruction and this is not that document.
@@ -1342,12 +1391,12 @@ function wipeStandard(): LegalDocument {
         heading: 'Not every machine has a certificate',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Some machines in the catalogue have no wipe certificate. Where one is absent, the
               machine&rsquo;s inspection record says so in plain words and shows no tick. Do not read
               a blank as a pass.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               If a certificate matters for a particular purchase — and for most corporate buyers it
               does — check the record for the serial before you order, or ask us. We would rather
               tell you a machine has not been certified than issue you a certificate for a run that
@@ -1368,7 +1417,7 @@ function wipeStandard(): LegalDocument {
                 'Data on media we did not touch — an external drive, a memory card left in a reader. The certificate names the machine’s serial and covers its internal storage.',
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Every certificate is tied to one serial. It is not a statement about a batch, a model
               or a supplier, and it cannot be read as one.
             </p>
@@ -1395,7 +1444,7 @@ function shipping(): LegalDocument {
         id: 'movement',
         heading: 'One movement, one seller',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             A machine goes directly from the supply point that holds it to your delivery address.
             There is one physical movement and there are two supplies: the supplier sells to us, and
             we sell to you. You are party to the second. The goods never pass through premises of
@@ -1409,7 +1458,7 @@ function shipping(): LegalDocument {
         heading: 'How an order is split',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               An order becomes one or more consignments, split on two things:
             </p>
             <List
@@ -1418,7 +1467,7 @@ function shipping(): LegalDocument {
                 'The tax valuation channel each machine falls into. Machines in different channels cannot share an invoice at all — see the pricing and taxes document.',
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Each consignment is delivered and tracked on its own, and each has its own inspection
               window opening from its own delivery.
             </p>
@@ -1430,12 +1479,12 @@ function shipping(): LegalDocument {
         heading: 'At handover',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Every machine arrives under a numbered tamper seal that was photographed at inspection.
               Check each seal against its printed code before you sign for the consignment. Your
               account has the seal codes for the machines on it.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Recording a seal as broken or mismatched opens a return on that machine immediately —
               see <Ref to="/legal/returns-and-refunds#seal">returns and refunds</Ref>. Delivery is
               also the instant that starts your inspection window and your warranty term, so it is
@@ -1462,17 +1511,17 @@ function shipping(): LegalDocument {
         heading: 'What we do not offer yet',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               We do not issue carrier tracking numbers, and there is no live tracking map. Delivery is
               recorded against your order when it happens and you are notified then. We are not going
               to describe a tracking experience that does not exist.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Committed delivery times by lane have not been published either. Your order shows an
               estimate against your pincode; that estimate is an estimate, and we do not currently
               publish a guaranteed window.
             </p>
-            <p className="mt-3">
+            <p>
               <Unset what="Committed delivery times" />
             </p>
           </>
@@ -1499,14 +1548,14 @@ function cancellation(window: number | null): LegalDocument {
         heading: 'Before you confirm',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Starting a checkout holds the specific machines in your cart for a short period so
               nobody else is sold them while you are paying. The hold is shown on the checkout screen
               and counted by our server. Abandoning the checkout releases the machines back to the
               catalogue immediately; letting the hold lapse does the same thing a little later.
               Nothing is owed either way and no order exists.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Where your organisation requires an internal approval, the machines are held while it is
               outstanding, for a longer period. Stock cannot be held indefinitely waiting for a
               manager, so if the approval is not given the hold lapses and the machines return to the
@@ -1521,13 +1570,13 @@ function cancellation(window: number | null): LegalDocument {
         heading: 'After the order is confirmed',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               There is no self-serve cancellation once an order is confirmed. That is a genuine gap
               rather than a policy: no such control exists on the site today, and we are not going to
               write a clause describing a button you cannot press. Write to customer care with your
               order number and we will deal with it by hand.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               A confirmed order is one we have already bought the machines for from the supply point,
               which is why cancellation after that point is a conversation rather than a click.
             </p>
@@ -1538,7 +1587,7 @@ function cancellation(window: number | null): LegalDocument {
         id: 'after-delivery',
         heading: 'After delivery, cancellation is a return',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             Once a machine has been delivered, the route is the inspection window rather than a
             cancellation: <N value={window} unit="hours" /> from delivery to send it back for any of
             six stated reasons, and{' '}
@@ -1552,16 +1601,16 @@ function cancellation(window: number | null): LegalDocument {
         heading: 'Money',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Orders are prepaid. Credit terms are not offered on this platform today, so a
               cancellation is always a question of returning money you have already paid rather than
               of cancelling an amount you owe.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The route and timing of that return are not yet published, for the same reason they are
               not published on the returns page.
             </p>
-            <p className="mt-3">
+            <p>
               <Unset what="Refund route and timing" />
             </p>
           </>
@@ -1599,7 +1648,7 @@ function pricingAndTaxes(): LegalDocument {
         heading: 'What a price includes',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Prices are per machine and are exclusive of GST unless a page says otherwise. The
               landed price of an order is the unit price for each serial, plus freight, plus tax, and
               it depends on where you are taking delivery — so a price is only complete once a
@@ -1607,12 +1656,12 @@ function pricingAndTaxes(): LegalDocument {
             </p>
             <Facts
               rows={[
-                ['Our GSTIN', <span className="tnum text-ink">{LEGAL_DISCLOSURE.gstin}</span>],
+                ['Our GSTIN', <span className="tnum">{LEGAL_DISCLOSURE.gstin}</span>],
                 [
                   'GST rate',
                   <>
                     <N value={18} unit="%" /> on HSN{' '}
-                    <span className="tnum text-ink-2">8471</span>, under Notification 1/2017-Central
+                    <span className="tnum">8471</span>, under Notification 1/2017-Central
                     Tax (Rate), Schedule III
                   </>,
                 ],
@@ -1627,10 +1676,10 @@ function pricingAndTaxes(): LegalDocument {
         heading: 'Which tax head applies',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               For our supply to you, the place of supply is where the movement of the goods
               terminates — that is,{' '}
-              <strong className="text-ink">your delivery address, not your billing address</strong>.
+              <strong>your delivery address, not your billing address</strong>.
               A buyer registered in one state taking delivery at a site in another is an inter-state
               supply, and the invoice carries IGST accordingly.
             </p>
@@ -1638,20 +1687,20 @@ function pricingAndTaxes(): LegalDocument {
               items={[
                 <>
                   Delivery in the same state as our registration —{' '}
-                  <span className="tnum text-ink-2">CGST + SGST</span>, half the rate each.
+                  <span className="tnum">CGST + SGST</span>, half the rate each.
                 </>,
                 <>
-                  Delivery anywhere else — <span className="tnum text-ink-2">IGST</span> at the full
+                  Delivery anywhere else — <span className="tnum">IGST</span> at the full
                   rate.
                 </>,
                 <>
                   Delivery in a Union Territory — the state half is styled{' '}
-                  <span className="tnum text-ink-2">UTGST</span>. The rate and the arithmetic are
+                  <span className="tnum">UTGST</span>. The rate and the arithmetic are
                   identical.
                 </>,
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Where the tax is split in half, the second half is computed as the total minus the
               first rather than by taking the half-rate twice. That is not pedantry: rounding a half
               twice loses a paisa on every odd total, and across a long order it produces an invoice
@@ -1665,25 +1714,25 @@ function pricingAndTaxes(): LegalDocument {
         heading: 'Two valuation channels, never on one invoice',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               Every machine is bought by us in one of two ways, and this is fixed for that machine
               from the moment we buy it. It cannot be changed afterwards.
             </p>
             <List
               items={[
                 <>
-                  <strong className="text-ink">Regular</strong> — we bought the machine from a
+                  <strong>Regular</strong> — we bought the machine from a
                   GST-registered supplier who charged us tax, and we claimed that credit. Tax on your
                   invoice is charged on the full value of the supply.
                 </>,
                 <>
-                  <strong className="text-ink">Margin</strong> — the machine was bought under the
+                  <strong>Margin</strong> — the machine was bought under the
                   second-hand goods margin scheme, and no input tax credit was availed on its
                   purchase. Tax on your invoice is charged on our margin only.
                 </>,
               ]}
             />
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               The two cannot appear on the same invoice, so a cart holding both is split into
               separate sub-orders and you receive an invoice for each. This is visible before you pay
               rather than discovered afterwards, and every machine on the site is labelled with its
@@ -1697,28 +1746,28 @@ function pricingAndTaxes(): LegalDocument {
         heading: 'How the margin scheme affects your input tax credit',
         body: (
           <>
-            <p className="text-body text-ink-2">
+            <p>
               This is the part that changes what a machine actually costs your business, so it is
               worth reading before you compare two prices.
             </p>
-            <p className="mt-4 text-body text-ink-2">
-              On a <strong className="text-ink">regular</strong> line, tax is charged on the whole
+            <p>
+              On a <strong>regular</strong> line, tax is charged on the whole
               taxable value and you may claim that tax as input credit in the ordinary way, subject to
               your own eligibility.
             </p>
-            <p className="mt-4 text-body text-ink-2">
-              On a <strong className="text-ink">margin</strong> line, the taxable value is determined
+            <p>
+              On a <strong>margin</strong> line, the taxable value is determined
               under Rule 32(5) of the CGST Rules, 2017: it is the difference between what we sold the
               machine for and what we paid for it. That difference is computed{' '}
-              <strong className="text-ink">for each serial individually and is never pooled</strong>{' '}
+              <strong>for each serial individually and is never pooled</strong>{' '}
               across a line or an invoice — the scheme requires the margin to be attributable to a
               specific unit. Where we sold a machine for less than we paid, that serial contributes a
               taxable value of zero; it never goes negative and never reduces the tax on another
               serial.
             </p>
-            <p className="mt-4 text-body text-ink-2">
+            <p>
               Because no credit was availed on the purchase,{' '}
-              <strong className="text-ink">no input tax credit is available to you on a margin
+              <strong>no input tax credit is available to you on a margin
               line</strong>. The tax charged is smaller, and so is the credit — which for a
               GST-registered buyer usually means a margin machine costs more in net terms than its
               headline price suggests next to a regular one. Both numbers are on the price breakdown
@@ -1751,7 +1800,7 @@ function pricingAndTaxes(): LegalDocument {
         id: 'suppliers',
         heading: 'For suppliers',
         body: (
-          <p className="text-body text-ink-2">
+          <p>
             Where tax is deductible at source on payments we make to a supplier, it is deducted at
             the applicable rate once that supplier&rsquo;s payments cross the statutory threshold for
             the financial year, and at the higher rate where we do not hold a valid PAN. The

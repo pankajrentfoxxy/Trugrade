@@ -1,11 +1,14 @@
 import * as React from 'react';
 import { persistInOrder } from '../persist';
-import { SectionDialog, StatusPill, Uploader, type UploadedFile } from '@trugrade/ui';
+import { SectionDialog, Uploader, type UploadedFile, type UploadStatus } from '@trugrade/ui';
 import {
   completeStep,
+  deleteDocument,
   getDocuments,
+  getDocumentUrl,
   saveStep,
   uploadDocument,
+  type DocumentStatus,
   type KycDocument,
 } from '../../../../../../storefront/src/app/register/api';
 
@@ -16,6 +19,41 @@ import {
  * cheque they do not have to hand.
  */
 const DOC_TYPES = ['GST_CERTIFICATE', 'PAN_CARD', 'CANCELLED_CHEQUE'] as const;
+
+const LABELS: Record<string, string> = {
+  GST_CERTIFICATE: 'GST certificate',
+  PAN_CARD: 'PAN card',
+  CANCELLED_CHEQUE: 'Cancelled cheque',
+};
+
+/**
+ * The server's status, in the pill's words. `UPLOADED` is "With our team", not
+ * "Accepted": nobody has looked at it yet, and a tick would say they had.
+ */
+const STATUS: Record<DocumentStatus, UploadStatus> = {
+  UPLOADED: 'pending-review',
+  UNDER_REVIEW: 'pending-review',
+  VERIFIED: 'accepted',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired',
+};
+
+/**
+ * `DocumentService.remove` refuses these with a 409. The button is withheld
+ * rather than shown and failed, so the card never offers what the server will
+ * not do.
+ */
+const SETTLED: ReadonlySet<DocumentStatus> = new Set(['VERIFIED', 'UNDER_REVIEW']);
+
+const asUploaded = (doc: KycDocument): UploadedFile => ({
+  id: doc.id,
+  name: doc.originalFilename ?? doc.label,
+  sizeBytes: doc.sizeBytes,
+  status: STATUS[doc.status],
+  viewable: true,
+  // A reviewer's rejection is their own wording, never summarised here.
+  ...(doc.rejectionReason ? { rejectionReason: doc.rejectionReason } : {}),
+});
 
 export interface DocumentsSectionProps {
   open: boolean;
@@ -31,7 +69,10 @@ export function DocumentsSection({
   initial,
 }: DocumentsSectionProps): React.JSX.Element {
   const [docs, setDocs] = React.useState<KycDocument[]>([]);
+  /** Files this browser is still sending, or that the server has just refused. */
   const [uploads, setUploads] = React.useState<Record<string, UploadedFile[]>>({});
+  /** A view or remove refusal, against the document type it concerns. */
+  const [rowError, setRowError] = React.useState<Record<string, string>>({});
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>();
 
@@ -41,21 +82,22 @@ export function DocumentsSection({
       if (result.ok) setDocs(result.data);
     });
     setError(undefined);
+    setRowError({});
   }, [open]);
 
-  const uploadedTypes = new Set([
-    ...docs.map((d) => d.docType),
-    ...Object.entries(uploads)
-      .filter(([, rows]) => rows.some((r) => r.status === 'accepted'))
-      .map(([type]) => type),
-  ]);
+  const clearRowError = (docType: string): void =>
+    setRowError(({ [docType]: _dropped, ...rest }) => rest);
+
+  // A rejected document has to be sent again, so it does not count as held.
+  const held = (docType: string): KycDocument | undefined =>
+    docs.find((d) => d.docType === docType && d.status !== 'REJECTED');
 
   const save = async (): Promise<void> => {
     setBusy(true);
     // The hub's summary counts what was actually uploaded. Without the list it
     // could only say "three documents", which is a fabrication for a supplier
     // who saved with one.
-    const uploadedDocTypes = DOC_TYPES.filter((t) => uploadedTypes.has(t));
+    const uploadedDocTypes = DOC_TYPES.filter((t) => held(t) !== undefined);
     const failed = await persistInOrder([
       () =>
         saveStep('DOCUMENTS_BANK', { ...initial, documentsComplete: true, uploadedDocTypes }, 100),
@@ -73,6 +115,7 @@ export function DocumentsSection({
     const file = files[0];
     if (!file) return;
     const id = `${docType}-${file.name}`;
+    clearRowError(docType);
     setUploads((prev) => ({
       ...prev,
       [docType]: [
@@ -106,26 +149,37 @@ export function DocumentsSection({
         }));
         return;
       }
+      // The server's row replaces the local one: from here on the file is
+      // viewed and removed by the id the server gave it.
       setDocs((d) => [...d.filter((x) => x.docType !== docType), result.data]);
-      setUploads((prev) => ({
-        ...prev,
-        [docType]: [
-          {
-            id: result.data.id,
-            name: result.data.originalFilename ?? file.name,
-            sizeBytes: result.data.sizeBytes,
-            status: 'accepted',
-            viewable: true,
-          },
-        ],
-      }));
+      setUploads(({ [docType]: _sent, ...rest }) => rest);
     });
   };
 
-  const labels: Record<string, string> = {
-    GST_CERTIFICATE: 'GST certificate',
-    PAN_CARD: 'PAN card',
-    CANCELLED_CHEQUE: 'Cancelled cheque',
+  const view = async (docType: string, id: string): Promise<void> => {
+    const result = await getDocumentUrl(id);
+    if (!result.ok) {
+      setRowError((e) => ({ ...e, [docType]: result.message }));
+      return;
+    }
+    clearRowError(docType);
+    window.open(result.data.url, '_blank', 'noopener,noreferrer');
+  };
+
+  const remove = async (docType: string, id: string): Promise<void> => {
+    // A refused local file never reached the server; dropping the row is enough.
+    if ((uploads[docType] ?? []).some((row) => row.id === id)) {
+      setUploads(({ [docType]: _dropped, ...rest }) => rest);
+      clearRowError(docType);
+      return;
+    }
+    const result = await deleteDocument(id);
+    if (!result.ok) {
+      setRowError((e) => ({ ...e, [docType]: result.message }));
+      return;
+    }
+    clearRowError(docType);
+    setDocs((d) => d.filter((x) => x.id !== id));
   };
 
   return (
@@ -143,30 +197,31 @@ export function DocumentsSection({
       <div className="flex flex-col gap-5">
         {DOC_TYPES.map((docType) => {
           const existing = docs.find((d) => d.docType === docType);
-          if (existing) {
-            return (
-              <div
-                key={docType}
-                className="flex items-center justify-between gap-3 rounded border border-rule bg-sheet-2 px-4 py-3"
-              >
-                <div>
-                  <p className="text-body-sm font-medium text-ink">{labels[docType]}</p>
-                  <p className="font-mono text-label tnum text-ink-3">
-                    {existing.originalFilename} · {Math.round(existing.sizeBytes / 1024)} KB
-                  </p>
-                </div>
-                <StatusPill tone="pass" label="Uploaded" />
-              </div>
-            );
-          }
+          const inFlight = uploads[docType] ?? [];
+          const rows = existing ? [asUploaded(existing), ...inFlight] : inFlight;
+          const settled = existing !== undefined && SETTLED.has(existing.status);
+          const hint =
+            existing?.status === 'VERIFIED'
+              ? 'Verified by our team. Ask support to reopen it if the details have moved on.'
+              : existing?.status === 'UNDER_REVIEW'
+                ? 'A reviewer is looking at this document. You can change it once they have finished.'
+                : undefined;
           return (
             <Uploader
-              key={docType}
-              label={labels[docType] ?? docType}
+              // Keyed on the held document so the native picker remounts, and
+              // so clears its "pan.png" caption, when one arrives or is removed.
+              key={`${docType}:${existing?.id ?? 'none'}`}
+              label={LABELS[docType] ?? docType}
+              hint={hint}
               accept=".pdf,.jpg,.jpeg,.png"
               maxSizeMb={5}
-              files={uploads[docType] ?? []}
+              files={rows}
+              // One file per type: the input opens again once the held one is removed.
+              disabled={held(docType) !== undefined || inFlight.some((r) => r.status === 'uploading')}
               onSelect={(files) => handleUpload(docType, files)}
+              onView={(id) => void view(docType, id)}
+              onRemove={settled ? undefined : (id) => void remove(docType, id)}
+              error={rowError[docType]}
             />
           );
         })}

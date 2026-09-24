@@ -313,6 +313,12 @@ export interface SkuDetail {
   osSupported: string;
   hsnCode: string;
   isActive: boolean;
+  /**
+   * The model's launch price in rupees, a decimal string, or null when the
+   * catalogue has none. The only figure a struck-through "was" price may be
+   * drawn from; a page never derives one.
+   */
+  msrpNewInr: string | null;
   images: ResolvedImages | null;
 }
 
@@ -323,9 +329,23 @@ export interface SkuDetail {
  * rather than a bigger offers response: what a machine IS belongs to the
  * catalogue and what was MEASURED belongs to listing, and the endpoint that
  * joined them would be a third definition of a SKU living in a page.
+ *
+ * Never stored. `images[].url` is a signed token that dies after 15 minutes,
+ * and Next's data cache serves a stale entry while it revalidates in the
+ * background — so the first view of a grade after a quiet spell was handed a
+ * set of dead links and drew six broken frames. The page is `force-dynamic`
+ * already; one uncached call per render is the price of live pictures.
  */
-export const getSkuDetail = (skuId: string, grade: string): Promise<SkuDetail | null> =>
-  get<SkuDetail>(`/catalog/skus/${skuId}?grade=${grade}`, 60);
+export async function getSkuDetail(skuId: string, grade: string): Promise<SkuDetail | null> {
+  try {
+    const res = await fetch(`${API_BASE}/catalog/skus/${skuId}?grade=${grade}`, {
+      cache: 'no-store',
+    });
+    return res.ok ? ((await res.json()) as SkuDetail) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Every active configuration of one model, as the catalogue declares it —
@@ -335,6 +355,10 @@ export const getSkuDetail = (skuId: string, grade: string): Promise<SkuDetail | 
  */
 export const getModelSkus = (modelId: string): Promise<SkuDetail[] | null> =>
   get<SkuDetail[]>(`/catalog/models/${modelId}/skus`, 60);
+
+// The reviews backend does not exist yet — `ReviewsSection` and `QASection`
+// render fixed sample content on the product page in the meantime. No API
+// client belongs here until that endpoint is real.
 
 export type QualityHeadline =
   | { kind: 'SCORE'; avgQcScore: number; gradeAccuracyPct: number; unitsInspected: number }

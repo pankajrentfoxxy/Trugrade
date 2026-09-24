@@ -37,8 +37,8 @@
     --chrome-2: #101317;
     --chrome-3: #1b1f26;
     --on-chrome: #ffffff;
-    --on-chrome-2: rgba(255, 255, 255, 0.92);
-    --on-chrome-3: rgba(255, 255, 255, 0.72);
+    --on-chrome-2: #ffffff;
+    --on-chrome-3: #ffffff;
     --chrome-line: rgba(255, 255, 255, 0.08);
     --chrome-line-2: rgba(255, 255, 255, 0.17);
     --ground: #0b0d10;
@@ -46,9 +46,9 @@
     --sheet-2: #1a1e24;
     --sheet-3: #20252c;
     --ink: #e9ecf1;
-    --ink-2: #a8b1be;
-    --ink-3: #7d8694;
-    --ink-4: #5c6572;
+    --ink-2: #e9ecf1;
+    --ink-3: #e9ecf1;
+    --ink-4: #e9ecf1;
     --rule: #252a32;
     --rule-2: #1e232a;
     --acc: #6bb1be;
@@ -70,7 +70,7 @@
     --warn-track: #2a2010;
     --acc-2: #153038;
     --brand-tint: #6bb1be;
-    --font-display: 'Inter', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
   }
@@ -81,8 +81,8 @@
     --chrome-2: #d4f2fa;
     --chrome-3: #b8e8f4;
     --on-chrome: #101319;
-    --on-chrome-2: #3c444f;
-    --on-chrome-3: #68717f;
+    --on-chrome-2: #101319;
+    --on-chrome-3: #101319;
     --chrome-line: rgba(16, 19, 25, 0.08);
     --chrome-line-2: rgba(16, 19, 25, 0.14);
     --ground: #f0f1f3;
@@ -90,9 +90,9 @@
     --sheet-2: #f7f8fa;
     --sheet-3: #edeff2;
     --ink: #101319;
-    --ink-2: #3c444f;
-    --ink-3: #68717f;
-    --ink-4: #98a1af;
+    --ink-2: #101319;
+    --ink-3: #101319;
+    --ink-4: #101319;
     --rule: #dde0e5;
     --rule-2: #ebedf0;
     --acc: #6bb1be;
@@ -122,9 +122,9 @@
     --board-ok-ink: #166a3a;
     --board-ok-tint: #e4f4ea;
     --board-ink: #16202a;
-    --board-ink-2: #3a4652;
-    --board-muted: #56636f;
-    --board-empty: #8a96a0;
+    --board-ink-2: #16202a;
+    --board-muted: #16202a;
+    --board-empty: #16202a;
     --board-line: #e3e7eb;
     --board-line-soft: #eef1f3;
     --board-field: #cbd5dc;
@@ -132,7 +132,7 @@
     --board-head: #fafbfc;
     --board-hover: #f8fafb;
     --board-page: #f4f6f8;
-    --board-sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --board-sans: 'Lato', system-ui, sans-serif;
     /* Storefront header/footer — #283341; hero/sell keep --chrome above. */
     --storefront-chrome: #283341;
     --storefront-chrome-2: #323f4f;
@@ -140,8 +140,8 @@
     --storefront-chrome-line: rgba(255, 255, 255, 0.08);
     --storefront-chrome-line-2: rgba(255, 255, 255, 0.16);
     --storefront-on-chrome: #ffffff;
-    --storefront-on-chrome-2: rgba(255, 255, 255, 0.92);
-    --storefront-on-chrome-3: rgba(255, 255, 255, 0.72);
+    --storefront-on-chrome-2: #ffffff;
+    --storefront-on-chrome-3: #ffffff;
     --acc-glow: rgba(107, 177, 190, 0.34);
     --scan: rgba(82, 153, 166, 0.75);
     --pass: #0f7048;
@@ -160,7 +160,7 @@
     --warn-track: #efe6d4;
     --acc-2: #cfe7eb;
     --brand-tint: #6bb1be;
-    --font-display: 'Inter', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
     --shadow: 0 8px 26px rgba(16, 19, 25, 0.1);
     --shadow-2: 0 6px 24px rgba(16, 19, 25, 0.13), 0 18px 60px rgba(16, 19, 25, 0.13);
   }
@@ -176,8 +176,8 @@
     --chrome-2: #222c3d;
     --chrome-3: #2c384c;
     --on-chrome: #e8eef6;
-    --on-chrome-2: #93a0b3;
-    --on-chrome-3: #6b788c;
+    --on-chrome-2: #e8eef6;
+    --on-chrome-3: #e8eef6;
     --chrome-line: rgba(255, 255, 255, 0.08);
     --chrome-line-2: rgba(255, 255, 255, 0.17);
     --ground: #1e2836;
@@ -185,9 +185,9 @@
     --sheet-2: #2c384c;
     --sheet-3: #344257;
     --ink: #e8eef6;
-    --ink-2: #a8b4c4;
-    --ink-3: #7d8b9c;
-    --ink-4: #5c6a7a;
+    --ink-2: #e8eef6;
+    --ink-3: #e8eef6;
+    --ink-4: #e8eef6;
     --rule: #3a4658;
     --rule-2: #323e4e;
     --acc: #6bb1be;
@@ -209,7 +209,7 @@
     --warn-track: #2a2010;
     --acc-2: #153038;
     --brand-tint: #6bb1be;
-    --font-display: 'Inter', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
   }
@@ -219,8 +219,8 @@
     --chrome-2: #252b1f;
     --chrome-3: #303628;
     --on-chrome: #eef0e6;
-    --on-chrome-2: #9aa08c;
-    --on-chrome-3: #727866;
+    --on-chrome-2: #eef0e6;
+    --on-chrome-3: #eef0e6;
     --chrome-line: rgba(255, 255, 255, 0.08);
     --chrome-line-2: rgba(255, 255, 255, 0.17);
     --ground: #22281d;
@@ -228,9 +228,9 @@
     --sheet-2: #323a2b;
     --sheet-3: #3a4332;
     --ink: #eef0e6;
-    --ink-2: #b4b8a4;
-    --ink-3: #8a8e7c;
-    --ink-4: #686c5c;
+    --ink-2: #eef0e6;
+    --ink-3: #eef0e6;
+    --ink-4: #eef0e6;
     --rule: #3e4636;
     --rule-2: #353c2e;
     --acc: #6bb1be;
@@ -252,7 +252,7 @@
     --warn-track: #2a2010;
     --acc-2: #153038;
     --brand-tint: #6bb1be;
-    --font-display: 'Inter', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45), 0 18px 60px rgba(0, 0, 0, 0.4);
   }
@@ -262,8 +262,8 @@
     --chrome-2: #4a4032;
     --chrome-3: #5a4e3c;
     --on-chrome: #f4efe6;
-    --on-chrome-2: #c4b8a4;
-    --on-chrome-3: #9a8c76;
+    --on-chrome-2: #f4efe6;
+    --on-chrome-3: #f4efe6;
     --chrome-line: rgba(255, 255, 255, 0.1);
     --chrome-line-2: rgba(255, 255, 255, 0.2);
     --ground: #f4efe6;
@@ -271,9 +271,9 @@
     --sheet-2: #f3ece0;
     --sheet-3: #ebe2d4;
     --ink: #2a241c;
-    --ink-2: #5a5248;
-    --ink-3: #7a7266;
-    --ink-4: #9a9286;
+    --ink-2: #2a241c;
+    --ink-3: #2a241c;
+    --ink-4: #2a241c;
     --rule: #e4dcd0;
     --rule-2: #ece6dc;
     --acc: #6bb1be;
@@ -295,7 +295,7 @@
     --warn-track: #efe6d4;
     --acc-2: #cfe7eb;
     --brand-tint: #6bb1be;
-    --font-display: 'Inter', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
     --shadow: 0 8px 26px rgba(42, 36, 28, 0.1);
     --shadow-2: 0 6px 24px rgba(42, 36, 28, 0.13), 0 18px 60px rgba(42, 36, 28, 0.13);
   }
@@ -328,7 +328,7 @@
     --promo-line: rgba(255, 255, 255, 0.1);
     --promo-line-soft: rgba(255, 255, 255, 0.05);
     --promo-text: #f7f2e4;
-    --promo-muted: #a2977c;
+    --promo-muted: #f7f2e4;
     --promo-accent: #fdb017;
     --promo-accent-ink: #1c1300;
     /* The amber as TEXT on a white sheet. #fdb017 itself fails contrast there,
@@ -362,7 +362,7 @@
     --cream-line-soft: rgba(58, 44, 8, 0.08);
     --cream-line-hover: rgba(58, 44, 8, 0.06);
     --cream-text: #2a2105;
-    --cream-muted: #86754c;
+    --cream-muted: #2a2105;
     --cream-accent: #fdb017;
     --cream-accent-ink: #2a2105;
     --cream-accent-soft: rgba(253, 176, 23, 0.16);
@@ -395,7 +395,7 @@
   :root {
     --plate: #ffffff;
     /* Ink for text placed ON that plate. Constant for the same reason. */
-    --plate-ink: #3c444f;
+    --plate-ink: #101319;
     --head: var(--sheet);
     --head-2: var(--sheet-2);
     --head-3: var(--sheet-3);
@@ -423,10 +423,10 @@
 
     --maxw: 1400px;
 
-    --font-sans: 'Inter', system-ui, sans-serif;
-    --font-display: 'Inter', system-ui, sans-serif;
-    --font-deva: 'IBM Plex Sans Devanagari', 'Inter', system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --font-sans: 'Lato', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
+    --font-deva: 'Lato', 'IBM Plex Sans Devanagari', system-ui, sans-serif;
+    --font-mono: 'Lato', system-ui, sans-serif;
 
     --pass-line: #1a5040;
     --warn-line: #5a4018;
@@ -494,8 +494,8 @@
     --chrome-2: #f7f9fa;
     --chrome-3: #e1e6eb;
     --on-chrome: #17202b;
-    --on-chrome-2: #4d5a69;
-    --on-chrome-3: #66717f;
+    --on-chrome-2: #17202b;
+    --on-chrome-3: #17202b;
     --chrome-line: #e1e6eb;
     --chrome-line-2: #eef1f4;
 
@@ -505,9 +505,9 @@
     --sheet-3: #eef1f4;
 
     --ink: #17202b;
-    --ink-2: #4d5a69;
-    --ink-3: #66717f;
-    --ink-4: #818b99;
+    --ink-2: #17202b;
+    --ink-3: #17202b;
+    --ink-4: #17202b;
 
     --rule: #e1e6eb;
     --rule-2: #eef1f4;
@@ -544,9 +544,9 @@
 
     /* No serif on this surface. --font-display exists only so the shared
        components that reach for it do not fall back to the buyer's Newsreader. */
-    --font-sans: 'Inter', system-ui, sans-serif;
-    --font-display: 'Inter', system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --font-sans: 'Lato', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
+    --font-mono: 'Lato', system-ui, sans-serif;
 
     --maxw: 1800px;
   }
@@ -589,8 +589,8 @@
     --chrome-2: #1e1a22;
     --chrome-3: #2c262f;
     --on-chrome: #ffffff;
-    --on-chrome-2: #9c96a3;
-    --on-chrome-3: #9c96a3;
+    --on-chrome-2: #ffffff;
+    --on-chrome-3: #ffffff;
     --chrome-line: #2c262f;
     --chrome-line-2: #241f28;
 
@@ -600,9 +600,9 @@
     --sheet-3: #f2f3f5;
 
     --ink: #15171c;
-    --ink-2: #474e58;
-    --ink-3: #5a626d;
-    --ink-4: #636c7a;
+    --ink-2: #15171c;
+    --ink-3: #15171c;
+    --ink-4: #15171c;
 
     --rule: #e5e8ec;
     --rule-2: #eef0f3;
@@ -637,9 +637,9 @@
     --shadow: 0 1px 2px rgba(21, 23, 28, 0.06), 0 1px 3px rgba(21, 23, 28, 0.08);
     --shadow-2: 0 8px 28px rgba(21, 23, 28, 0.16), 0 20px 64px rgba(21, 23, 28, 0.14);
 
-    --font-sans: 'Inter', system-ui, sans-serif;
-    --font-display: 'Inter', system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --font-sans: 'Lato', system-ui, sans-serif;
+    --font-display: 'Lato', system-ui, sans-serif;
+    --font-mono: 'Lato', system-ui, sans-serif;
 
     /* 1480 left a dead band on a wide monitor that the user noticed and named. */
     --maxw: 1800px;
@@ -659,6 +659,35 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+  }
+
+  /**
+   * Slim scrollbars everywhere — the page, every board, every drawer and
+   * every scrolling panel. The default gutter takes a visible slice of a
+   * narrow panel, and a 17px bar beside a 6px thumb reads as two different
+   * products. Both syntaxes, for Firefox and the rest; the colours are tokens,
+   * so the bar follows the theme.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--rule);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-4);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   /**
@@ -1148,9 +1177,9 @@
   --sl-line-18: rgba(58, 44, 8, 0.18);
   --sl-line-30: rgba(58, 44, 8, 0.3);
   --sl-text: #2a2105;
-  --sl-text-55: rgba(42, 33, 5, 0.55);
-  --sl-text-80: rgba(42, 33, 5, 0.8);
-  --sl-muted: #86754c;
+  --sl-text-55: #2a2105;
+  --sl-text-80: #2a2105;
+  --sl-muted: #2a2105;
   --sl-accent: #fdb017;
   --sl-accent-ink: #2a2105;
   --sl-accent-soft: rgba(253, 176, 23, 0.16);
@@ -1161,8 +1190,8 @@
   --sl-accent-deep: #b07a00;
   --sl-ink: #171204;
   --sl-on-ink: #f7f2e4;
-  --sl-on-ink-65: rgba(247, 242, 228, 0.65);
-  --sl-on-ink-80: rgba(247, 242, 228, 0.8);
+  --sl-on-ink-65: #f7f2e4;
+  --sl-on-ink-80: #f7f2e4;
   --sl-white-04: rgba(255, 255, 255, 0.04);
   --sl-white-09: rgba(255, 255, 255, 0.09);
   --sl-white-10: rgba(255, 255, 255, 0.1);
@@ -1173,8 +1202,8 @@
   --sl-tape: rgba(255, 246, 227, 0.55);
   --sl-shadow-18: rgba(58, 44, 8, 0.18);
   --sl-shadow-25: rgba(58, 44, 8, 0.25);
-  --sl-font: 'Archivo', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --sl-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --sl-font: 'Lato', system-ui, sans-serif;
+  --sl-mono: 'Lato', system-ui, sans-serif;
   --sl-ride: 16s;
   /* Sign-in only: the crew on the brand panel and the form's states. */
   --sl-eye: #241c08;
@@ -1182,8 +1211,8 @@
   --sl-black-40: rgba(0, 0, 0, 0.4);
   --sl-white-07: rgba(255, 255, 255, 0.07);
   --sl-white-16: rgba(255, 255, 255, 0.16);
-  --sl-on-ink-45: rgba(247, 242, 228, 0.45);
-  --sl-on-ink-50: rgba(247, 242, 228, 0.5);
+  --sl-on-ink-45: #f7f2e4;
+  --sl-on-ink-50: #f7f2e4;
   --sl-line-06: rgba(58, 44, 8, 0.06);
   --sl-line-35: rgba(58, 44, 8, 0.35);
   --sl-accent-ring: rgba(253, 176, 23, 0.15);

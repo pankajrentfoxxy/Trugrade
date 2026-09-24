@@ -7,6 +7,14 @@
  * documents rather than actions, because a legal page has no primary action and
  * inventing one would break the single-amber-control rule for nothing.
  *
+ * The shell is the supplied legal-page design (`grievance.html`): cream ground,
+ * the one yellow, flat — sections separated by rules, no card shells — a mono
+ * kicker pill, the version and date as a meta strip, and a sticky contents rail
+ * with scrollspy. Its palette is the `--cream-*` block in globals.css, scoped to
+ * `.lgbody` in storefront.css; the site header and footer keep their own chrome.
+ * All ten documents share it, so a reader moving between them never changes
+ * page language.
+ *
  * ---------------------------------------------------------------------------
  * RENDERING
  * ---------------------------------------------------------------------------
@@ -52,6 +60,7 @@ import { notFound } from 'next/navigation';
 import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { getGrades, getLegalTerms } from '../../../lib/api';
 import { LEGAL_SLUGS, buildDocuments, type LegalDocument } from '../documents';
+import { Toc } from '../Toc';
 
 export const revalidate = 300;
 
@@ -89,6 +98,16 @@ export async function generateMetadata({
   };
 }
 
+/** The ISO date the document carries, as the meta strip prints it. */
+function formatUpdated(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export default async function LegalDocumentPage({
   params,
 }: {
@@ -101,116 +120,87 @@ export default async function LegalDocumentPage({
   const others = all.filter((d) => d.slug !== doc.slug);
 
   return (
-    <>
+    <div className="lgbody">
       {/*
         Not `.wrap`. That container is 1400px, which is right for a data board
         and wrong for prose: a legal document set across it is 100 characters a
-        line and nobody finishes it. 920px puts the article at roughly 74
-        characters with the contents rail beside it and no void between them.
+        line and nobody finishes it. The design's 1160px puts the article at
+        roughly 66 characters with the contents rail beside it.
       */}
-      <main className="mx-auto max-w-[920px] px-5 py-7">
-        <nav aria-label="Breadcrumb" className="mb-5 text-body-sm text-ink-3">
-          <Link href="/legal" className="hover:text-ink hover:underline hover:underline-offset-4">
-            Legal
-          </Link>
-          <span aria-hidden className="px-2 text-ink-4">
-            /
-          </span>
-          <span className="text-ink-2">{doc.title}</span>
+      <div className="lg-wrap">
+        <nav aria-label="Breadcrumb" className="lg-crumb">
+          <Link href="/legal">Legal</Link>
+          <span aria-hidden>&rsaquo;</span>
+          <span>{doc.title}</span>
         </nav>
 
         {/* Identity header — what this document is, which version, and as of when. */}
-        <header className="border-b border-rule pb-6">
-          <h1 className="text-h1 text-ink">{doc.title}</h1>
-          <p className="mt-3 text-body-lg text-ink-2">{doc.summary}</p>
-          <dl className="mt-5 flex flex-wrap gap-x-7 gap-y-3">
-            <div>
-              <dt className="text-label uppercase text-ink-4">Version</dt>
-              <dd className="tnum mt-1 text-body text-ink">{doc.version}</dd>
-            </div>
-            <div>
-              <dt className="text-label uppercase text-ink-4">Last updated</dt>
-              <dd className="tnum mt-1 text-body text-ink">{doc.updated}</dd>
-            </div>
-            <div>
-              <dt className="text-label uppercase text-ink-4">Issued by</dt>
-              <dd className="mt-1 text-body text-ink-2">{LEGAL_DISCLOSURE.legalName}</dd>
-            </div>
-          </dl>
-          {doc.reconsentOnChange ? (
-            <p className="mt-5 border-l-2 border-rule pl-4 text-body-sm text-ink-3">
-              This is one of three documents whose changes we intend to put in front of existing
-              customers to accept at their next sign-in. That mechanism is not running yet. Until it
-              is, the version and date above are how you can tell whether this is the document you
-              read last time.
-            </p>
-          ) : null}
-        </header>
+        <span className="lg-kicker tnum">Legal &middot; {doc.kicker ?? doc.title}</span>
+        <h1 className="lg-h1">{doc.title}</h1>
+        <p className="lg-lede">{doc.summary}</p>
 
-        <div className="mt-6 grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_212px]">
-          {/*
-            The measure is the grid column, not a `max-w` on the article: the
-            container above is sized so that this column lands at roughly 74
-            characters with the rail beside it. Constraining both would leave a
-            band of nothing between the prose and its own contents list.
-          */}
-          <article>
+        <dl className="lg-meta">
+          <div>
+            <dt>Version</dt>
+            <dd className="tnum">{doc.version}</dd>
+          </div>
+          <div>
+            <dt>Last updated</dt>
+            <dd className="tnum">{formatUpdated(doc.updated)}</dd>
+          </div>
+          <div>
+            <dt>Issued by</dt>
+            <dd>{LEGAL_DISCLOSURE.legalName}</dd>
+          </div>
+        </dl>
+        {doc.reconsentOnChange ? (
+          <p className="lg-note lg-reconsent">
+            This is one of three documents whose changes we intend to put in front of existing
+            customers to accept at their next sign-in. That mechanism is not running yet. Until it
+            is, the version and date above are how you can tell whether this is the document you
+            read last time.
+          </p>
+        ) : null}
+
+        <div className="lg-cols">
+          <main className="lg-doc">
             {doc.sections.map((section, i) => (
-              <section
-                key={section.id}
-                id={section.id}
-                className={i === 0 ? 'scroll-mt-6' : 'mt-8 scroll-mt-6'}
-              >
-                <h2 className="group text-h2 text-ink">
+              <section key={section.id} id={section.id}>
+                <h2>
+                  <span className="lg-no tnum" aria-hidden>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
                   {section.heading}
                   {/* The anchor. A clause somebody needs to cite must have a URL. */}
                   <a
                     href={`#${section.id}`}
                     aria-label={`Link to “${section.heading}”`}
-                    className="ml-2 text-ink-4 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                    className="lg-anchor"
                   >
                     #
                   </a>
                 </h2>
-                <div className="mt-3">{section.body}</div>
+                {section.body}
               </section>
             ))}
-          </article>
+          </main>
 
           {/* Contents, and the other nine. Sticky, so a long document keeps them. */}
-          <aside aria-labelledby="legal-nav" className="lg:sticky lg:top-5 lg:self-start">
-            <h2 id="legal-nav" className="text-label uppercase text-ink-4">
-              On this page
-            </h2>
-            <ul className="mt-3 flex flex-col gap-2 border-l border-rule">
-              {doc.sections.map((section) => (
-                <li key={section.id}>
-                  <a
-                    href={`#${section.id}`}
-                    className="-ml-px block border-l border-transparent pl-3 text-body-sm text-ink-3 hover:border-acc hover:text-ink"
-                  >
-                    {section.heading}
-                  </a>
-                </li>
-              ))}
-            </ul>
+          <aside className="lg-side" aria-labelledby="lg-nav">
+            <h3 id="lg-nav">On this page</h3>
+            <Toc sections={doc.sections} />
 
-            <h2 className="mt-6 text-label uppercase text-ink-4">Other documents</h2>
-            <ul className="mt-3 flex flex-col gap-2">
+            <h3>Other documents</h3>
+            <ul className="lg-docs">
               {others.map((other) => (
                 <li key={other.slug}>
-                  <Link
-                    href={`/legal/${other.slug}`}
-                    className="block text-body-sm text-ink-3 hover:text-ink hover:underline hover:underline-offset-4"
-                  >
-                    {other.title}
-                  </Link>
+                  <Link href={`/legal/${other.slug}`}>{other.title}</Link>
                 </li>
               ))}
             </ul>
           </aside>
         </div>
-      </main>
-    </>
+      </div>
+    </div>
   );
 }

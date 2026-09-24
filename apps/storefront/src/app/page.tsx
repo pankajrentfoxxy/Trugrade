@@ -166,12 +166,14 @@ export default async function HomePage({
         sentence about nothing.
       */}
 
-        {/* 6 — UTILITY STRIP: verify a certificate, and bulk requirement.
-          `.wrap.strip` is one box: the wrap centres it, the strip grid puts
-          the two cards side by side. A nested wrap used to be the only child
-          of the grid, so they stacked. */}
+        {/* 6 — UTILITY STRIP: verify a certificate.
+          The requirement-list card that used to sit beside it is gone; `/bulk`
+          is still reachable from the header and the footer. `id="verify"` is
+          what every "Verify a certificate" link in the chrome points at —
+          `/qc/verify` has no page of its own, only `/qc/verify/[code]`, so the
+          form here is the way in. */}
         <div className="wrap strip">
-          <section className="sbx">
+          <section className="sbx" id="verify">
             <div className="sbx-head">
               <span className="sbx-ic">
                 <span className="qr" role="img" aria-label="Certificate QR" />
@@ -190,38 +192,6 @@ export default async function HomePage({
               </label>
               <input id="cert" name="q" className="mono" placeholder="TG-CERT-… or serial" />
               <button type="submit">Verify</button>
-            </form>
-          </section>
-          <section className="sbx">
-            <div className="sbx-head">
-              <span className="sbx-ic">
-                {/* The requirement list itself: three ticked lines. */}
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M8 6h13M8 12h13M8 18h13" />
-                  <path d="m3.2 6 1 1 1.8-2M3.2 12l1 1 1.8-2M3.2 18l1 1 1.8-2" />
-                </svg>
-              </span>
-              <div>
-                <h3>Have a requirement list?</h3>
-                <p>
-                  Send the specification, quantity and grade. We tell you what is available now, at
-                  a landed price for your pincode, and source the rest.
-                </p>
-              </div>
-            </div>
-            <form className="qform" action="/bulk">
-              <label className="sr-only" htmlFor="req">
-                Requirement
-              </label>
-              <input id="req" name="q" placeholder="e.g. 40 × i5 / 16 GB / Grade A" />
-              <button type="submit">Start</button>
             </form>
           </section>
         </div>

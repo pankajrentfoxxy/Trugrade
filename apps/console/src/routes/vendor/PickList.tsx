@@ -26,7 +26,7 @@ type PickMachine = PickListModelGroup['machines'][number];
  *
  * **This is a physical document.** Somebody stands in a warehouse holding a
  * laptop in one hand and reads a serial off this screen with the other, then
- * compares a seal code to a sticker. So every identifier is IBM Plex Mono with
+ * compares a seal code to a sticker. So every identifier is set with
  * tabular figures and extra letter-spacing, the rows are tall enough to keep a
  * finger on, and the serial and the seal sit side by side because they are
  * checked as a pair.

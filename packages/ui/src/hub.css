@@ -270,33 +270,35 @@
 .hub-banner {
   display: flex;
   align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 13px 26px;
+  gap: 12px;
+  padding: 7px 26px;
   background: var(--warn-wash);
   border-bottom: 1px solid var(--warn-line);
 }
 
 .hub-banner__label {
-  font-size: 14.5px;
+  flex: none;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink);
 }
 
 .hub-banner__pill {
-  padding: 4px 14px;
-  border-radius: 14px;
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 10px;
   background: var(--warn);
   color: var(--acc-on);
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .hub-banner__track {
+  flex: none;
   display: block;
-  width: 220px;
-  height: 8px;
-  border-radius: 4px;
+  width: 140px;
+  height: 6px;
+  border-radius: 3px;
   background: var(--warn-track);
   overflow: hidden;
 }
@@ -308,22 +310,29 @@
   transition: width 0.35s cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* The message takes whatever is left so the strip stays one line; the button
+   never drops below it. */
 .hub-banner__next {
-  font-size: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
   color: var(--ink-2);
 }
 
 .hub-banner__cta {
+  flex: none;
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  height: 36px;
-  padding: 0 14px;
+  height: 28px;
+  padding: 0 12px;
   border-radius: var(--r);
   background: var(--acc);
   color: var(--acc-on);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .hub-banner__cta:hover {
@@ -352,8 +361,12 @@
 
 @media (max-width: 720px) {
   .hub-banner {
-    padding: 12px 18px;
-    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 18px;
+    gap: 8px 12px;
+  }
+  .hub-banner__next {
+    flex-basis: 100%;
   }
   .hub-banner__track {
     width: 100%;

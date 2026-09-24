@@ -340,7 +340,7 @@ export function NotMeasured({
 }): React.JSX.Element {
   return (
     // `font-sans` explicitly: `DataTable` puts a numeric column in mono and
-    // tabular figures, and these are words. A sentence in IBM Plex Mono in the
+    // tabular figures, and these are words. A sentence set as data in the
     // middle of a price column reads as data that failed to parse.
     <span className="whitespace-nowrap font-sans text-body-sm text-ink-4" title={why}>
       {label}

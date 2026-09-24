@@ -67,11 +67,11 @@ module.exports = {
         'brand-tint': v('brand-tint'),
       },
       fontFamily: {
-        sans: ['var(--font-sans)', 'Inter', 'system-ui', 'sans-serif'],
-        // Hindi keeps its own family; Inter has no Devanagari coverage.
-        deva: ['var(--font-deva)', 'IBM Plex Sans Devanagari', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
-        display: ['var(--font-display)', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)', 'Lato', 'system-ui', 'sans-serif'],
+        // Devanagari glyphs fall back to Plex Sans Devanagari; Lato has no coverage.
+        deva: ['var(--font-deva)', 'Lato', 'IBM Plex Sans Devanagari', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'Lato', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'Lato', 'system-ui', 'sans-serif'],
       },
       /**
        * Sized against a 14px base, not 16px. `body` is the base; `body-lg` is

@@ -179,9 +179,10 @@ describe('typography is an instrument, not a document', () => {
     expect(css).toMatch(/\.mono,\s*\n?\s*\.tnum\s*\{[^}]*tabular-nums/s);
   });
 
-  it('uses Inter and IBM Plex Mono, not the superseded faces', () => {
-    expect(css).toContain("'Inter'");
-    expect(css).toContain("'IBM Plex Mono'");
+  it('uses Lato everywhere, not the superseded faces', () => {
+    expect(css).toContain("'Lato'");
+    expect(css).not.toContain("'Inter'");
+    expect(css).not.toContain("'IBM Plex Mono'");
     expect(css).not.toContain('Instrument Sans');
   });
 });

@@ -57,16 +57,25 @@ const VARIANTS: SearchResult[] = [
 const here = { skuId: 'i5-16-512', grade: 'B' };
 
 describe('configChoices', () => {
-  it('draws a row for each dimension the model differs on, and none for one it does not', () => {
+  it('draws every row from the rows sealed AT THIS GRADE only', () => {
+    // At grade B the index holds the i5 in two memory/storage builds and no
+    // i7 — so memory and storage offer two pills and the processor row holds
+    // the one processor sealed at B.
     const choices = configChoices(VARIANTS, here);
-    expect(choices.map((c) => c.key)).toEqual(['cpu', 'ram', 'storage']);
-    // Same model held in one storage type only: no storage-type row is a
-    // storage row here because size differs; a model all at 512 GB gets none.
-    const uniform = configChoices(
-      VARIANTS.map((r) => ({ ...r, ramGb: 16, storageGb: 512 })),
-      here,
-    );
-    expect(uniform.map((c) => c.key)).toEqual(['cpu']);
+    expect(choices.map((c) => [c.key, c.options.length])).toEqual([
+      ['cpu', 1],
+      ['ram', 2],
+      ['storage', 2],
+    ]);
+    // At grade A the i5 and the i7 are both sealed, in one build each.
+    const atA = configChoices(VARIANTS, { skuId: 'i5-16-512', grade: 'A' });
+    expect(atA.map((c) => [c.key, c.options.length])).toEqual([
+      ['cpu', 2],
+      ['ram', 1],
+      ['storage', 1],
+    ]);
+    // A grade with nothing sealed at all gets no rows, not rows of nothing.
+    expect(configChoices(VARIANTS, { skuId: 'i5-16-512', grade: 'A_PLUS' })).toEqual([]);
   });
 
   it('leads to the sibling that changes only that one thing, at this grade where it exists', () => {
@@ -84,75 +93,71 @@ describe('configChoices', () => {
     });
   });
 
-  it('falls to another grade only when this grade has no such sibling, and says so', () => {
-    const cpu = configChoices(VARIANTS, here).find((c) => c.key === 'cpu')!;
-    const i7 = cpu.options.find((o) => o.value === 'Core i7-1185G7')!;
-    expect(i7).toMatchObject({ skuId: 'i7-16-512', grade: 'A' });
+  it('never offers a configuration sealed only at another grade', () => {
+    // The i7 exists only at grade A. On the grade B page it is not drawn —
+    // not greyed, not linked to grade A, simply absent: the grade row above
+    // is where a buyer changes grade.
     render(
       <ConfigPicker
         variants={VARIANTS}
-        catalogue={[]}
         current={here}
+        hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
+      />,
+    );
+    expect(screen.queryByText(/Core i7-1185G7/)).toBeNull();
+    // The processor row still stands, holding the one processor sealed at B.
+    const cpu = within(screen.getByTestId('config-cpu'));
+    expect(cpu.getAllByRole('link')).toHaveLength(1);
+    expect(cpu.getByRole('link', { name: /Core i5-1135G7/ })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('on the grade where it is sealed, opens it at that same grade', () => {
+    render(
+      <ConfigPicker
+        variants={VARIANTS}
+        current={{ skuId: 'i5-16-512', grade: 'A' }}
         hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
       />,
     );
     const link = screen.getByRole('link', { name: /Core i7-1185G7/ });
     expect(link).toHaveAttribute('href', '/laptops/i7-16-512?grade=A');
-    expect(link).toHaveTextContent('Grade A');
+    expect(link).not.toHaveAttribute('title');
   });
 
-  it('draws nothing for a model with one configuration', () => {
-    expect(configChoices([row({})], here)).toEqual([]);
-    const { container } = render(
-      <ConfigPicker variants={[row({})]} catalogue={[]} current={here} hrefFor={() => '/x'} />,
-    );
-    expect(container).toBeEmptyDOMElement();
+  it('draws each row with its one lit pill for a model with one configuration', () => {
+    // One build sealed: three rows, one pill each, all current. The rows say
+    // "this, only this" rather than disappearing.
+    const choices = configChoices([row({})], here);
+    expect(choices.map((c) => c.options.length)).toEqual([1, 1, 1]);
+    expect(choices.every((c) => c.options[0]!.current)).toBe(true);
+    render(<ConfigPicker variants={[row({})]} current={here} hrefFor={() => '/x'} />);
+    const links = screen.getAllByRole('link');
+    expect(links).toHaveLength(3);
+    for (const link of links) expect(link).toHaveAttribute('aria-current', 'true');
   });
 
-  it('draws a configuration the catalogue holds but nobody has sealed, greyed and not a link', () => {
-    // The catalogue declares a 32 GB build; the index has never seen one sealed.
-    const catalogue = [
-      { skuId: 'i5-16-512', cpuFamily: 'Core i5', cpuModel: 'i5-1135G7', ramGb: 16, storageGb: 512, storageType: 'NVME_SSD' },
-      { skuId: 'i5-32-512', cpuFamily: 'Core i5', cpuModel: 'i5-1135G7', ramGb: 32, storageGb: 512, storageType: 'NVME_SSD' },
-    ];
-    const ram = configChoices(VARIANTS, here, catalogue).find((c) => c.key === 'ram')!;
-    expect(ram.options.map((o) => o.value)).toEqual(['8', '16', '32']);
-    expect(ram.options.find((o) => o.value === '32')).toMatchObject({
-      skuId: 'i5-32-512',
-      available: false,
-      unitsAvailable: 0,
-    });
-    expect(ram.options.find((o) => o.value === '16')).toMatchObject({ available: true });
-
+  it('does not draw a configuration nothing is sealed at, at any grade', () => {
+    // The index holds no 32 GB row for this model at any grade — so there is
+    // no 32 GB pill. A switch that opened nothing at every grade is not drawn.
+    const ram = configChoices(VARIANTS, here).find((c) => c.key === 'ram')!;
+    expect(ram.options.map((o) => o.value)).toEqual(['8', '16']);
     render(
       <ConfigPicker
         variants={VARIANTS}
-        catalogue={catalogue}
         current={here}
         hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
       />,
     );
     const memory = within(screen.getByTestId('config-ram'));
-    expect(memory.queryByRole('link', { name: /32 GB RAM/ })).toBeNull();
-    const greyed = memory.getByText('32 GB RAM').closest('.gpill')!;
-    expect(greyed).toHaveAttribute('aria-disabled', 'true');
-    expect(greyed).toHaveTextContent('No units sealed');
-  });
-
-  it('only draws a row when the catalogue itself differs — one declared build is not a choice', () => {
-    const one = [
-      { skuId: 'i5-16-512', cpuFamily: 'Core i5', cpuModel: 'i5-1135G7', ramGb: 16, storageGb: 512, storageType: 'NVME_SSD' },
-    ];
-    // The index row must carry the line the shared helper builds, as a real
-    // search row does; the fixture's short form above is not what search says.
-    expect(configChoices([row({ cpuLine: 'Intel Core i5-1135G7' })], here, one)).toEqual([]);
+    expect(memory.queryByText(/32 GB RAM/)).toBeNull();
+    // Nothing greyed anywhere: every pill drawn is a link that opens a board.
+    expect(document.querySelectorAll('.gpill.off')).toHaveLength(0);
   });
 
   it('marks the configuration being viewed and counts what each pill opens', () => {
     render(
       <ConfigPicker
         variants={VARIANTS}
-        catalogue={[]}
         current={here}
         hrefFor={(s, g) => `/laptops/${s}?grade=${g}`}
       />,

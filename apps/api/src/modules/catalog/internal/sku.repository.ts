@@ -38,6 +38,8 @@ export interface SkuRow {
   osSupported: string;
   hsnCode: string;
   isActive: boolean;
+  /** The model's launch price, a decimal string, or null when the catalogue has none. */
+  msrpNewInr: string | null;
   brandName: string;
   seriesName: string;
   modelName: string;
@@ -103,6 +105,8 @@ interface RawSku {
   os_supported: string;
   hsn_code: string;
   is_active: boolean;
+  /** NUMERIC(14,2) arrives as a Decimal object, never a number. */
+  msrp_new_inr: { toString(): string } | null;
   brand_name: string;
   series_name: string;
   model_name: string;
@@ -130,6 +134,9 @@ function toRow(r: RawSku): SkuRow {
     osSupported: r.os_supported,
     hsnCode: r.hsn_code,
     isActive: r.is_active,
+    // A string, as every rupee figure leaves the API: money does not survive a
+    // round trip as a float.
+    msrpNewInr: r.msrp_new_inr === null ? null : r.msrp_new_inr.toString(),
     brandName: r.brand_name,
     seriesName: r.series_name,
     modelName: r.model_name,
@@ -180,7 +187,8 @@ export class SkuRepository {
              s.ram_gb, s.storage_gb, s.storage_type, s.gpu_type, s.gpu_model,
              s.screen_size_inch, s.resolution, s.is_touch, s.os_supported,
              s.hsn_code, s.is_active,
-             b.name AS brand_name, se.name AS series_name, m.name AS model_name
+             b.name AS brand_name, se.name AS series_name, m.name AS model_name,
+             m.msrp_new_inr
       FROM catalog.sku s
       JOIN catalog.model  m  ON m.id  = s.model_id
       JOIN catalog.series se ON se.id = m.series_id
@@ -196,7 +204,8 @@ export class SkuRepository {
              s.ram_gb, s.storage_gb, s.storage_type, s.gpu_type, s.gpu_model,
              s.screen_size_inch, s.resolution, s.is_touch, s.os_supported,
              s.hsn_code, s.is_active,
-             b.name AS brand_name, se.name AS series_name, m.name AS model_name
+             b.name AS brand_name, se.name AS series_name, m.name AS model_name,
+             m.msrp_new_inr
       FROM catalog.sku s
       JOIN catalog.model  m  ON m.id  = s.model_id
       JOIN catalog.series se ON se.id = m.series_id
@@ -246,7 +255,8 @@ export class SkuRepository {
              s.ram_gb, s.storage_gb, s.storage_type, s.gpu_type, s.gpu_model,
              s.screen_size_inch, s.resolution, s.is_touch, s.os_supported,
              s.hsn_code, s.is_active,
-             b.name AS brand_name, se.name AS series_name, m.name AS model_name
+             b.name AS brand_name, se.name AS series_name, m.name AS model_name,
+             m.msrp_new_inr
       FROM catalog.sku s
       JOIN catalog.model  m  ON m.id  = s.model_id
       JOIN catalog.series se ON se.id = m.series_id

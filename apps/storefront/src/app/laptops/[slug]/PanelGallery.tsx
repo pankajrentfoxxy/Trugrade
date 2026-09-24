@@ -84,8 +84,11 @@ export function PanelGallery({
   const count = frames.length;
   const current = frames[Math.min(index, Math.max(count - 1, 0))];
 
+  // Wraps: a press past the last frame goes back to the first and a press
+  // before the first goes to the last, so the arrows are never shut and the
+  // set reads as a loop the buyer can keep turning through.
   const step = (by: number): void => {
-    setIndex((i) => Math.min(count - 1, Math.max(0, i + by)));
+    setIndex((i) => (count === 0 ? 0 : (i + by + count) % count));
   };
 
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -150,7 +153,6 @@ export function PanelGallery({
               type="button"
               className="gal-ar l"
               aria-label="Previous frame"
-              disabled={index === 0}
               onClick={() => step(-1)}
             >
               &lsaquo;
@@ -159,7 +161,6 @@ export function PanelGallery({
               type="button"
               className="gal-ar r"
               aria-label="Next frame"
-              disabled={index === count - 1}
               onClick={() => step(1)}
             >
               &rsaquo;

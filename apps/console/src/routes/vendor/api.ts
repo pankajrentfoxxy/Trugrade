@@ -471,6 +471,18 @@ export interface Page<T> {
   pageSize: number;
 }
 
+/**
+ * `GET /vendor/listings/bulk-status` — every status present, zero-filled, so
+ * the board's tiles never have to decide what an absent key means.
+ */
+export interface ListingStatusBoard {
+  counts: Record<string, number>;
+  total: number;
+  units: Record<string, number>;
+  unitsTotal: number;
+  unitsOnSale: number;
+}
+
 /** Mirrors `SerialCsvReport` from the listing module's serial service. */
 export interface SerialCsvRow {
   /** The line in the VENDOR'S file, blank rows included in the count. */

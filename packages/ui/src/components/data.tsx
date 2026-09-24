@@ -51,6 +51,11 @@ export interface DataTableProps<Row> {
   skeletonRows?: number;
   /** Rendered in place of the rows when there are none. Pass an `EmptyState`. */
   empty?: React.ReactNode;
+  /**
+   * Extra classes for one row — a wash behind a row that needs the reader's
+   * attention. Never the only signal: the cell that explains why carries text.
+   */
+  rowClassName?: (row: Row) => string | undefined;
   stickyHeader?: boolean;
   className?: string;
   id?: string;
@@ -82,6 +87,7 @@ export function DataTable<Row>({
   loading = false,
   skeletonRows = 5,
   empty,
+  rowClassName,
   stickyHeader = false,
   className,
   id,
@@ -177,7 +183,10 @@ export function DataTable<Row>({
 
           {!loading &&
             rows.map((row) => (
-              <tr key={rowKey(row)} className="border-b border-rule-2 last:border-b-0">
+              <tr
+                key={rowKey(row)}
+                className={cn('border-b border-rule-2 last:border-b-0', rowClassName?.(row))}
+              >
                 {columns.map((column) => (
                   <td
                     key={column.key}

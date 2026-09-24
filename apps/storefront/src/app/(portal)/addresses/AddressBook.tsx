@@ -1,17 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import {
-  AddressCard,
-  Button,
-  EmptyState,
-  Input,
-  RecordHeader,
-  Skeleton,
-  StatusPill,
-  type Address,
-} from '@trugrade/ui';
+import { Drawer, EmptyState, Input, Skeleton, useToast } from '@trugrade/ui';
 import { normaliseMobile, normalisePincode } from '@trugrade/contracts';
+import { LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { PincodeLocalityFields } from '../../register/PincodeLocalityFields';
 import { STATES as STATE_OPTIONS } from '../../register/picklists';
 import { MOBILE_PREFIX, typeMobile } from '../../register/validation';
@@ -80,139 +72,181 @@ function Record({
   book: Book;
   onChanged: () => Promise<void>;
 }): React.JSX.Element {
+  const { session, profile } = usePortal();
+  // POST /account/addresses checks `ordering.order.create` — an ordering
+  // permission by design, because the spec names a procurer who holds no
+  // identity permission at all. An approver, a finance seat and a viewer hold
+  // none of it and used to open the form and be refused on save.
+  const canAdd = session.permissions.includes('ordering.order.create');
   const active = book.delivery.filter((a) => a.isActive);
   const retired = book.delivery.filter((a) => !a.isActive);
+  // One drawer at a time: adding and editing are the same panel with a
+  // different form in it, so opening one closes the other.
+  const [adding, setAdding] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const editing = book.delivery.find((a) => a.id === editingId && a.isActive) ?? null;
 
+  const openAdd = (): void => {
+    setEditingId(null);
+    setAdding(true);
+  };
   const startEdit = (id: string): void => {
+    setAdding(false);
     setEditingId(id);
   };
 
   return (
-    <>
-      <RecordHeader
-        title="Where we deliver, and who we bill"
-        // A title and a count. What a driver is shown is a consequence of the
-        // fields, and it is said beside them rather than 39 words up here.
-        subtitle="Delivery sites and the address we invoice"
-        identifiers={[
-          { label: 'Delivery sites', value: String(active.length) },
-          { label: 'Retired', value: String(retired.length) },
-          { label: 'Billing addresses', value: String(book.billing.length) },
-        ]}
-      />
+    <div className="ad">
+      <div className="ad-head">
+        <div>
+          <h1 className="ad-title">Addresses</h1>
+          <p className="ad-sub">
+            Where we deliver your machines, and the address we put on your invoices.
+          </p>
+        </div>
+        {canAdd ? (
+          <button type="button" className="ad-btn ad-btn--primary ad-btn--lg" onClick={openAdd}>
+            <PlusIcon size={18} />
+            Add delivery site
+          </button>
+        ) : null}
+      </div>
 
-      <div className="rec adrrec">
-        <main className="evid">
-          <section className="adrdelivery" aria-labelledby="delivery">
-            <div className="sh">
-              <div className="shrow">
-                <h2 id="delivery">Delivery sites</h2>
-                <span className="sub">
-                  {active.length === 0
-                    ? 'None yet'
-                    : `${active.length} in use · one is the default at checkout`}
-                </span>
-              </div>
-            </div>
+      <section className="ad-section" aria-labelledby="delivery" data-testid="delivery-sites">
+        <div className="ad-section__head">
+          <div>
+            <h2 id="delivery">
+              Delivery sites
+              <span className="ad-count mono">{active.length}</span>
+            </h2>
+            <p>
+              The default site is picked for you at checkout. Drivers see the site details on the
+              delivery day.
+            </p>
+          </div>
+          <span className="ad-retired-count">
+            {retired.length === 0
+              ? 'No retired sites'
+              : `${retired.length} retired site${retired.length === 1 ? '' : 's'} below`}
+          </span>
+        </div>
 
-            <AddSite
-              onAdded={onChanged}
-              first={active.length === 0}
-              blocked={editingId !== null}
-              onOpen={() => setEditingId(null)}
+        <div className="ad-grid">
+          {active.map((a) => (
+            <SiteCard
+              key={a.id}
+              address={a}
+              canRetire={active.length > 1}
+              onChanged={onChanged}
+              onEdit={() => startEdit(a.id)}
+              editing={editingId === a.id}
             />
-
-            {editing !== null && (
-              <EditSite
-                address={editing}
-                onClose={() => setEditingId(null)}
-                onSaved={async () => {
-                  setEditingId(null);
-                  await onChanged();
-                }}
-              />
-            )}
-
-            {active.length === 0 ? (
-              <div className="empty">
-                <h3>No delivery site yet</h3>
-                <p>
-                  Checkout needs somewhere to send machines to. Open <b>Add a delivery site</b>{' '}
-                  above — the contact and the gate instruction go straight to the driver, so the
-                  more exact they are, the fewer failed deliveries.
-                </p>
-              </div>
-            ) : (
-              <div className="adrgrid">
-                {active.map((a) => (
-                  <SiteCard
-                    key={a.id}
-                    address={a}
-                    canRetire={active.length > 1}
-                    onChanged={onChanged}
-                    onEdit={() => startEdit(a.id)}
-                    editing={editingId === a.id}
-                  />
-                ))}
-              </div>
-            )}
-
-            {retired.length > 0 && (
-              <details className="adrretired">
-                <summary>
-                  {retired.length} retired site{retired.length === 1 ? '' : 's'}
-                </summary>
-                <p className="fnote off">
-                  Nothing is deleted. Orders already delivered to these still name them, which is
-                  what keeps an old invoice readable.
-                </p>
-                <div className="adrgrid">
-                  {retired.map((a) => (
-                    <SiteCard
-                      key={a.id}
-                      address={a}
-                      canRetire={false}
-                      onChanged={onChanged}
-                      onEdit={() => undefined}
-                      editing={false}
-                    />
-                  ))}
-                </div>
-              </details>
-            )}
-          </section>
-
-          <section aria-labelledby="billing">
-            <div className="sh">
-              <div className="shrow">
-                <h2 id="billing">Billing</h2>
-                <span className="sub">Bound to your GST registration</span>
-              </div>
+          ))}
+          {canAdd ? (
+            <button type="button" className="ad-add" onClick={openAdd}>
+              <span className="ad-add__icon">
+                <PlusIcon size={22} />
+              </span>
+              <span className="ad-add__title">
+                {active.length === 0 ? 'Add your first delivery site' : 'Add a delivery site'}
+              </span>
+              <span className="ad-add__meta">
+                {active.length === 0
+                  ? 'Checkout needs somewhere to send machines to. The contact and the gate instruction go straight to the driver.'
+                  : 'An office, warehouse or branch where machines should arrive.'}
+              </span>
+            </button>
+          ) : active.length === 0 ? (
+            <div className="ad-add ad-add--static">
+              <span className="ad-add__title">No delivery site yet</span>
+              <span className="ad-add__meta">
+                Checkout needs somewhere to send machines to. Someone on your account who places
+                orders can add one.
+              </span>
             </div>
+          ) : null}
+        </div>
 
-            {book.billing.length === 0 ? (
-              <p className="fnote off">
+        {retired.length > 0 && (
+          <details className="ad-retired">
+            <summary>
+              {retired.length} retired site{retired.length === 1 ? '' : 's'}
+            </summary>
+            <p className="ad-retired__note">
+              Nothing is deleted. Orders already delivered to these still name them, which is what
+              keeps an old invoice readable.
+            </p>
+            <div className="ad-grid">
+              {retired.map((a) => (
+                <SiteCard
+                  key={a.id}
+                  address={a}
+                  canRetire={false}
+                  onChanged={onChanged}
+                  onEdit={() => undefined}
+                  editing={false}
+                />
+              ))}
+            </div>
+          </details>
+        )}
+      </section>
+
+      <section className="ad-section" aria-labelledby="billing">
+        <div className="ad-section__head">
+          <div>
+            <h2 id="billing">Billing address</h2>
+            <p>Printed on every invoice. It comes from your GST registration.</p>
+          </div>
+        </div>
+
+        {book.billing.length === 0 ? (
+          <div className="ad-bill">
+            <div className="ad-bill__main">
+              <p className="ad-bill__name">{profile?.legalName ?? 'Your organisation'}</p>
+              <GstinLine gstin={profile?.gstin ?? null} />
+              <p className="ad-addr ad-addr--absent">
                 Invoices go to the registered address on your GST certificate.
               </p>
-            ) : (
-              <div className="adrgrid">
-                {book.billing.map((a) => (
-                  <div className="adrcard locked" key={a.id}>
-                    <AddressCard
-                      address={asAddress(a)}
-                      badge={<StatusPill tone="neutral" label="On your invoices" />}
-                    />
-                    <p className="adrlock">{a.lockedReason}</p>
-                  </div>
-                ))}
+            </div>
+            <ChangeAside />
+          </div>
+        ) : (
+          book.billing.map((a) => (
+            <div className="ad-bill" key={a.id} data-testid="billing-address">
+              <div className="ad-bill__main">
+                <p className="ad-bill__name">{profile?.legalName ?? a.label ?? 'Billing address'}</p>
+                <GstinLine gstin={profile?.gstin ?? null} />
+                <AddressLines address={a} />
+                <ContactLine address={a} />
               </div>
-            )}
-          </section>
-        </main>
-      </div>
-    </>
+              <ChangeAside reason={a.lockedReason} />
+            </div>
+          ))
+        )}
+      </section>
+
+      {canAdd ? (
+        <AddSite
+          open={adding}
+          first={active.length === 0}
+          onClose={() => setAdding(false)}
+          onAdded={async () => {
+            setAdding(false);
+            await onChanged();
+          }}
+        />
+      ) : null}
+
+      <EditSite
+        address={editing}
+        onClose={() => setEditingId(null)}
+        onSaved={async () => {
+          setEditingId(null);
+          await onChanged();
+        }}
+      />
+    </div>
   );
 }
 
@@ -255,89 +289,299 @@ function SiteCard({
     else setFailure(result.message);
   };
 
+  const classes = ['ad-card'];
+  if (address.isDefault && address.isActive) classes.push('ad-card--default');
+  if (!address.isActive) classes.push('ad-card--off');
+
+  /**
+   * "Add" only where there is a field behind it and a person who may fill it.
+   * Receiving hours have no column, so they are "Not recorded" for everyone —
+   * a link that opened a form with no such field would be a promise the
+   * schema cannot keep.
+   */
+  const addLink = (label: string): React.ReactNode =>
+    canEdit && address.isActive ? (
+      <button type="button" className="ad-kv__add" onClick={onEdit} aria-label={`Add ${label}`}>
+        Add
+      </button>
+    ) : (
+      <span className="ad-kv__absent">Not recorded</span>
+    );
+
   return (
-    <div
-      className={address.isActive ? 'adrcard' : 'adrcard off'}
-      data-editing={editing || undefined}
-    >
-      <AddressCard
-        className="adrcard-panel"
-        address={asAddress(address)}
-        badge={
-          address.isDefault ? (
-            // An active state, which is one of the three things amber means.
-            <StatusPill tone="info" label="Default at checkout" />
+    <article className={classes.join(' ')} data-editing={editing || undefined}>
+      <div className="ad-card__top">
+        <h3 className="ad-card__name">
+          {address.label ?? `${address.city} site`}
+          {address.isDefault && address.isActive ? (
+            // An active state, which is one of the three things the accent means.
+            <span className="ad-badge">
+              <CheckIcon />
+              Default
+            </span>
           ) : !address.isActive ? (
-            <StatusPill tone="neutral" label="Retired" />
-          ) : undefined
-        }
-        actions={
-          address.isActive ? (
-            <>
-              {canEdit ? (
-                <Button variant="secondary" size="sm" disabled={busy} onClick={onEdit}>
-                  Edit
-                </Button>
-              ) : null}
-              {!address.isDefault && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={busy}
-                  onClick={() => void patch({ isDefault: true })}
-                >
-                  Make this the default
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={busy}
-                {...(canRetire
-                  ? {}
-                  : {
-                      disabledReason:
-                        'This is your only delivery site, and checkout needs one. Add another first.',
-                    })}
-                onClick={() => {
-                  // `disabledReason` leaves the button focusable and therefore
-                  // clickable on purpose, so the guard is here as well as printed.
-                  if (!canRetire) return;
-                  void patch({ isActive: false });
-                }}
-              >
-                Retire this site
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={busy}
-              onClick={() => void patch({ isActive: true })}
-            >
-              Put it back in use
-            </Button>
-          )
-        }
-      />
+            <span className="ad-badge ad-badge--off">Retired</span>
+          ) : null}
+        </h3>
+        <AddressLines address={address} />
+        <ContactLine address={address} />
+      </div>
+
+      <div className="ad-driver">
+        <div className="ad-driver__label">For the driver</div>
+        <dl className="ad-kv">
+          <div>
+            <dt>Receiving hours</dt>
+            <dd>
+              <span className="ad-kv__absent">Not recorded</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Gate instructions</dt>
+            <dd>{address.gateInstructions ?? addLink('gate instructions')}</dd>
+          </div>
+          <div>
+            <dt>Landmark</dt>
+            <dd>{address.landmark ?? addLink('a landmark')}</dd>
+          </div>
+        </dl>
+      </div>
+
       {!canRetire && address.isActive && (
-        <p className="adrnote">
-          This is your only delivery site. Checkout needs one, so it cannot be retired until there
-          is another.
+        <p className="ad-warn" role="note">
+          <InfoIcon />
+          <span>
+            <strong>Your only delivery site.</strong> Checkout needs one, so it cannot be retired
+            until there is another.
+          </span>
         </p>
       )}
       {failure !== null && (
-        <p className="adrfail" role="alert">
+        <p className="ad-fail" role="alert">
           {failure}
         </p>
       )}
-    </div>
+
+      <div className="ad-card__actions">
+        {address.isActive ? (
+          <>
+            {canEdit ? (
+              <button type="button" className="ad-link-btn" disabled={busy} onClick={onEdit}>
+                Edit
+              </button>
+            ) : null}
+            {!address.isDefault && (
+              <button
+                type="button"
+                className="ad-link-btn ad-link-btn--muted"
+                disabled={busy}
+                onClick={() => void patch({ isDefault: true })}
+              >
+                Make default
+              </button>
+            )}
+            <span className="spacer" />
+            <button
+              type="button"
+              className="ad-link-btn ad-link-btn--danger"
+              disabled={busy}
+              // Focusable and clickable on purpose, so the reason above is read
+              // rather than guessed at; the guard is here as well as printed.
+              aria-disabled={!canRetire || undefined}
+              onClick={() => {
+                if (!canRetire) return;
+                void patch({ isActive: false });
+              }}
+            >
+              Retire
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="ad-link-btn"
+            disabled={busy}
+            onClick={() => void patch({ isActive: true })}
+          >
+            Put it back in use
+          </button>
+        )}
+      </div>
+    </article>
   );
 }
 
 /* ==========================================================================
- * Adding one — the screen's single primary action
+ * The pieces a card and the billing block share
+ * ======================================================================== */
+
+function AddressLines({ address }: { address: OrgAddress }): React.JSX.Element {
+  return (
+    <address className="ad-addr">
+      {address.line1}
+      {address.line2 ? `, ${address.line2}` : null}
+      <br />
+      {address.city}, {address.state} <span className="mono">{address.pincode}</span>
+    </address>
+  );
+}
+
+/** `+91XXXXXXXXXX`, the normalised form the column holds, printed the way people read it. */
+function formatMobile(e164: string): string {
+  const m = /^\+91(\d{5})(\d{5})$/.exec(e164);
+  return m ? `+91 ${m[1]} ${m[2]}` : e164;
+}
+
+function ContactLine({ address }: { address: OrgAddress }): React.JSX.Element {
+  return (
+    <div className="ad-contact">
+      <PersonIcon />
+      <span>
+        {address.contactName} ·{' '}
+        <a href={`tel:${address.contactMobile}`} className="mono">
+          {formatMobile(address.contactMobile)}
+        </a>
+      </span>
+    </div>
+  );
+}
+
+/** The GSTIN the invoice is raised under, or the honest absence of one. */
+function GstinLine({ gstin }: { gstin: string | null }): React.JSX.Element {
+  return (
+    <div className="ad-gstin">
+      {gstin ? (
+        <span className="mono">{gstin}</span>
+      ) : (
+        <span className="ad-kv__absent">GSTIN not verified yet</span>
+      )}
+      <span className="ad-lock">
+        <LockIcon />
+        GSTIN
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Why the billing address is read-only, and the one route to changing it.
+ * There is no self-serve change request yet, so the route is customer care
+ * with the updated certificate — and the panel says that, rather than showing
+ * a button to a flow that does not exist.
+ */
+function ChangeAside({ reason }: { reason?: string | null }): React.JSX.Element {
+  return (
+    <div className="ad-bill__side">
+      <h3>Need to change this?</h3>
+      <p>
+        {reason ??
+          'We cannot edit it here, because it must match your GST registration. Send us your updated GST certificate and we will update it for you.'}
+      </p>
+      <a
+        className="ad-btn"
+        href={`mailto:${LEGAL_DISCLOSURE.customerCare.email}?subject=${encodeURIComponent('Billing address change')}`}
+      >
+        Email customer care
+      </a>
+    </div>
+  );
+}
+
+function PlusIcon({ size }: { size: number }): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function CheckIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12l5 5 9-10" />
+    </svg>
+  );
+}
+
+function PersonIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
+    </svg>
+  );
+}
+
+function InfoIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5" />
+      <path d="M12 16.5v.01" />
+    </svg>
+  );
+}
+
+function LockIcon(): React.JSX.Element {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+/* ==========================================================================
+ * Adding and editing one — the drawer forms
  * ======================================================================== */
 
 const BLANK: NewAddress = {
@@ -507,35 +751,90 @@ function SiteFormFields({
   );
 }
 
-function AddSite({
-  onAdded,
-  first,
-  blocked,
-  onOpen,
+/**
+ * The drawer both forms open in. The same `Drawer` every board's record panel
+ * uses — a `<dialog showModal()>` pinned right, full-height, full-width on a
+ * phone — with the actions pinned to its foot, where a long form cannot bury
+ * them. The submit sits in the foot and reaches the form through `form=`,
+ * so pressing Enter in a field and pressing Save do the same thing.
+ */
+function SiteDrawer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  formId,
+  busy,
+  saveLabel,
+  children,
 }: {
-  onAdded: () => Promise<void>;
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle: string;
+  formId: string;
+  busy: boolean;
+  saveLabel: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={title}
+      subtitle={subtitle}
+      size="md"
+      className="ad-drawer"
+      footer={
+        <>
+          <span className="spacer" />
+          <button type="button" className="ad-btn" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            className="ad-btn ad-btn--primary"
+            disabled={busy}
+            aria-busy={busy || undefined}
+          >
+            {busy ? 'Saving…' : saveLabel}
+          </button>
+        </>
+      }
+    >
+      {children}
+    </Drawer>
+  );
+}
+
+function AddSite({
+  open,
+  first,
+  onClose,
+  onAdded,
+}: {
+  open: boolean;
   first: boolean;
-  blocked: boolean;
-  onOpen: () => void;
-}): React.JSX.Element | null {
-  // POST /account/addresses checks `ordering.order.create` — an ordering
-  // permission by design, because the spec names a procurer who holds no
-  // identity permission at all. An approver, a finance seat and a viewer hold
-  // none of it and used to open this form and be refused on save.
-  const { session } = usePortal();
-  if (!session.permissions.includes('ordering.order.create')) return null;
-  const [open, setOpen] = React.useState(first);
+  onClose: () => void;
+  onAdded: () => Promise<void>;
+}): React.JSX.Element {
+  const formId = React.useId();
+  const toast = useToast();
   const [form, setForm] = React.useState<NewAddress>(BLANK);
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   const [fields, setFields] = React.useState<Record<string, string>>({});
-  const [saved, setSaved] = React.useState<string | null>(null);
 
-  const title = first ? 'Add your first delivery site' : 'Add a delivery site';
-
+  // A drawer that reopens shows a fresh form, not the half-typed one that was
+  // cancelled — cancelling is "forget this", and a stale draft says otherwise.
   React.useEffect(() => {
-    if (blocked) setOpen(false);
-  }, [blocked]);
+    if (!open) {
+      setForm(BLANK);
+      setFields({});
+      setFailure(null);
+    }
+  }, [open]);
 
   // Once a save has been refused, every edit re-runs the check, so a message
   // leaves the moment its field is fixed rather than waiting for the next save.
@@ -558,10 +857,11 @@ function AddSite({
     setBusy(false);
 
     if (result.ok) {
-      setSaved(result.data.label ?? result.data.city);
-      setForm(BLANK);
-      setFields({});
-      setOpen(false);
+      toast({
+        tone: 'success',
+        title: `${result.data.label ?? result.data.city} is on your account`,
+        body: 'It can be chosen at checkout from now on.',
+      });
       await onAdded();
     } else {
       setFailure(result.message);
@@ -570,38 +870,25 @@ function AddSite({
   };
 
   return (
-    <details
-      className="adradd"
-      open={open && !blocked}
-      onToggle={(e) => {
-        const next = (e.target as HTMLDetailsElement).open;
-        setOpen(next);
-        if (next) onOpen();
-      }}
+    <SiteDrawer
+      open={open}
+      onClose={onClose}
+      title={first ? 'Add your first delivery site' : 'Add a delivery site'}
+      subtitle="The driver is shown the contact and the gate instruction on the day."
+      formId={formId}
+      busy={busy}
+      saveLabel="Save site"
     >
-      <summary>{title}</summary>
-      <div className="adradd-body">
-        <p className="adradd-note">The driver is shown these on the day.</p>
-        <form className="adrform" onSubmit={(e) => void submit(e)} noValidate>
-          {saved !== null && (
-            <p className="adrok" role="status">
-              <b>{saved}</b> is on your account and can be chosen at checkout.
-            </p>
-          )}
-          {failure !== null && (
-            <p className="adrfail" role="alert">
-              {failure}
-            </p>
-          )}
+      <form id={formId} className="adrform" onSubmit={(e) => void submit(e)} noValidate>
+        {failure !== null && (
+          <p className="adrfail" role="alert">
+            {failure}
+          </p>
+        )}
 
-          <SiteFormFields form={form} set={set} patch={patch} fields={fields} />
-
-          <Button type="submit" variant="primary" block loading={busy}>
-            Save this site
-          </Button>
-        </form>
-      </div>
-    </details>
+        <SiteFormFields form={form} set={set} patch={patch} fields={fields} />
+      </form>
+    </SiteDrawer>
   );
 }
 
@@ -610,28 +897,27 @@ function EditSite({
   onClose,
   onSaved,
 }: {
-  address: OrgAddress;
+  /** Null closes the drawer. The last address stays mounted so it can slide out. */
+  address: OrgAddress | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }): React.JSX.Element {
-  const [form, setForm] = React.useState<NewAddress>(() => orgToForm(address));
+  const formId = React.useId();
+  const [form, setForm] = React.useState<NewAddress>(() =>
+    address ? orgToForm(address) : BLANK,
+  );
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   const [fields, setFields] = React.useState<Record<string, string>>({});
-  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [last, setLast] = React.useState<OrgAddress | null>(address);
 
   React.useEffect(() => {
+    if (!address) return;
+    setLast(address);
     setForm(orgToForm(address));
     setFields({});
     setFailure(null);
   }, [address]);
-
-  React.useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [address.id]);
 
   // Once a save has been refused, every edit re-runs the check, so a message
   // leaves the moment its field is fixed rather than waiting for the next save.
@@ -644,13 +930,15 @@ function EditSite({
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
+    const target = address ?? last;
+    if (!target) return;
     const problems = validateSiteForm(form);
     setFields(problems);
     if (Object.keys(problems).length > 0) return;
 
     setBusy(true);
     setFailure(null);
-    const result = await updateAddress(address.id, sitePayload(form));
+    const result = await updateAddress(target.id, sitePayload(form));
     setBusy(false);
 
     if (result.ok) await onSaved();
@@ -660,21 +948,20 @@ function EditSite({
     }
   };
 
-  const label = address.label ?? address.city;
+  const shown = address ?? last;
+  const label = shown ? (shown.label ?? shown.city) : '';
 
   return (
-    <div ref={panelRef} className="adradd-body adredit">
-      <div className="adredit-head">
-        <h3>Edit {label}</h3>
-        <button type="button" className="adredit-close" onClick={onClose}>
-          Cancel
-        </button>
-      </div>
-      <p className="adradd-note">
-        Changes here are what the driver sees on the next delivery to this site. Orders already
-        placed keep the address they were raised with.
-      </p>
-      <form className="adrform" onSubmit={(e) => void submit(e)} noValidate>
+    <SiteDrawer
+      open={address !== null}
+      onClose={onClose}
+      title={`Edit ${label}`}
+      subtitle="Changes here are what the driver sees on the next delivery. Orders already placed keep the address they were raised with."
+      formId={formId}
+      busy={busy}
+      saveLabel="Save changes"
+    >
+      <form id={formId} className="adrform" onSubmit={(e) => void submit(e)} noValidate>
         {failure !== null && (
           <p className="adrfail" role="alert">
             {failure}
@@ -682,45 +969,14 @@ function EditSite({
         )}
 
         <SiteFormFields form={form} set={set} patch={patch} fields={fields} />
-
-        <div className="adrform-actions">
-          <Button type="button" variant="ghost" block disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" block loading={busy}>
-            Save changes
-          </Button>
-        </div>
       </form>
-    </div>
+    </SiteDrawer>
   );
 }
 
 /* ==========================================================================
  * Bits
  * ======================================================================== */
-
-/**
- * `OrgAddress` in `AddressCard`'s vocabulary.
- *
- * A field we do not hold is left off rather than passed as an empty string, so
- * the card prints its own "Not provided" in `--ink-4`. Receiving hours are never
- * passed at all, because there is no column behind them.
- */
-function asAddress(a: OrgAddress): Address {
-  return {
-    label: a.label ?? `${a.city} site`,
-    line1: a.line1,
-    ...(a.line2 ? { line2: a.line2 } : {}),
-    city: a.city,
-    state: a.state,
-    pincode: a.pincode,
-    ...(a.landmark ? { landmark: a.landmark } : {}),
-    contactName: a.contactName,
-    contactMobile: a.contactMobile,
-    ...(a.gateInstructions ? { gateInstructions: a.gateInstructions } : {}),
-  };
-}
 
 function BookSkeleton(): React.JSX.Element {
   return (

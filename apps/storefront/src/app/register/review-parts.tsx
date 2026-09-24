@@ -30,7 +30,7 @@ export interface Row {
   /** Empty or undefined renders as "Not provided", never as blank. */
   value?: string;
   required?: boolean;
-  /** Rendered in IBM Plex Mono: a GSTIN, a PAN, a number, a code. */
+  /** Rendered with tabular figures: a GSTIN, a PAN, a number, a code. */
   mono?: boolean;
 }
 

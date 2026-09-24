@@ -41,7 +41,7 @@ import {
  * renders, not an error — and because the hold is a live deadline that has to
  * tick.
  *
- * The screen is drawn in the supplied checkout design's language — Archivo,
+ * The screen is drawn in the supplied checkout design's language — its type,
  * the promo amber, 14–16px radii — on the product's own surfaces. Every class
  * below is `ck-*` and lives in `storefront.css`; the palette is the `.ck` block
  * there, which maps the design's cream onto `--sheet` / `--ink` so the page

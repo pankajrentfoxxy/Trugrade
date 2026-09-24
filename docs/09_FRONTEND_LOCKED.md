@@ -16,7 +16,7 @@ Reference implementation: the published homepage artifact. Build against it, not
 | Default theme | **Dark** |
 | Themes | Dark and light, user-toggleable, persisted |
 | Accent | Amber `#FFB627` |
-| Typefaces | **Inter** (UI) + **IBM Plex Mono** (all data) |
+| Typefaces | **Lato** everywhere (UI and data); numbers keep `tabular-nums` |
 | Header / footer | Dark in **both** themes - brand identity is constant |
 | Catalogue scope | **Laptops only.** Desktops, monitors and parts are marked SOON |
 | Motif set | Viewfinder brackets, scan line, barcode, tick rules, grid ground, live blip, QR |
@@ -74,8 +74,8 @@ Reference implementation: the published homepage artifact. Build against it, not
 
 | Role | Face | Notes |
 |---|---|---|
-| UI, headings, body | **Inter** 400/500/600/700 | `letter-spacing:-.022em` on headings |
-| **All data** | **IBM Plex Mono** 400/500/600/700 | `font-variant-numeric:tabular-nums` |
+| UI, headings, body | **Lato** 400/700/900 | `letter-spacing:-.022em` on headings |
+| **All data** | **Lato** 400/700 | `font-variant-numeric:tabular-nums` |
 
 **Everything numeric or identifying is monospace, always:** prices, serials, service tags, certificate IDs, seal codes, QC scores, percentages, unit counts, filter counts, timings, HSN codes, GSTINs. This is not stylistic - it is what makes a column of ten prices scannable, and it is half of why the interface reads as an instrument.
 
@@ -130,7 +130,7 @@ Six devices. All functional; none decorative. Reuse them, do not invent new ones
 
 ## 6. Filter rail - the specification
 
-Sticky, `262px`, its own scroll, `max-height:calc(100vh - 24px)`.
+Sticky below the pinned header (`top:calc(var(--head-h) + 12px)`), `262px`, its own scroll, `max-height:calc(100vh - var(--head-h) - 24px)`.
 
 **Structure, in this order:**
 1. **Header** - "Filters", applied count, "Clear all"
@@ -235,7 +235,7 @@ Then the prompt in `PHASE_00_01_RETROFIT_ADDENDUM.md`.
 `PHASE_00_01_RETROFIT.md` Change 2 specified the earlier warm-paper "Anodised" palette with Instrument Sans. **That is superseded.** Apply instead:
 
 - Tokens from §2 of this file, both themes
-- **Inter + IBM Plex Mono**, not Instrument Sans + IBM Plex Sans
+- **Lato** everywhere, not Inter + IBM Plex Mono (superseded September 2026) and not Instrument Sans + IBM Plex Sans
 - Base font size **14px**, not 16px
 - Radii **3/4/5/7/9**, not 3/5/7/10/14
 - Add the seven QC motif utilities from §4 to `packages/ui`

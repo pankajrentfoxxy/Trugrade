@@ -79,10 +79,11 @@ export function AuthButtons({
               </a>
             </div>
             {/* A plain anchor, not `Link`: `/qc/verify` has no page component —
-                only `/qc/verify/[code]` — so typed routes reject it. Carried
-                over from the utility strip exactly as it stood there, target
-                included, rather than quietly repointed at something else. */}
-            <a className="usermenu-item" href="/qc/verify">
+                only `/qc/verify/[code]` — so the link lands on the verify card
+                on the home page, which is the form that reaches it. From the
+                home page itself this is a scroll; from anywhere else it is a
+                navigation and then the scroll. */}
+            <a className="usermenu-item" href="/#verify">
               Verify a certificate
             </a>
             <Link className="usermenu-item" href="/orders">

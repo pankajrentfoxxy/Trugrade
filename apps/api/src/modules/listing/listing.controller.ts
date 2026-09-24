@@ -236,22 +236,37 @@ export class ListingController {
    */
   @Get('bulk-status')
   @RequirePermissions('listing.own.read')
-  async bulkStatusBoard(): Promise<{ counts: Record<string, number>; total: number }> {
+  async bulkStatusBoard(): Promise<{
+    counts: Record<string, number>;
+    total: number;
+    /** Machines behind each status, so a tile can say "5 drafts · 18 units". */
+    units: Record<string, number>;
+    unitsTotal: number;
+    /** What a buyer can order right now — the board's "on sale" figure. */
+    unitsOnSale: number;
+  }> {
     const rows = await this.prisma.db.listing.groupBy({
       by: ['status'],
       where: this.mine({}),
       _count: { _all: true },
+      _sum: { qty_total: true, qty_available: true },
     });
 
     const counts: Record<string, number> = Object.fromEntries(
       listingStatusSchema.options.map((s) => [s, 0]),
     );
+    const units: Record<string, number> = { ...counts };
     let total = 0;
+    let unitsTotal = 0;
+    let unitsOnSale = 0;
     for (const row of rows) {
       counts[row.status] = row._count._all;
+      units[row.status] = row._sum.qty_total ?? 0;
       total += row._count._all;
+      unitsTotal += row._sum.qty_total ?? 0;
+      unitsOnSale += row._sum.qty_available ?? 0;
     }
-    return { counts, total };
+    return { counts, total, units, unitsTotal, unitsOnSale };
   }
 
   /**
