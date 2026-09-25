@@ -31,6 +31,24 @@
   background: var(--pass-wash);
 }
 
+/*
+ * A locked card is drawn as not yet in play — dashed rule, no shadow, and its
+ * number in a plain box rather than the accent wash. The text stays at full
+ * ink: the card must still be read to learn what opens it. The background
+ * stays the plain sheet, because the secondary button on it is `--sheet-2`
+ * and would vanish into a recessed card, leaving a bare faded word.
+ */
+.profile-hub-card[data-locked='true'] {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.profile-hub-card[data-locked='true'] .profile-hub-icon {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+
 .profile-hub-card-head {
   display: flex;
   align-items: flex-start;

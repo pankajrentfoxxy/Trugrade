@@ -11,7 +11,9 @@ import {
   PROFILE_SECTIONS,
   sectionBlockingReason,
   sectionIsDone,
+  sectionIsLocked,
   sectionSummary,
+  sectionUnlockedBy,
   type ProfileSectionId,
 } from './sections.config';
 
@@ -116,11 +118,19 @@ export function ProfileHub(): React.JSX.Element {
         {PROFILE_SECTIONS.map((section, index) => {
           const done = sectionIsDone(section, onboarding, session);
           const sentBack = sectionBlockingReason(section, onboarding);
+          // The cards open one after another. A locked card still says what it
+          // is for and which card opens it; only its button is held back.
+          const locked = onboarding.editable && sectionIsLocked(section, onboarding, session);
+          const unlockedBy = locked ? sectionUnlockedBy(section, onboarding, session) : null;
+          const lockReason = unlockedBy
+            ? `Save the ${unlockedBy.title} card first. This card opens after it.`
+            : null;
           return (
             <article
               key={section.id}
               className="profile-hub-card"
               data-done={done ? 'true' : 'false'}
+              data-locked={locked ? 'true' : 'false'}
             >
               <div className="profile-hub-card-head">
                 <span className="profile-hub-icon">{done ? '✓' : index + 1}</span>
@@ -132,20 +142,25 @@ export function ProfileHub(): React.JSX.Element {
                   <StatusPill tone="warn" label="Sent back" />
                 ) : done ? (
                   <StatusPill tone="pass" label="Done" />
+                ) : locked ? (
+                  <StatusPill tone="neutral" label="Locked" />
                 ) : (
                   <StatusPill tone="neutral" label="Required" />
                 )}
               </div>
               <p className="profile-hub-summary">
-                {sentBack ?? sectionSummary(section, onboarding, session)}
+                {sentBack ?? lockReason ?? sectionSummary(section, onboarding, session)}
               </p>
               {onboarding.editable ? (
+                // One primary action per screen: the first open card. Locked cards
+                // keep a reachable, reason-disabled button rather than none.
                 <Button
                   className="profile-hub-action"
-                  variant={done ? 'secondary' : 'primary'}
+                  variant={done || locked ? 'secondary' : 'primary'}
+                  disabledReason={lockReason ?? undefined}
                   onClick={() => setOpen(section.id)}
                 >
-                  {done ? 'Edit' : 'Fill now'}
+                  {done ? 'Edit' : locked ? 'Locked' : 'Fill now'}
                 </Button>
               ) : (
                 // Locked is not hidden. A verified buyer could see one line of

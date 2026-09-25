@@ -101,6 +101,39 @@ export function profileCompletionPct(
   return Math.min(100, earned);
 }
 
+/**
+ * The cards open in order: a card is locked until every card before it is
+ * done, and unlocks the moment the one before it saves.
+ *
+ * The order is the order of `PROFILE_SECTIONS`, which is the order the flow
+ * already walks — Account, then Tax and billing, then Delivery, then
+ * Preferences. A card that is itself done is never locked, so nothing a buyer
+ * has saved becomes unreachable if an earlier card is later sent back.
+ */
+export function sectionIsLocked(
+  section: ProfileSectionDef,
+  onboarding: ResumableOnboarding | null,
+  session: SessionView | null,
+): boolean {
+  if (sectionIsDone(section, onboarding, session)) return false;
+  const index = PROFILE_SECTIONS.findIndex((s) => s.id === section.id);
+  return PROFILE_SECTIONS.slice(0, index).some((s) => !sectionIsDone(s, onboarding, session));
+}
+
+/**
+ * The first unfinished card before this one — the card a buyer must save
+ * next for this one to open. Null when this card is not locked.
+ */
+export function sectionUnlockedBy(
+  section: ProfileSectionDef,
+  onboarding: ResumableOnboarding | null,
+  session: SessionView | null,
+): ProfileSectionDef | null {
+  if (!sectionIsLocked(section, onboarding, session)) return null;
+  const index = PROFILE_SECTIONS.findIndex((s) => s.id === section.id);
+  return PROFILE_SECTIONS.slice(0, index).find((s) => !sectionIsDone(s, onboarding, session)) ?? null;
+}
+
 export function nextIncompleteSection(
   after: ProfileSectionId | null,
   onboarding: ResumableOnboarding | null,

@@ -20,11 +20,13 @@ import { PROFILE_SECTIONS, sectionBlockingReason, type ProfileSectionId } from '
  * so a card left half way reopens where it was. When a card's last step saves,
  * the flow moves to the next card; after the last card it closes.
  *
- * **No card depends on another being opened first.** The Company card used to
- * refuse to save until the GSTIN was verified elsewhere, while the hub rendered
- * the cards as an unordered grid — a reachable dead end with a message in it.
- * The company details now arrive with the GSTIN on the Tax card, so the
- * dependency is gone rather than disabled.
+ * **The cards open in order, and the hub is what holds the order.** A card is
+ * locked on the hub until every card before it is saved, and this flow moves
+ * to the next card on save — the two agree because both read
+ * `PROFILE_SECTIONS` in sequence. No card body refuses to save because of
+ * another card: the Company card once did that, from an unordered grid, which
+ * was a reachable dead end with a message in it. A lock on the hub names the
+ * card that opens it; a refusal inside a dialog does not.
  */
 
 export interface ProfileFlowProps {
