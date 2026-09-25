@@ -1,7 +1,9 @@
 /**
- * "Full specifications" on the product page — the long, grouped spec table
- * a buyer expects below the reviews summary, the way a marketplace listing
- * carries it.
+ * "All details" — the declared specification, in the record column right
+ * under the delivery check, the marketplace "All details" bottom-sheet a
+ * buyer already knows: open panel, a "Specifications" tab (the only tab
+ * there is data for), the first group's rows, and a "See more" that
+ * reveals the rest.
  *
  * **PLACEHOLDER CONTENT — frontend only, not read from the catalogue.** The
  * real declared specification for a SKU comes from `SkuDetail` via `specRows`
@@ -9,7 +11,10 @@
  * reference configuration (an ASUS TUF Gaming A15), built so the design can
  * be seen and reviewed before the catalogue carries this level of detail for
  * every SKU. It renders the same fixed rows under every grade and every
- * model until it is replaced.
+ * model until it is replaced. The reference this was built from also showed
+ * "Warranty" and "Manufacturer info" tabs beside "Specifications" — those are
+ * left out rather than invented, since there is no warranty or manufacturer
+ * data anywhere in this placeholder to put behind them.
  *
  * When the catalogue gains these fields, this becomes a function of `sku`
  * like `specRows`, and this notice — and the fixed data below — come out.
@@ -17,16 +22,14 @@
  * Grouped, not one long list: a buyer scanning for "does it have a fingerprint
  * reader" reads group headings, not forty ungrouped rows top to bottom.
  *
- * Two columns of small, individually-collapsible group cards — the
- * marketplace "Product information" layout a buyer already knows — rather
- * than one long column of groups. Splitting the nine groups across two
- * columns roughly halves the section's height on a wide screen, which is
- * what actually made "all nine groups, one column" look wrong there.
- *
- * Every group loads closed. The "More" chip beside the title (`page.tsx`)
- * scrolls straight to this section without also dumping the full,
- * nine-group table open in the same motion — a buyer opens the groups they
- * actually want.
+ * Two levels of disclosure, both native `<details>` so neither needs
+ * client-side state: the outer panel (chevron beside "All details") loads
+ * open, since the declared spec is expected to be visible without an extra
+ * click on this record; the inner one — the other eight groups, behind "See
+ * more" — stays closed, so the panel opens to one group's worth of rows
+ * rather than the whole forty-row table at once. The "More…" chip beside
+ * the title (`page.tsx`) still links to this panel's id and works the same
+ * way whether the outer `<details>` is open or closed.
  */
 
 interface SpecGroup {
@@ -140,24 +143,11 @@ const SPEC_GROUPS: readonly [SpecGroup, ...SpecGroup[]] = [
   },
 ];
 
-function SpecGroupCard({ group }: { group: SpecGroup }): React.JSX.Element {
+function SpecGroupRows({ group }: { group: SpecGroup }): React.JSX.Element {
   return (
-    <details className="fullspec-group">
-      <summary>
-        {group.title}
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </summary>
-      <dl className="fullspec-dl">
+    <>
+      <h3 className="adl-h">{group.title}</h3>
+      <dl className="adl">
         {group.rows.map(([label, value]) => (
           <div key={label}>
             <dt>{label}</dt>
@@ -165,52 +155,61 @@ function SpecGroupCard({ group }: { group: SpecGroup }): React.JSX.Element {
           </div>
         ))}
       </dl>
-    </details>
+    </>
   );
 }
 
-/**
- * Greedily assigns each group to whichever column currently holds fewer
- * rows, so the two columns land close in height instead of splitting nine
- * groups 5/4 by count and leaving one column visibly taller.
- */
-function splitIntoColumns(groups: readonly SpecGroup[]): [SpecGroup[], SpecGroup[]] {
-  const left: SpecGroup[] = [];
-  const right: SpecGroup[] = [];
-  let leftRows = 0;
-  let rightRows = 0;
-  for (const group of groups) {
-    if (leftRows <= rightRows) {
-      left.push(group);
-      leftRows += group.rows.length;
-    } else {
-      right.push(group);
-      rightRows += group.rows.length;
-    }
-  }
-  return [left, right];
-}
+const CHEVRON_PATH = 'm6 9 6 6 6-6';
 
 export function FullSpecifications(): React.JSX.Element {
-  const [left, right] = splitIntoColumns(SPEC_GROUPS);
+  const [first, ...rest] = SPEC_GROUPS;
 
   return (
-    <section className="fullspec" aria-labelledby="fullspec-h">
-      <h2 className="sec-t" id="fullspec-h">
-        Full specifications
-      </h2>
-      <div className="fullspec-cols">
-        <div className="fullspec-col">
-          {left.map((group) => (
-            <SpecGroupCard group={group} key={group.title} />
-          ))}
-        </div>
-        <div className="fullspec-col">
-          {right.map((group) => (
-            <SpecGroupCard group={group} key={group.title} />
-          ))}
-        </div>
+    <details className="alldetails" id="fullspec-h" open>
+      <summary className="alldetails-h">
+        All details
+        <span className="alldetails-toggle" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d={CHEVRON_PATH} />
+          </svg>
+        </span>
+      </summary>
+
+      <div className="alldetails-b">
+        <span className="alldetails-tab">Specifications</span>
+
+        <SpecGroupRows group={first} />
+
+        <details className="adl-more">
+          <summary>
+            <span className="more">See more</span>
+            <span className="less">See less</span>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d={CHEVRON_PATH} />
+            </svg>
+          </summary>
+          <div>
+            {rest.map((group) => (
+              <SpecGroupRows group={group} key={group.title} />
+            ))}
+          </div>
+        </details>
       </div>
-    </section>
+    </details>
   );
 }

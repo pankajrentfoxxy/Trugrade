@@ -4130,41 +4130,57 @@ body:has(.pdpbody){background:var(--sheet)}
 .spec dt{font-size:13px;font-weight:600;color:var(--ink-2)}
 .spec dd{margin:0;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
 
-/* ---- Full specifications (PLACEHOLDER — see FullSpecifications.tsx) ----
-   The marketplace "Product information" layout: two columns of small,
-   individually-collapsible group cards rather than one long column of
-   groups. That split is what actually fixes the big-screen space problem —
-   every group open in one column ran well past a screen height, and two
-   columns roughly halve that without hiding anything by default. Each card
-   is its own `<details>`, open on load; a buyer can close just the ones
-   they do not care about instead of an all-or-nothing toggle for the whole
-   table. */
-.fullspec{margin-top:22px}
-.fullspec h2{scroll-margin-top:calc(var(--head-h) + 14px)}
-.fullspec-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-.fullspec-group{background:var(--sheet);border:1px solid var(--rule);border-radius:12px;
-  overflow:hidden}
-.fullspec-group+.fullspec-group{margin-top:16px}
-.fullspec-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
-  padding:12px 18px;font-size:13.5px;font-weight:800;color:var(--ink);background:var(--sheet-2);
-  border-bottom:1px solid var(--rule)}
-.fullspec-group>summary::-webkit-details-marker{display:none}
-.fullspec-group:not([open])>summary{border-bottom:none}
-.fullspec-group>summary svg{width:16px;height:16px;flex:0 0 auto;margin-left:auto;stroke:var(--ink-3);
-  transition:transform .3s ease}
-.fullspec-group[open]>summary svg{transform:rotate(180deg)}
-.fullspec-dl{margin:0}
-.fullspec-dl>div{display:grid;grid-template-columns:minmax(120px,45%) minmax(0,1fr);gap:16px;
-  padding:11px 18px;border-bottom:1px solid var(--rule-2)}
-.fullspec-dl>div:last-child{border-bottom:none}
-.fullspec-dl dt{font-size:13px;font-weight:600;color:var(--ink-2)}
-.fullspec-dl dd{margin:0;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
-@media(max-width:800px){
-  .fullspec-cols{grid-template-columns:1fr}
-}
+/* ---- All details (PLACEHOLDER — see FullSpecifications.tsx) ----
+   The marketplace "All details" panel, in the record column under the
+   delivery check rather than down with the board and the reviews — one card,
+   closed on load, so it costs nothing until a buyer asks for it. Two nested
+   `<details>`: the outer one is the whole panel; the inner "See more" is the
+   eight groups beyond the first. Both native, so neither needs client state,
+   and a link straight to `#fullspec-h` (the "More…" chip, `page.tsx`) opens
+   the outer one automatically — a browser does that for a `<details>` that
+   is itself the anchor target. */
+.alldetails{margin-top:16px;background:var(--sheet);border:1px solid var(--rule);
+  border-radius:16px;overflow:hidden;scroll-margin-top:calc(var(--head-h) + 14px)}
+.alldetails-h{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;
+  padding:11px 16px;font-size:15px;font-weight:800;color:var(--ink)}
+.alldetails-h::-webkit-details-marker{display:none}
+.alldetails-toggle{margin-left:auto;flex:0 0 auto;width:26px;height:26px;border-radius:7px;
+  border:1px solid var(--rule);display:flex;align-items:center;justify-content:center}
+.alldetails-toggle svg{width:13px;height:13px;stroke:var(--ink-3);transition:transform .3s ease}
+.alldetails[open]>.alldetails-h .alldetails-toggle svg{transform:rotate(180deg)}
+.alldetails-b{padding:0 20px 20px;border-top:1px solid var(--rule-2)}
+.alldetails-tab{display:inline-block;margin:18px 0 14px;padding:7px 14px;border-radius:999px;
+  background:var(--ink);color:var(--sheet);font-size:12px;font-weight:700}
+/* Every group heading gets breathing room above it except the first, which
+   already has the tab's own bottom margin doing that job. */
+.adl-h{margin:18px 0 4px;font-size:14px;font-weight:800;color:var(--ink)}
+.alldetails-tab+.adl-h{margin-top:0}
+.adl{margin:0;display:grid;grid-template-columns:1fr 1fr;column-gap:28px}
+.adl>div{padding:13px 0;border-bottom:1px solid var(--rule-2);display:flex;flex-direction:column;gap:3px}
+.adl dt{font-size:12.5px;color:var(--ink-3)}
+.adl dd{margin:0;font-size:14.5px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+/* The eight remaining groups. A plain centred pill, not the rail chevron
+   above — "See more" is an invitation to read on, not a section to fold
+   away once opened, so there is no equivalent affordance for closing it
+   back up beyond the label swap below. */
+/* `display:flex` + `align-self` centres the summary alone, not `text-align`
+   on `.adl-more` — that would also centre every group's rows revealed
+   underneath it once open, which is content, not a button. */
+.adl-more{margin-top:6px;display:flex;flex-direction:column}
+.adl-more>summary{align-self:center;list-style:none;cursor:pointer;display:inline-flex;
+  align-items:center;gap:8px;padding:10px 22px;border:1px solid var(--rule);
+  border-radius:999px;font-size:13px;font-weight:700;color:var(--ink)}
+.adl-more>summary::-webkit-details-marker{display:none}
+.adl-more>summary:hover{background:var(--sheet-2)}
+.adl-more>summary svg{width:14px;height:14px;stroke:var(--ink-3);transition:transform .3s ease}
+.adl-more[open]>summary svg{transform:rotate(180deg)}
+.adl-more .less{display:none}
+.adl-more[open] .more{display:none}
+.adl-more[open] .less{display:inline}
+.adl-more[open]>summary{margin-bottom:6px}
 @media(max-width:640px){
-  .fullspec-dl>div{grid-template-columns:1fr;gap:2px;padding-top:10px;padding-bottom:10px}
-  .fullspec-dl dt{font-size:11.5px;color:var(--ink-3)}
+  .adl{grid-template-columns:1fr;gap:2px}
+  .adl>div{padding-top:10px;padding-bottom:10px}
 }
 
 @media(max-width:960px){
@@ -4179,7 +4195,7 @@ body:has(.pdpbody){background:var(--sheet)}
   .gal-thumbs{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
 @media(prefers-reduced-motion:reduce){
-  .pvbtn,.mini,.det .acc>summary svg,.pdp-evidence .acc>summary svg,.fullspec-group>summary svg,.dchip-more,.filters,.pin-line,.gal-ar,.th{transition:none}
+  .pvbtn,.mini,.det .acc>summary svg,.pdp-evidence .acc>summary svg,.alldetails-toggle svg,.adl-more>summary svg,.dchip-more,.filters,.pin-line,.gal-ar,.th{transition:none}
   .pin-line .field.shake{animation:none}
 }
 

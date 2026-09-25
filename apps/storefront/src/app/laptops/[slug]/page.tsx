@@ -467,11 +467,19 @@ export default async function ProductPage({
               </div>
 
               {/*
-                The two actions, last in the record column, under the
-                delivery check. Stuck to the window's bottom edge while the
-                column runs past it, so they are on screen for the whole time
-                the record is being read, and in their own place at the foot
-                of the column once it fits. See `.det-cta`.
+                "All details" sits right under the delivery check, closed by
+                default — a buyer who wants the full declared spec asks for
+                it there, before the purchase actions rather than after them,
+                so it never has to be scrolled past to reach "Add to cart".
+              */}
+              <FullSpecifications />
+
+              {/*
+                The two purchase actions, under the delivery check and the
+                collapsed spec panel. Stuck to the window's bottom edge while
+                the column runs past it, so they are on screen for the whole
+                time the record is being read, and in their own place at the
+                foot of the decision once it fits. See `.det-cta`.
               */}
               <div className="det-cta">
                 <PanelActions
@@ -577,7 +585,6 @@ export default async function ProductPage({
                 )}
               </div>
 
-              <FullSpecifications />
               <ReviewsSection />
               <RelatedProducts brandName={sku.brandName} modelName={sku.modelName} />
               <QASection />
