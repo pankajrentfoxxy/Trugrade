@@ -186,6 +186,8 @@ export function PincodeLocalityFields({
           maxLength={7}
           required
           readOnly={readOnly}
+          // Drawn read-only when held read-only, as City already is.
+          className={readOnly ? 'profile-hub-readonly' : undefined}
           value={value.pincode}
           onFocus={() => {
             engaged.current = true;

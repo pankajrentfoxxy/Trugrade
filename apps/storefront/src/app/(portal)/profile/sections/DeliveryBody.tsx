@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { Chip, Input } from '@trugrade/ui';
+import { Checkbox, Chip, Input } from '@trugrade/ui';
 import { completeStep, saveStep, type AccountHolderDetails } from '../../../register/api';
+import { stateName } from '../../../register/picklists';
 import { PincodeLocalityFields } from '../../../register/PincodeLocalityFields';
 import {
   isMobileBlank,
@@ -28,6 +29,10 @@ import type { StepBodyProps } from './step-body';
  * - Name the site, the street, the pincode. City and state fill themselves from
  *   the pincode directory and are read-only. Gate instructions sit directly
  *   under them, because that is what they are — the last line of the address.
+ * - One tick, "Deliver to the billing address", copies the address the Tax
+ *   card verified into the site and holds those fields read-only while it is
+ *   ticked. Untick and they are typed like any other. The tick only appears
+ *   once a billing address exists to copy.
  * - Who signs is the account holder, and the card neither asks it nor restates
  *   it. The person who opened the account is the person a delivery OTP reaches;
  *   naming somebody else is an edit to the address, not a question to open
@@ -117,6 +122,35 @@ function windowIdFrom(saved: Record<string, unknown>): string {
   return (match ?? DEFAULT_WINDOW).id;
 }
 
+/** The five lines an address is, whichever card typed them. */
+type Postal = Pick<SiteValues, 'line1' | 'line2' | 'city' | 'state' | 'pincode'>;
+
+const POSTAL_KEYS: readonly (keyof Postal)[] = ['line1', 'line2', 'city', 'state', 'pincode'];
+
+/**
+ * The billing address the Tax card wrote into this same draft, if it has one.
+ * Null until the Tax card has saved a street, so the offer to reuse it never
+ * appears over an address that does not exist yet.
+ */
+function readBilling(initial: Record<string, unknown>): Postal | null {
+  const rows = initial.billing;
+  const saved = Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined;
+  if (!saved || !str(saved, 'line1').trim()) return null;
+  return {
+    line1: str(saved, 'line1'),
+    line2: str(saved, 'line2'),
+    city: str(saved, 'city'),
+    state: str(saved, 'state'),
+    pincode: str(saved, 'pincode'),
+  };
+}
+
+const samePostal = (a: Postal, b: Postal): boolean =>
+  POSTAL_KEYS.every((k) => a[k].trim() === b[k].trim());
+
+const postalLines = (p: Postal): string =>
+  [p.line1, p.line2, p.city, p.pincode].filter((x) => x.trim()).join(', ');
+
 function readSite(initial: Record<string, unknown>, account: AccountHolderDetails): SiteValues {
   const rows = initial.delivery;
   const saved =
@@ -149,6 +183,12 @@ export function DeliveryBody({
   const [site, setSite] = React.useState<SiteValues>(() => readSite(initial, accountHolder));
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | undefined>();
+  const billing = React.useMemo(() => readBilling(initial), [initial]);
+  // Ticked on reopen only when the saved site IS the billing address — the
+  // box reports what was saved, and is never pre-ticked over an empty form.
+  const [sameAsBilling, setSameAsBilling] = React.useState<boolean>(
+    () => billing !== null && site.line1.trim() !== '' && samePostal(site, billing),
+  );
 
   React.useEffect(() => {
     onFrame({ index: 1, count: 1, primaryLabel: 'Save' });
@@ -172,6 +212,17 @@ export function DeliveryBody({
     });
   };
   const noop = (): void => undefined;
+
+  /**
+   * Ticking copies the billing address into the site and holds those five
+   * fields read-only, so what is saved is exactly what the Tax card verified.
+   * Unticking releases the fields with the copy still in them: a site that is
+   * "the billing address, but the loading bay at the back" is one edit away.
+   */
+  const useBilling = (same: boolean): void => {
+    setSameAsBilling(same);
+    if (same && billing) patch({ ...billing });
+  };
 
   const check = (): Record<string, string> => {
     const found: Record<string, string> = {};
@@ -268,15 +319,38 @@ export function DeliveryBody({
         onChange={(e) => patch({ label: e.target.value })}
         error={errors.label}
       />
+      {/*
+        Most buyers take delivery where they are billed, and the Tax card has
+        already verified that address. Offer it as one tick, with the address
+        under it so the tick is over something they can read, and only once
+        there is a billing address to offer.
+      */}
+      {billing ? (
+        <div className="flex flex-col gap-1" data-testid="same-as-billing">
+          <Checkbox
+            label="Deliver to the billing address"
+            checked={sameAsBilling}
+            onChange={useBilling}
+          />
+          <p className="pl-7 text-body-sm text-ink">
+            {postalLines(billing)}
+            {billing.state && stateName(billing.state) ? `, ${stateName(billing.state)}` : ''}
+          </p>
+        </div>
+      ) : null}
       <Input
         label="Building and street"
         required
+        readOnly={sameAsBilling}
+        className={sameAsBilling ? 'profile-hub-readonly' : undefined}
         value={site.line1}
         onChange={(e) => patch({ line1: e.target.value })}
         error={errors.line1}
       />
       <Input
         label="Floor, unit or area"
+        readOnly={sameAsBilling}
+        className={sameAsBilling ? 'profile-hub-readonly' : undefined}
         value={site.line2}
         onChange={(e) => patch({ line2: e.target.value })}
       />
@@ -285,6 +359,7 @@ export function DeliveryBody({
         onChange={(next) => patch(next)}
         errors={{ pincode: errors.pincode, city: errors.city, state: errors.state }}
         autoLookup={false}
+        readOnly={sameAsBilling}
         onFocus={noop}
         onBlur={noop}
       />
