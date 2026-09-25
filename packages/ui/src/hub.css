@@ -29,7 +29,15 @@
 .hub-mast {
   position: sticky;
   top: 0;
-  z-index: 30;
+  /*
+   * Raised from 30. The masthead is the sticky topbar of the buyer portal
+   * template — it stays on screen for the length of every board — and page
+   * content underneath it (a DataBoard's own sticky sub-header, a positioned
+   * chip or panel drawn inline in a form) must never be able to scroll over
+   * it. Its own flyouts (`.hub-menu__panel`, `.hub-info__panel`) are lifted
+   * to 60 below so they still draw above the masthead they open from.
+   */
+  z-index: 50;
   display: grid;
   grid-template-columns: minmax(200px, 1fr) minmax(0, 560px) minmax(200px, 1fr);
   align-items: center;
@@ -195,7 +203,8 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 40;
+  /* Above the masthead's own 50, since this opens from it. */
+  z-index: 60;
   min-width: 232px;
   padding: 6px;
   border: 1px solid var(--rule);
@@ -941,7 +950,9 @@
   position: absolute;
   left: 0;
   top: 22px;
-  z-index: 40;
+  /* Above the masthead's own 50: an info tooltip near the top of a scrolled
+     board must not draw behind the sticky topbar. */
+  z-index: 60;
   max-width: 320px;
   padding: 12px 14px;
   border: 1px solid var(--rule);

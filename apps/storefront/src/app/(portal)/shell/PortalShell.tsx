@@ -306,7 +306,11 @@ function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
     <div className="hub-frame">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-2 focus:z-40 focus:rounded focus:bg-acc focus:px-3 focus:py-2 focus:text-acc-on"
+        // Above the masthead's own z-index (50, `.hub-mast` in hub.css): both
+        // sit at the same top-left corner when this link is focused before any
+        // scroll has happened, and a skip link a keyboard user cannot see is
+        // a skip link that does not work.
+        className="sr-only focus:not-sr-only focus:absolute focus:left-5 focus:top-2 focus:z-[60] focus:rounded focus:bg-acc focus:px-3 focus:py-2 focus:text-acc-on"
       >
         Skip to content
       </a>
