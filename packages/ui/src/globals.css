@@ -349,6 +349,19 @@
     --promo-screen-6: #2b2b2b;
   }
 
+  /* ---- Listing card accent ------------------------------------------------
+     The supplied listing-card design's orange, the same #fdb017 as the promo
+     hero and the cart, for the search-result tile (`.ptile`) only: its rating
+     pill, its action and its hover edge. Constant in both themes, like the
+     other supplied-design palettes, and nothing outside the tile should reach
+     for it. Literal hex is allowed here and nowhere else. */
+  :root {
+    --card-accent: #fdb017;
+    --card-accent-ink: #1c1300;
+    --card-accent-glow: rgba(253, 176, 23, 0.4);
+    --card-accent-edge: rgba(253, 176, 23, 0.55);
+  }
+
   /* ---- Cream cart palette -------------------------------------------------
      The supplied cart design, on a white ground, with the same #fdb017 yellow as the
      promo hero, flat, no gradients. Like the promo palette it is one surface's

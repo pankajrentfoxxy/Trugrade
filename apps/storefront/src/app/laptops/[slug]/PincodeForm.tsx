@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 import { normalisePincode } from '@trugrade/contracts';
 import { PINCODE_DEMAND_EVENT, PINCODE_DEMAND_MESSAGE, scrollToPincode } from './pincode-demand';
 
@@ -9,10 +11,19 @@ import { PINCODE_DEMAND_EVENT, PINCODE_DEMAND_MESSAGE, scrollToPincode } from '.
  *
  * The form is still a plain GET to the same route — the pincode lands in the
  * URL, so a buyer can send a colleague the link and the colleague sees the
- * same landed prices. What this adds is the refusal in place: a malformed
- * pincode used to round-trip to the server, be dropped, and come back as a
- * line of helper text. Now it is stopped here, said under the box in the
- * error ink, and the box is marked invalid for a screen reader.
+ * same landed prices, and a browser with JavaScript off still submits it.
+ * What this adds is the refusal in place: a malformed pincode used to
+ * round-trip to the server, be dropped, and come back as a line of helper
+ * text. Now it is stopped here, said under the box in the error ink, and the
+ * box is marked invalid for a screen reader.
+ *
+ * When JavaScript IS available, a valid submit is also intercepted and sent
+ * through `router.push` inside a transition instead of letting the native GET
+ * happen — the same fix as the search filter rail. A native form submission
+ * is a real document navigation: it re-fetches and re-mounts everything,
+ * header included, which reads as the whole site reloading over an updated
+ * delivery estimate. The `action`/`method` stay on the element regardless, so
+ * the no-JS path is unaffected.
  *
  * The one rule is `normalisePincode`, the same one the server applies, so the
  * two cannot disagree about what a pincode is.
@@ -35,8 +46,10 @@ export function PincodeForm({
   /** The helper line under the box when there is nothing wrong. */
   children: React.ReactNode;
 }): React.JSX.Element {
+  const router = useRouter();
   const [value, setValue] = React.useState(initialPincode);
   const [error, setError] = React.useState<string | null>(initialError);
+  const [isPending, startTransition] = React.useTransition();
 
   // The pincode can change under the form without a reload: a signed-in
   // buyer's default site is put in the URL after first paint, and the page
@@ -76,13 +89,26 @@ export function PincodeForm({
         action={action}
         method="get"
         noValidate
+        aria-busy={isPending}
         onSubmit={(event) => {
           const found = problem(value);
           if (found) {
             event.preventDefault();
             setError(found);
             (event.currentTarget.elements.namedItem('pin') as HTMLInputElement | null)?.focus();
+            return;
           }
+          // A working router is a progressive enhancement over the plain GET
+          // above, not a replacement for it — see the file header.
+          event.preventDefault();
+          const params = new URLSearchParams();
+          for (const h of hidden) params.set(h.name, h.value);
+          const normalised = normalisePincode(value.trim());
+          if (normalised) params.set('pin', normalised);
+          const qs = params.toString();
+          startTransition(() => {
+            router.push((qs ? `${action}?${qs}` : action) as Route, { scroll: false });
+          });
         }}
       >
         {hidden.map((h) => (
@@ -109,7 +135,7 @@ export function PincodeForm({
           aria-describedby="pinhelp"
           aria-invalid={error ? true : undefined}
         />
-        <button type="submit" className="mini">
+        <button type="submit" className="mini" disabled={isPending}>
           {buttonLabel}
         </button>
       </form>

@@ -39,12 +39,14 @@ import {
 import { Board } from './Board';
 import { ProductCartScope } from './ProductCartScope';
 import { PanelActions } from './PanelActions';
-import { specLine, specRows } from './spec-rows';
+import { specLine } from './spec-rows';
 import { PincodeFocusLink } from './PincodeFocusLink';
 import { PincodeForm } from './PincodeForm';
 import { ConfigPicker } from './ConfigPicker';
 import { PanelGallery } from './PanelGallery';
 import { ReviewsSection } from './ReviewsSection';
+import { PRODUCT_RATING, Stars } from './product-rating';
+import { FullSpecifications } from './FullSpecifications';
 import { QASection } from './QASection';
 import { RelatedProducts } from './RelatedProducts';
 
@@ -265,9 +267,25 @@ export default async function ProductPage({
 
             {/* RIGHT — what the machine is, what it costs, and the switches. */}
             <div className="det">
-              <h1 className="det-title">
-                {sku.brandName} {sku.modelName}
-              </h1>
+              {/*
+                The title, and the same headline rating "Ratings and reviews"
+                gives further down, on the same line where there is room. It
+                is a link to that section rather than a second, disconnected
+                number — one placeholder figure for the page (see
+                `PRODUCT_RATING` in `product-rating.tsx`), not two.
+              */}
+              <div className="det-head">
+                <h1 className="det-title">
+                  {sku.brandName} {sku.modelName}
+                </h1>
+                <a className="det-rating" href="#rev-h">
+                  <Stars rating={PRODUCT_RATING.average} />
+                  <span className="mono">{PRODUCT_RATING.average.toFixed(1)}</span>
+                  <span>
+                    (<span className="mono">{PRODUCT_RATING.count}</span> ratings)
+                  </span>
+                </a>
+              </div>
 
               <div className="meta-row">
                 <span className="dchip hl">Grade {gradeLabel}</span>
@@ -284,6 +302,28 @@ export default async function ProductPage({
                 <span className="dchip mono">
                   {sku.screenSizeIn}&quot; {sku.resolution}
                 </span>
+                {/*
+                  A seventh chip in the row's own shape — not a "5 more"
+                  overflow badge off to the side — pointing straight at
+                  "Full specifications" further down the record, since that
+                  is where the rest of the declared spec actually lives now.
+                  "More…", not the section's own title repeated: it reads as
+                  the row's own overflow rather than a duplicate heading.
+                */}
+                <a className="dchip dchip-more" href="#fullspec-h">
+                  More…
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14M5 12l7 7 7-7" />
+                  </svg>
+                </a>
               </div>
 
               <div className="mt-5">
@@ -380,47 +420,13 @@ export default async function ProductPage({
               />
 
               {/*
-                The declared specification, under the switches in the record
-                column rather than below the board, so what the machine IS sits
-                beside its photographs and the board below is left to prices.
-              */}
-              <details className="acc">
-                <summary className="acc-h">
-                  Specification
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </summary>
-                {/*
-                A definition list rather than a table. A `<table>` here has to
-                resolve its width against a grid column, and a long mono value
-                — `DEL-LAT5420-I51135G7-16-512` — sizes the column from its own
-                content and pushes the record sideways on a phone. Rows of
-                `dt`/`dd` wrap instead.
-              */}
-                <dl className="spec">
-                  {specRows(sku).map(([label, value]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd className="mono">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
-
-              {/*
-                The pincode comes last, under the specification: a buyer
-                settles what they want first, then where it is going. The form
-                carries the grade and supply point so the answer lands on the
-                same configuration.
+                The pincode comes right after the grade/config switches: a
+                buyer settles what they want first, then where it is going.
+                The declared specification used to sit here too, as a short
+                accordion, but it now duplicates the "Full specifications"
+                section further down the record — one place for it, not two.
+                The form carries the grade and supply point so the answer
+                lands on the same configuration.
               */}
               <h2 className="sec-t">Check delivery</h2>
               <div className="pin-blk">
@@ -571,9 +577,10 @@ export default async function ProductPage({
                 )}
               </div>
 
+              <FullSpecifications />
               <ReviewsSection />
-              <QASection />
               <RelatedProducts brandName={sku.brandName} modelName={sku.modelName} />
+              <QASection />
             </section>
 
           </main>

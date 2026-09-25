@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { SearchResult } from '../lib/api';
 import { storageShortLabel } from './search/storage-label';
 import { HeroDeals, type HeroDeal } from './HeroDeals';
+import { brandPhoto } from '../lib/brand-photo';
 import { HeroShowcase, type HeroSlide } from './HeroShowcase';
 
 /**
@@ -47,13 +48,6 @@ const CONDITION: Record<string, { condition: string; note: string }> = {
   B: { condition: 'Good condition', note: 'Visible wear, fully working' },
 };
 
-/** The renders the design ships, by brand. Files live in `public/home/`. */
-const PHOTO: Record<string, string> = {
-  dell: '/home/laptop-dell.png',
-  apple: '/home/laptop-apple.png',
-  asus: '/home/laptop-asus.png',
-  lenovo: '/home/laptop-lenovo.png',
-};
 
 /** Machines drawn with a pale shell rather than graphite. Illustration only. */
 const SILVER = new Set(['apple']);
@@ -89,7 +83,7 @@ export function HeroBanner({
     qcScore: r.avgQcScore === null ? null : Math.round(r.avgQcScore),
     price: RUPEES.format(r.fromPrice),
     shipHours: r.shipHours,
-    photo: PHOTO[r.brand.toLowerCase()] ?? null,
+    photo: brandPhoto(r.brand),
   }));
 
   // One slide per brand, so the stage never rotates the same machine twice.
@@ -110,7 +104,7 @@ export function HeroBanner({
       spec: r.cpuLine,
       tint: slides.length % 6,
       silver: SILVER.has(key),
-      photo: PHOTO[key] ?? null,
+      photo: brandPhoto(key),
     });
     if (slides.length === 4) break;
   }

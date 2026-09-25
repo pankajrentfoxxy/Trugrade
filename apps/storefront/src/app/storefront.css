@@ -217,7 +217,12 @@ header{position:sticky;top:0;z-index:30}
 .cols{display:grid;grid-template-columns:262px minmax(0,1fr);gap:18px;align-items:start}
 /* ---- FILTER RAIL ---- */
 .filters{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;overflow:hidden;
-  position:sticky;top:calc(var(--head-h) + 12px);max-height:calc(100vh - var(--head-h) - 24px);overflow-y:auto}
+  position:sticky;top:calc(var(--head-h) + 12px);max-height:calc(100vh - var(--head-h) - 24px);overflow-y:auto;
+  transition:opacity .15s ease}
+/* Set while `commit()`'s transition is in flight — see FilterRail.tsx. The
+   rail stays exactly as the buyer left it (never the `loading.tsx` skeleton
+   for a mid-transition tick), just dimmed enough to say a count is coming. */
+.filters[aria-busy="true"]{opacity:.6}
 .fhead{padding:12px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:8px;
   background:var(--sheet-2);position:sticky;top:0;z-index:2}
 .fhead b{font-size:13.5px;color:var(--ink)}
@@ -551,62 +556,99 @@ header{position:sticky;top:0;z-index:30}
 }
 
 /* ---- SEARCH RESULT TILE (photo-led) ----
-   The grade ribbon is `GradeBadge` and stays neutral; the only colour on the
-   tile is the score ring's accent, which is a measured value. */
+   Built to the supplied listing-card design, "one shared stage" variant: the
+   image stage owns roughly half the card, the battery is one compact line,
+   the price is large, and the one primary action runs full width.
+
+   Three things in the supplied design are not carried over, and why:
+   - the brand-coloured stages and pills are literal hex; tokens live in
+     `packages/ui/src/globals.css` only, so every card takes the one neutral
+     stage instead;
+   - the grade pill there is amber for A+. Grades are neutral here, so the
+     ribbon stays `GradeBadge`;
+   - the buyer-rating pill and the struck MRP. The search API carries neither,
+     and a number the API did not send is not drawn. The pill slot shows the
+     inspection score instead, a measured value, which is what the accent is
+     for. */
 .ptile{display:flex;flex-direction:column;background:var(--sheet);border:1px solid var(--rule);
-  border-radius:10px;overflow:hidden;color:inherit;text-decoration:none;
-  transition:border-color .12s ease,box-shadow .12s ease,transform .12s ease}
-.ptile:hover{border-color:var(--acc);box-shadow:0 10px 26px rgb(0 0 0 / .08);transform:translateY(-2px)}
-.ptile-media{position:relative;height:126px;display:flex;align-items:center;justify-content:center;
-  background:var(--sheet-2);border-bottom:1px solid var(--rule-2);color:var(--ink-4)}
-.ptile-ribbon{position:absolute;top:10px;left:10px;transform:scale(.88);transform-origin:top left}
-.ptile-sealed{position:absolute;top:10px;right:10px;font-size:10.5px;font-weight:600;
-  background:var(--ink);color:var(--sheet);padding:4px 10px;border-radius:999px}
-.ptile-body{display:flex;flex-direction:column;flex:1;padding:12px 13px 13px}
-.ptile-name{font-size:14.5px;font-weight:600;color:var(--ink);line-height:1.3}
-.ptile-loc{display:flex;align-items:flex-start;gap:5px;margin-top:4px;font-size:11.5px;color:var(--ink-2)}
-.ptile-loc svg{color:var(--ink-3);flex:0 0 auto;margin-top:2px}
-.ptile-loc b{font-weight:600;color:var(--ink)}
-/* A supply point in seven cities is a long line. Two rows, then clipped —
-   the count in front of it is the number that carries the meaning. */
-.ptile-loc span{display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;
-  -webkit-box-orient:vertical;overflow:hidden}
-.ptile-health{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 10px;
-  background:var(--sheet-2);border:1px solid var(--rule-2);border-radius:8px}
-.ptile-health-info{flex:1;min-width:0}
-.ptile-health-info small{display:block;font-size:9.5px;font-weight:600;letter-spacing:.11em;
-  text-transform:uppercase;color:var(--ink-3)}
-.ptile-batt-track{display:block;height:6px;margin-top:6px;border-radius:999px;
-  background:var(--rule);overflow:hidden}
-/* Green, by direction. Noted because it reads against the house rule that
-   --pass is a PASS/FAIL verdict and a battery percentage is a measured value;
-   the score ring beside it still uses the accent. */
-.ptile-batt-track i{display:block;height:100%;border-radius:999px;background:var(--pass)}
-.ptile-batt-num{margin-top:4px;font-size:11px;font-weight:600;color:var(--ink)}
-.ptile-batt-num span span,.ptile-batt-num>span:last-child{font-weight:500;color:var(--ink-3)}
-.ptile-batt-none{margin-top:6px;line-height:1.4}
+  border-radius:18px;overflow:hidden;color:inherit;text-decoration:none;
+  transition:border-color .25s ease,box-shadow .25s ease,transform .25s ease}
+.ptile:hover{transform:translateY(-5px);box-shadow:0 18px 40px rgb(0 0 0 / .16);
+  border-color:var(--card-accent-edge)}
+/* The stage. A soft halo sits behind the machine so a render with a
+   transparent background reads as lit rather than pasted on. */
+.ptile-media{position:relative;height:230px;display:flex;align-items:center;justify-content:center;
+  padding:26px 22px 18px;background:var(--sheet-2);overflow:hidden;color:var(--ink-4)}
+.ptile-media::before{content:"";position:absolute;left:50%;top:58%;translate:-50% -50%;
+  width:78%;aspect-ratio:1;border-radius:50%;background:var(--sheet)}
+.ptile-photo{position:relative;max-height:100%;width:auto;max-width:92%;
+  filter:drop-shadow(0 16px 18px rgb(0 0 0 / .28));transition:transform .35s ease}
+.ptile:hover .ptile-photo{transform:scale(1.06) translateY(-3px)}
+/* No render for this brand: the line-drawn shell, in the muted ink. */
+.ptile-shell{position:relative;width:60%;height:auto;max-height:70%}
+.ptile-ribbon{position:absolute;top:12px;left:12px;z-index:2;border-radius:9px;
+  font-weight:800;font-size:12.5px;padding:5px 10px}
+.ptile-sealed{position:absolute;top:12px;right:12px;z-index:2;font-size:10.5px;font-weight:700;
+  letter-spacing:.06em;font-variant-numeric:tabular-nums;
+  background:var(--ink);color:var(--sheet);padding:6px 11px;border-radius:999px}
+/* The body. Brand label, then the name, then the rating pill, then the spec
+   line, then the price and the action. No battery line, by direction. */
+.ptile-body{display:flex;flex-direction:column;flex:1;padding:15px 17px 17px}
+.ptile-brandline{display:flex;align-items:center;gap:8px;min-width:0;font-size:11px}
+.ptile-brandline b{font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink);white-space:nowrap}
+.ptile-brandline span{font-weight:600;color:var(--ink-3);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ptile-brandline .mono{font-weight:700;color:var(--ink)}
+.ptile-name{font-size:14.5px;font-weight:800;letter-spacing:-.01em;line-height:1.25;
+  color:var(--ink);margin-top:5px}
+/* The buyer rating, as the supplied design draws it: an amber pill with the
+   score and a star, then the count. PLACEHOLDER values, see
+   `placeholder-market.ts`. */
+.ptile-rate{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;
+  font-weight:600;color:var(--ink-3)}
+.ptile-rate .mono{font-variant-numeric:tabular-nums}
+.ptile-rate-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;
+  background:var(--card-accent);color:var(--card-accent-ink);border-radius:6px;padding:2px 7px}
+.ptile-rate-pill svg{width:9px;height:9px;fill:currentColor}
+.ptile-spec{font-size:11.5px;font-weight:600;line-height:1.5;color:var(--ink-3);margin-top:6px;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ptile-spec b{color:var(--ink);font-weight:700}
 .ptile-unmeasured{font-size:12px;color:var(--ink-4);font-weight:500}
-.ptile-specs{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:7px 10px;margin-top:10px;
-  font-size:11.5px;font-weight:600;color:var(--ink)}
-.ptile-specs small{display:block;font-size:9px;font-weight:600;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
-.ptile-cta-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
-  margin-top:auto;padding-top:12px}
-.ptile-price .mono{display:block;font-size:15px;font-weight:700;color:var(--ink);line-height:1.15}
-.ptile-price small{display:block;font-size:10px;color:var(--ink-4);margin-top:2px}
-/* Yellow, by direction.
-   `--score-bar-warn` with a `--warn` fallback is the pattern this stylesheet
-   already uses for the system's amber: raw `--warn` is #9a620a on the light
-   theme — a brown chosen to pass contrast as TEXT — so a button painted with it
-   would not read as yellow at all. The fallback keeps it amber in both themes,
-   and `--acc-on` is the near-black that sits on a bright ground. */
-.ptile-cta{flex:0 0 auto;font-size:11.5px;font-weight:700;color:var(--acc-on);
-  background:var(--score-bar-warn,var(--warn));border:1px solid transparent;
-  border-radius:6px;padding:8px 13px;white-space:nowrap}
-.ptile:hover .ptile-cta{filter:brightness(1.06)}
-@media(max-width:520px){
+/* Directly under the spec line, a fixed 12px down: the slack that keeps the
+   actions level across a row sits below the price, above the button, never
+   between the spec and the price. */
+.ptile-price-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin-top:12px;margin-bottom:12px}
+.ptile-price-now{font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums}
+/* The struck MRP and the saving, PLACEHOLDER values (see
+   `placeholder-market.ts`). The saving is a plain bold, not the accent: the
+   accent is already spent on the rating and the action. */
+.ptile-price-mrp{font-size:11px;font-weight:600;color:var(--ink-3);text-decoration:line-through;
+  font-variant-numeric:tabular-nums}
+.ptile-price-off{font-size:11px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.ptile-price-sub{width:100%;font-size:10.5px;font-weight:600;color:var(--ink-4);margin-top:-3px}
+/* The supplied design's orange, `--card-accent`, constant in both themes.
+   Full width, pinned to the foot of the tile by the auto margin so a row of
+   tiles keeps its buttons level: one primary action, sized for a thumb. */
+.ptile-cta{display:block;margin-top:auto;text-align:center;font-size:11.5px;font-weight:800;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--card-accent-ink);
+  background:var(--card-accent);border:1px solid transparent;
+  border-radius:11px;padding:11px 13px;transition:transform .2s ease,box-shadow .2s ease}
+.ptile:hover .ptile-cta{transform:translateY(-1px);box-shadow:0 8px 20px var(--card-accent-glow)}
+@media(max-width:620px){
   .pcclist{grid-template-columns:1fr}
-  .ptile-specs{grid-template-columns:1fr 1fr}
+  .ptile-media{height:170px;padding:20px 14px 12px}
+  .ptile-body{padding:12px 13px 14px}
+  .ptile-name{font-size:13.5px}
+  .ptile-spec{font-size:11px}
+  .ptile-price-now{font-size:17px}
+  .ptile-cta{padding:10px 0;font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){
+  .ptile,.ptile-photo,.ptile-cta{transition:none}
+  .ptile:hover{transform:none}
+  .ptile:hover .ptile-photo{transform:none}
 }
 
 .loadmore{margin-top:14px;text-align:center}
@@ -3867,7 +3909,7 @@ body:has(.pdpbody){background:var(--sheet)}
    bar sits in its own place under the specification and moves with the
    page. Smaller than the panel's old buttons: this is a row in a column of
    rows now, not the only thing under a photograph. */
-.det-cta{position:sticky;bottom:0;z-index:44;margin-top:14px;padding:10px 0 12px;
+.det-cta{position:sticky;bottom:0;z-index:20;margin-top:14px;padding:10px 0 12px;
   background:var(--sheet);border-top:1px solid var(--rule-2)}
 .det-cta .pv-actions{margin-top:0;gap:8px}
 .det-cta .pvbtn{padding:10px 0;border-radius:10px;font-size:11.5px}
@@ -3883,7 +3925,7 @@ body:has(.pdpbody){background:var(--sheet)}
 /* ---- ratings and reviews ---- */
 /* One card, like the board and the specification. The headline is a figure
    with its denominator; a review is a rating, a month, the words, and who
-   left it. No star-by-star breakdown — a grid of comment cards instead. */
+   left it. No star-by-star breakdown — a rail of comment cards instead. */
 .rev{margin-top:22px}
 .rev-card{background:var(--sheet);border:1px solid var(--rule);border-radius:16px;padding:18px 20px}
 .rev-empty{margin:0;font-size:13px;line-height:1.55;color:var(--ink-3)}
@@ -3896,14 +3938,34 @@ body:has(.pdpbody){background:var(--sheet)}
    so an unfilled star never reads as a faint award. */
 .rev-stars{display:inline-flex;gap:1px;font-size:14px;line-height:1;color:var(--rule)}
 .rev-stars .on{color:var(--promo-accent)}
-.rev-list{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px;
-  grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+/* The same shared carousel as "you may also like": a fixed run of cards that
+   scrolls sideways rather than a grid that grows the page. On this card's own
+   `--sheet` background the arrows take the gallery's colours, same override
+   as `.rel-rail`. */
+.rev-rail{margin-top:16px}
+.rev-rail .tg-carousel-nav{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
+.rev-rail .tg-carousel-nav:hover:not(:disabled){background:var(--sheet);border-color:var(--promo-accent);color:var(--ink)}
+.rev-track{gap:12px;padding:4px 2px 8px;scroll-snap-type:x mandatory}
+.rev-track>.rev-item{flex:0 0 300px;scroll-snap-align:start}
 .rev-item{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--rule-2);
   border-radius:12px;background:var(--sheet-2)}
 .rev-item-h{display:flex;align-items:center;gap:8px;font-size:13px}
 .rev-when{margin-left:auto;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
 .rev-text{margin:0;font-size:13px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
 .rev-verified{font-size:11px;font-weight:600;color:var(--ink-3)}
+/* The trailing "view all" tile in the track: the count the scroll would
+   otherwise only imply, stated up front instead. Dashed rather than solid so
+   it reads as a door out of the rail, not one more review. Amber only on
+   hover/focus — the ACTIVE STATE meaning, not a fourth use invented for it. */
+.rev-more{align-items:center;justify-content:center;text-align:center;gap:6px;
+  border-style:dashed;background:transparent;color:var(--ink-2);cursor:pointer;
+  font-family:inherit}
+.rev-more:hover,.rev-more:focus-visible{border-color:var(--promo-accent);color:var(--ink)}
+.rev-more-count{font-size:22px;font-weight:800;color:var(--ink)}
+.rev-more-label{font-size:12.5px;font-weight:700}
+@media(max-width:520px){
+  .rev-track>.rev-item{flex-basis:78vw}
+}
 
 /* ---- questions and answers ---- */
 /* A list of Q/A pairs, one card each. The Q and A tags are small badges, not
@@ -3939,14 +4001,33 @@ body:has(.pdpbody){background:var(--sheet)}
 @media(max-width:520px){
   .rel-track>.ptile{flex-basis:78vw}
 }
+/* Title and rating share a row where there is room, and wrap to their own
+   lines on a narrow record column rather than crowding the title. */
+.det-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
 .det-title{margin:0;font-size:clamp(1.35rem,2.2vw,1.7rem);font-weight:800;
   letter-spacing:-.01em;color:var(--ink)}
+/* PLACEHOLDER — see `PRODUCT_RATING` in `ReviewsSection.tsx`. A link to the
+   reviews section below, not a button: it is the same figure, read here
+   first. Reuses `.rev-stars` so the glyphs match the ones under "Ratings and
+   reviews" exactly. */
+.det-rating{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+  font-weight:600;color:var(--ink-3);text-decoration:none}
+.det-rating:hover{color:var(--ink)}
+.det-rating .rev-stars{font-size:14px}
+.det-rating .mono{color:var(--ink);font-weight:700}
 .meta-row{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:10px}
 .dchip{font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;
   border:1px solid var(--rule);background:var(--sheet);color:var(--ink-2)}
 /* The selected grade only. Amber is an ACTIVE STATE here, which is one of the
    three things it is allowed to mean — not a ranking of A+ above B. */
 .dchip.hl{border-color:var(--promo-accent-mid);background:var(--promo-accent-soft);color:var(--warn)}
+/* The one chip in the row that is a link, not a value — jumps to "Full
+   specifications" further down the record. No amber: a navigation chip is
+   none of the three things the accent is reserved for. */
+.dchip-more{display:inline-flex;align-items:center;gap:5px;cursor:pointer;text-decoration:none;
+  transition:border-color .2s ease,color .2s ease}
+.dchip-more:hover,.dchip-more:focus-visible{border-color:var(--ink-3);color:var(--ink)}
+.dchip-more svg{width:11px;height:11px;flex:0 0 auto}
 
 .price-blk{margin-top:16px;background:var(--sheet);border:1px solid var(--rule);
   border-radius:16px;padding:18px 20px}
@@ -3962,9 +4043,14 @@ body:has(.pdpbody){background:var(--sheet)}
 /* "from": the lowest row on the board, and the others are below. */
 .price-from{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .price-note{margin:5px 0 0;font-size:12px;color:var(--ink-2);line-height:1.55}
-.pin-line{display:flex;gap:9px;margin-top:14px;max-width:420px}
+.pin-line{display:flex;gap:9px;margin-top:14px;max-width:420px;transition:opacity .15s ease}
 /* Under the switches, with its own heading, so it needs no top margin of its own. */
 .pin-blk .pin-line{margin-top:0}
+/* Set while the transition from PincodeForm.tsx's client-side `router.push`
+   is in flight, the same convention as `.filters[aria-busy="true"]` — the
+   form stays on screen and interactive, just dimmed, instead of the native
+   GET's full document reload. */
+.pin-line[aria-busy="true"]{opacity:.6}
 .pin-line .field{flex:1;min-width:0;background:var(--sheet-2);border:1px solid var(--rule);
   border-radius:11px;color:var(--ink);padding:10px 13px;font-size:14px;outline:none;
   transition:border-color .2s ease,box-shadow .2s ease}
@@ -3975,6 +4061,7 @@ body:has(.pdpbody){background:var(--sheet)}
   font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;
   transition:transform .2s ease,box-shadow .2s ease}
 .mini:hover{transform:translateY(-1px);box-shadow:0 6px 16px var(--promo-accent-mid)}
+.mini:disabled{opacity:.6;cursor:not-allowed}
 .deliver{margin:10px 0 0;font-size:13px;color:var(--ink-2);line-height:1.55}
 .deliver b{color:var(--ink)}
 /* A refused pincode, said under the box in the one ink a refusal gets. */
@@ -4043,6 +4130,43 @@ body:has(.pdpbody){background:var(--sheet)}
 .spec dt{font-size:13px;font-weight:600;color:var(--ink-2)}
 .spec dd{margin:0;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
 
+/* ---- Full specifications (PLACEHOLDER — see FullSpecifications.tsx) ----
+   The marketplace "Product information" layout: two columns of small,
+   individually-collapsible group cards rather than one long column of
+   groups. That split is what actually fixes the big-screen space problem —
+   every group open in one column ran well past a screen height, and two
+   columns roughly halve that without hiding anything by default. Each card
+   is its own `<details>`, open on load; a buyer can close just the ones
+   they do not care about instead of an all-or-nothing toggle for the whole
+   table. */
+.fullspec{margin-top:22px}
+.fullspec h2{scroll-margin-top:calc(var(--head-h) + 14px)}
+.fullspec-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.fullspec-group{background:var(--sheet);border:1px solid var(--rule);border-radius:12px;
+  overflow:hidden}
+.fullspec-group+.fullspec-group{margin-top:16px}
+.fullspec-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+  padding:12px 18px;font-size:13.5px;font-weight:800;color:var(--ink);background:var(--sheet-2);
+  border-bottom:1px solid var(--rule)}
+.fullspec-group>summary::-webkit-details-marker{display:none}
+.fullspec-group:not([open])>summary{border-bottom:none}
+.fullspec-group>summary svg{width:16px;height:16px;flex:0 0 auto;margin-left:auto;stroke:var(--ink-3);
+  transition:transform .3s ease}
+.fullspec-group[open]>summary svg{transform:rotate(180deg)}
+.fullspec-dl{margin:0}
+.fullspec-dl>div{display:grid;grid-template-columns:minmax(120px,45%) minmax(0,1fr);gap:16px;
+  padding:11px 18px;border-bottom:1px solid var(--rule-2)}
+.fullspec-dl>div:last-child{border-bottom:none}
+.fullspec-dl dt{font-size:13px;font-weight:600;color:var(--ink-2)}
+.fullspec-dl dd{margin:0;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+@media(max-width:800px){
+  .fullspec-cols{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .fullspec-dl>div{grid-template-columns:1fr;gap:2px;padding-top:10px;padding-bottom:10px}
+  .fullspec-dl dt{font-size:11.5px;color:var(--ink-3)}
+}
+
 @media(max-width:960px){
   .pdp-top{grid-template-columns:1fr;gap:18px}
   /* Stacked, there is no split to keep: the record reads top to bottom in
@@ -4055,7 +4179,7 @@ body:has(.pdpbody){background:var(--sheet)}
   .gal-thumbs{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
 @media(prefers-reduced-motion:reduce){
-  .pvbtn,.mini,.det .acc>summary svg,.pdp-evidence .acc>summary svg,.gal-ar,.th{transition:none}
+  .pvbtn,.mini,.det .acc>summary svg,.pdp-evidence .acc>summary svg,.fullspec-group>summary svg,.dchip-more,.filters,.pin-line,.gal-ar,.th{transition:none}
   .pin-line .field.shake{animation:none}
 }
 

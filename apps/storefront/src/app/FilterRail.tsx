@@ -53,11 +53,19 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
   const params = React.useMemo(() => new URLSearchParams(query), [query]);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [pincodeError, setPincodeError] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
 
   /**
    * Write through to the URL. `push`, not `replace`: a filter is a place a buyer
    * navigated to, and back must undo it. Page resets, because page 4 of a
    * different result set is not the page they were looking at.
+   *
+   * The push itself is wrapped in `startTransition`. Without it, every tick of
+   * a checkbox re-suspends the whole `/search` segment and Next swaps in
+   * `loading.tsx` — rail and grid both vanish behind a skeleton and come back
+   * a moment later, which reads as the page reloading rather than a filter
+   * applying. Inside a transition, React keeps this render on screen, fully
+   * interactive, until the new one is ready, then swaps once.
    */
   const commit = React.useCallback(
     (next: URLSearchParams): void => {
@@ -65,7 +73,10 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
       const qs = next.toString();
       // `typedRoutes` cannot prove a string built at runtime is a real route.
       // The cast is on the ONE line that builds it, not on the router.
-      router.push((qs ? `/search?${qs}` : '/search') as Route, { scroll: false });
+      const href = (qs ? `/search?${qs}` : '/search') as Route;
+      startTransition(() => {
+        router.push(href, { scroll: false });
+      });
     },
     [router],
   );
@@ -111,6 +122,7 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
         id="filter-rail"
         className={sheetOpen ? 'filters open' : 'filters'}
         aria-label="Filters"
+        aria-busy={isPending}
       >
         <div className="fhead">
           <b>Filters</b>

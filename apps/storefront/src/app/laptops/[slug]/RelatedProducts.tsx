@@ -3,7 +3,7 @@ import { getSearch, type SearchResult } from '../../../lib/api';
 import { SearchResultCard } from '../../search/SearchResultCard';
 
 /**
- * "You may also like" — other machines for sale, under the questions.
+ * "You may also like" — other machines for sale, under the reviews.
  *
  * **Not this model.** Every row for the model on the page is left out —
  * every grade and every configuration of it — because the switches above
