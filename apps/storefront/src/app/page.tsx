@@ -3,11 +3,13 @@ import { getSearch, getStats } from '../lib/api';
 import { consoleSellRegisterUrlFromRequest } from '../lib/console-url.server';
 import { toApiQueryString } from './search/query';
 import { BrandRail } from './BrandRail';
+import { BuyerReviews } from './BuyerReviews';
 import { HeroBanner } from './HeroBanner';
 import { HomePills } from './HomePills';
 import { HomeStrip } from './HomeStrip';
 import { SpecShowcase } from './SpecShowcase';
 import { SiteHeader } from './SiteHeader';
+import { WhyTrugrade } from './WhyTrugrade';
 
 /**
  * The homepage, built to the block structure in `09_FRONTEND_LOCKED.md` §7
@@ -36,7 +38,19 @@ import { SiteHeader } from './SiteHeader';
  * category strip (removed across the whole storefront, not just here), the hero
  * (claim, two calls to action, live inspection feed), the result bar (result
  * count, sort control), the supply board and the supplier band. The page runs
- * header → grid → utility strip → process → footer.
+ * header → grid → why Trugrade → buyer reviews → utility strip → process →
+ * footer.
+ *
+ * `WhyTrugrade` is new: a five-row comparison against buying new and a
+ * grey-market dealer, beside a bulk-order poster — the differentiator the
+ * supply board used to carry, restated as the reasons already given in this
+ * page's own copy rather than a second thing to keep in sync with it.
+ *
+ * `BuyerReviews`, right after it, is also new: a masonry wall of sample
+ * quotes. **Placeholder content, not a database read** — see that file's own
+ * header for exactly what is real and what is not, the same notice
+ * `laptops/[slug]/product-rating.tsx` already carries for the per-product
+ * review rail.
  *
  * Filtering is `/search`'s job now and that page is untouched: it still renders
  * the same `FilterRail` and `ResultBar`, driven by the URL. This page keeps
@@ -150,6 +164,14 @@ export default async function HomePage({
         */}
 
         {results.length > 0 && <SpecShowcase items={results} />}
+
+        {/* Why Trugrade — the comparison table and bulk-order poster. Sits
+          between the machines the reader has just seen measured and the
+          mechanics of buying one (verify a certificate, then the process). */}
+        <WhyTrugrade />
+
+        {/* Buyer reviews — placeholder content, see the file's own header. */}
+        <BuyerReviews />
 
         {/*
         The product grid is gone from this page.
