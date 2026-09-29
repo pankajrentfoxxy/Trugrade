@@ -78,7 +78,7 @@ html,body{overflow-x:clip}
 /* One side gutter for the whole storefront, so the header, every section and the
    footer share a left edge. Scales with the viewport; the mobile blocks below
    narrow it. Change it here, not on the individual rules. */
-:root{--gutter:clamp(24px,5.5vw,110px)}
+:root{--gutter:clamp(16px,2.5vw,40px)}
 /* The header's height at the desktop breakpoint. Every rail that pins to the
    viewport measures its offset from this, not from the top of the window,
    because the top of the window is the header now. */
@@ -151,17 +151,22 @@ header{position:sticky;top:0;z-index:30}
   display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;
   color:var(--acc-ink);flex:0 0 auto;font-weight:700}
 .sugg .div{border-top:1px solid var(--rule-2)}
-.hact{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-.hbtn{display:flex;align-items:center;height:32px;padding:0 10px;border-radius:6px;font-size:12px;
-  color:var(--on-head);white-space:nowrap}
+.hact{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+/* The same height as the search field beside them (11px of padding either side
+   of a 13.5px line). At 32px the two controls read as afterthoughts next to a
+   field that fills the rest of a 72px bar; a border gives each one an edge the
+   field already has, so the row is three things of one size. */
+.hbtn{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;font-size:13.5px;
+  border:1px solid var(--head-line-2);color:var(--on-head);white-space:nowrap}
 .hbtn:hover{background:var(--head-2)}
+.hbtn svg{flex:0 0 auto}
 .hbtn.solid{background:var(--acc);color:var(--acc-on);font-weight:700;font-size:12.5px;padding:0 14px}
 .hbtn.solid:hover{background:var(--acc-dk)}
 .hbtn small{display:block;font-size:9px;color:var(--on-head-3);line-height:1.1}
-.hbtn strong{font-size:11.5px;font-weight:600;color:var(--on-head);line-height:1.2}
-.hcart{padding:0 10px;gap:6px}
+.hbtn strong{font-size:13.5px;font-weight:600;color:var(--on-head);line-height:1.2}
+.hcart{padding:0 16px;gap:8px}
 .hcart-ic{position:relative;display:flex;align-items:center;flex:0 0 auto}
-.hcart-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+.hcart-badge{position:absolute;top:-8px;right:-9px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
   background:var(--acc);color:var(--acc-on);font-size:10px;font-weight:700;line-height:18px;text-align:center;
   pointer-events:none}
 .usermenu{position:relative;flex:0 0 auto}
@@ -185,8 +190,6 @@ header{position:sticky;top:0;z-index:30}
 /* Wide enough for "Verify a certificate" and for the prompt row to breathe;
    the 148px default was sized for a two-item menu. */
 .authpop .usermenu-pop{min-width:236px}
-.authpop-trigger{gap:7px}
-.authpop-trigger svg{flex:0 0 auto}
 .authpop-trigger:hover,.authpop:focus-within .authpop-trigger{background:var(--head-2)}
 .authpop-top{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:9px 12px 9px 14px;border-bottom:1px solid var(--head-line)}
@@ -347,38 +350,39 @@ header{position:sticky;top:0;z-index:30}
 .pc .cta:hover{background:var(--acc);color:var(--acc-on)}
 /* ---- SEARCH RESULT CARDS (rich list) ---- */
 /* ---- HOMEPAGE GROUND ----
-   The homepage runs on the near-white `--sheet-2` instead of the standard
-   `--ground` grey. Redefined as a variable rather than repainted section by
-   section: `.strip2`, `.shoptiles` and `.showcase` all paint `var(--ground)`,
-   so they follow this one line, and nothing outside the homepage changes. */
-.home{--ground:var(--sheet-2);background:var(--ground)}
+   The homepage runs on white — `--sheet`, the same surface as the header —
+   instead of the standard `--ground` grey. Redefined as a variable rather than
+   repainted section by section: `.hbn`, `.hcarousel` and `.shoptiles` all
+   paint `var(--ground)`, so they follow this one line, and nothing outside the
+   homepage changes. */
+.home{--ground:var(--sheet);background:var(--ground)}
 
-/* ---- HOMEPAGE CLAIM PILLS (above the hero) ---- */
-/* `--sheet-2` is the near-white grey (#f7f8fa on the light theme). This used to
-   read `var(--paper)`, which no theme defines — so the band was transparent and
-   showed the page's darker `--ground` through it. Full width, edge to edge. */
-.hpills{background:var(--sheet-2);padding:16px 20px 14px;border-bottom:1px solid var(--rule-2)}
+/* ---- HOMEPAGE FILTER STRIP (attached under the header) ---- */
+/* Painted `--head` like the bar above it, with the header's own rule between
+   the two, so the strip reads as the second row of the header rather than as a
+   band of pills floating on the page. The bottom edge takes the same rule, and
+   the ground starts under it. */
+.hpills{background:var(--head);border-bottom:1px solid var(--head-line-2);padding:0 var(--gutter)}
 .hpills ul{list-style:none;margin:0 auto;padding:0;max-width:1240px;
-  display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px}
-/* One size for every pill: a fixed height and a shared minimum width wide
-   enough for the longest label, centred inside it. Grades is the one allowed to
-   outgrow it, and only while it is open. */
-.hpill{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
-  gap:7px;height:38px;min-width:164px;padding:0 18px;
-  background:var(--sheet);border:1px solid var(--rule);border-radius:999px;
-  font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap}
-.hpill b{font-weight:700;color:var(--acc-ink)}
-/* Every pill wears the hero's own yellow — `--promo-accent` is the token
-   `.phero-btn-primary` is painted with, so the two cannot drift apart. */
-.hpill-promo{cursor:pointer;border-color:var(--promo-accent);text-decoration:none;
-  transition:background-color .15s ease,box-shadow .15s ease}
-.hpill-promo:hover,.hpill-promo:focus-within{background:var(--promo-accent-soft);
-  box-shadow:0 0 0 3px var(--promo-accent-soft)}
-.hpill-promo b{color:var(--promo-accent-ink)}
+  display:flex;justify-content:center;align-items:stretch;gap:clamp(6px,2.4vw,40px)}
+.hpills li{display:flex}
+/* Plain tabs, not pills: text on the header's surface, one height, with the
+   underline drawn by `::after` as the hover and focus state. The number in
+   each one stays the bold part, so "48 hr" is still what the eye lands on. */
+.hpill{box-sizing:border-box;position:relative;display:inline-flex;align-items:center;justify-content:center;
+  gap:6px;height:46px;padding:0 6px;background:transparent;border:0;border-radius:0;
+  font-size:13.5px;font-weight:600;color:var(--on-head);white-space:nowrap;text-decoration:none}
+.hpill b{font-weight:700;color:var(--on-head)}
+.hpill-promo{cursor:pointer}
+.hpill-promo::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;
+  background:var(--promo-accent);border-radius:3px 3px 0 0;transform:scaleX(0);
+  transition:transform .18s ease}
+.hpill-promo:hover::after,.hpill-promo:focus-within::after{transform:scaleX(1)}
+.hpill-promo:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
 
-/* Grades opens into A+ / A / B. The pill itself grows because the clipped
-   group inside it does — animating max-width rather than width, since the
-   natural width of three links is not a number this rule can know. */
+/* Grades opens into A+ / A / B. The tab grows because the clipped group
+   inside it does — animating max-width rather than width, since the natural
+   width of three links is not a number this rule can know. */
 .hpill-out{display:inline-flex;align-items:center;gap:6px;
   max-width:0;margin-left:0;opacity:0;overflow:hidden;
   transition:max-width .28s ease,margin-left .28s ease,opacity .18s ease}
@@ -386,8 +390,8 @@ header{position:sticky;top:0;z-index:30}
   max-width:190px;margin-left:8px;opacity:1}
 .hpill-grade{display:inline-flex;align-items:center;justify-content:center;
   min-width:30px;height:24px;padding:0 9px;border-radius:999px;
-  background:var(--sheet);border:1px solid var(--promo-accent-mid);
-  font-size:12px;font-weight:700;color:var(--ink);text-decoration:none;
+  background:var(--head);border:1px solid var(--promo-accent-mid);
+  font-size:12px;font-weight:700;color:var(--on-head);text-decoration:none;
   transition:background-color .15s ease,border-color .15s ease}
 .hpill-grade:hover,.hpill-grade:focus-visible{background:var(--promo-accent);
   border-color:var(--promo-accent);color:var(--promo-accent-ink)}
@@ -396,17 +400,55 @@ header{position:sticky;top:0;z-index:30}
   .hpill-out{max-width:190px;margin-left:8px;opacity:1}
 }
 @media(prefers-reduced-motion:reduce){
-  .hpill-out{transition:none}
+  .hpill-out,.hpill-promo::after{transition:none}
 }
-/* Two equal columns on a phone. Grades runs the full width because it is
-   permanently open there and wider than a column; so does the last pill,
-   rather than sitting alone in the left half of a row. */
-@media(max-width:520px){
-  .hpills{padding:12px 14px 2px}
-  .hpills ul{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .hpills li{display:flex}
-  .hpill{width:100%;min-width:0;height:36px;padding:0 12px;font-size:12px}
-  .hpills li.hpill-grades,.hpills li:last-child{grid-column:1 / -1}
+/* One scrolling row on a phone, the way every storefront's category strip
+   behaves there: nothing wraps, nothing stacks, and the row reaches the edge. */
+@media(max-width:720px){
+  .hpills{padding:0}
+  .hpills ul{justify-content:flex-start;gap:4px;padding:0 var(--gutter);
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .hpills ul::-webkit-scrollbar{display:none}
+  .hpill{height:42px;padding:0 8px;font-size:13px}
+}
+
+/* ---- HOMEPAGE PROMO CAROUSEL (under the filter strip) ---- */
+/* A row of 460 x 224 banner cards, the active one at the left edge and the
+   next peeking in on the right, that scrolls by snapping. The card is sized as a width and
+   an aspect ratio rather than two lengths, so on a phone narrower than the
+   card it shrinks in proportion instead of overflowing. The track is a real scroller so a
+   swipe on a phone and a wheel on a trackpad both work with no script; the
+   buttons, the dots and the timer only call scrollTo on it. */
+/* The slide width and gap live on the section so the track and its media
+   query read one pair of numbers. */
+/* Inset by the page gutter and clipped there, so the peeking neighbour stops
+   where every other block does rather than running to the viewport edge. The
+   right padding on the track is what lets the last slide reach the left edge. */
+.hcarousel{position:relative;padding:18px 0 10px;margin:0 var(--gutter);background:var(--ground);
+  overflow:hidden;--hc-w:min(460px,calc(100vw - 2 * var(--gutter)));--hc-gap:20px}
+.hcarousel-track{display:flex;align-items:stretch;gap:var(--hc-gap);
+  padding:0 calc(100% - var(--hc-w)) 0 0;
+  overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.hcarousel-track::-webkit-scrollbar{display:none}
+.hcarousel-slide{flex:0 0 var(--hc-w);scroll-snap-align:start;scroll-snap-stop:always;
+  aspect-ratio:460 / 224;border-radius:12px;overflow:hidden;
+  background:var(--sheet);border:1px solid var(--rule);box-shadow:var(--shadow)}
+.hcarousel-slide img{display:block;width:100%;height:100%;object-fit:cover}
+.hcarousel-dots{display:flex;justify-content:center;gap:6px;margin:12px 0 0;padding:0;list-style:none}
+.hcarousel-dot{width:6px;height:6px;padding:0;border:0;border-radius:999px;background:var(--rule);
+  cursor:pointer;transition:width .18s ease,background-color .18s ease}
+/* The active dot is told apart by length and by taking the full ink, not by
+   a colour: the banners carry enough of their own. */
+.hcarousel-dot[aria-current="true"]{width:18px;background:var(--ink)}
+.hcarousel-dot:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media(max-width:720px){
+  .hcarousel{padding:12px 0 8px}
+  .hcarousel{--hc-w:calc(100vw - 2 * var(--gutter));--hc-gap:12px}
+  .hcarousel-slide{border-radius:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .hcarousel-dot{transition:none}
 }
 
 /* Three across, and fixed at three rather than auto-filled: the search page's
@@ -881,10 +923,10 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   .srch input{padding:10px 14px}
   .srch button{padding:0 13px}
   .hbtn:not(.solid) small{display:none}
-  .hbtn:not(.solid) strong{font-size:12px;line-height:1.2}
-  .hbtn:not(.solid){padding:0 8px}
+  .hbtn:not(.solid) strong{font-size:13px;line-height:1.2}
+  .hbtn:not(.solid){padding:0 12px;height:38px}
   .hbtn.solid{padding:0 11px}
-  .hact{gap:4px}}
+  .hact{gap:6px}}
 
 /* Additions for the data-backed page: states the reference mock never needed,
    because its data was illustrative and ours is read from the database. */
@@ -3363,29 +3405,39 @@ html[data-t="light"] .hero2{
 .la-pad{fill:var(--h-ink);opacity:.12}
 .la-sweep{fill:var(--acc);opacity:0;animation:sweepdown 5s linear 1.3s infinite}
 
-/* ---- image strip: curved cards under the hero ---------------------------- */
-.strip2{background:var(--ground);padding:34px 0 10px}
-.strip2-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;
-  margin:0;padding:0;list-style:none}
-/* 2:3 to match the supplied artwork, so `cover` crops essentially nothing —
-   these are posters whose headings sit hard against the top and bottom. */
-.strip2-card{position:relative;aspect-ratio:2 / 3;overflow:hidden;border-radius:18px;
-  background:var(--sheet-2);border:1px solid var(--rule);
-  display:flex;align-items:center;justify-content:center;
-  animation:rise .55s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i) * 90ms);
-  transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease}
-.strip2-card:hover{border-color:var(--acc);transform:translateY(-4px);box-shadow:var(--shadow)}
-.strip2-card img{width:100%;height:100%;object-fit:cover;display:block;
-  transition:transform .5s cubic-bezier(.2,.7,.3,1)}
-.strip2-card:hover img{transform:scale(1.04)}
-/* A slot with no file yet: its number, not a gap. */
-.strip2-num{font-size:46px;font-weight:600;color:var(--ink-4);opacity:.45}
-
-@media(max-width:1000px){
-  .strip2-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){
-  .strip2-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-  .strip2-card{border-radius:14px}}
+/* ---- banner scroller under the hero ------------------------------------- */
+/* Every card is 1059 x 308; on a screen too narrow for that it shrinks to the
+   gutters and keeps the same shape. A file of a different shape is cropped to
+   it about its centre — see `HomeBanners.tsx`. */
+.hbn{position:relative;background:var(--ground);padding:30px 0 14px}
+.hbn-track{display:flex;align-items:stretch;gap:16px;padding:0 var(--gutter);
+  scroll-padding:0 var(--gutter);overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.hbn-track::-webkit-scrollbar{display:none}
+.hbn-card{flex:0 0 auto;margin:0;width:min(1059px,calc(100vw - 2 * var(--gutter)));
+  aspect-ratio:1059 / 308;scroll-snap-align:start;
+  border-radius:14px;overflow:hidden;background:var(--sheet);border:1px solid var(--rule)}
+.hbn-card img{display:block;width:100%;height:100%;object-fit:cover}
+/* The tall white tab at the row's edge, like every storefront's product row.
+   It sits on the page, not inside the track, so the track can scroll under it. */
+.hbn-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:2;
+  width:46px;height:104px;border:1px solid var(--rule);
+  background:var(--sheet);color:var(--ink);display:flex;align-items:center;justify-content:center;
+  box-shadow:var(--shadow);cursor:pointer}
+.hbn-btn.prev{left:0;border-radius:0 12px 12px 0;border-left:0}
+.hbn-btn.next{right:0;border-radius:12px 0 0 12px;border-right:0}
+.hbn-btn:hover{background:var(--sheet-2)}
+.hbn-btn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media(max-width:900px){
+  .hbn{padding:22px 0 10px}
+  .hbn-btn{width:38px;height:84px}
+}
+@media(max-width:640px){
+  .hbn{padding:16px 0 8px}
+  .hbn-track{gap:10px}
+  .hbn-card{border-radius:10px}
+  .hbn-btn{display:none}
+}
 
 /* ---- shop tiles ---------------------------------------------------------- */
 .shoptiles{background:var(--ground);padding:30px 0 6px}
@@ -3400,47 +3452,16 @@ html[data-t="light"] .hero2{
 .shoptile-n{font-size:12.5px;color:var(--acc-ink);font-weight:600}
 .shoptile-n b{font-weight:700}
 
-.showcase{background:var(--ground);border-bottom:1px solid var(--rule-2);padding:34px 0 38px}
-.showcase-head h2{margin:0;font-size:20px;letter-spacing:-.01em;color:var(--ink)}
-.showcase-head p{margin:6px 0 20px;font-size:13px;color:var(--ink-3)}
-.showcase-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:28px;
-  background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:24px 26px}
-.showcase-id h3{margin:10px 0 0;font-size:20px;letter-spacing:-.01em;color:var(--ink)}
-/* Neutral. A+, A and B are all sellable; colour here would read as a verdict. */
-.showcase-grade{display:inline-block;font-family:var(--font-mono);font-size:10.5px;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--rule);
-  border-radius:4px;padding:4px 9px}
-.showcase-spec{margin:8px 0 0;font-size:13px;color:var(--ink-3);line-height:1.5}
-.showcase-price{margin:16px 0 0;font-size:22px;font-weight:600;color:var(--ink)}
-.showcase-price .sspec-den{font-family:inherit;font-size:12px;font-weight:400}
-.sspec{margin:0;display:grid;gap:0}
-.sspec-row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:baseline;
-  padding:10px 0;border-top:1px solid var(--rule-2);
-  animation:rise .42s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i) * 55ms)}
-.sspec-row:first-child{border-top:0;padding-top:0}
-.sspec dt{font-size:12.5px;color:var(--ink-3)}
-.sspec dd{margin:0;font-size:13.5px;color:var(--ink)}
-.sspec-den{color:var(--ink-3);font-weight:400}
-/* A missing measurement never renders as a passing one. */
-.sspec-missing{color:var(--ink-4)}
-.showcase-dots{display:flex;gap:7px;justify-content:center;margin-top:18px}
-.showcase-dot{width:7px;height:7px;border-radius:999px;background:var(--rule);padding:0;
-  transition:background .15s ease,width .15s ease}
-.showcase-dot.on{width:22px;background:var(--acc)}
-.showcase-dot:hover{background:var(--ink-4)}
-
 @media(max-width:900px){
   .hero2-grid{grid-template-columns:minmax(0,1fr);gap:24px;padding-top:34px;padding-bottom:34px}
   .hero2-art{order:-1}
   .la{max-width:380px}
   .hero2 h1{font-size:32px;max-width:none}
-  .hero2-stats{gap:24px;margin-top:26px;padding-top:20px}
-  .showcase-panel{grid-template-columns:minmax(0,1fr);gap:20px}}
+  .hero2-stats{gap:24px;margin-top:26px;padding-top:20px}}
 @media(max-width:640px){
   .hero2 h1{font-size:27px}
   .hero2-sub{font-size:14px}
-  .hero2-stats dt{font-size:20px}
-  .sspec-row{grid-template-columns:minmax(0,1fr);gap:2px}}
+  .hero2-stats dt{font-size:20px}}
 
 /* `09_FRONTEND_LOCKED.md` §9 and the same rule the rest of the system obeys:
    nothing on this page moves for a reader who has asked the platform for no
@@ -3449,14 +3470,12 @@ html[data-t="light"] .hero2{
    whose keyframes never ran. */
 @media (prefers-reduced-motion: reduce){
   .hero2-copy > *,
-  .la-bar,.la-chip,.sspec-row{animation:none;transform:none}
-  .hero2-copy > *,.la-chip,.sspec-row{opacity:1}
+  .la-bar,.la-chip{animation:none;transform:none}
+  .hero2-copy > *,.la-chip{opacity:1}
   .la-bar{opacity:.16}
   .la-sweep{animation:none;opacity:0}
-  .showcase-dot,.shoptile,.strip2-card,.strip2-card img{transition:none}
-  .shoptile:hover,.strip2-card:hover{transform:none}
-  .strip2-card:hover img{transform:none}
-  .strip2-card{animation:none;opacity:1;transform:none}
+  .shoptile{transition:none}
+  .shoptile:hover{transform:none}
 }
 
 /* ============ PROMO HERO (supplied design, ported) ============
@@ -3477,7 +3496,7 @@ html[data-t="light"] .hero2{
   neither has anything to do on a white one.
 */
 .phero{position:relative;width:100%;display:flex;flex-direction:column;justify-content:center;
-  padding:clamp(18px,3vh,32px) clamp(20px,5vw,72px) clamp(16px,2.4vh,28px);
+  padding:clamp(18px,3vh,32px) var(--gutter) clamp(16px,2.4vh,28px);
   --promo-bg:var(--sheet);
   --promo-text:var(--ink);
   --promo-muted:var(--ink-2);
@@ -3497,7 +3516,7 @@ html[data-t="light"] .hero2{
 @keyframes pheroDrift{0%,100%{transform:translate(0,0)}50%{transform:translate(14px,-22px)}}
 
 .phero-top{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
-  gap:clamp(32px,5vw,72px);align-items:center;max-width:1280px;width:100%;margin:0 auto}
+  gap:clamp(32px,5vw,72px);align-items:center;width:100%;margin:0 auto}
 .phero-tagline{display:inline-flex;align-items:center;gap:10px;font-size:.78rem;font-weight:600;
   letter-spacing:.14em;text-transform:uppercase;color:var(--promo-muted);
   border:1px solid var(--promo-line);border-radius:999px;padding:7px 14px;margin:0 0 18px;
@@ -4335,17 +4354,12 @@ body:has(.pdpbody){background:var(--sheet)}
 .dvhold .dvholdwho .dvspec{color:var(--ink-3);font-weight:400}
 .dvhold .dvtodo{color:var(--ink-2)}
 
-/* ---- HEADER: the search outline and Sign up, in the page's amber ----
-   The rule beside `.srch button` already says the header's one primary action
-   is Sign up, and the one beside `.authpop-cta` calls it "the one amber thing
-   in the panel" — both were painted `--acc`, which is teal. These put them in
-   the amber they were described as.
-
-   The search is OUTLINED and not filled, deliberately: a second amber slab in
-   the bar would compete with Sign up for the same job, which is the thing that
-   comment was guarding against. A border is not a call to action. */
-.srch{border-color:var(--promo-accent)}
-.srch:focus-within{border-color:var(--promo-accent);box-shadow:0 0 0 3px var(--promo-accent-soft)}
+/* ---- HEADER: Sign up in the page's amber ----
+   The rule beside `.authpop-cta` calls it "the one amber thing in the panel",
+   and it was painted `--acc`, which is teal. This puts it in the amber it was
+   described as. The search field used to share the amber as an outline; it no
+   longer does — at rest it is the plain `--rule` border and on focus the
+   product's own active colour, so the only amber in the header is the action. */
 .authpop-cta{background:var(--promo-accent);color:var(--promo-accent-ink)}
 .authpop-cta:hover{background:var(--promo-accent);filter:brightness(1.06)}
 

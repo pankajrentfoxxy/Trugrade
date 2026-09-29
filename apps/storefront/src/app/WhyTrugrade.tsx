@@ -2,7 +2,7 @@
  * "Why Trugrade" — the comparison table + bulk-order poster, reproduced
  * exactly from the supplied design (colours, type, layout, animation).
  *
- * Homepage only, between the spec showcase and the "verify a certificate"
+ * Homepage only, between the banner row and the "verify a certificate"
  * strip. Per the explicit direction to match the supplied file exactly, this
  * is scoped rather than merged into the shared stylesheet: its own font
  * (Archivo, loaded here) and its own literal colours live inside `.wt-scope`,
@@ -222,14 +222,14 @@ const CSS = `
   color:var(--wt-text);
   font-family:"Archivo","Segoe UI",system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased;
-  padding:clamp(40px,7vh,80px) clamp(16px,4vw,56px);
+  padding:clamp(40px,7vh,80px) var(--gutter);
 }
 .wt-scope *{box-sizing:border-box}
 .wt-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 .wt-wrap{
-  max-width:1360px;margin:0 auto;
+  margin:0 auto;
   display:grid;
   grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);
   gap:clamp(28px,4vw,64px);

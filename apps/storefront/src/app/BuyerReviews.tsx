@@ -277,13 +277,13 @@ const CSS = `
   color:var(--rv-text);
   font-family:"Archivo","Segoe UI",system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased;
-  padding:clamp(40px,7vh,80px) clamp(16px,4vw,56px);
+  padding:clamp(40px,7vh,80px) var(--gutter);
   position:relative;
 }
 .rv-scope *{box-sizing:border-box}
 .rv-scope button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 
-.rv-wrap{max-width:1280px;margin:0 auto}
+.rv-wrap{margin:0 auto}
 
 .rv-head{display:flex;align-items:flex-end;flex-wrap:wrap;gap:18px}
 .rv-head h2{

@@ -5,9 +5,9 @@ import { toApiQueryString } from './search/query';
 import { BrandRail } from './BrandRail';
 import { BuyerReviews } from './BuyerReviews';
 import { HeroBanner } from './HeroBanner';
+import { HomeCarousel } from './HomeCarousel';
 import { HomePills } from './HomePills';
-import { HomeStrip } from './HomeStrip';
-import { SpecShowcase } from './SpecShowcase';
+import { HomeBanners } from './HomeBanners';
 import { SiteHeader } from './SiteHeader';
 import { WhyTrugrade } from './WhyTrugrade';
 
@@ -28,18 +28,18 @@ import { WhyTrugrade } from './WhyTrugrade';
  * not a shortfall: a motif must carry information, and a product card promising
  * 91 units that do not exist is a scarcity device.
  *
- * A banner and a spec showcase were added back at the top after the original
- * blocks came out. Both are homepage-only and both are fed from the API: the
- * banner drops any figure `getStats()` did not return rather than printing a
- * zero, and the showcase cycles the same `SearchResult`s the grid renders, so
- * there is no second source of truth for a machine's specification.
+ * A banner was added back at the top after the original blocks came out. It is
+ * homepage-only and fed from the API: it drops any figure `getStats()` did not
+ * return rather than printing a zero. The spec showcase that used to follow it
+ * ("What we measured") is gone at the homepage's request; the SKU page still
+ * carries every measurement it showed.
  *
  * **Blocks 3, 4a, 4b, 5 and 8 are gone**, and so is the filter rail — the
  * category strip (removed across the whole storefront, not just here), the hero
  * (claim, two calls to action, live inspection feed), the result bar (result
  * count, sort control), the supply board and the supplier band. The page runs
- * header → grid → why Trugrade → buyer reviews → utility strip → process →
- * footer.
+ * header → filter strip → promo carousel → hero → why Trugrade → buyer
+ * reviews → utility strip → process → footer.
  *
  * `WhyTrugrade` is new: a five-row comparison against buying new and a
  * grey-market dealer, beside a bulk-order poster — the differentiator the
@@ -143,14 +143,20 @@ export default async function HomePage({
         override — and every other page keeps the standard ground.
       */}
       <div className="home">
-        {/* The claims, centred, before the banner says anything else. */}
+        {/* The filter strip, attached under the header as its second row. */}
         <HomePills />
+
+        {/* Supplied promotional creatives, one centred with its neighbours
+          peeking in. Not a database read — see the file's own header. */}
+        <HomeCarousel />
 
         {/* The banner, then the same machines the grid holds, one at a time,
           with their measurements. Both are homepage-only: this is the way in. */}
         <HeroBanner results={results} sellUrl={sellUrl} />
 
-        <HomeStrip />
+        {/* Supplied banner artwork in one scrolling row. Not a database read —
+          see the file's own header. */}
+        <HomeBanners />
 
         {/*
           The "ways to shop" tiles are gone from this page.
@@ -162,8 +168,6 @@ export default async function HomePage({
           meets first. `ShopTiles` itself is untouched and still counts its own
           stock, so it can go back anywhere that does not already have the pills.
         */}
-
-        {results.length > 0 && <SpecShowcase items={results} />}
 
         {/* Why Trugrade — the comparison table and bulk-order poster. Sits
           between the machines the reader has just seen measured and the
@@ -179,9 +183,8 @@ export default async function HomePage({
         `/search` owns the catalogue and carries the rail, the result bar and
         the sort control that make a grid of it usable; repeating the cards here
         was a second, unfilterable copy of that page. The search call stays —
-        the banner, the shop tiles and the spec showcase are all fed from the
-        same `results`, so this page still renders real stock, just not as a
-        grid of cards.
+        the banner and the shop tiles are fed from the same `results`, so this
+        page still renders real stock, just not as a grid of cards.
 
         The "No inspected stock yet" empty state went with it. It belonged to
         the grid, and an empty state for a block that no longer exists is a

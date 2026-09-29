@@ -58,7 +58,7 @@ export function AuthButtons({
           onClick={openAs('sign-in')}
           aria-haspopup="true"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="8" r="3.6" stroke="currentColor" strokeWidth="1.75" />
             <path
               d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"
