@@ -8,7 +8,7 @@ import { Button, Skeleton, StatusPill } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { inIst } from '../../../../lib/deadline';
 import { OrderNav } from './OrderNav';
-import { getOrder, type OrderRecord as Order } from './api';
+import { getOrder, payOrder, type OrderRecord as Order } from './api';
 import { DownloadIcon, InfoIcon, TickIcon } from './icons';
 import {
   problem,
@@ -40,12 +40,8 @@ import {
  * too many.
  */
 
-export const OrderContext = React.createContext<OrderPhase | null>(null);
-
-/** The order the chrome read, or null when rendered outside it (tests). */
-export function useSharedOrder(): OrderPhase | null {
-  return React.useContext(OrderContext);
-}
+export { OrderContext, ReloadContext, useReloadOrder, useSharedOrder } from './order-context';
+import { OrderContext, ReloadContext } from './order-context';
 
 export function OrderChrome({
   orderNumber,
@@ -55,6 +51,9 @@ export function OrderChrome({
   children: React.ReactNode;
 }): React.JSX.Element {
   const [phase, setPhase] = React.useState<OrderPhase>({ k: 'loading' });
+  // Bumped after a payment, so the chrome and every panel under it re-read
+  // the order rather than patching a copy of it.
+  const [generation, setGeneration] = React.useState(0);
   const pathname = usePathname();
 
   React.useEffect(() => {
@@ -70,21 +69,29 @@ export function OrderChrome({
     return () => {
       live = false;
     };
-  }, [orderNumber]);
+  }, [orderNumber, generation]);
 
   const live = phase.k === 'ready' || phase.k === 'loading';
 
+  const reload = React.useCallback(() => setGeneration((n) => n + 1), []);
+
   return (
     <OrderContext.Provider value={phase}>
+      <ReloadContext.Provider value={reload}>
       <div className="od">
         {phase.k === 'ready' ? (
-          <Head order={phase.order} pathname={pathname ?? ''} />
+          <Head
+            order={phase.order}
+            pathname={pathname ?? ''}
+            onPaid={() => setGeneration((n) => n + 1)}
+          />
         ) : phase.k === 'loading' ? (
           <HeadSkeleton />
         ) : null}
         {live && <OrderNav orderNumber={orderNumber} />}
         {children}
       </div>
+      </ReloadContext.Provider>
     </OrderContext.Provider>
   );
 }
@@ -93,14 +100,22 @@ export function OrderChrome({
  * The header, the progress and the next step
  * ======================================================================== */
 
-function Head({ order, pathname }: { order: Order; pathname: string }): React.JSX.Element {
+function Head({
+  order,
+  pathname,
+  onPaid,
+}: {
+  order: Order;
+  pathname: string;
+  onPaid: () => void;
+}): React.JSX.Element {
   const at = standing(order);
   const state = statusOf(order);
   const pdf = `/api/buyer/orders/${encodeURIComponent(order.orderNumber)}/confirmation.pdf`;
-  // The sales order is the document the payment is against, and it carries the
-  // pay control beside its own total. Drawing a second one in the header on
-  // that tab would be two primary actions on one screen.
-  const onSalesOrder = pathname.endsWith('/sales-order');
+  // The record body draws the payment panel with the deadline beside it, and
+  // that panel is where the one primary action lives. The header carries the
+  // button only on the other tabs, so no screen has two of them.
+  const onRecord = pathname === `/orders/${encodeURIComponent(order.orderNumber)}`;
 
   return (
     <>
@@ -127,7 +142,9 @@ function Head({ order, pathname }: { order: Order; pathname: string }): React.JS
               <DownloadIcon />
               Order confirmation
             </a>
-            {at.payable && !onSalesOrder && <PayButton amount={order.grandTotal} />}
+            {at.payable && !onRecord && (
+              <PayButton orderNumber={order.orderNumber} amount={order.grandTotal} onPaid={onPaid} />
+            )}
           </div>
         </div>
       </div>
@@ -195,23 +212,52 @@ function Headline({ order }: { order: Order }): React.JSX.Element {
 }
 
 /**
- * The one primary action on the screen.
+ * The one primary action on the screen: pay for a verified order.
  *
- * Online payment is not connected in this product yet — there is no gateway
- * adapter and no `/checkout/pay` route, only the spec for one — so the control
- * is here, for the amount, with the reason it cannot be pressed stated on it.
- * It is never drawn as a working button that leads nowhere: `disabledReason`
- * keeps it reachable and says what will change it.
+ * `POST /api/buyer/orders/:n/pay` records the payment and confirms the order.
+ * There is no gateway in front of it yet, so the press is the payment; when a
+ * gateway arrives it lands in front of this call. A refusal — the 24-hour
+ * window closed, the order already paid — is the server's own sentence and is
+ * printed beside the button.
  */
-function PayButton({ amount }: { amount: string }): React.JSX.Element {
+export function PayButton({
+  orderNumber,
+  amount,
+  onPaid,
+}: {
+  orderNumber: string;
+  amount: string;
+  onPaid: () => void;
+}): React.JSX.Element {
+  const [busy, setBusy] = React.useState(false);
+  const [failure, setFailure] = React.useState<string | null>(null);
+
+  async function pay(): Promise<void> {
+    setBusy(true);
+    setFailure(null);
+    const result = await payOrder(orderNumber);
+    setBusy(false);
+    if (result.ok) onPaid();
+    else setFailure(problem(result));
+  }
+
   return (
-    <Button
-      variant="primary"
-      className="od-btn--primary"
-      disabledReason="Online payment is not connected yet. Your account manager will send payment instructions for this amount, and this button will take the payment once it is."
-    >
-      Pay <span className="mono">{rupees(amount)}</span>
-    </Button>
+    <span className="od-pay">
+      <Button
+        variant="primary"
+        className="od-btn--primary"
+        loading={busy}
+        disabled={busy}
+        onClick={() => void pay()}
+      >
+        Pay <span className="mono">{rupees(amount)}</span>
+      </Button>
+      {failure && (
+        <span role="alert" className="od-pay__err">
+          {failure}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -238,8 +284,7 @@ interface Step {
 
 function Progress({ order, at }: { order: Order; at: Standing }): React.JSX.Element {
   const base = `/orders/${encodeURIComponent(order.orderNumber)}`;
-  const answered = order.supply.filter((l) => l.qtyAvailable !== null).length;
-  const total = order.supply.length;
+  const total = order.unitsAllocated;
 
   const steps: Step[] = [
     {
@@ -248,22 +293,43 @@ function Progress({ order, at }: { order: Order; at: Standing }): React.JSX.Elem
       done: true,
     },
     {
-      label: 'Stock confirmed',
-      meta: at.stockConfirmed
-        ? total > 0 && answered === total
-          ? 'Every line confirmed'
-          : 'By dispatch point'
-        : total > 0 && answered > 0
-          ? `${answered} of ${total} lines so far`
-          : 'By dispatch point',
-      done: at.stockConfirmed,
+      // Each machine is named by our technician at the supply point. The count
+      // carries its denominator; a step nobody has started says so.
+      label: 'Inspected',
+      meta: at.inspected ? (
+        'Every machine recorded'
+      ) : order.unitsInspected > 0 ? (
+        <>
+          <span className="mono">{order.unitsInspected}</span> of{' '}
+          <span className="mono">{total}</span> recorded
+        </>
+      ) : (
+        'By our technician'
+      ),
+      done: at.inspected || at.verified,
+    },
+    {
+      label: 'Verified',
+      meta: at.verified ? (
+        'Every machine verified'
+      ) : order.unitsVerified > 0 ? (
+        <>
+          <span className="mono">{order.unitsVerified}</span> of{' '}
+          <span className="mono">{total}</span> verified
+        </>
+      ) : (
+        'Then you pay'
+      ),
+      done: at.verified,
     },
     {
       label: 'Payment',
       meta:
         order.paymentMode === 'CREDIT'
           ? PAYMENT_STEP.CREDIT
-          : (PAYMENT_STEP[order.paymentStatus] ?? 'Waiting for you'),
+          : at.payable && order.payBy
+            ? `Due ${shortIst(order.payBy)}`
+            : (PAYMENT_STEP[order.paymentStatus] ?? 'After verification'),
       done: at.paid,
     },
     {
@@ -329,13 +395,10 @@ function NextStep({
   // Only a real `Supply Point X · City` reads as a name in a sentence. The
   // API's placeholder for a line nobody has been asked about yet does not,
   // so it falls back to "the dispatch point".
-  const points = order.dispatchGroups
-    .map((g) => g.label)
-    .filter((l) => l.startsWith('Supply Point '));
+  const points = [
+    ...new Set(order.dispatchGroups.map((g) => g.label).filter((l) => l.startsWith('Supply Point '))),
+  ];
   const named = points.length === 0 ? 'the dispatch point' : points.join(' and ');
-  const plural = points.length > 1;
-  // For the two sentences that open with the name, since the fallback is lowercase.
-  const Named = named.charAt(0).toUpperCase() + named.slice(1);
 
   let body: React.ReactNode;
   let link: { href: Route; label: string } | null = null;
@@ -378,27 +441,38 @@ function NextStep({
       </>
     );
     link = { href: `${base}/tracking` as Route, label: 'Tracking →' };
-  } else if (!at.stockConfirmed) {
-    body = at.paid ? (
+  } else if (!at.inspected && !at.verified) {
+    body = (
       <>
-        <strong>Next: stock confirmation.</strong> {Named} {plural ? 'are' : 'is'} confirming your
-        machines by serial number. We will tell you when {plural ? 'they have' : 'it has'}.
+        <strong>Next: inspection.</strong> Our technician goes to {named}, inspects each machine
+        and records its serial. Nothing has been charged yet; payment comes once every machine is
+        verified.
       </>
-    ) : (
+    );
+  } else if (!at.verified) {
+    body = (
       <>
-        <strong>Next: stock confirmation.</strong> {Named} {plural ? 'are' : 'is'} confirming your
-        machines by serial number. Payment comes after that, and nothing has been charged yet.
+        <strong>Next: verification.</strong> Every machine has been inspected and named. We are
+        checking each one against its inspection; you pay once the last one is verified, and
+        nothing has been charged yet.
       </>
     );
   } else if (!at.paid) {
     body = (
       <>
-        <strong>Next: complete payment.</strong> Nothing has been charged yet. {named}{' '}
-        {plural ? 'have' : 'has'} confirmed your machines, so payment is the last step before they
-        ship.
+        <strong>Next: pay.</strong> Every machine is verified. Nothing has been charged yet;
+        {order.payBy ? (
+          <>
+            {' '}
+            pay by <span className="mono">{inIst(order.payBy)}</span> or the machines go back on
+            sale.
+          </>
+        ) : (
+          ' payment is the last step before they ship.'
+        )}
       </>
     );
-    link = { href: `${base}/sales-order` as Route, label: 'Payment options →' };
+    link = { href: base as Route, label: 'Pay now →' };
   } else {
     body = (
       <>

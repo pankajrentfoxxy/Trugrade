@@ -11,6 +11,7 @@ import {
 import {
   Button,
   DataBoard,
+  Drawer,
   EmptyState,
   GradeBadge,
   Input,
@@ -20,7 +21,7 @@ import {
   cn,
   type Column,
 } from '@trugrade/ui';
-import { Board, PageHeader, Section } from '../lib/controls';
+import { Board, PageHeader } from '../lib/controls';
 import { useResource } from '../lib/useResource';
 import { useUrlState } from '../lib/urlState';
 import { apiFetch } from '../lib/auth';
@@ -268,10 +269,6 @@ async function send<T>(method: string, url: string, body: unknown): Promise<T> {
 }
 
 const postJson = <T,>(url: string, body: unknown): Promise<T> => send<T>('POST', url, body);
-
-function scrollToTop(): void {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
 
 const CAPTION_MIN = 10;
 const caption = (captions: Record<string, string>, filename: string): string =>
@@ -785,9 +782,9 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
   // change than teaching it to refetch.
   const [reload, setReload] = React.useState(0);
   // In the URL: "the model whose shoot I am uploading" survives a reload and is
-  // a link an ops person can send to whoever is holding the camera.
+  // a link an ops person can send to whoever is holding the camera. It opens
+  // the drawer on the right; clearing it closes the drawer.
   const [openModel, setOpenModel] = useUrlState('model');
-  const uploadPanelRef = React.useRef<HTMLDivElement>(null);
 
   const { data, error } = useResource<ModelCoverage[]>(
     `/api/catalog/condition-images/coverage?v=${reload}`,
@@ -796,24 +793,7 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
 
   function closeUpload(): void {
     setOpenModel('');
-    scrollToTop();
   }
-
-  function toggleUpload(modelId: string): void {
-    if (openModel === modelId) {
-      closeUpload();
-      return;
-    }
-    setOpenModel(modelId);
-  }
-
-  React.useEffect(() => {
-    if (!openModel) return;
-    const frame = requestAnimationFrame(() => {
-      uploadPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [openModel]);
 
   // Worst first. The screen exists to surface gaps, and a gap sorted below two
   // hundred complete models is a gap nobody sees until a buyer does.
@@ -836,14 +816,17 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
             <span className="text-body-sm text-ink-3">
               {row.model.brandName} · {row.model.seriesName}
             </span>
+            {/* Opens the drawer. It never needs to read "Close": while the
+                drawer is up the page behind it is inert, and the drawer's own
+                close button and Esc are the way out. */}
             <Button
               variant="link"
               size="sm"
               className="justify-start px-0"
               aria-expanded={openModel === row.model.modelId}
-              onClick={() => toggleUpload(row.model.modelId)}
+              onClick={() => setOpenModel(row.model.modelId)}
             >
-              {openModel === row.model.modelId ? 'Close' : 'Add photographs'}
+              Add photographs
             </Button>
           </div>
         ),
@@ -926,31 +909,28 @@ export function ConditionImageCoverageRoute(): React.JSX.Element {
       </Board>
 
       {/*
-        The upload panel sits below the board rather than inside it as a second
-        <tr>. A table row that opens a drop zone spanning thirty-two columns is a
-        table pretending to be a page, and `DataBoard` — one table component,
-        three densities — deliberately has no expansion slot for it to grow into.
+        The upload form opens in the shared `Drawer`, beside the board, rather
+        than as a panel under it or a second <tr> inside it. A table row that
+        opens a drop zone spanning thirty-two columns is a table pretending to
+        be a page, and `DataBoard` — one table component, three densities —
+        deliberately has no expansion slot for it to grow into. A drawer keeps
+        the grid mounted and where it was scrolled to, so the next model's
+        shoot is one click away rather than a scroll back up.
+
+        Mounted only while a model is open: `FrameList` and the drop zone
+        belong to one model, and a dialog kept in the DOM for a model nobody
+        has picked is a fetch and a form for nothing.
       */}
       {open && (
-        <div ref={uploadPanelRef} className="scroll-mt-20">
-          <Section
-            title={`Add photographs · ${open.model.modelName}`}
-            subtitle={`${open.model.brandName} · ${open.model.seriesName}`}
-            aside={
-              <Button variant="ghost" size="sm" onClick={closeUpload}>
-                Close
-              </Button>
-            }
-          >
-            <BulkUpload
-              model={open.model}
-              onCommitted={() => {
-                setReload((n) => n + 1);
-                scrollToTop();
-              }}
-            />
-          </Section>
-        </div>
+        <Drawer
+          open
+          size="xl"
+          onClose={closeUpload}
+          title={`Add photographs · ${open.model.modelName}`}
+          subtitle={`${open.model.brandName} · ${open.model.seriesName}`}
+        >
+          <BulkUpload model={open.model} onCommitted={() => setReload((n) => n + 1)} />
+        </Drawer>
       )}
     </div>
   );

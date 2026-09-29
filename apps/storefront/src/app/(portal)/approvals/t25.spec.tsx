@@ -115,6 +115,12 @@ const record = (over: Partial<ApprovalRow> = {}): Record_ => ({
     billingAddress: address(),
     deliveryAddress: address(),
     unitsAllocated: 1,
+    unitsInspected: 1,
+    unitsVerified: 1,
+    verifiedAt: null,
+    payBy: null,
+    paidAt: null,
+    payable: false,
     dispatchGroups: [
       {
         label: 'Supply Point D · Ghaziabad',
@@ -125,6 +131,8 @@ const record = (over: Partial<ApprovalRow> = {}): Record_ => ({
             specSummary: 'Core i5 · 16 GB',
             grade: 'A',
             unitPrice: '46000.00',
+            inspectedAt: null,
+            verifiedAt: null,
           },
         ],
       },

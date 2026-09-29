@@ -130,6 +130,8 @@ export interface VendorListingView {
   expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** Ops' own words when they refused the listing. Null unless REJECTED. */
+  rejectionReason: string | null;
   /** Present when `vendorAskPrice` is set — from the pricing engine, never client-side. */
   commissionPct: number | null;
   commissionAmount: Money | null;
@@ -294,11 +296,12 @@ export interface PublicOffer {
   fromPrice: string;
   unitsAvailable: number;
   supplyPoints: number;
-  avgQcScore: number;
-  batteryMin: number;
-  batteryMax: number;
-  /** One real serial, so the viewfinder brackets are vouching for something. */
-  sampleSerial: string;
+  /** Null: nothing behind a declared listing has been inspected yet. Never 0. */
+  avgQcScore: number | null;
+  batteryMin: number | null;
+  batteryMax: number | null;
+  /** A real serial when one is known; null for declared stock. */
+  sampleSerial: string | null;
 }
 
 /**
@@ -321,7 +324,10 @@ export interface SellableUnitFacts {
   dispatchSlaHours: number | null;
   /** Our own warranty on the unit, in months. `null` when none is offered. */
   warrantyMonths: number | null;
-  serialNumber: string;
+  /** Null for a declared listing. */
+  serialNumber: string | null;
+  /** How many machines this row stands for. */
+  qtyAvailable: number;
 }
 
 /**
@@ -401,120 +407,119 @@ export class ListingService implements IListingService {
 
   // -------------------------------------------------------------------------
   // Public read surface (storefront figures)
+  //
+  // Every read here is LISTING-based. A listing is a declared quantity of one
+  // machine at one grade from one supply point, and there are no inspected
+  // units behind it until a buyer orders. `listing.qty_available` is therefore
+  // the one definition of "on sale": written by ops approval and by the
+  // ordering module's hold and order transactions, and by nothing else.
   // -------------------------------------------------------------------------
 
   async publicStockCounts(): Promise<{ sellable: number; returnedToVendor: number }> {
     const [row] = await this.prisma.$queryRaw<Array<{ sellable: bigint; returned: bigint }>>`
-      SELECT (SELECT count(*) FROM listing.v_sellable_unit)                     AS sellable,
-             (SELECT count(*) FROM listing.unit WHERE status = 'RETURNED_TO_VENDOR') AS returned`;
+      SELECT (SELECT COALESCE(sum(qty_available), 0)::bigint FROM listing.listing
+               WHERE status IN ('ACTIVE', 'PARTIALLY_ACTIVE'))                    AS sellable,
+             (SELECT count(*)::bigint FROM listing.unit WHERE status = 'RETURNED_TO_VENDOR') AS returned`;
     return {
       sellable: Number(row?.sellable ?? 0),
       returnedToVendor: Number(row?.returned ?? 0),
     };
   }
 
-  /**
-   * ponytail: one row per SKU that currently has stock, materialised into a Map.
-   * That is bounded by SKUs actually in stock rather than by the catalogue, and
-   * the only caller caches for a minute. If it ever stops fitting comfortably,
-   * the upgrade is a `skuIds` argument so the caller asks about the page it is
-   * rendering instead of the whole platform.
-   */
   async countSellableBySku(): Promise<Map<string, number>> {
     const rows = await this.prisma.$queryRaw<Array<{ sku_id: string; n: bigint }>>`
-      SELECT sku_id, count(*) AS n FROM listing.v_sellable_unit GROUP BY sku_id`;
+      SELECT sku_id, sum(qty_available)::bigint AS n
+        FROM listing.listing
+       WHERE status IN ('ACTIVE', 'PARTIALLY_ACTIVE') AND qty_available > 0
+       GROUP BY sku_id`;
     return new Map(rows.map((r) => [r.sku_id, Number(r.n)]));
   }
 
   /**
-   * The count comes from the view; the label comes from the table.
+   * The count and the price come off the listing row; the label comes from
+   * `listing.supply_point` through the pickup address's city.
    *
-   * Those two halves are deliberately different sources. Counting through
-   * `v_sellable_unit` is what makes an expired or unsealed unit disappear the
-   * moment it expires. But the *label* has to survive a listing going
-   * temporarily empty — a cart line that shows "0 of 5 available" still has to
-   * say which dispatch point it belonged to, or the buyer cannot tell which of
-   * their lines just went away. So the query drives off `listing.unit`, which is
-   * legitimate here (this is listing's own table, read inside listing) and joins
-   * the view in to do the counting.
-   *
-   * The supply point is resolved on `(vendor_org_id, code)` rather than on the
-   * unit's city, because `listing.supply_point` is the register of assignments
-   * and `unit.supply_point_code` is a denormalised copy of it —
-   * `v_supply_point_drift` is the thing that proves the two agree.
+   * Driven off `listing.listing` so a line that has just sold out still says
+   * which dispatch point it belonged to — a cart line that vanishes rather than
+   * saying "0 of 5 available" leaves the buyer unable to tell which of their
+   * lines disappeared. The city is `identity`'s fact and is read in its own
+   * statement; a listing whose supply point has never been assigned comes back
+   * with a null code and the cart prints its "to be confirmed" label.
    */
   async availabilityByListing(
     listingIds: readonly string[],
   ): Promise<Map<string, ListingAvailability>> {
     if (listingIds.length === 0) return new Map();
 
-    // Driven off `listing.listing`, not `listing.unit`. A listing whose last
-    // sellable unit just went is still a listing, and a cart line that vanishes
-    // rather than saying "0 of 5 available" leaves the buyer unable to tell
-    // which of their lines disappeared.
     const rows = await this.prisma.$queryRaw<
       Array<{
         listing_id: string;
+        vendor_org_id: string;
+        pickup_location_id: string;
         sku_id: string;
         grade: string;
         unit_price: unknown;
         moq: number;
         dispatch_sla_hours: number;
         purchasable: boolean;
-        available: bigint;
-        code: string | null;
-        city: string | null;
+        available: number;
       }>
     >`
-      SELECT l.id                        AS listing_id,
-             l.sku_id,
-             l.grade::text               AS grade,
-             l.unit_price,
-             l.moq,
-             l.dispatch_sla_hours,
+      SELECT l.id AS listing_id, l.vendor_org_id, l.pickup_location_id, l.sku_id,
+             l.grade::text AS grade, l.unit_price, l.moq, l.dispatch_sla_hours,
              (l.status IN ('ACTIVE','PARTIALLY_ACTIVE')) AS purchasable,
-             count(sv.id)::bigint        AS available,
-             min(u.supply_point_code)    AS code,
-             min(sp.city)                AS city
+             l.qty_available AS available
         FROM listing.listing l
-        LEFT JOIN listing.unit u            ON u.listing_id = l.id
-        LEFT JOIN listing.v_sellable_unit sv ON sv.id = u.id
-        LEFT JOIN listing.supply_point sp
-               ON sp.vendor_org_id = u.vendor_org_id
-              AND sp.code = u.supply_point_code
-       WHERE l.id = ANY(${[...listingIds]}::uuid[])
-       GROUP BY l.id, l.sku_id, l.grade, l.unit_price, l.moq, l.dispatch_sla_hours, l.status`;
+       WHERE l.id = ANY(${[...listingIds]}::uuid[])`;
+
+    const addressIds = [...new Set(rows.map((r) => r.pickup_location_id))];
+    const cities =
+      addressIds.length === 0
+        ? new Map<string, string>()
+        : new Map(
+            (
+              await this.prisma.$queryRaw<Array<{ id: string; city: string | null }>>`
+                SELECT id, city FROM identity.org_address WHERE id = ANY(${addressIds}::uuid[])`
+            ).flatMap((a) => (a.city?.trim() ? [[a.id, a.city.trim()] as const] : [])),
+          );
+
+    const vendorIds = [...new Set(rows.map((r) => r.vendor_org_id))];
+    const points =
+      vendorIds.length === 0
+        ? []
+        : await this.prisma.$queryRaw<Array<{ vendor_org_id: string; city: string; code: string }>>`
+            SELECT vendor_org_id, city, code FROM listing.supply_point
+             WHERE vendor_org_id = ANY(${vendorIds}::uuid[])`;
+    const codeBy = new Map(points.map((p) => [`${p.vendor_org_id}|${p.city}`, p.code]));
 
     return new Map(
-      rows.map((r) => [
-        r.listing_id,
-        {
-          availableQty: Number(r.available),
-          supplyPointCode: r.code,
-          city: r.city,
-          skuId: r.sku_id,
-          grade: r.grade as Grade,
-          // NUMERIC arrives as a Decimal. Number() here would be a float bug on
-          // the one field a buyer is charged against.
-          unitPrice: moneyFromDb(r.unit_price as string)!,
-          moq: Number(r.moq),
-          dispatchSlaHours: Number(r.dispatch_sla_hours),
-          purchasable: r.purchasable,
-        },
-      ]),
+      rows.map((r) => {
+        const city = cities.get(r.pickup_location_id) ?? null;
+        const code = city ? (codeBy.get(`${r.vendor_org_id}|${city}`) ?? null) : null;
+        return [
+          r.listing_id,
+          {
+            availableQty: Number(r.available),
+            supplyPointCode: code,
+            city: code ? city : null,
+            skuId: r.sku_id,
+            grade: r.grade as Grade,
+            // NUMERIC arrives as a Decimal. Number() here would be a float bug on
+            // the one field a buyer is charged against.
+            unitPrice: moneyFromDb(r.unit_price as string)!,
+            moq: Number(r.moq),
+            dispatchSlaHours: Number(r.dispatch_sla_hours),
+            purchasable: r.purchasable,
+          },
+        ];
+      }),
     );
   }
 
   async publicOffers(limit: number): Promise<PublicOffer[]> {
-    // Reads v_sellable_unit, never listing.unit: the view re-evaluates the QC
-    // expiry and seal predicates on read, so a machine whose inspection lapsed
-    // at midnight leaves the storefront at midnight rather than whenever a job
-    // next runs.
-    //
-    // It also touches ONLY the listing schema. The brand, model and
-    // specification behind a sku_id are catalog's facts, and joining to them
-    // here would be a second definition of what a SKU is — the caller composes
-    // the two halves on sku_id, which is what the JOIN was doing anyway.
+    // One row per (SKU, grade) across every live listing with stock. The
+    // supply-point count is a count of vendors, which is the same number the
+    // board would give and names nobody.
     const rows = await this.prisma.$queryRaw<
       Array<{
         sku_id: string;
@@ -522,97 +527,59 @@ export class ListingService implements IListingService {
         from_price: unknown;
         units: bigint;
         supply_points: bigint;
-        avg_score: unknown;
-        batt_min: number | null;
-        batt_max: number | null;
-        sample_serial: string;
       }>
     >`
-      SELECT u.sku_id,
-             u.grade_actual::text AS grade,
-             min(u.retail_price)  AS from_price,
-             count(*)::bigint     AS units,
-             count(DISTINCT u.supply_point_code)::bigint AS supply_points,
-             round(avg(u.qc_score))    AS avg_score,
-             min(u.battery_health_pct) AS batt_min,
-             max(u.battery_health_pct) AS batt_max,
-             min(u.serial_number)      AS sample_serial
-        FROM listing.v_sellable_unit u
-       WHERE u.retail_price IS NOT NULL
-       GROUP BY u.sku_id, u.grade_actual
-       ORDER BY min(u.retail_price)
+      SELECT l.sku_id,
+             l.grade::text                         AS grade,
+             min(l.unit_price)                     AS from_price,
+             sum(l.qty_available)::bigint          AS units,
+             count(DISTINCT l.vendor_org_id)::bigint AS supply_points
+        FROM listing.listing l
+       WHERE l.status IN ('ACTIVE', 'PARTIALLY_ACTIVE')
+         AND l.qty_available > 0
+       GROUP BY l.sku_id, l.grade
+       ORDER BY min(l.unit_price)
        LIMIT ${limit}`;
 
     return rows.map((r) => ({
       skuId: r.sku_id,
       grade: r.grade as Grade,
-      // NUMERIC through moneyFromDb, never Number(): this is the figure a buyer
-      // is charged against.
       fromPrice: (moneyFromDb(r.from_price as string) ?? Money.ZERO).toString(),
       unitsAvailable: Number(r.units),
       supplyPoints: Number(r.supply_points),
-      avgQcScore: Number(r.avg_score ?? 0),
-      batteryMin: Number(r.batt_min ?? 0),
-      batteryMax: Number(r.batt_max ?? 0),
-      sampleSerial: r.sample_serial,
+      // Nothing behind a declared listing has been opened. Null, never zero.
+      avgQcScore: null,
+      batteryMin: null,
+      batteryMax: null,
+      sampleSerial: null,
     }));
   }
 
   async sellableUnitFacts(): Promise<SellableUnitFacts[]> {
-    // ponytail: every sellable unit in one read, filtered and faceted in the
-    // caller. At 48 units that is free and it keeps the two schemas apart; past
-    // a few thousand this becomes a filtered query per request with the facet
-    // counts computed in SQL over a materialised view.
-    //
-    // The supply point is resolved through `vendor_org_id`, which is why the
-    // join is here rather than in the caller: the org id is the thing that must
-    // not leave this module, and the code/city pair is what replaces it.
-    const rows = await this.prisma.$queryRaw<
-      Array<{
-        sku_id: string;
-        grade: string;
-        retail_price: unknown;
-        battery_health_pct: unknown;
-        qc_score: number | null;
-        supply_point_code: string | null;
-        city: string | null;
-        dispatch_sla_hours: number | null;
-        warranty: string | null;
-        serial_number: string;
-      }>
-    >`
-      SELECT u.sku_id,
-             u.grade_actual::text        AS grade,
-             u.retail_price,
-             u.battery_health_pct,
-             u.qc_score,
-             u.supply_point_code,
-             sp.city,
-             l.dispatch_sla_hours,
-             l.truetech_warranty::text   AS warranty,
-             u.serial_number
-        FROM listing.v_sellable_unit u
-        LEFT JOIN listing.supply_point sp
-               ON sp.vendor_org_id = u.vendor_org_id
-              AND sp.code = u.supply_point_code
-        LEFT JOIN listing.listing l ON l.id = u.listing_id
-       WHERE u.retail_price IS NOT NULL
-         AND u.grade_actual IS NOT NULL`;
+    // One row per live listing, carrying its quantity, so the search's facet
+    // counts add up machines rather than rows.
+    const offers = await this.listings.publicLiveOffers();
+    if (offers.length === 0) return [];
 
-    return rows.map((r) => ({
-      skuId: r.sku_id,
-      grade: r.grade as Grade,
-      retailPrice: (moneyFromDb(r.retail_price as string) ?? Money.ZERO).toString(),
-      // A unit whose battery was never measured stays null all the way to the
-      // screen, where it reads "Not measured". Coercing it to 0 here would make
-      // an unmeasured machine look like a dead one.
-      batteryHealthPct: r.battery_health_pct === null ? null : Number(r.battery_health_pct),
-      qcScore: r.qc_score === null ? null : Number(r.qc_score),
-      supplyPointCode: r.supply_point_code,
-      city: r.city,
-      dispatchSlaHours: r.dispatch_sla_hours === null ? null : Number(r.dispatch_sla_hours),
-      warrantyMonths: WARRANTY_MONTHS[r.warranty ?? 'NONE'] ?? null,
-      serialNumber: r.serial_number,
+    const warranties = await this.prisma.$queryRaw<
+      Array<{ id: string; warranty: string | null }>
+    >`
+      SELECT id, truetech_warranty::text AS warranty
+        FROM listing.listing WHERE id = ANY(${offers.map((o) => o.listingId)}::uuid[])`;
+    const warrantyBy = new Map(warranties.map((w) => [w.id, w.warranty]));
+
+    return offers.map((o) => ({
+      skuId: o.skuId,
+      grade: o.grade,
+      retailPrice: o.sellingPrice.toString(),
+      batteryHealthPct: null,
+      qcScore: null,
+      supplyPointCode: o.supplyPointCode,
+      city: o.city,
+      dispatchSlaHours: o.dispatchSlaHours,
+      warrantyMonths: WARRANTY_MONTHS[warrantyBy.get(o.listingId) ?? 'NONE'] ?? null,
+      serialNumber: null,
+      qtyAvailable: o.qtyAvailable,
     }));
   }
 
@@ -900,6 +867,7 @@ function toVendorView(r: ListingRow): Omit<VendorListingView, 'sku'> {
     expiresAt: r.expiresAt,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
+    rejectionReason: r.rejectionReason,
     commissionPct: null,
     commissionAmount: null,
   };

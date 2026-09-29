@@ -35,6 +35,7 @@ import {
 } from './internal/sku.repository';
 import {
   CatalogBoardRepository,
+  type CatalogBoardFacets,
   type CatalogBoardPage,
   type CatalogBrandOption,
 } from './internal/catalog-board.repository';
@@ -484,8 +485,22 @@ export class CatalogController {
   async listBoard(
     @Query(new ZodValidationPipe(catalogBoardQuerySchema)) query: CatalogBoardQueryDto,
   ): Promise<CatalogBoardPage> {
-    const { page, pageSize, q, brandId } = query;
-    return this.catalogBoard.listSkus({ q, brandId }, { page, pageSize });
+    const { page, pageSize, q, brandId, modelId, cpuFamily, ramGb, live } = query;
+    return this.catalogBoard.listSkus(
+      { q, brandId, modelId, cpuFamily, ramGb, liveOnly: live === '1' },
+      { page, pageSize },
+    );
+  }
+
+  /**
+   * The board's Processor and RAM selects — the distinct values the active
+   * catalog holds. Read from the data rather than hardcoded, so a new CPU
+   * family appears in the filter the day its first SKU is imported.
+   */
+  @Get('board/facets')
+  @RequirePermissions('catalog.sku.read')
+  async boardFacets(): Promise<CatalogBoardFacets> {
+    return this.catalogBoard.listFacets();
   }
 
   /**

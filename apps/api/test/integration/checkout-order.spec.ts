@@ -1517,7 +1517,7 @@ describe('the buyer reads their orders back as a board', () => {
     const placed = await asBuyer(() => checkout.confirm(confirmArgs(cartId)));
 
     const record = await asBuyer(() => readOrder.byNumber(placed.orderNumber));
-    const serial = record.dispatchGroups[0]!.machines[0]!.serialNumber;
+    const serial = record.dispatchGroups[0]!.machines[0]!.serialNumber ?? "";
 
     const byNumber = await asBuyer(() => board({ q: placed.orderNumber }));
     expect(byNumber.orders.map((o) => o.orderNumber)).toContain(placed.orderNumber);

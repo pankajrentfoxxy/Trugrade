@@ -233,7 +233,7 @@ export function ProductIdentityCard({
           <span className="mono">{sku.hsnCode}</span> · <b className="mono">{board.supplyPoints}</b>{' '}
           supply point{board.supplyPoints === 1 ? '' : 's'}
           {cities.length > 0 ? <> · {cities.join(', ')}</> : null} ·{' '}
-          <span className="mono">{board.unitsAvailable} sealed</span>
+          <span className="mono">{board.unitsAvailable} on sale</span>
         </span>
       </div>
 

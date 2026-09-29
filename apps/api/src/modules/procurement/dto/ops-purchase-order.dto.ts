@@ -31,6 +31,14 @@ export const opsPurchaseOrderListQuerySchema = z
      * cover several statuses later without the URL changing meaning.
      */
     view: z.enum(['ready', 'partial', 'awaiting', 'dispatched', 'received', 'all']).optional(),
+    /**
+     * The two "stuck" sets the board's attention strip counts, so its "Show
+     * them" is a filter the server applies rather than a sort the reader has to
+     * interpret. `ack`: raised and not acknowledged within the board's
+     * acknowledgement threshold. `dispatch`: acknowledged and not dispatched
+     * within its dispatch threshold. The thresholds are the service's.
+     */
+    late: z.enum(['ack', 'dispatch']).optional(),
     sort: z.enum(['recent', 'oldest', 'value', 'value_asc']).default('recent'),
     // No ceiling: the service clamps to the last page that exists. A stale
     // bookmark naming page 9,999 is not a client error worth a 422 — every

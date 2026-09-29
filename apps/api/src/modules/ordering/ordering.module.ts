@@ -26,6 +26,7 @@ import { DeliveryService } from './internal/delivery.service';
 import { OrderPdfService } from './internal/order-pdf.service';
 import { OwnedUnitsService } from './internal/owned-units.service';
 import { RfqIntakeService } from './internal/rfq-intake.service';
+import { OrderVerificationService } from './internal/order-verification.service';
 import { AutomationModule } from '../../shared/automation/automation.service';
 
 /**
@@ -101,6 +102,7 @@ import { AutomationModule } from '../../shared/automation/automation.service';
     OrderDocumentsService,
     OrderListService,
     OpsOrderService,
+    OrderVerificationService,
     ApprovalService,
     CatalogLookup,
     DeliveryService,

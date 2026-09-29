@@ -106,10 +106,20 @@ export type PickerModelsQueryDto = z.infer<typeof pickerModelsQuerySchema>;
 export const skuDetailQuerySchema = z.object({ grade: gradeSchema.optional() });
 export type SkuDetailQueryDto = z.infer<typeof skuDetailQuerySchema>;
 
-/** Console catalog board — flat SKU list with search and brand filter. */
+/**
+ * Console catalog board — flat SKU list with search and filters.
+ *
+ * `live` is a presence flag (`?live=1`), not a coerced boolean: `z.coerce
+ * .boolean()` turns the string "false" into `true`, which is the wrong answer
+ * to give a toggle.
+ */
 export const catalogBoardQuerySchema = paginationSchema.extend({
   q: z.string().trim().max(120).optional(),
   brandId: uuidSchema.optional(),
+  modelId: uuidSchema.optional(),
+  cpuFamily: z.string().trim().min(1).max(60).optional(),
+  ramGb: positiveInt.optional(),
+  live: z.literal('1').optional(),
 });
 export type CatalogBoardQueryDto = z.infer<typeof catalogBoardQuerySchema>;
 

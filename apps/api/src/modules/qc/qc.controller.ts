@@ -32,6 +32,7 @@ import {
   type QcVisitRow,
   type QcVisitUnitRow,
 } from './internal/qc.repository';
+import { OrderInspectionService } from './internal/order-inspection.service';
 import { SchedulingService } from './internal/scheduling.service';
 import { VisitClosingService, type SignoffSummary } from './internal/visit-closing.service';
 import { SealingService } from './internal/sealing.service';
@@ -148,6 +149,26 @@ export interface VisitRow {
   geoVarianceMetres: number | null;
   /** The threshold in force, so the console never hard-codes 500 m. */
   geoVarianceAlertMetres: number;
+  /**
+   * The order this visit was raised for, or null for a stock visit. An order
+   * visit has no manifest until the technician names each machine on the
+   * order-inspection screen, and the console needs to say so rather than show
+   * an empty list.
+   */
+  orderNumber: string | null;
+  /** The site's address id: two visits on one day at two addresses is a double booking. */
+  addressId: string;
+  arrivedAt: string | null;
+  startedAt: string | null;
+  /**
+   * Days past `scheduledDate` for a visit still open, on the server's IST
+   * calendar; zero on the day itself; null when unscheduled or closed. Sent
+   * rather than computed in the browser so a laptop with the wrong date cannot
+   * move a deadline.
+   */
+  daysOverdue: number | null;
+  /** `YYYY-MM-DD` in IST — what "today" means on this row's calendar. */
+  today: string;
 }
 
 export interface ManifestUnit {
@@ -156,12 +177,27 @@ export interface ManifestUnit {
   sequenceNo: number;
   serialNumber: string;
   listingId: string | null;
+  /** The SKU code. */
   skuLabel: string;
+  /** `Microsoft Surface Pro 7` and `i5-1035G4 · 8 GB · 128 GB NVME_SSD`; null when the SKU is gone. */
+  skuTitle: string | null;
+  specSummary: string | null;
   declaredGrade: Grade | null;
   outcome: QcUnitOutcome;
   absentReason: string | null;
   qcReportId: string | null;
   durationSeconds: number | null;
+  /** The inspection's own clock, as recorded — read against the visit's. */
+  startedAt: string | null;
+  completedAt: string | null;
+  /** `listing.unit.status` and the trigger-owned sellability: is this machine on sale on the strength of this visit? */
+  unitStatus: string;
+  isSellable: boolean;
+  /** From the unit's report on this visit; null until one exists. */
+  verdict: QcVerdictValue | null;
+  gradeFinal: Grade | null;
+  qcScore: number | null;
+  gradeOverrideReason: string | null;
 }
 
 export interface ToolRunRow {
@@ -179,19 +215,26 @@ export interface ToolRunRow {
 }
 
 export interface PhotoRow {
+  /** The report — and so the machine — this photograph belongs to. */
+  qcReportId: string;
   angle: QcPhotoAngle;
   fileKey: string;
+  /** SHA-256 of the bytes. Two photographs with one hash are one photograph. */
+  hash: string;
   /** Signed and short-lived. The console never constructs an object-store URL. */
   url: string;
   capturedAt: string | null;
 }
 
 export interface SealRow {
+  qcReportId: string;
   sealCode: string;
   status: string;
   appliedAt: string;
   appliedByName: string;
   appliedPhotoUrl: string;
+  /** The object key, so a seal photograph can be recognised as one of the unit photographs. */
+  appliedPhotoKey: string;
   verifiedAt: string | null;
   verifiedByName: string | null;
   brokenAt: string | null;
@@ -222,12 +265,45 @@ export interface TechnicianOption {
   isActive: boolean;
 }
 
+/** One visit on the calendar: where it sits in the day, and what it is. */
+export interface ScheduleVisit {
+  id: string;
+  visitNumber: string;
+  vendorName: string;
+  units: number;
+  status: QcVisitStatus;
+  /** `HH:MM:SS`, or null when the visit was booked without a window. */
+  slotFrom: string | null;
+  slotTo: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  /** The order this visit is for, or null for a stock visit. */
+  orderNumber: string | null;
+  addressId: string;
+}
+
 export interface ScheduleTechnicianDay {
   date: string;
   availability: 'AVAILABLE' | 'BOOKED' | 'LEAVE' | 'TRAVEL' | 'HOLIDAY' | 'UNSET';
   bookedUnits: number;
   sites: number;
-  visits: Array<{ id: string; visitNumber: string; vendorName: string; units: number }>;
+  visits: ScheduleVisit[];
+}
+
+/** An open visit whose date has passed: the calendar's "needs a day" list. */
+export interface ScheduleOverdueVisit {
+  id: string;
+  visitNumber: string;
+  vendorName: string;
+  facilityLabel: string;
+  units: number;
+  technicianId: string | null;
+  technicianName: string | null;
+  scheduledDate: string;
+  slotFrom: string | null;
+  slotTo: string | null;
+  daysLate: number;
+  addressId: string;
 }
 
 export interface ScheduleTechnician extends TechnicianOption {
@@ -242,7 +318,10 @@ export interface ScheduleWeek {
   from: string;
   to: string;
   dates: string[];
+  /** `YYYY-MM-DD` in IST. The server's today, so the calendar's "today" column is the server's. */
+  today: string;
   technicians: ScheduleTechnician[];
+  overdue: ScheduleOverdueVisit[];
   licence: Array<{ providerCode: string; seats: number; seatsUsedPerDate: Record<string, number> }>;
 }
 
@@ -450,6 +529,43 @@ type Raw = Record<string, unknown>;
  * statement and a `Map`, which is what a join across a future service boundary
  * would have to become anyway.
  */
+/** One finished inspection, from either client — the shape `recordInspection` takes. */
+interface InspectionInput {
+  visitUnitId: string;
+  unitId: string;
+  technicianId: string;
+  serialScanned: string;
+  serialMatches: boolean;
+  startedAt: Date;
+  completedAt: Date;
+  durationSeconds?: number;
+  areas: Array<{
+    area: QcAreaCode;
+    status: 'PASS' | 'WARN' | 'FAIL';
+    score: number;
+    maxScore: number;
+    note?: string | null;
+  }>;
+  hardware?: {
+    ramDetectedGb: number;
+    ramModules?: number | null;
+    storageType?: string | null;
+    storageDetectedGb?: number | null;
+    smartStatus?: 'OK' | 'WARNING' | 'FAILING' | null;
+    batteryHealthPct?: number | null;
+    cycleCount?: number | null;
+    biosLocked: boolean;
+    mdmLocked: boolean;
+    computraceActive: boolean;
+  };
+  photos: Array<{ angle: QcPhotoAngle; fileKey: string; hash: string }>;
+  seal: { sealCode: string; photoKey: string } | null;
+  qcScore: number | null;
+  gradeProposed: Grade | null;
+  verdict: QcVerdictValue | null;
+  nonce: string;
+}
+
 @Injectable()
 export class QcConsoleService {
   constructor(
@@ -461,6 +577,7 @@ export class QcConsoleService {
     private readonly corrections: GradeCorrectionService,
     private readonly audits: AuditRecheckService,
     private readonly store: ObjectStorePort,
+    private readonly orderInspections: OrderInspectionService,
   ) {}
 
   // =========================================================================
@@ -489,12 +606,24 @@ export class QcConsoleService {
     const reports = await this.repo.findReportsByVisit(visitId);
     const reportIds = reports.map((r) => r.id);
 
-    const [manifest, toolRuns, photos, seals] = await Promise.all([
+    const [bare, toolRuns, photos, seals] = await Promise.all([
       this.manifestUnits(units),
       this.toolRuns(units.map((u) => u.unitId)),
       this.photos(reportIds),
       this.seals(reportIds),
     ]);
+    // Each machine's report, on the line it belongs to.
+    const byReport = new Map(reports.map((r) => [r.id, r]));
+    const manifest = bare.map((u) => {
+      const r = u.qcReportId ? byReport.get(u.qcReportId) : undefined;
+      return {
+        ...u,
+        verdict: r?.verdict ?? null,
+        gradeFinal: r?.gradeFinal ?? null,
+        qcScore: r?.qcScore ?? null,
+        gradeOverrideReason: r?.gradeOverrideReason ?? null,
+      };
+    });
 
     return {
       ...row!,
@@ -569,7 +698,8 @@ export class QcConsoleService {
   async scheduleWeek(from?: string): Promise<ScheduleWeek> {
     // The server decides what "this week" means. A laptop with a wrong clock
     // must not be able to move a week that visits are booked against.
-    const start = weekStart(from ?? this.clock.todayInIst());
+    const today = this.clock.todayInIst();
+    const start = weekStart(from ?? today);
     const end = shiftDate(start, 6);
     const dates = Array.from({ length: 7 }, (_, i) => shiftDate(start, i));
 
@@ -582,7 +712,22 @@ export class QcConsoleService {
       page: 1,
       pageSize: 500,
     });
-    const vendors = await this.orgNames(visits.rows.map((v) => v.vendorOrgId));
+    // Open visits whose date has passed, from any week: the calendar offers
+    // them a day. Fetched up to yesterday and narrowed to the statuses that can
+    // still be booked; an in-progress visit needs finishing, not a new date.
+    const OVERDUE_STATUSES: readonly QcVisitStatus[] = ['SCHEDULED', 'TECH_ASSIGNED', 'RESCHEDULED'];
+    const overdueRows = (
+      await this.repo.findVisits({ scheduledTo: shiftDate(today, -1), page: 1, pageSize: 500 })
+    ).rows.filter((v) => OVERDUE_STATUSES.includes(v.status) && v.scheduledDate !== null);
+    const todayMs = Date.parse(`${today}T00:00:00Z`);
+
+    const [vendors, orders, overdueVendors, overdueLabels, overdueTechs] = await Promise.all([
+      this.orgNames(visits.rows.map((v) => v.vendorOrgId)),
+      this.orderNumbers(visits.rows.map((v) => v.orderId).filter((id): id is string => id !== null)),
+      this.orgNames(overdueRows.map((v) => v.vendorOrgId)),
+      this.addressLabels(overdueRows.map((v) => v.addressId)),
+      this.technicianNames(overdueRows.map((v) => v.technicianId)),
+    ]);
 
     const byTech = new Map<string, QcVisitRow[]>();
     for (const visit of visits.rows) {
@@ -620,10 +765,34 @@ export class QcConsoleService {
               visitNumber: v.visitNumber,
               vendorName: vendors.get(v.vendorOrgId) ?? 'Unknown vendor',
               units: v.unitsRequested,
+              status: v.status,
+              slotFrom: v.slotFrom,
+              slotTo: v.slotTo,
+              startedAt: v.startedAt?.toISOString() ?? null,
+              completedAt: v.completedAt?.toISOString() ?? null,
+              orderNumber: v.orderId ? (orders.get(v.orderId) ?? null) : null,
+              addressId: v.addressId,
             })),
           };
         }),
       })),
+      today,
+      overdue: overdueRows
+        .map((v) => ({
+          id: v.id,
+          visitNumber: v.visitNumber,
+          vendorName: overdueVendors.get(v.vendorOrgId) ?? 'Unknown vendor',
+          facilityLabel: overdueLabels.get(v.addressId) ?? 'Unknown site',
+          units: v.unitsRequested,
+          technicianId: v.technicianId,
+          technicianName: v.technicianId ? (overdueTechs.get(v.technicianId) ?? null) : null,
+          scheduledDate: v.scheduledDate!,
+          slotFrom: v.slotFrom,
+          slotTo: v.slotTo,
+          daysLate: Math.max(0, Math.floor((todayMs - Date.parse(`${v.scheduledDate}T00:00:00Z`)) / 86_400_000)),
+          addressId: v.addressId,
+        }))
+        .sort((a, b) => b.daysLate - a.daysLate || a.visitNumber.localeCompare(b.visitNumber)),
       licence: await this.licenceUsage(dates, visits.rows),
     };
   }
@@ -695,41 +864,7 @@ export class QcConsoleService {
    * a disagreement between the form and the engine is a signal worth having,
    * and it is invisible if the form's numbers are dropped on the floor.
    */
-  async recordInspection(input: {
-    visitUnitId: string;
-    unitId: string;
-    technicianId: string;
-    serialScanned: string;
-    serialMatches: boolean;
-    startedAt: Date;
-    completedAt: Date;
-    durationSeconds?: number;
-    areas: Array<{
-      area: QcAreaCode;
-      status: 'PASS' | 'WARN' | 'FAIL';
-      score: number;
-      maxScore: number;
-      note?: string | null;
-    }>;
-    hardware?: {
-      ramDetectedGb: number;
-      ramModules?: number | null;
-      storageType?: string | null;
-      storageDetectedGb?: number | null;
-      smartStatus?: 'OK' | 'WARNING' | 'FAILING' | null;
-      batteryHealthPct?: number | null;
-      cycleCount?: number | null;
-      biosLocked: boolean;
-      mdmLocked: boolean;
-      computraceActive: boolean;
-    };
-    photos: Array<{ angle: QcPhotoAngle; fileKey: string; hash: string }>;
-    seal: { sealCode: string; photoKey: string } | null;
-    qcScore: number | null;
-    gradeProposed: Grade | null;
-    verdict: QcVerdictValue | null;
-    nonce: string;
-  }): Promise<{ reportId: string; alreadyRecorded: boolean }> {
+  async recordInspection(input: InspectionInput): Promise<{ reportId: string; alreadyRecorded: boolean }> {
     const visitUnit = await this.visitUnit(input.visitUnitId);
     const visit = await this.repo.findVisitById(visitUnit.visitId);
     if (!visit) throw new NotFoundError('visit');
@@ -825,6 +960,47 @@ export class QcConsoleService {
     await this.repo.recountVisit(visit.id);
 
     return { reportId, alreadyRecorded: false };
+  }
+
+  /**
+   * The console's inspection of an **ordered** machine.
+   *
+   * The serial names the slot, the report is recorded against the unit that
+   * naming creates, and the verdict settles the slot — one transaction, so a
+   * refused serial leaves no report and a refused report leaves no named slot.
+   * A replayed nonce comes back as the report that exists and settles nothing
+   * twice.
+   */
+  async recordOrderInspection(
+    input: Omit<InspectionInput, 'visitUnitId' | 'unitId'>,
+    order: { visitId: string; slotId: string; userId: string },
+  ): Promise<{ reportId: string; alreadyRecorded: boolean }> {
+    // The replay is answered before the transaction opens. Inside it, the
+    // nonce's unique index would abort the whole transaction on the retry, and
+    // the lookup that answers "which report was that" would fail with it.
+    const replayed = await this.reportIdByNonce(input.nonce);
+    if (replayed) return { reportId: replayed, alreadyRecorded: true };
+
+    return this.prisma.runInTransaction(async () => {
+      const named = await this.orderInspections.nameUnit({
+        visitId: order.visitId,
+        slotId: order.slotId,
+        serial: input.serialScanned,
+        userId: order.userId,
+      });
+      const result = await this.recordInspection({
+        ...input,
+        visitUnitId: named.visitUnitId,
+        unitId: named.unitId,
+        serialScanned: named.serial,
+        // The serial IS the identity here; there is no earlier claim to match.
+        serialMatches: true,
+      });
+      if (!result.alreadyRecorded) {
+        await this.orderInspections.settleUnit({ visitId: order.visitId, unitId: named.unitId, userId: order.userId });
+      }
+      return result;
+    });
   }
 
   /**
@@ -1133,11 +1309,16 @@ export class QcConsoleService {
   private async decorate(visits: readonly QcVisitRow[]): Promise<VisitRow[]> {
     if (visits.length === 0) return [];
     const cfg = await readConfig(this.prisma, [GEO_VARIANCE_KEY]);
-    const [vendors, labels, technicians] = await Promise.all([
+    const [vendors, labels, technicians, orders] = await Promise.all([
       this.orgNames(visits.map((v) => v.vendorOrgId)),
       this.addressLabels(visits.map((v) => v.addressId)),
       this.technicianNames(visits.map((v) => v.technicianId)),
+      this.orderNumbers(visits.map((v) => v.orderId).filter((id): id is string => id !== null)),
     ]);
+
+    const today = this.clock.todayInIst();
+    const todayMs = Date.parse(`${today}T00:00:00Z`);
+    const OPEN: readonly string[] = ['SCHEDULED', 'TECH_ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS', 'RESCHEDULED'];
 
     return visits.map((v) => ({
       id: v.id,
@@ -1160,16 +1341,35 @@ export class QcConsoleService {
       unitsAbsent: v.unitsAbsent,
       geoVarianceMetres: v.geoVarianceMetres,
       geoVarianceAlertMetres: cfgNum(cfg, GEO_VARIANCE_KEY),
+      orderNumber: v.orderId ? (orders.get(v.orderId) ?? null) : null,
+      addressId: v.addressId,
+      arrivedAt: v.arrivedAt?.toISOString() ?? null,
+      startedAt: v.startedAt?.toISOString() ?? null,
+      daysOverdue:
+        v.scheduledDate && OPEN.includes(v.status)
+          ? Math.max(0, Math.floor((todayMs - Date.parse(`${v.scheduledDate}T00:00:00Z`)) / 86_400_000))
+          : null,
+      today,
     }));
+  }
+
+  /** `ordering` in its own statement: order id → order number. */
+  private async orderNumbers(ids: readonly string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; order_number: string }>>`
+      SELECT id, order_number FROM ordering."order" WHERE id = ANY(${unique}::text[]::uuid[])`;
+    return new Map(rows.map((r) => [r.id, r.order_number]));
   }
 
   private async manifestUnits(units: readonly QcVisitUnitRow[]): Promise<ManifestUnit[]> {
     if (units.length === 0) return [];
     const rows = await this.prisma.$queryRaw<Raw[]>`
-      SELECT id, sku_id, grade_declared FROM listing.unit
+      SELECT id, sku_id, grade_declared, status::text AS status, is_sellable FROM listing.unit
        WHERE id = ANY(${units.map((u) => u.unitId)}::text[]::uuid[])`;
     const declared = new Map(rows.map((r) => [r.id as string, r]));
-    const skus = await this.skuLabels(rows.map((r) => r.sku_id as string));
+    const skuIds = rows.map((r) => r.sku_id as string);
+    const [skus, titles] = await Promise.all([this.skuLabels(skuIds), this.skuTitles(skuIds)]);
 
     return units.map((u, i) => {
       const unit = declared.get(u.unitId);
@@ -1180,11 +1380,22 @@ export class QcConsoleService {
         serialNumber: u.serialNumber,
         listingId: u.listingId,
         skuLabel: unit ? (skus.get(unit.sku_id as string) ?? 'Unknown SKU') : 'Unknown SKU',
+        skuTitle: unit ? (titles.get(unit.sku_id as string)?.title ?? null) : null,
+        specSummary: unit ? (titles.get(unit.sku_id as string)?.spec ?? null) : null,
         declaredGrade: (unit?.grade_declared as Grade | undefined) ?? null,
         outcome: u.outcome,
         absentReason: u.absentReason,
         qcReportId: u.qcReportId,
         durationSeconds: u.durationSeconds,
+        startedAt: iso(u.startedAt),
+        completedAt: iso(u.completedAt),
+        unitStatus: (unit?.status as string | undefined) ?? 'UNKNOWN',
+        isSellable: Boolean(unit?.is_sellable),
+        // The report's fields are joined by the caller that has the reports.
+        verdict: null,
+        gradeFinal: null,
+        qcScore: null,
+        gradeOverrideReason: null,
       };
     });
   }
@@ -1219,13 +1430,15 @@ export class QcConsoleService {
   private async photos(reportIds: readonly string[]): Promise<PhotoRow[]> {
     if (reportIds.length === 0) return [];
     const rows = await this.prisma.$queryRaw<Raw[]>`
-      SELECT angle, file_key, captured_at FROM qc.qc_photo
+      SELECT qc_report_id, angle, file_key, hash, captured_at FROM qc.qc_photo
        WHERE qc_report_id = ANY(${[...reportIds]}::text[]::uuid[])
        ORDER BY captured_at`;
     return Promise.all(
       rows.map(async (r) => ({
+        qcReportId: r.qc_report_id as string,
         angle: r.angle as QcPhotoAngle,
         fileKey: r.file_key as string,
+        hash: r.hash as string,
         url: await this.store.presignDownload(r.file_key as string, PHOTO_URL_TTL_SECONDS),
         capturedAt: iso(r.captured_at as Date | null),
       })),
@@ -1235,7 +1448,7 @@ export class QcConsoleService {
   private async seals(reportIds: readonly string[]): Promise<SealRow[]> {
     if (reportIds.length === 0) return [];
     const rows = await this.prisma.$queryRaw<Raw[]>`
-      SELECT s.seal_code, s.status, s.applied_at, s.applied_by, s.applied_photo_key,
+      SELECT s.qc_report_id, s.seal_code, s.status, s.applied_at, s.applied_by, s.applied_photo_key,
              s.verified_at, s.verified_by, s.broken_at, s.broken_reason,
              r.seal_code AS replaced_by_seal_code
         FROM qc.qc_seal s
@@ -1250,6 +1463,7 @@ export class QcConsoleService {
 
     return Promise.all(
       rows.map(async (r) => ({
+        qcReportId: r.qc_report_id as string,
         sealCode: r.seal_code as string,
         status: r.status as string,
         appliedAt: (r.applied_at as Date).toISOString(),
@@ -1258,6 +1472,7 @@ export class QcConsoleService {
           r.applied_photo_key as string,
           PHOTO_URL_TTL_SECONDS,
         ),
+        appliedPhotoKey: r.applied_photo_key as string,
         verifiedAt: iso(r.verified_at as Date | null),
         verifiedByName:
           r.verified_by === null ? null : (verifiers.get(r.verified_by as string) ?? null),
@@ -1390,6 +1605,31 @@ export class QcConsoleService {
     const rows = await this.prisma.$queryRaw<Array<{ id: string; sku_code: string }>>`
       SELECT id, sku_code FROM catalog.sku WHERE id = ANY(${unique}::text[]::uuid[])`;
     return new Map(rows.map((r) => [r.id, r.sku_code]));
+  }
+
+  /** What the SKU is called, and what is in it — `catalog` in one statement. */
+  private async skuTitles(ids: readonly string[]): Promise<Map<string, { title: string; spec: string }>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; brand: string; model: string; cpu_model: string; ram_gb: number; storage_gb: number; storage_type: string }>
+    >`
+      SELECT s.id, b.name AS brand, m.name AS model, s.cpu_model, s.ram_gb, s.storage_gb,
+             s.storage_type::text AS storage_type
+        FROM catalog.sku s
+        JOIN catalog.model m ON m.id = s.model_id
+        JOIN catalog.series se ON se.id = m.series_id
+        JOIN catalog.brand b ON b.id = se.brand_id
+       WHERE s.id = ANY(${unique}::text[]::uuid[])`;
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          title: `${r.brand} ${r.model}`.trim(),
+          spec: [r.cpu_model, `${r.ram_gb} GB`, `${r.storage_gb} GB ${r.storage_type}`].join(' · '),
+        },
+      ]),
+    );
   }
 
   private async serials(ids: readonly string[]): Promise<Map<string, string>> {
@@ -1663,11 +1903,10 @@ export class QcController {
   @RequirePermissions('qc.visit.execute')
   manualReport(
     @Body(new ZodValidationPipe(manualReportSchema)) body: ManualReportDto,
+    @CurrentUser() user: Principal,
   ): Promise<{ reportId: string; alreadyRecorded: boolean }> {
     const hw = body.hardware;
-    return this.console.recordInspection({
-      visitUnitId: body.visitUnitId,
-      unitId: body.unitId,
+    const input: Omit<InspectionInput, 'visitUnitId' | 'unitId'> = {
       technicianId: body.technicianId,
       serialScanned: body.serialScanned,
       serialMatches: body.serialMatches,
@@ -1707,7 +1946,15 @@ export class QcController {
       gradeProposed: body.gradeProposed,
       verdict: body.verdict,
       nonce: body.nonce ?? randomUUID(),
-    });
+    };
+    if (body.slotId) {
+      return this.console.recordOrderInspection(input, { visitId: body.visitId, slotId: body.slotId, userId: user.userId });
+    }
+    if (body.visitUnitId && body.unitId) {
+      return this.console.recordInspection({ ...input, visitUnitId: body.visitUnitId, unitId: body.unitId });
+    }
+    // The schema refuses this shape; the type system does not know that.
+    throw new ValidationError('Name the machine: a manifest line or an ordered slot.', { slotId: 'required' });
   }
 
   /**

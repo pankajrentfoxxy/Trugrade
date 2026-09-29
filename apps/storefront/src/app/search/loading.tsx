@@ -29,7 +29,7 @@ export default function Loading(): React.JSX.Element {
           <main>
             <div className="rbar">
               <span className="cnt" role="status">
-                Searching sealed stock…
+                Searching stock on sale…
               </span>
             </div>
             <div className="pgrid" aria-hidden="true">

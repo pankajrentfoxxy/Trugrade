@@ -194,33 +194,63 @@ async function seedOrderWithPo(): Promise<{
   return { poId, vendorOrgId, buyerOrgId, orderNumber, skuIds: units.map((u) => u.skuId) };
 }
 
+/** Mark `done` of the order's slots as named and verified, and stamp the order — what the flow writes. */
+async function verified(orderNumber: string, done: number, over: Partial<{ status: string; payment_status: string; paid: boolean }> = {}): Promise<void> {
+  await raw.$executeRaw`
+    UPDATE ordering.order_line_unit olu SET inspected_at = ${NOW}, verified_at = ${NOW}, serial_number = 'SN' || left(olu.id::text, 8)
+     WHERE olu.id IN (
+       SELECT olu2.id FROM ordering.order_line_unit olu2
+         JOIN ordering.order_line ol ON ol.id = olu2.order_line_id
+         JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+         JOIN ordering."order" o ON o.id = so.order_id
+        WHERE o.order_number = ${orderNumber}
+        ORDER BY ol.id LIMIT ${done})`;
+  await raw.$executeRaw`
+    UPDATE ordering."order"
+       SET verified_at = ${NOW}, pay_by = ${new Date(NOW.getTime() + 86_400_000)},
+           status = ${over.status ?? 'PAYMENT_PENDING'}::public.order_status,
+           payment_status = ${over.payment_status ?? 'PENDING'}::public.payment_status,
+           paid_at = ${over.paid ? NOW : null},
+           -- chk_held_order_has_expiry: a PAYMENT_PENDING order holds its machines until pay_by.
+           stock_hold_expires_at = ${new Date(NOW.getTime() + 86_400_000)}
+     WHERE order_number = ${orderNumber}`;
+}
+
 describe('the sales order', () => {
-  it('is WAITING with no totals until the dispatch point answers', async () => {
+  it('is WAITING with no totals while machines are still to be named and verified', async () => {
     const fx = await seedOrderWithPo();
     const so = await as(fx.buyerOrgId, 'BUYER', () => readOrder.salesOrder(fx.orderNumber));
     expect(so.state).toBe('WAITING');
+    expect(so.stage).toBe('INSPECTION');
+    expect(so.machines).toEqual({ ordered: 3, inspected: 0, verified: 0 });
     expect(so.totals).toBeNull();
-    expect(so.dispatchPointsAnswered).toBe(0);
+    expect(so.verifiedAt).toBeNull();
     expect(so.lines.every((l) => l.qtyConfirmed === null && l.lineTotal === null)).toBe(true);
     expect(so.payment.payable).toBe(false);
   });
 
-  it('prices exactly the confirmed machines once the vendor has answered', async () => {
+  it('is not made READY by the dispatch point answering — only by verification', async () => {
     const fx = await seedOrderWithPo();
     await as(fx.vendorOrgId, 'VENDOR', () =>
       procurement.confirmAvailability(fx.poId, {
-        lines: [
-          { skuId: fx.skuIds[0]!, grade: 'A', qtyAvailable: 1 },
-          { skuId: fx.skuIds[1]!, grade: 'A', qtyAvailable: 1 },
-          { skuId: fx.skuIds[2]!, grade: 'A', qtyAvailable: 0 },
-        ],
+        lines: fx.skuIds.map((skuId) => ({ skuId, grade: 'A' as const, qtyAvailable: 1 })),
       }),
     );
+    const so = await as(fx.buyerOrgId, 'BUYER', () => readOrder.salesOrder(fx.orderNumber));
+    expect(so.state).toBe('WAITING');
+    expect(so.totals).toBeNull();
+  });
+
+  it('prices exactly the verified machines once the last one is verified, with the deadline', async () => {
+    const fx = await seedOrderWithPo();
+    await verified(fx.orderNumber, 2);
 
     const so = await as(fx.buyerOrgId, 'BUYER', () => readOrder.salesOrder(fx.orderNumber));
     expect(so.state).toBe('READY');
-    expect(so.dispatchPointsAnswered).toBe(1);
-    expect(so.confirmedAt).not.toBeNull();
+    expect(so.stage).toBe('PAYMENT');
+    expect(so.machines).toEqual({ ordered: 3, inspected: 2, verified: 2 });
+    expect(so.verifiedAt).not.toBeNull();
+    expect(so.payBy).not.toBeNull();
 
     const confirmed = so.lines.map((l) => l.qtyConfirmed);
     expect(confirmed.filter((q) => q === 1)).toHaveLength(2);
@@ -242,15 +272,25 @@ describe('the sales order', () => {
     expect(json).not.toMatch(/PO-SO-1|purchase/i);
   });
 
-  it('is CANCELLED with nothing owed when the vendor refuses everything', async () => {
+  it('is PAID, with when, and no longer payable once the buyer has paid', async () => {
     const fx = await seedOrderWithPo();
-    await as(fx.vendorOrgId, 'VENDOR', () =>
-      procurement.confirmAvailability(fx.poId, {
-        lines: fx.skuIds.map((skuId) => ({ skuId, grade: 'A' as const, qtyAvailable: 0 })),
-      }),
-    );
+    await verified(fx.orderNumber, 3, { status: 'CONFIRMED', payment_status: 'PAID', paid: true });
+    const so = await as(fx.buyerOrgId, 'BUYER', () => readOrder.salesOrder(fx.orderNumber));
+    expect(so.state).toBe('READY');
+    expect(so.stage).toBe('PAID');
+    expect(so.paidAt).not.toBeNull();
+    // What was charged — the order's own total — not a re-pricing.
+    expect(so.totals?.grandTotal).toBe('106700.00');
+    expect(so.payment).toMatchObject({ status: 'PAID', payable: false });
+  });
+
+  it('is CANCELLED with nothing owed when the order is cancelled', async () => {
+    const fx = await seedOrderWithPo();
+    await raw.$executeRaw`
+      UPDATE ordering."order" SET status = 'CANCELLED'::public.order_status WHERE order_number = ${fx.orderNumber}`;
     const so = await as(fx.buyerOrgId, 'BUYER', () => readOrder.salesOrder(fx.orderNumber));
     expect(so.state).toBe('CANCELLED');
+    expect(so.stage).toBe('CANCELLED');
     expect(so.totals).toBeNull();
     expect(so.payment.payable).toBe(false);
   });

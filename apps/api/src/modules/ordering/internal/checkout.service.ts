@@ -522,13 +522,11 @@ export class CheckoutService {
         lines[0]?.gstRatePct ?? 18,
       ),
       serials: [],
-      units: result.serials.length,
+      units: result.units,
       next:
         result.status === 'AWAITING_APPROVAL'
-          ? `Sent to ${approval?.approverName ?? 'your approver'} to sign off. Stock is held until then; if the approval is not given by ${result.holdExpiresAt.toISOString()}, it goes back on sale and nothing is charged. Serials are named when a machine is attached to this order.`
-          : result.status === 'PAYMENT_PENDING'
-            ? 'Stock is held for this order. Complete payment and we buy the machines on your behalf. Serials are named when a machine is attached to this order.'
-            : 'Confirmed on your credit terms. We are arranging dispatch. Serials are named when a machine is attached to this order.',
+          ? `Sent to ${approval?.approverName ?? 'your approver'} to sign off. Stock is held until then; if the approval is not given by ${result.holdExpiresAt.toISOString()}, it goes back on sale and nothing is charged. Once approved, a technician inspects each machine and records its serial before you pay.`
+          : 'Order placed and stock held. Nothing is charged yet: a technician inspects each machine at the supply point and records its serial, we verify every one, and then you pay. You have 24 hours to pay once the order is verified.',
     };
   }
 
@@ -559,7 +557,6 @@ export class CheckoutService {
       this.orderReadiness(buyer.orgId),
     ]);
 
-    const serials = await this.serialsByListing(input.held);
     const described = new Map<string, Awaited<ReturnType<CatalogLookup['describe']>>>();
     const lines: CheckoutLineView[] = [];
     for (const item of input.items) {
@@ -578,7 +575,8 @@ export class CheckoutService {
         unitPrice: offer.unitPrice.toString(),
         lineTotal: offer.unitPrice.times(item.qty).toString(),
         dispatchPoint: input.labels.get(item.listingId) ?? 'Dispatch point to be confirmed',
-        serials: serials.get(item.listingId) ?? [],
+        // Named by the technician after the order. Nothing to show at checkout.
+        serials: [],
       });
     }
 
@@ -1130,24 +1128,6 @@ export class CheckoutService {
         stock.supplyPointCode && stock.city
           ? supplyPointLabel(stock.supplyPointCode, stock.city)
           : 'Dispatch point to be confirmed',
-      );
-    }
-    return out;
-  }
-
-  /** The serials actually held, per listing. What the review step shows. */
-  private async serialsByListing(held: HeldStock): Promise<Map<string, string[]>> {
-    const unitIds = [...held.unitsByListing.values()].flat();
-    if (unitIds.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; serial_number: string }>>`
-      SELECT id, serial_number FROM listing.unit
-       WHERE id = ANY(${unitIds}::uuid[]) ORDER BY serial_number`;
-    const serialOf = new Map(rows.map((r) => [r.id, r.serial_number]));
-    const out = new Map<string, string[]>();
-    for (const [listingId, ids] of held.unitsByListing) {
-      out.set(
-        listingId,
-        ids.map((id) => serialOf.get(id) ?? '').filter((s) => s.length > 0),
       );
     }
     return out;

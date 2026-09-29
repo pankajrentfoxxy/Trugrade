@@ -29,6 +29,51 @@ export interface Column<Row> {
    * visually and keeps it in the accessibility tree.
    */
   headerHidden?: boolean;
+  /**
+   * A class on this column's `<th>` and every `<td>` under it. For a board
+   * whose rows become cards below a breakpoint and need to say which cell is
+   * which; a column's position is not stable enough to address by `nth-child`
+   * once an optional column (a selection box, say) comes and goes.
+   */
+  className?: string;
+}
+
+/**
+ * Rows folded under a heading — every SKU of one model under that model, say.
+ *
+ * Consecutive rows with the same `of` key form one group, rendered as its own
+ * `<tbody>` with a header row spanning every column. The grouping follows the
+ * caller's row order, so a page the server already sorted groups here without
+ * a second sort. Folding is local UI state, not URL state: a fold is a reading
+ * aid for this visit, not a filter a colleague needs in a shared link.
+ */
+export interface RowGroup<Row> {
+  of: (row: Row) => string;
+  header: (group: {
+    key: string;
+    rows: readonly Row[];
+    expanded: boolean;
+    toggle: () => void;
+  }) => React.ReactNode;
+  /** Extra classes for the header `<tr>`. */
+  className?: string;
+}
+
+/**
+ * A second row under a data row, opened by the caller.
+ *
+ * For the board whose row is a summary of several things — an inspection visit
+ * and the machines recorded on it — where the reader wants the machines under
+ * the row they belong to, not on another page. The caller owns which rows are
+ * open (a Set in state, or the URL) and draws the toggle in one of its cells;
+ * the table only knows whether to render the second row. One `<td>` spanning
+ * every column, so the caller's content lays itself out.
+ */
+export interface RowDetail<Row> {
+  open: (row: Row) => boolean;
+  render: (row: Row) => React.ReactNode;
+  /** Classes for the detail `<tr>`. */
+  className?: string;
 }
 
 export interface DataTableProps<Row> {
@@ -56,6 +101,10 @@ export interface DataTableProps<Row> {
    * attention. Never the only signal: the cell that explains why carries text.
    */
   rowClassName?: (row: Row) => string | undefined;
+  /** Fold consecutive rows under a header row. See `RowGroup`. */
+  group?: RowGroup<Row>;
+  /** A second row under any row the caller says is open. See `RowDetail`. */
+  detail?: RowDetail<Row>;
   stickyHeader?: boolean;
   className?: string;
   id?: string;
@@ -88,11 +137,63 @@ export function DataTable<Row>({
   skeletonRows = 5,
   empty,
   rowClassName,
+  group,
+  detail,
   stickyHeader = false,
   className,
   id,
 }: DataTableProps<Row>): React.JSX.Element {
   const isEmpty = !loading && rows.length === 0;
+
+  // Which groups are folded shut. Keyed by the group's own key, so a fold
+  // survives the rows underneath it re-rendering with fresh data.
+  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const toggleGroup = (key: string): void =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const renderRow = (row: Row): React.JSX.Element => (
+    <React.Fragment key={rowKey(row)}>
+      <tr className={cn('border-b border-rule-2 last:border-b-0', rowClassName?.(row))}>
+        {columns.map((column) => (
+          <td
+            key={column.key}
+            className={cn(
+              'tg-cell align-top text-ink',
+              column.numeric && 'text-right font-mono tnum',
+              column.className,
+            )}
+          >
+            {column.cell(row)}
+          </td>
+        ))}
+      </tr>
+      {detail?.open(row) && (
+        <tr className={cn('tg-detail-row border-b border-rule-2', detail.className)}>
+          <td colSpan={columns.length} className="tg-cell text-ink">
+            {detail.render(row)}
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+
+  // Consecutive rows sharing a key form one group. Cheap enough to do on every
+  // render — the alternative, memoising on a `group` object the caller builds
+  // inline, would never hit.
+  const groups: Array<{ key: string; rows: Row[] }> = [];
+  if (group) {
+    for (const row of rows) {
+      const key = group.of(row);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) last.rows.push(row);
+      else groups.push({ key, rows: [row] });
+    }
+  }
 
   return (
     // `relative` is load-bearing: the caption and live region below are
@@ -139,6 +240,7 @@ export function DataTable<Row>({
                     'tg-cell whitespace-nowrap font-mono text-label uppercase tracking-[0.13em] text-ink-2',
                     column.numeric ? 'text-right' : 'text-left',
                     stickyHeader && 'sticky top-0 z-10 bg-sheet',
+                    column.className,
                   )}
                 >
                   {column.sortable && onSort ? (
@@ -161,46 +263,54 @@ export function DataTable<Row>({
           </tr>
         </thead>
 
-        <tbody>
-          {loading &&
-            Array.from({ length: skeletonRows }, (_, i) => (
-              <tr key={`skeleton-${i}`} className="border-b border-rule-2">
-                {columns.map((column) => (
-                  <td key={column.key} className="tg-cell">
-                    <Skeleton />
-                  </td>
-                ))}
-              </tr>
-            ))}
+        {/* One flat body, or — when grouped and loaded — one body per group
+            below, so `tbody:first-of-type` is the first group and not an
+            empty placeholder. */}
+        {(loading || !group) && (
+          <tbody>
+            {loading &&
+              Array.from({ length: skeletonRows }, (_, i) => (
+                <tr key={`skeleton-${i}`} className="border-b border-rule-2">
+                  {columns.map((column) => (
+                    <td key={column.key} className="tg-cell">
+                      <Skeleton />
+                    </td>
+                  ))}
+                </tr>
+              ))}
 
-          {/* The empty state is NOT rendered here.
-              A td inherits the table's intrinsic width — boards set a min-width
-              so their columns stay readable — so on a phone the empty panel sat
-              off the right edge of a horizontal scroll nobody knew was there.
-              The message a person needs when there is nothing to see was the one
-              thing they could not see. It is rendered outside the table below,
-              where there are no columns to be as wide as. */}
+            {/* The empty state is NOT rendered here.
+                A td inherits the table's intrinsic width — boards set a min-width
+                so their columns stay readable — so on a phone the empty panel sat
+                off the right edge of a horizontal scroll nobody knew was there.
+                The message a person needs when there is nothing to see was the one
+                thing they could not see. It is rendered outside the table below,
+                where there are no columns to be as wide as. */}
 
-          {!loading &&
-            rows.map((row) => (
-              <tr
-                key={rowKey(row)}
-                className={cn('border-b border-rule-2 last:border-b-0', rowClassName?.(row))}
-              >
-                {columns.map((column) => (
-                  <td
-                    key={column.key}
-                    className={cn(
-                      'tg-cell align-top text-ink',
-                      column.numeric && 'text-right font-mono tnum',
-                    )}
-                  >
-                    {column.cell(row)}
+            {!loading && !group && rows.map(renderRow)}
+          </tbody>
+        )}
+
+        {!loading &&
+          group &&
+          groups.map((g) => {
+            const expanded = !collapsed.has(g.key);
+            return (
+              <tbody key={g.key} data-group={g.key}>
+                <tr className={cn('tg-group-row border-b border-rule', group.className)}>
+                  <td colSpan={columns.length} className="tg-cell text-ink">
+                    {group.header({
+                      key: g.key,
+                      rows: g.rows,
+                      expanded,
+                      toggle: () => toggleGroup(g.key),
+                    })}
                   </td>
-                ))}
-              </tr>
-            ))}
-        </tbody>
+                </tr>
+                {expanded && g.rows.map(renderRow)}
+              </tbody>
+            );
+          })}
       </table>
 
       {isEmpty && empty}

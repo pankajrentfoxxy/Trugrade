@@ -4,7 +4,6 @@ import { RequirePermission } from '../../lib/auth';
 import { VendorDashboardRoute } from './Dashboard';
 import { VendorListingsRoute } from './Listings';
 import { ListingUnitsRoute, UnitDetailRoute } from './Units';
-import { BulkUploadRoute } from './BulkUpload';
 import { VendorCorrectionsRoute, VendorCorrectionDetailRoute } from './Corrections';
 import { VendorPickListRoute } from './PickList';
 import { VendorPurchaseOrderRoute } from './PurchaseOrder';
@@ -90,11 +89,6 @@ export const vendorRoutes: VendorRoute[] = [
     path: '/vendor/listings/:id/reprice',
     permission: 'listing.own.write',
     element: guarded('listing.own.write', RepriceRoute),
-  },
-  {
-    path: '/vendor/listings/:id/bulk-upload',
-    permission: 'listing.own.write',
-    element: guarded('listing.own.write', BulkUploadRoute),
   },
   {
     path: '/vendor/listings/:id/units/:unitId',

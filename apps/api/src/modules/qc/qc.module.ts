@@ -3,6 +3,8 @@ import { PrismaModule } from '../../shared/db/prisma.service';
 import { ClockModule } from '../../shared/clock';
 import { QcService } from './qc.service';
 import { QcRepository } from './internal/qc.repository';
+import { OrderInspectionService } from './internal/order-inspection.service';
+import { OrderInspectionsController } from './order-inspections.controller';
 import { QcIngestionController } from './qc-ingestion.controller';
 import { IngestionService } from './internal/ingestion.service';
 import { DeviceSureClient } from './internal/devicesure.client';
@@ -62,6 +64,7 @@ import { VendorVisitsController } from './vendor-visits.controller';
   // is internal to `qc` — exporting it through the barrel to reach a controller
   // would make the whole correction lifecycle another module's to call.
   controllers: [
+    OrderInspectionsController,
     InspectionsController,
     QcIngestionController,
     QcPublicController,
@@ -70,6 +73,7 @@ import { VendorVisitsController } from './vendor-visits.controller';
     VendorVisitsController,
   ],
   providers: [
+    OrderInspectionService,
     QcService,
     QcRepository,
     IngestionService,

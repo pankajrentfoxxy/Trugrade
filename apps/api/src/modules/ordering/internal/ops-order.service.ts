@@ -72,6 +72,12 @@ export interface OpsOrderRow {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  /**
+   * `PREPAID` or the credit-terms mode. The board reads it to tell an order
+   * that is unpaid because it is on credit from one that is unpaid because
+   * nobody has paid — only the second is anybody's problem.
+   */
+  paymentMode: string;
   placedAt: string;
   buyer: OpsOrderPartyView | null;
   buyerPoNumber: string | null;
@@ -96,6 +102,29 @@ export interface OpsFacetOption {
   count: number;
 }
 
+/** One order the board's "Needs attention" strip names. */
+export interface OpsOrderAttentionItem {
+  orderNumber: string;
+  status: string;
+  buyerName: string | null;
+  grandTotal: string;
+}
+
+/**
+ * What needs somebody in this building today, counted over EVERY order rather
+ * than the filtered page: an operator who has narrowed the board to
+ * "dispatched" must still be told about the delivered one nobody paid for.
+ * Prepaid orders only — an order on credit terms is meant to ship unpaid.
+ */
+export interface OpsOrderAttentionView {
+  /** Delivered, still unpaid. Ours to chase. */
+  deliveredUnpaid: OpsOrderAttentionItem[];
+  /** The vendor accepted (or dispatched) before the buyer paid. */
+  acceptedUnpaid: OpsOrderAttentionItem[];
+  /** Verified orders waiting on the buyer's payment, as one line. */
+  paymentPending: { count: number; total: string; oldestPlacedAt: string | null };
+}
+
 export interface OpsOrderBoardView {
   rows: OpsOrderRow[];
   total: number;
@@ -103,6 +132,7 @@ export interface OpsOrderBoardView {
   per: number;
   pages: number;
   facets: { status: OpsFacetOption[]; payment: OpsFacetOption[] };
+  attention: OpsOrderAttentionView;
   /**
    * What the search term was compared against, whether or not it matched.
    *
@@ -117,13 +147,32 @@ export interface OpsOrderBoardView {
  * ======================================================================== */
 
 export interface OpsOrderMachineView {
-  serialNumber: string;
+  /** The `order_line_unit` row. Stable before a serial exists. */
+  slotId: string;
+  /** Null until the technician names the machine at the supply point. */
+  serialNumber: string | null;
   title: string | null;
   grade: string;
   unitPrice: string;
   /** What we agreed to pay the supply point for this exact serial. Null: no PO. */
   purchaseCost: string | null;
   status: string;
+  inspectedAt: string | null;
+  verifiedAt: string | null;
+}
+
+/** One technician visit raised for this order. `qc` only, its own statement. */
+export interface OpsOrderVisitView {
+  visitId: string;
+  visitNumber: string;
+  status: string;
+  technicianName: string | null;
+  /** `YYYY-MM-DD`, and `HH:MM` — the day and slot the visit is booked into, or null. */
+  scheduledDate: string | null;
+  slotFrom: string | null;
+  slotTo: string | null;
+  unitsRequested: number;
+  unitsInspected: number;
 }
 
 export interface OpsSubOrderView {
@@ -147,6 +196,14 @@ export interface OpsPurchaseOrderView {
   lines: number;
   raisedAt: string;
   acknowledgedAt: string | null;
+  /**
+   * The consignment, as the supply point recorded it at dispatch. Verbatim:
+   * the screen decides whether what was typed is a usable tracking number,
+   * and says so, rather than this layer silently tidying it.
+   */
+  carrier: string | null;
+  awb: string | null;
+  dispatchedAt: string | null;
 }
 
 /**
@@ -216,6 +273,17 @@ export interface OpsOrderRecordView {
   marginUnavailable: string | null;
   approval: OpsOrderApprovalView | null;
   timeline: OpsTimelineEventView[];
+  /** The inspection: who was sent, and how far along each machine is. */
+  inspection: {
+    visits: OpsOrderVisitView[];
+    machines: number;
+    inspected: number;
+    verified: number;
+  };
+  verifiedAt: string | null;
+  /** The buyer's 24-hour payment deadline. Null until verified, or on credit terms. */
+  payBy: string | null;
+  paidAt: string | null;
 }
 
 /* ========================================================================== */
@@ -224,7 +292,10 @@ export interface OpsOrderRecordView {
 const STATUS_LABEL: Record<string, string> = {
   CREATED: 'Not yet placed',
   AWAITING_APPROVAL: 'Awaiting the buyer’s approver',
-  PAYMENT_PENDING: 'Placed · payment pending',
+  AWAITING_INSPECTION: 'Placed · assign a technician',
+  QC_IN_PROGRESS: 'Inspection in progress',
+  AWAITING_VERIFICATION: 'Inspected · verify the machines',
+  PAYMENT_PENDING: 'Verified · payment pending',
   CONFIRMED: 'Confirmed',
   DISPATCHED: 'Dispatched',
   DELIVERED: 'Delivered',
@@ -244,6 +315,7 @@ interface OrderRow {
   order_number: string;
   status: string;
   payment_status: string;
+  payment_mode: string;
   buyer_org_id: string;
   buyer_user_id: string;
   buyer_po_number: string | null;
@@ -271,8 +343,20 @@ export class OpsOrderService {
     // `approval=pending` is what the ops dashboard's tile links to. It is a
     // filter and not a status, because an order awaiting an approver can be at
     // AWAITING_APPROVAL *or* have been placed and later held — the approval row
-    // is the fact, and the order status is a consequence of it.
-    const pendingOnly = query.approval === 'pending';
+    // is the fact, and the order status is a consequence of it. `approved` and
+    // `none` are the board's other two cuts of the same fact. One fragment,
+    // interpolated into every statement that must agree on the count.
+    const approvalWhere =
+      query.approval === 'pending'
+        ? Prisma.sql`EXISTS (SELECT 1 FROM ordering.order_approval a
+                              WHERE a.order_id = o.id AND a.status = 'PENDING')`
+        : query.approval === 'approved'
+          ? Prisma.sql`EXISTS (SELECT 1 FROM ordering.order_approval a
+                                WHERE a.order_id = o.id AND a.status = 'APPROVED')`
+          : query.approval === 'none'
+            ? Prisma.sql`NOT EXISTS (SELECT 1 FROM ordering.order_approval a
+                                      WHERE a.order_id = o.id)`
+            : Prisma.sql`TRUE`;
 
     // Each identifier resolved inside its own module's schema first, then
     // handed to ordering's statement as an array of ids. One schema per
@@ -292,9 +376,7 @@ export class OpsOrderService {
         FROM ordering."order" o
        WHERE (${status}::text IS NULL OR o.status::text = ${status})
          AND (${payment}::text IS NULL OR o.payment_status::text = ${payment})
-         AND (${pendingOnly}::boolean = false
-              OR EXISTS (SELECT 1 FROM ordering.order_approval a
-                          WHERE a.order_id = o.id AND a.status = 'PENDING'))
+         AND ${approvalWhere}
          AND ${where}`;
 
     const total = counted?.total ?? 0;
@@ -303,14 +385,13 @@ export class OpsOrderService {
 
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.order_number, o.status::text AS status,
-             o.payment_status::text AS payment_status, o.buyer_org_id, o.buyer_user_id,
+             o.payment_status::text AS payment_status, o.payment_mode::text AS payment_mode,
+             o.buyer_org_id, o.buyer_user_id,
              o.buyer_po_number, o.grand_total::text AS grand_total, o.placed_at
         FROM ordering."order" o
        WHERE (${status}::text IS NULL OR o.status::text = ${status})
          AND (${payment}::text IS NULL OR o.payment_status::text = ${payment})
-         AND (${pendingOnly}::boolean = false
-              OR EXISTS (SELECT 1 FROM ordering.order_approval a
-                          WHERE a.order_id = o.id AND a.status = 'PENDING'))
+         AND ${approvalWhere}
          AND ${where}
        -- Four CASE keys over a validated enum rather than interpolating a column
        -- name into SQL. For any given sort three are NULL on every row, so they
@@ -322,19 +403,29 @@ export class OpsOrderService {
        LIMIT ${query.per} OFFSET ${(page - 1) * query.per}`;
 
     const ids = rows.map((r) => r.id);
-    const [units, poCounts, approvals, parties, serialHits, sealHits, statusFacet, paymentFacet] =
-      await Promise.all([
-        this.unitCounts(ids),
-        this.poCounts(ids),
-        this.approvals(ids),
-        this.parties(rows.map((r) => r.buyer_org_id)),
-        like === null ? Promise.resolve(new Map<string, string[]>()) : this.matchedSerials(ids, like),
-        sealUnitIds.length === 0
-          ? Promise.resolve(new Map<string, string[]>())
-          : this.ordersHoldingUnits(ids, sealUnitIds, sealUnits),
-        this.statusFacet(where, payment, pendingOnly),
-        this.paymentFacet(where, status, pendingOnly),
-      ]);
+    const [
+      units,
+      poCounts,
+      approvals,
+      parties,
+      serialHits,
+      sealHits,
+      statusFacet,
+      paymentFacet,
+      attention,
+    ] = await Promise.all([
+      this.unitCounts(ids),
+      this.poCounts(ids),
+      this.approvals(ids),
+      this.parties(rows.map((r) => r.buyer_org_id)),
+      like === null ? Promise.resolve(new Map<string, string[]>()) : this.matchedSerials(ids, like),
+      sealUnitIds.length === 0
+        ? Promise.resolve(new Map<string, string[]>())
+        : this.ordersHoldingUnits(ids, sealUnitIds, sealUnits),
+      this.statusFacet(where, payment, approvalWhere),
+      this.paymentFacet(where, status, approvalWhere),
+      this.attention(),
+    ]);
 
     return {
       rows: rows.map((row) => {
@@ -356,6 +447,7 @@ export class OpsOrderService {
           orderNumber: row.order_number,
           status: row.status,
           paymentStatus: row.payment_status,
+          paymentMode: row.payment_mode,
           placedAt: row.placed_at.toISOString(),
           buyer: parties.get(row.buyer_org_id) ?? null,
           // An empty string is what a form posts when nobody typed anything. It
@@ -374,6 +466,7 @@ export class OpsOrderService {
       per: query.per,
       pages,
       facets: { status: statusFacet, payment: paymentFacet },
+      attention,
       searchedFor:
         q === null
           ? null
@@ -405,6 +498,9 @@ export class OpsOrderService {
           tcs_amount: string;
           billing_gst_profile_id: string | null;
           shipping_address_id: string;
+          verified_at: Date | null;
+          pay_by: Date | null;
+          paid_at: Date | null;
         }
       >
     >`
@@ -414,7 +510,8 @@ export class OpsOrderService {
              o.subtotal::text AS subtotal, o.gst_total::text AS gst_total,
              o.freight_total::text AS freight_total, o.tcs_amount::text AS tcs_amount,
              o.grand_total::text AS grand_total, o.placed_at,
-             o.billing_gst_profile_id, o.shipping_address_id
+             o.billing_gst_profile_id, o.shipping_address_id,
+             o.verified_at, o.pay_by, o.paid_at
         FROM ordering."order" o
        WHERE o.order_number = ${orderNumber}`;
 
@@ -424,7 +521,7 @@ export class OpsOrderService {
       });
     }
 
-    const [parties, gstin, placedBy, shipTo, subOrders, pos, approvals, timeline] =
+    const [parties, gstin, placedBy, shipTo, subOrders, pos, approvals, timeline, visits] =
       await Promise.all([
         this.parties([order.buyer_org_id]),
         order.billing_gst_profile_id === null
@@ -436,13 +533,12 @@ export class OpsOrderService {
         this.purchaseOrdersOf(order.id),
         this.approvals([order.id]),
         this.timelineOf(order.id),
+        this.visitsOf(order.id),
       ]);
 
-    const machineCount = subOrders.reduce((n, s) => n + s.machines.length, 0);
-    const covered = subOrders.reduce(
-      (n, s) => n + s.machines.filter((m) => m.purchaseCost !== null).length,
-      0,
-    );
+    const allMachines = subOrders.flatMap((s) => s.machines);
+    const machineCount = allMachines.length;
+    const covered = allMachines.filter((m) => m.purchaseCost !== null).length;
 
     return {
       orderNumber: order.order_number,
@@ -469,7 +565,61 @@ export class OpsOrderService {
       ...this.margin(order.subtotal, pos, machineCount, covered),
       approval: approvals.get(order.id) ?? null,
       timeline,
+      inspection: {
+        visits,
+        machines: machineCount,
+        inspected: allMachines.filter((m) => m.inspectedAt !== null).length,
+        verified: allMachines.filter((m) => m.verifiedAt !== null).length,
+      },
+      verifiedAt: order.verified_at?.toISOString() ?? null,
+      payBy: order.pay_by?.toISOString() ?? null,
+      paidAt: order.paid_at?.toISOString() ?? null,
     };
+  }
+
+  /** The technician visits raised for this order. `qc` and `identity`, one statement each. */
+  private async visitsOf(orderId: string): Promise<OpsOrderVisitView[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        visit_number: string;
+        status: string;
+        technician_id: string | null;
+        scheduled_date: string | null;
+        slot_from: string | null;
+        slot_to: string | null;
+        units_requested: number;
+        units_inspected: number;
+      }>
+    >`
+      SELECT id, visit_number, status::text AS status, technician_id,
+             to_char(scheduled_date, 'YYYY-MM-DD') AS scheduled_date,
+             to_char(slot_from, 'HH24:MI') AS slot_from,
+             to_char(slot_to, 'HH24:MI') AS slot_to,
+             units_requested, units_inspected
+        FROM qc.qc_visit WHERE order_id = ${orderId}::uuid ORDER BY requested_at`;
+    if (rows.length === 0) return [];
+    const techIds = rows.flatMap((r) => (r.technician_id ? [r.technician_id] : []));
+    const techUsers =
+      techIds.length === 0
+        ? []
+        : await this.prisma.$queryRaw<Array<{ id: string; user_id: string }>>`
+            SELECT id, user_id FROM qc.qc_technician WHERE id = ANY(${techIds}::uuid[])`;
+    const names = await this.names(techUsers.map((t) => t.user_id));
+    const userOf = new Map(techUsers.map((t) => [t.id, t.user_id]));
+    return rows.map((r) => ({
+      visitId: r.id,
+      visitNumber: r.visit_number,
+      status: r.status,
+      technicianName: r.technician_id
+        ? (names.get(userOf.get(r.technician_id) ?? '') ?? null)
+        : null,
+      scheduledDate: r.scheduled_date,
+      slotFrom: r.slot_from,
+      slotTo: r.slot_to,
+      unitsRequested: r.units_requested,
+      unitsInspected: r.units_inspected,
+    }));
   }
 
   /**
@@ -778,24 +928,28 @@ export class OpsOrderService {
 
     const machineRows = await this.prisma.$queryRaw<
       Array<{
+        slot_id: string;
         sub_order_id: string;
-        unit_id: string;
-        serial_number: string;
+        unit_id: string | null;
+        serial_number: string | null;
         status: string;
         sku_id: string;
         grade: string;
         unit_price: string;
+        inspected_at: Date | null;
+        verified_at: Date | null;
       }>
     >`
-      SELECT ol.sub_order_id, olu.unit_id, olu.serial_number, olu.status::text AS status,
-             ol.sku_id, ol.grade::text AS grade, ol.unit_price::text AS unit_price
+      SELECT olu.id AS slot_id, ol.sub_order_id, olu.unit_id, olu.serial_number,
+             olu.status::text AS status, ol.sku_id, ol.grade::text AS grade,
+             ol.unit_price::text AS unit_price, olu.inspected_at, olu.verified_at
         FROM ordering.order_line_unit olu
         JOIN ordering.order_line ol ON ol.id = olu.order_line_id
        WHERE ol.sub_order_id = ANY(${rows.map((r) => r.id)}::uuid[])
-       ORDER BY olu.serial_number`;
+       ORDER BY olu.inspected_at NULLS LAST, olu.serial_number, olu.id`;
 
     const [costs, vendors, titles] = await Promise.all([
-      this.purchaseCosts(machineRows.map((m) => m.unit_id)),
+      this.purchaseCosts(machineRows.flatMap((m) => (m.unit_id ? [m.unit_id] : []))),
       this.parties(rows.map((r) => r.vendor_org_id)),
       this.titles(machineRows.map((m) => m.sku_id)),
     ]);
@@ -810,12 +964,15 @@ export class OpsOrderService {
       machines: machineRows
         .filter((m) => m.sub_order_id === r.id)
         .map((m) => ({
+          slotId: m.slot_id,
           serialNumber: m.serial_number,
           title: titles.get(m.sku_id) ?? null,
           grade: m.grade,
           unitPrice: m.unit_price,
-          purchaseCost: costs.get(m.unit_id) ?? null,
+          purchaseCost: m.unit_id ? (costs.get(m.unit_id) ?? null) : null,
           status: m.status,
+          inspectedAt: m.inspected_at?.toISOString() ?? null,
+          verifiedAt: m.verified_at?.toISOString() ?? null,
         })),
     }));
   }
@@ -843,12 +1000,16 @@ export class OpsOrderService {
         tds_amount: string;
         created_at: Date;
         acknowledged_at: Date | null;
+        consignment_carrier: string | null;
+        consignment_awb: string | null;
+        dispatched_at: Date | null;
         lines: number;
       }>
     >`
       SELECT po.id, po.po_number, po.status::text AS status, po.vendor_org_id,
              po.total_net::text AS total_net, po.tds_amount::text AS tds_amount,
              po.created_at, po.acknowledged_at,
+             po.consignment_carrier, po.consignment_awb, po.dispatched_at,
              (SELECT count(*)::int FROM procurement.purchase_order_line l
                WHERE l.po_id = po.id) AS lines
         FROM procurement.purchase_order po
@@ -866,6 +1027,9 @@ export class OpsOrderService {
       lines: r.lines,
       raisedAt: r.created_at.toISOString(),
       acknowledgedAt: r.acknowledged_at?.toISOString() ?? null,
+      carrier: r.consignment_carrier?.trim() || null,
+      awb: r.consignment_awb?.trim() || null,
+      dispatchedAt: r.dispatched_at?.toISOString() ?? null,
     }));
   }
 
@@ -926,6 +1090,50 @@ export class OpsOrderService {
   }
 
   /**
+   * The board's "Needs attention" strip, over every order rather than the
+   * filtered page. Prepaid only: an order on credit terms is meant to ship
+   * before it is paid, and naming it here would be a false alarm every time.
+   * Two statements in `ordering`'s own schema, and the buyer's name through
+   * the same `parties()` the rows use, so the strip and the row agree.
+   */
+  private async attention(): Promise<OpsOrderAttentionView> {
+    const exceptions = await this.prisma.$queryRaw<
+      Array<{ order_number: string; status: string; buyer_org_id: string; grand_total: string }>
+    >`
+      SELECT o.order_number, o.status::text AS status, o.buyer_org_id,
+             o.grand_total::text AS grand_total
+        FROM ordering."order" o
+       WHERE o.payment_mode::text = 'PREPAID'
+         AND o.payment_status::text <> 'PAID'
+         AND o.status::text IN ('VENDOR_ACCEPTED', 'DISPATCHED', 'DELIVERED')
+       ORDER BY o.placed_at`;
+    const [pending] = await this.prisma.$queryRaw<
+      Array<{ n: number; total: string; oldest: Date | null }>
+    >`
+      SELECT count(*)::int AS n,
+             coalesce(sum(o.grand_total), 0)::text AS total,
+             min(o.placed_at) AS oldest
+        FROM ordering."order" o
+       WHERE o.status::text = 'PAYMENT_PENDING'`;
+    const parties = await this.parties(exceptions.map((e) => e.buyer_org_id));
+    const item = (e: (typeof exceptions)[number]): OpsOrderAttentionItem => ({
+      orderNumber: e.order_number,
+      status: e.status,
+      buyerName: parties.get(e.buyer_org_id)?.legalName ?? null,
+      grandTotal: e.grand_total,
+    });
+    return {
+      deliveredUnpaid: exceptions.filter((e) => e.status === 'DELIVERED').map(item),
+      acceptedUnpaid: exceptions.filter((e) => e.status !== 'DELIVERED').map(item),
+      paymentPending: {
+        count: pending?.n ?? 0,
+        total: pending?.total ?? '0',
+        oldestPlacedAt: pending?.oldest?.toISOString() ?? null,
+      },
+    };
+  }
+
+  /**
    * The two facets, each counted under every OTHER filter but not its own.
    *
    * That is what makes a zero meaningful: the option stays visible and disabled
@@ -935,15 +1143,13 @@ export class OpsOrderService {
   private async statusFacet(
     where: Prisma.Sql,
     payment: string | null,
-    pendingOnly: boolean,
+    approval: Prisma.Sql,
   ): Promise<OpsFacetOption[]> {
     const rows = await this.prisma.$queryRaw<Array<{ value: string; count: number }>>`
       SELECT o.status::text AS value,
              count(*) FILTER (
                WHERE (${payment}::text IS NULL OR o.payment_status::text = ${payment})
-                 AND (${pendingOnly}::boolean = false
-                      OR EXISTS (SELECT 1 FROM ordering.order_approval a
-                                  WHERE a.order_id = o.id AND a.status = 'PENDING'))
+                 AND ${approval}
              )::int AS count
         FROM ordering."order" o
        WHERE ${where}
@@ -959,15 +1165,13 @@ export class OpsOrderService {
   private async paymentFacet(
     where: Prisma.Sql,
     status: string | null,
-    pendingOnly: boolean,
+    approval: Prisma.Sql,
   ): Promise<OpsFacetOption[]> {
     const rows = await this.prisma.$queryRaw<Array<{ value: string; count: number }>>`
       SELECT o.payment_status::text AS value,
              count(*) FILTER (
                WHERE (${status}::text IS NULL OR o.status::text = ${status})
-                 AND (${pendingOnly}::boolean = false
-                      OR EXISTS (SELECT 1 FROM ordering.order_approval a
-                                  WHERE a.order_id = o.id AND a.status = 'PENDING'))
+                 AND ${approval}
              )::int AS count
         FROM ordering."order" o
        WHERE ${where}

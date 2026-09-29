@@ -277,7 +277,10 @@ export function Drawer({
       className={cn(
         // `mr-0` with `ml-auto` is what pins a <dialog> to the right edge; the
         // element is centred by the UA stylesheet otherwise.
-        'ml-auto mr-0 h-dvh max-h-dvh w-full border-l border-rule bg-sheet p-0 text-ink shadow-3',
+        // `overflow-hidden` because the UA gives a modal dialog `overflow:
+        // auto`, and the body below is the one region meant to scroll — the
+        // dialog growing a second bar beside it is never intended.
+        'ml-auto mr-0 h-dvh max-h-dvh w-full overflow-hidden border-l border-rule bg-sheet p-0 text-ink shadow-3',
         DRAWER_WIDTH[size],
         className,
       )}
@@ -300,8 +303,14 @@ export function Drawer({
           </Button>
         </header>
 
-        {/* The only scrolling region: the header and the actions stay put. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {/* The only scrolling region: the header and the actions stay put.
+            `relative` is load-bearing, as it is on `DataTable`: an `sr-only`
+            control in the content (a hidden file input, a live region) is
+            `position: absolute`, and without a positioned ancestor here its
+            box resolves against the fixed dialog instead — overflowing the
+            dialog rather than this region, which is how a drawer ends up with
+            two scrollbars side by side. */}
+        <div className="relative min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
         {footer && (
           <footer className="flex flex-wrap items-center gap-3 border-t border-rule bg-sheet-2 px-5 py-3">

@@ -198,11 +198,15 @@ export interface SupplyPointOffer {
   totalWarrantyMonths: number;
   /** Sellable units only, per `listing.v_sellable_unit`. */
   unitsAvailable: number;
-  /** Display strings, already formatted for `en-IN` by the caller. */
-  inspectedOn: string;
-  qcExpiresOn: string;
+  /**
+   * Display strings, already formatted for `en-IN` by the caller. Null when
+   * nothing behind the offer has been inspected yet — a declared listing whose
+   * machines are named and inspected only after an order.
+   */
+  inspectedOn: string | null;
+  qcExpiresOn: string | null;
   /** Computed server-side: this package has no clock, and `Date.now()` is banned. */
-  qcExpiresInDays: number;
+  qcExpiresInDays: number | null;
   /** "ships in 24 h". Anonymised — never a named carrier account or facility. */
   dispatchCommitment: string;
 }
@@ -274,6 +278,16 @@ function QualityCell({ quality }: { quality: QualityHeadline }): React.JSX.Eleme
 }
 
 function QcExpiry({ offer }: { offer: SupplyPointOffer }): React.JSX.Element {
+  if (offer.inspectedOn === null || offer.qcExpiresInDays === null) {
+    // Not a failure and not a date: the inspection happens after the order,
+    // at the supply point, machine by machine. Said in --ink-4, never a tick.
+    return (
+      <span className="flex flex-col gap-1">
+        <span className="text-body-sm text-ink-4">Inspected after you order</span>
+        <span className="text-body-sm text-ink-2">Serial recorded per machine</span>
+      </span>
+    );
+  }
   return (
     <span className="flex flex-col gap-1">
       <span className="text-body-sm text-ink">{offer.inspectedOn}</span>

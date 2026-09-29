@@ -2,9 +2,7 @@ import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import type { SerialBatch } from '@trugrade/contracts';
 import userEvent from '@testing-library/user-event';
-import { StepSerials } from './StepSerials';
 import { StepCondition } from './StepCondition';
 import { StepMachine } from './StepMachine';
 import { ListingWizardRoute } from './Wizard';
@@ -12,13 +10,10 @@ import { EMPTY_DRAFT } from './draft';
 import type { PickerBrand, PickerModel, SkuDetail } from '../api';
 
 /**
- * The two behaviours in this wizard that are decisions rather than markup.
- *
- * Step 3's rule is that a brand-shape mismatch **never blocks** — worn labels
- * are real machines, and a wizard that refuses them is a wizard the warehouse
- * works around. The shape warning is not shown. Step 2's rule is that the
- * grade-correction consequence is on the screen before the vendor grades, not
- * in an appeals process after.
+ * The behaviours in this wizard that are decisions rather than markup: step 2
+ * puts the grade-correction consequence on the screen before the vendor grades,
+ * and submit declares a quantity and sends the listing for approval — no serial
+ * is asked for and none is posted.
  */
 
 function mockFetch(body: unknown): void {
@@ -32,71 +27,6 @@ function mockFetch(body: unknown): void {
 afterEach(() => {
   vi.restoreAllMocks();
   sessionStorage.clear();
-});
-
-describe('step 3 — serials', () => {
-  it('accepts a serial the brand pattern does not recognise, without showing a shape warning', async () => {
-    const batch: SerialBatch = {
-      accepted: ['7XKQ1P3', 'WORNLABEL9'],
-      errors: [],
-      warnings: [
-        {
-          line: 2,
-          serial: 'WORNLABEL9',
-          message: 'Does not look like a Dell service tag (7 letters and digits).',
-        },
-      ],
-    };
-    mockFetch(batch);
-
-    render(
-      <MemoryRouter>
-        <StepSerials serialText={'7XKQ1P3\nWORNLABEL9'} brandName="Dell" onChange={() => {}} />
-      </MemoryRouter>,
-    );
-
-    // Both serials are ready. The warned one is NOT held back — that is the rule.
-    expect(await screen.findByText('2 serials ready to add', {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.queryByText(/none of them stops you/)).toBeNull();
-    expect(screen.queryByText(/Does not look like a Dell/)).toBeNull();
-    expect(screen.queryByText(/unrecognised shape/)).toBeNull();
-  });
-
-  it('holds back the serials that are genuinely wrong and names the line', async () => {
-    const batch: SerialBatch = {
-      accepted: ['7XKQ1P3'],
-      errors: [{ line: 2, serial: '7XKQ1P3', message: 'Already listed by another vendor.' }],
-      warnings: [],
-    };
-    mockFetch(batch);
-
-    render(
-      <MemoryRouter>
-        <StepSerials serialText={'7XKQ1P3\n7XKQ1P3'} brandName="Dell" onChange={() => {}} />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText('Line 2', {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText(/Already listed by another vendor/)).toBeInTheDocument();
-  });
-
-  it('accepts nothing when the check could not run, rather than accepting on local rules alone', async () => {
-    // Uniqueness and the blacklist are the two checks a browser cannot make.
-    // Proceeding without them would put a stolen serial into a listing.
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
-    const onChange = vi.fn();
-
-    render(
-      <MemoryRouter>
-        <StepSerials serialText="7XKQ1P3" onChange={onChange} />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent(
-      /Nothing has been added/,
-    );
-    expect(onChange).toHaveBeenLastCalledWith('7XKQ1P3', []);
-  });
 });
 
 const GRADE_DEFS = [
@@ -230,74 +160,80 @@ describe('step 2 — declaration', () => {
 
 
 /**
- * Answering the batch-size question must re-submit the listing that already
- * exists, never build a second one.
- *
- * `POST /:id/submit` returns DECISION_REQUIRED *after* the listing and its units
- * are written — the vendor is being asked a question, not refused, so nothing is
- * rolled back. The bug this asserts against ran create → attach → submit a
- * second time on the accept-fee press, which meant `POST /:id/units` was handed
- * serials the vendor's own draft was already holding. The API correctly refused
- * them, and the vendor was left with two drafts, an error calling their own
- * machines duplicates, and no inspection. Found by photographing the state.
+ * Submit creates the listing with its declared quantity and sends it for
+ * approval. Nothing asks for a serial, nothing posts to `/units`, and no
+ * inspection is requested — the machines are named by our technician once a
+ * buyer has ordered.
  */
-describe('the batch-size decision', () => {
-  it('submits the listing it already created instead of creating a second one', async () => {
-    const posts: string[] = [];
+describe('sending for approval', () => {
+  function stubApi(posts: string[]): void {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = String(input);
       if (init?.method === 'POST') posts.push(url);
-      const body =
-        url.endsWith('/submit')
-          ? {
-              outcome: 'DECISION_REQUIRED',
-              unitCount: 3,
-              minUnitsPerVisit: 25,
-              shortBy: 22,
-              visitFee: '1500.00',
-              options: ['HOLD', 'ACCEPT_FEE'],
-            }
-          : url.endsWith('/units')
-            ? { added: 3 }
-            : url.endsWith('/api/vendor/listings')
-              ? { id: 'listing-1' }
-              // The payout preview, which step 4 renders on the way to the
-              // batch-size question. It used to fall through to `{}`, and
-              // `StepPrice` maps over `preview.deductions` — so this fixture
-              // threw an unhandled TypeError after the assertions had already
-              // passed, which vitest reports as a failed FILE whenever the
-              // rejection lands inside the run rather than after it. A response
-              // shape the API cannot produce is not a useful stub.
-              : url.endsWith('/payout-preview')
-                ? {
-                    pricingMode: 'NET_PAYOUT',
-                    units: 3,
-                    perUnitPayout: '42000.00',
-                    grossPayout: '126000.00',
-                    deductions: [],
-                    totalDeductions: '0.00',
-                    netPayout: '126000.00',
-                    commissionPct: 14,
-                    commissionAmount: '17640.00',
-                    buyerPays: '143640.00',
-                    vendorWarrantyMonths: 3,
-                    customerWarrantyMonths: 6,
-                  }
-                : {};
+      const body = url.endsWith('/submit')
+        ? {
+            outcome: 'SUBMITTED',
+            listingId: 'listing-1',
+            status: 'PENDING_APPROVAL',
+            unitCount: 5,
+            sellingPrice: '47500.00',
+          }
+        : url.endsWith('/api/vendor/listings')
+          ? { id: 'listing-1' }
+          : url.endsWith('/payout-preview')
+            ? {
+                pricingMode: 'NET_PAYOUT',
+                units: 5,
+                perUnitPayout: '42000.00',
+                grossPayout: '210000.00',
+                deductions: [],
+                totalDeductions: '0.00',
+                netPayout: '210000.00',
+                commissionPct: 14,
+                commissionAmount: '29400.00',
+                buyerPays: '239400.00',
+                vendorWarrantyMonths: 3,
+                customerWarrantyMonths: 6,
+              }
+            : {};
       return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
     });
+  }
 
+  function draftAtPrice(over: Record<string, unknown>): void {
     sessionStorage.setItem(
       'trugrade.vendor.listing-wizard',
       JSON.stringify({
         ...EMPTY_DRAFT,
-        step: 4,
+        step: 3,
         sku: { skuId: 'sku-1', skuCode: 'X', brandName: 'Dell', modelName: 'L5420' },
         pickupLocationId: 'addr-1',
-        serials: ['A1', 'A2', 'A3'],
+        qtyText: '5',
         netPayoutRupees: '42000',
+        ...over,
       }),
     );
+  }
+
+  it('creates the listing with the declared quantity, submits it, and never posts serials', async () => {
+    const posts: string[] = [];
+    const bodies: unknown[] = [];
+    stubApi(posts);
+    const spy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    spy.mockImplementation((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === 'POST') {
+        posts.push(url);
+        if (url.endsWith('/api/vendor/listings')) bodies.push(JSON.parse(String(init.body)));
+      }
+      const body = url.endsWith('/submit')
+        ? { outcome: 'SUBMITTED', listingId: 'listing-1', status: 'PENDING_APPROVAL', unitCount: 5, sellingPrice: null }
+        : url.endsWith('/api/vendor/listings')
+          ? { id: 'listing-1' }
+          : { units: 5, perUnitPayout: '42000.00', grossPayout: '210000.00', deductions: [], totalDeductions: '0.00', netPayout: '210000.00', commissionPct: 14, commissionAmount: '29400.00', buyerPays: '239400.00', vendorWarrantyMonths: 3, customerWarrantyMonths: 6, pricingMode: 'NET_PAYOUT' };
+      return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
+    });
+    draftAtPrice({});
 
     render(
       <MemoryRouter>
@@ -305,42 +241,20 @@ describe('the batch-size decision', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: /Request the inspection/ }));
-    await screen.findByText(/fewer than the 25 a visit is worth/);
+    await userEvent.click(await screen.findByRole('button', { name: /Send for approval/ }));
+    await screen.findByText(/Sent for approval/);
 
-    const afterFirst = posts.filter((u) => u.endsWith('/api/vendor/listings')).length;
-    expect(afterFirst).toBe(1);
-
-    await userEvent.click(screen.getByRole('button', { name: /Inspect now/i }));
-
-    // The forbidden thing, attempted: a second create and a second attach of the
-    // same three serials.
-    await waitFor(() =>
-      expect(posts.filter((u) => u.endsWith('/submit'))).toHaveLength(2),
-    );
     expect(posts.filter((u) => u.endsWith('/api/vendor/listings'))).toHaveLength(1);
-    expect(posts.filter((u) => u.endsWith('/units'))).toHaveLength(1);
+    expect(posts.filter((u) => u.endsWith('/submit'))).toHaveLength(1);
+    // The forbidden thing: a serial attach. There is no such step any more.
+    expect(posts.filter((u) => u.endsWith('/units'))).toHaveLength(0);
+    expect((bodies[0] as { qtyTotal: number }).qtyTotal).toBe(5);
   });
 
-  it('does not create a listing when the net payout is empty', async () => {
+  it('does not create a listing when the quantity or the net payout is empty', async () => {
     const posts: string[] = [];
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
-      const url = String(input);
-      if (init?.method === 'POST') posts.push(url);
-      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) } as Response);
-    });
-
-    sessionStorage.setItem(
-      'trugrade.vendor.listing-wizard',
-      JSON.stringify({
-        ...EMPTY_DRAFT,
-        step: 4,
-        sku: { skuId: 'sku-1', skuCode: 'X', brandName: 'Dell', modelName: 'L5420' },
-        pickupLocationId: 'addr-1',
-        serials: ['A1'],
-        netPayoutRupees: '',
-      }),
-    );
+    stubApi(posts);
+    draftAtPrice({ qtyText: '', netPayoutRupees: '' });
 
     render(
       <MemoryRouter>
@@ -348,7 +262,9 @@ describe('the batch-size decision', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: /Request the inspection/ }));
+    const button = await screen.findByRole('button', { name: /Send for approval/ });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(button);
     expect(posts.filter((u) => u.endsWith('/api/vendor/listings'))).toHaveLength(0);
   });
 });

@@ -36,6 +36,8 @@ export {
   DataBoard,
   type DataTableProps,
   type Column,
+  type RowGroup,
+  type RowDetail,
   type SortDirection,
   Pagination,
   type PaginationProps,

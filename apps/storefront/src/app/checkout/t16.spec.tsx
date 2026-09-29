@@ -249,7 +249,7 @@ describe('checkout — the tax split before confirmation', () => {
   });
 
   it('never draws an unresolved split as one that came out at zero', async () => {
-    await open(unpriced(), 4);
+    await open(unpriced(), 3);
     await screen.findByRole('heading', { level: 1, name: 'Confirm' });
 
     expect(screen.getByText('The tax split is not resolved yet')).toBeInTheDocument();
@@ -265,7 +265,7 @@ describe('checkout — the tax split before confirmation', () => {
 
 describe('checkout — the primary action', () => {
   it('says on the screen why it is unavailable, not only in a tooltip', async () => {
-    await open(unpriced(), 4);
+    await open(unpriced(), 3);
     await screen.findByRole('heading', { level: 1, name: 'Confirm' });
     // `Button` puts `disabledReason` in `title`, which a touch or keyboard user
     // never reaches. The sentence has to be in the document text.
@@ -275,7 +275,7 @@ describe('checkout — the primary action', () => {
   });
 
   it('does not place an order when it has said the order cannot be placed', async () => {
-    await open(unpriced(), 4);
+    await open(unpriced(), 3);
     await screen.findByRole('heading', { level: 1, name: 'Confirm' });
     // `aria-disabled` leaves the handler live, so pressing it really does fire
     // the click — the guard is what must stop the request, and this attempts
@@ -284,6 +284,44 @@ describe('checkout — the primary action', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Place this order' }));
     });
     expect(mockConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('checkout — no payment step', () => {
+  it('walks billing, delivery, reference and confirm, and never asks how the buyer will pay', async () => {
+    await open(session(), 3);
+    expect(screen.getByRole('heading', { level: 1, name: 'Confirm' })).toBeInTheDocument();
+    expect(document.body.textContent).toContain('Step 4 of 4');
+    expect(screen.queryByText('How you will pay')).toBeNull();
+    expect(screen.queryByRole('radio', { name: /Prepaid|credit/i })).toBeNull();
+    // The commitment says when the money moves: after verification, not now.
+    expect(document.body.textContent).toMatch(/Nothing today\. You pay once every machine is inspected and verified/);
+  });
+
+  it('books the order to the account’s method without asking', async () => {
+    await open(session(), 3);
+    const s = session();
+    mockConfirm.mockResolvedValue(
+      ok({
+        orderId: '8e0d4b7a-2d5e-4a5c-9f3b-0c2c9f7b1a11',
+        orderNumber: 'TT-26-00050',
+        status: 'AWAITING_INSPECTION',
+        placedAt: '2026-09-29T09:00:00.000Z',
+        holdExpiresAt: '2026-09-29T09:20:00.000Z',
+        subtotal: s.breakUp!.goods,
+        freight: s.breakUp!.freight ?? '0.00',
+        gstTotal: s.breakUp!.gstTotal,
+        grandTotal: s.breakUp!.grandTotal!,
+        tax: s.breakUp!.tax,
+        serials: [],
+        units: s.unitsHeld,
+        next: 'inspection',
+      }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Place this order' }));
+    });
+    expect(mockConfirm).toHaveBeenCalledWith(CART_ID, expect.objectContaining({ paymentMode: 'PREPAID' }));
   });
 });
 

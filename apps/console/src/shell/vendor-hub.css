@@ -1,11 +1,12 @@
 /**
- * Supplier Hub — the vendor surface chrome.
+ * The hub chrome — masthead, icon rail, page primitives.
  *
- * Loaded only by VendorShell. Admin never imports this. Tokens only; no hex.
+ * Loaded by both `VendorShell` and `OpsShell`: the internal console composes
+ * onto the same `data-surface='hub'` template as the vendor portal now, rather
+ * than a look-alike copy. Tokens only; no hex.
  *
  * The masthead is WHITE, not --chrome. See the note on
- * `:root[data-surface='hub']` in packages/ui/src/globals.css: the dark chrome is
- * the buyer brand, and this is a different product for a different audience.
+ * `:root[data-surface='hub']` in packages/ui/src/globals.css.
  */
 
 .vendor-hub {
@@ -381,6 +382,68 @@
   color: var(--acc-ink);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Ops tab strip — the current domain's places, one level in from the rail.   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The rail names the domain; this names the place inside it. Sticky under the
+ * masthead so it survives a long scroll (Platform configuration runs to
+ * hundreds of rows), and it spans the main column only — the rail already has
+ * its own sticky offset and does not need a second bar competing for it.
+ */
+.hub-tabs {
+  position: sticky;
+  top: var(--hub-mast-h);
+  z-index: 20;
+  display: flex;
+  height: 44px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--sheet);
+}
+
+.hub-tabs__item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 2px solid transparent;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.hub-tabs__item:hover {
+  color: var(--ink);
+}
+.hub-tabs__item[aria-current='page'] {
+  border-bottom-color: var(--acc);
+  color: var(--acc-ink);
+  font-weight: 600;
+}
+
+.hub-tabs__count {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-4);
+}
+.hub-tabs__item[aria-current='page'] .hub-tabs__count {
+  color: var(--acc-ink);
+}
+
+.hub-main-col {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+}
+
 /* Work waiting. A count, not a dot — "3 POs" and "some POs" are different facts. */
 .hub-rail__count {
   position: absolute;
@@ -421,6 +484,19 @@
 .hub-main {
   flex: 1 1 auto;
   min-width: 0;
+  /**
+   * `width: 100%`, not just `flex: 1 1 auto`.
+   *
+   * A flex item with an auto left/right margin does not stretch to fill the
+   * free space the way `align-items: stretch` implies — the auto margins claim
+   * that space for themselves first, so the item shrinks to its own content
+   * width and the margins centre that narrower box instead. On a screen wider
+   * than content plus `--maxw`, a table narrower than the cap sat centred in a
+   * sea of empty gutter rather than stretching up to the cap. `width: 100%`
+   * gives the item a definite size before the margins run, which is what makes
+   * `max-width` + `margin: 0 auto` behave like a normal centred column.
+   */
+  width: 100%;
   /**
    * `min()`, not `var(--maxw)` alone.
    *

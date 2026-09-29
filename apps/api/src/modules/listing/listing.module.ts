@@ -3,6 +3,8 @@ import { PrismaModule } from '../../shared/db/prisma.service';
 import { ClockModule } from '../../shared/clock';
 import { ListingController } from './listing.controller';
 import { ListingPublicController } from './listing-public.controller';
+import { ListingOpsController } from './listing-ops.controller';
+import { ListingApprovalService } from './internal/listing-approval.service';
 import { PricingAdminController } from './pricing-admin.controller';
 import { OfferBoardService } from './internal/offer-board.service';
 import { LogisticsModule } from '../logistics';
@@ -47,8 +49,14 @@ import { LocalQcVisitPort, QcVisitPort, SubmitService } from './internal/submit.
   imports: [PrismaModule, ClockModule, QcModule, LogisticsModule],
   // `PricingAdminController` is here rather than in `procurement` because the
   // margin-rule RESOLVER is here. See the file's own comment.
-  controllers: [ListingController, ListingPublicController, PricingAdminController],
+  controllers: [
+    ListingController,
+    ListingPublicController,
+    PricingAdminController,
+    ListingOpsController,
+  ],
   providers: [
+    ListingApprovalService,
     ListingService,
     ListingRepository,
     MarginRuleRepository,

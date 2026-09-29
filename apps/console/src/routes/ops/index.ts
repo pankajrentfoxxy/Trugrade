@@ -4,6 +4,7 @@ import type { ConsoleRoute } from '../qc';
 import { OpsOrderBoardRoute } from './OrderBoard';
 import { OpsOrderRecordRoute } from './OrderRecord';
 import { OpsPurchaseOrderBoardRoute } from './PurchaseOrderBoard';
+import { ListingApprovalsRoute } from './ListingApprovals';
 
 /**
  * The platform's order and procurement boards — T39.
@@ -33,6 +34,16 @@ export const opsRoutes: ConsoleRoute[] = [
     element: React.createElement(OpsOrderBoardRoute),
     permission: 'ordering.any.read' satisfies Permission,
     label: 'Orders',
+  },
+  // The listing approval queue. The list itself is `listing.any.read`, but the
+  // screen is gated on `listing.any.write` — the permission behind approve and
+  // reject — because `listing.any.read` reaches TECHNICIAN, and a queue whose
+  // buttons a seat cannot press is not a screen for that seat.
+  {
+    path: '/listings/approvals',
+    element: React.createElement(ListingApprovalsRoute),
+    permission: 'listing.any.write' satisfies Permission,
+    label: 'Listing approvals',
   },
   {
     path: '/orders/:orderNumber',

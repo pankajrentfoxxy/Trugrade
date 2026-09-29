@@ -57,14 +57,19 @@ import { dispatchLabels, UNKNOWN_DISPATCH_LABEL } from './dispatch-label';
  * The buyer-facing shapes. All allow-lists.
  * ======================================================================== */
 
-/** One allocated machine, by serial. Never a listing id, never a vendor. */
+/** One ordered machine. Never a listing id, never a vendor. */
 export interface OrderedMachineView {
-  serialNumber: string;
+  /** Null until the technician has inspected the machine and recorded its serial. */
+  serialNumber: string | null;
   /** "Dell Latitude 5320". Null when the SKU has since been withdrawn. */
   title: string | null;
   specSummary: string | null;
   grade: Grade;
   unitPrice: string;
+  /** ISO 8601 when the technician recorded it. Null before. */
+  inspectedAt: string | null;
+  /** ISO 8601 when we verified it. "Device verified" reads this and nothing else. */
+  verifiedAt: string | null;
 }
 
 /** The machines leaving one warehouse. They travel together and arrive together. */
@@ -113,6 +118,15 @@ export interface SalesOrderLineView {
   specSummary: string | null;
   grade: Grade;
   qtyOrdered: number;
+  /** Machines on this line the technician has named and recorded at the supply point. */
+  qtyInspected: number;
+  /** Machines on this line we have verified. */
+  qtyVerified: number;
+  /**
+   * The quantity the sales order prices: the verified machines, once every
+   * machine on the order is verified. Null before — a partly verified order
+   * has no invoiceable quantity yet.
+   */
   qtyConfirmed: number | null;
   unitPrice: string;
   gstRatePct: number;
@@ -138,23 +152,38 @@ export interface SalesOrderTotalsView {
  * and then have to pay again. `READY` carries totals for the confirmed
  * quantities; `CANCELLED` is an order every dispatch point refused.
  */
+/**
+ * The sales order under the order-first flow.
+ *
+ * A sales order exists once every machine on the order has been named by our
+ * technician at the supply point and verified by us: that is the moment there
+ * is something to price and the buyer is asked to pay. Before it the tab says
+ * where the machines are in that process and prices nothing.
+ */
 export interface SalesOrderView {
   orderNumber: string;
+  /** `WAITING` until every machine is verified; `READY` from then on, paid or not. */
   state: 'WAITING' | 'READY' | 'CANCELLED';
+  /** Where the order is, more finely than `state`. */
+  stage: 'INSPECTION' | 'VERIFICATION' | 'PAYMENT' | 'PAID' | 'CANCELLED';
+  machines: { ordered: number; inspected: number; verified: number };
+  /** Consignments — dispatch points the machines leave from. */
   dispatchPoints: number;
-  dispatchPointsAnswered: number;
-  /** When the last dispatch point answered. Null while any is outstanding. */
-  confirmedAt: string | null;
+  /** When the last machine was verified. Null before. */
+  verifiedAt: string | null;
+  /** The payment deadline set at verification; null before, and on credit terms. */
+  payBy: string | null;
+  paidAt: string | null;
   lines: SalesOrderLineView[];
-  /** Null unless `READY`. Never a total of a partly answered order. */
+  /** Null unless `READY`. Never a total of a partly verified order. */
   totals: SalesOrderTotalsView | null;
   payment: {
     mode: string;
     status: string;
     /**
-     * True when the sales order is ready and money is still owed on it.
-     * Credit-terms orders are never payable here: they are invoiced and paid on
-     * the agreed terms, not at a button.
+     * True exactly when the Pay button belongs on the screen: verified, owed,
+     * and the deadline not passed by the server's clock. Credit-terms orders
+     * are never payable here: they are invoiced and paid on the agreed terms.
      */
     payable: boolean;
   };
@@ -244,6 +273,21 @@ export interface OrderRecordView {
    * needs a deadline for is the approval one, and it is `approval.expiresAt`.
    */
   approval: OrderApprovalView | null;
+  /** How many machines the technician has recorded, of `unitsAllocated`. */
+  unitsInspected: number;
+  /** How many machines we have verified, of `unitsAllocated`. */
+  unitsVerified: number;
+  /** ISO 8601 when the last machine was verified. */
+  verifiedAt: string | null;
+  /**
+   * The buyer's payment deadline, ISO 8601. Set when the last machine is
+   * verified; null before, and null on credit terms. A real deadline: the
+   * order is cancelled and the machines released when it passes.
+   */
+  payBy: string | null;
+  paidAt: string | null;
+  /** True exactly when the Pay button should be on screen. */
+  payable: boolean;
 }
 
 /* ========================================================================== */
@@ -267,21 +311,28 @@ interface OrderRow {
   billing_gst_profile_id: string;
   billing_address_id: string;
   shipping_address_id: string;
+  verified_at: Date | null;
+  pay_by: Date | null;
+  paid_at: Date | null;
 }
 
 interface AllocatedRow {
-  unit_id: string;
-  serial_number: string;
+  unit_id: string | null;
+  serial_number: string | null;
+  listing_id: string;
   sku_id: string;
   grade: string;
   unit_price: string;
   gst_rate: string;
+  inspected_at: Date | null;
+  verified_at: Date | null;
 }
 
 /** One `order_line` with its consignment's answer. `ordering` only. */
 interface OrderLineRow {
   sub_order_id: string;
   sub_status: string;
+  order_line_id: string;
   listing_id: string;
   sku_id: string;
   grade: string;
@@ -319,12 +370,14 @@ export class OrderReadService {
              payment_status::text AS payment_status, buyer_po_number, cost_centre,
              subtotal::text AS subtotal, gst_total::text AS gst_total,
              freight_total::text AS freight_total, grand_total::text AS grand_total,
-             placed_at, billing_gst_profile_id, billing_address_id, shipping_address_id
+             placed_at, billing_gst_profile_id, billing_address_id, shipping_address_id,
+             verified_at, pay_by, paid_at
         FROM ordering."order"
        WHERE order_number = ${orderNumber} AND buyer_org_id = ${orgId}::uuid`;
     if (!order) throw new NotFoundError('order', { reason: 'no_such_order_for_this_org' });
 
     const allocated = await this.allocated(order.id);
+    const now = this.clock.now().getTime();
     const [billedTo, addresses, approval, supply] = await Promise.all([
       this.party(order.billing_gst_profile_id),
       this.addresses([order.billing_address_id, order.shipping_address_id]),
@@ -382,16 +435,31 @@ export class OrderReadService {
       dispatchGroups: await this.groups(allocated),
       supply,
       approval,
+      unitsInspected: allocated.filter((r) => r.inspected_at !== null).length,
+      unitsVerified: allocated.filter((r) => r.verified_at !== null).length,
+      verifiedAt: order.verified_at?.toISOString() ?? null,
+      payBy: order.pay_by?.toISOString() ?? null,
+      paidAt: order.paid_at?.toISOString() ?? null,
+      // The server's clock decides, never the browser's: a deadline that has
+      // passed is not payable even before the sweep has cancelled the order.
+      payable:
+        order.status === 'PAYMENT_PENDING' &&
+        order.payment_status !== 'PAID' &&
+        (order.pay_by === null || order.pay_by.getTime() > now),
     };
   }
 
   /**
-   * The sales order: the booking as the dispatch points confirmed it.
+   * The sales order: the machines as our technician named them and we verified
+   * them, priced once the last one is in.
    *
    * Same scoping and the same 404-not-403 rule as `byNumber`. Everything here
-   * is `ordering`'s own: the consignment's `accepted_at` / `rejected_at` say
-   * whether a dispatch point has answered, `cancelled_qty` says how short it
-   * was, and the line's own price and GST rate say what the rest comes to.
+   * is `ordering`'s own: `order_line_unit.inspected_at` says a machine has a
+   * serial, `verified_at` that we stand behind it, `order.verified_at` that
+   * the last one is done, `pay_by` and `paid_at` the money. Nothing is read
+   * from the dispatch point's side: under the order-first flow the buyer is not
+   * waiting on a vendor to answer, and a screen that said so would be waiting
+   * for something that never comes.
    */
   async salesOrder(orderNumber: string): Promise<SalesOrderView> {
     const orgId = this.buyerOrgId();
@@ -400,14 +468,16 @@ export class OrderReadService {
              payment_status::text AS payment_status, buyer_po_number, cost_centre,
              subtotal::text AS subtotal, gst_total::text AS gst_total,
              freight_total::text AS freight_total, grand_total::text AS grand_total,
-             placed_at, billing_gst_profile_id, billing_address_id, shipping_address_id
+             placed_at, billing_gst_profile_id, billing_address_id, shipping_address_id,
+             verified_at, pay_by, paid_at
         FROM ordering."order"
        WHERE order_number = ${orderNumber} AND buyer_org_id = ${orgId}::uuid`;
     if (!order) throw new NotFoundError('order', { reason: 'no_such_order_for_this_org' });
 
-    const [rows, addresses] = await Promise.all([
+    const [rows, addresses, progress] = await Promise.all([
       this.lineRows(order.id),
       this.addresses([order.shipping_address_id]),
+      this.lineProgress(order.id),
     ]);
     const deliveryAddress = addresses.get(order.shipping_address_id);
     if (!deliveryAddress) {
@@ -415,33 +485,38 @@ export class OrderReadService {
     }
     const { availability, descriptions } = await this.lineContext(rows);
 
-    // One answer per consignment, not per line: a dispatch point answers the
-    // whole of what it was asked for at once.
-    const consignments = new Map<string, { answeredAt: Date | null; refused: boolean }>();
-    for (const row of rows) {
-      consignments.set(row.sub_order_id, {
-        answeredAt: row.accepted_at ?? row.rejected_at,
-        refused: row.sub_status === 'VENDOR_REJECTED',
-      });
-    }
-    const answers = [...consignments.values()];
-    const answered = answers.filter((c) => c.answeredAt !== null);
-    const everyoneAnswered = answers.length > 0 && answered.length === answers.length;
-    const everyoneRefused = everyoneAnswered && answers.every((c) => c.refused);
-    const state: SalesOrderView['state'] = !everyoneAnswered
-      ? 'WAITING'
-      : everyoneRefused || order.status === 'CANCELLED'
-        ? 'CANCELLED'
-        : 'READY';
-    const confirmedAt = everyoneAnswered
-      ? new Date(Math.max(...answered.map((c) => c.answeredAt!.getTime()))).toISOString()
-      : null;
+    const counts = (lineId: string): { slots: number; inspected: number; verified: number } =>
+      progress.get(lineId) ?? { slots: 0, inspected: 0, verified: 0 };
+    const machines = rows.reduce(
+      (m, r) => {
+        const c = counts(r.order_line_id);
+        return { ordered: m.ordered + c.slots, inspected: m.inspected + c.inspected, verified: m.verified + c.verified };
+      },
+      { ordered: 0, inspected: 0, verified: 0 },
+    );
+
+    const over = ['CANCELLED', 'VENDOR_REJECTED', 'RTO'].includes(order.status);
+    // Verified is the order's own stamp, or every slot carrying one — the two
+    // agree, and the second covers an order verified before the stamp existed.
+    const everyMachineVerified =
+      order.verified_at !== null || (machines.ordered > 0 && machines.verified >= machines.ordered);
+    const state: SalesOrderView['state'] = over ? 'CANCELLED' : everyMachineVerified ? 'READY' : 'WAITING';
+    const settled = order.payment_status === 'PAID' || order.payment_mode === 'CREDIT';
+    const stage: SalesOrderView['stage'] = over
+      ? 'CANCELLED'
+      : state === 'WAITING'
+        ? machines.ordered > 0 && machines.inspected >= machines.ordered
+          ? 'VERIFICATION'
+          : 'INSPECTION'
+        : settled
+          ? 'PAID'
+          : 'PAYMENT';
 
     const lines: SalesOrderLineView[] = rows.map((row) => {
       const stock = availability.get(row.listing_id);
       const description = descriptions.get(row.sku_id) ?? null;
-      const isAnswered = (row.accepted_at ?? row.rejected_at) !== null;
-      const qtyConfirmed = isAnswered ? row.qty - row.cancelled_qty : null;
+      const c = counts(row.order_line_id);
+      const qtyConfirmed = state === 'READY' ? c.verified : null;
       const unitPrice = Money.parse(row.unit_price);
       const net = qtyConfirmed === null ? null : unitPrice.times(qtyConfirmed);
       const gst = net === null ? null : Money.percentOf(net, Number(row.gst_rate));
@@ -454,6 +529,8 @@ export class OrderReadService {
         specSummary: description?.specSummary ?? null,
         grade: row.grade as Grade,
         qtyOrdered: row.qty,
+        qtyInspected: c.inspected,
+        qtyVerified: c.verified,
         qtyConfirmed,
         unitPrice: row.unit_price,
         gstRatePct: Number(row.gst_rate),
@@ -465,7 +542,13 @@ export class OrderReadService {
 
     let totals: SalesOrderTotalsView | null = null;
     if (state === 'READY') {
-      const subtotal = Money.sum(lines.map((l) => Money.parse(l.lineNet ?? '0')));
+      // Once paid, the sales order is what was charged: the payment took the
+      // order's own total, so that is the figure shown, not a re-pricing that
+      // could drift from the money. Before payment it is the verified machines.
+      const subtotal =
+        order.payment_status === 'PAID'
+          ? Money.parse(order.subtotal)
+          : Money.sum(lines.map((l) => Money.parse(l.lineNet ?? '0')));
       const freight = Money.parse(order.freight_total);
       const ratePct = Number(rows[0]?.gst_rate ?? 18);
       // The same two facts and the same function that decided the heads at
@@ -494,25 +577,52 @@ export class OrderReadService {
           placeOfSupplyState: deliveryAddress.state,
           basis: split.basis,
         },
-        grandTotal: subtotal.add(freight).add(gstTotal).toString(),
+        // Paid: the total is the one the payment took, to the paisa.
+        grandTotal: order.payment_status === 'PAID' ? Money.parse(order.grand_total).toString() : subtotal.add(freight).add(gstTotal).toString(),
       };
     }
 
-    const owed = ['PENDING', 'FAILED', 'PARTIALLY_PAID'].includes(order.payment_status);
+    const now = this.clock.now().getTime();
     return {
       orderNumber: order.order_number,
       state,
-      dispatchPoints: answers.length,
-      dispatchPointsAnswered: answered.length,
-      confirmedAt,
+      stage,
+      machines,
+      dispatchPoints: new Set(rows.map((r) => r.sub_order_id)).size,
+      verifiedAt: order.verified_at?.toISOString() ?? null,
+      payBy: order.pay_by?.toISOString() ?? null,
+      paidAt: order.paid_at?.toISOString() ?? null,
       lines,
       totals,
       payment: {
         mode: order.payment_mode,
         status: order.payment_status,
-        payable: state === 'READY' && order.payment_mode !== 'CREDIT' && owed,
+        // The same rule as the order record: the server's clock, never the browser's.
+        payable:
+          state === 'READY' &&
+          order.payment_mode !== 'CREDIT' &&
+          order.status === 'PAYMENT_PENDING' &&
+          order.payment_status !== 'PAID' &&
+          (order.pay_by === null || order.pay_by.getTime() > now),
       },
     };
+  }
+
+  /** Per order line: how many slots it has, how many carry a serial, how many are verified. */
+  private async lineProgress(
+    orderId: string,
+  ): Promise<Map<string, { slots: number; inspected: number; verified: number }>> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ order_line_id: string; slots: number; inspected: number; verified: number }>
+    >`
+      SELECT ol.id AS order_line_id, count(olu.id)::int AS slots,
+             count(olu.inspected_at)::int AS inspected, count(olu.verified_at)::int AS verified
+        FROM ordering.order_line ol
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+        LEFT JOIN ordering.order_line_unit olu ON olu.order_line_id = ol.id
+       WHERE so.order_id = ${orderId}::uuid
+       GROUP BY ol.id`;
+    return new Map(rows.map((r) => [r.order_line_id, { slots: r.slots, inspected: r.inspected, verified: r.verified }]));
   }
 
   /* ----------------------------------------------------------------------
@@ -522,7 +632,7 @@ export class OrderReadService {
   /** Every line on the order with its consignment's answer. Inside `ordering` only. */
   private async lineRows(orderId: string): Promise<OrderLineRow[]> {
     return this.prisma.$queryRaw<OrderLineRow[]>`
-      SELECT so.id AS sub_order_id, so.status::text AS sub_status,
+      SELECT so.id AS sub_order_id, so.status::text AS sub_status, ol.id AS order_line_id,
              ol.listing_id, ol.sku_id, ol.grade::text AS grade, ol.qty, ol.cancelled_qty,
              ol.unit_price::text AS unit_price, ol.gst_rate::text AS gst_rate,
              so.accepted_at, so.rejected_at
@@ -567,13 +677,14 @@ export class OrderReadService {
   /** The allocated machines. Inside `ordering` only — no cross-schema JOIN. */
   private async allocated(orderId: string): Promise<AllocatedRow[]> {
     return this.prisma.$queryRaw<AllocatedRow[]>`
-      SELECT olu.unit_id, olu.serial_number, ol.sku_id, ol.grade::text AS grade,
-             ol.unit_price::text AS unit_price, ol.gst_rate::text AS gst_rate
+      SELECT olu.unit_id, olu.serial_number, ol.listing_id, ol.sku_id, ol.grade::text AS grade,
+             ol.unit_price::text AS unit_price, ol.gst_rate::text AS gst_rate,
+             olu.inspected_at, olu.verified_at
         FROM ordering.order_line_unit olu
         JOIN ordering.order_line ol ON ol.id = olu.order_line_id
         JOIN ordering.sub_order so ON so.id = ol.sub_order_id
        WHERE so.order_id = ${orderId}::uuid
-       ORDER BY olu.serial_number`;
+       ORDER BY olu.inspected_at NULLS LAST, olu.serial_number, olu.id`;
   }
 
   /**
@@ -586,10 +697,16 @@ export class OrderReadService {
    */
   private async groups(rows: readonly AllocatedRow[]): Promise<DispatchGroupView[]> {
     if (rows.length === 0) return [];
-    const labels = await dispatchLabels(
-      this.prisma,
-      rows.map((r) => r.unit_id),
-    );
+    // The label comes off the LISTING, through `listing`'s own seam: a slot has
+    // no unit until the technician names one, and the buyer still needs to know
+    // which dispatch point each machine leaves from.
+    const [availability, unitLabels] = await Promise.all([
+      this.listings.availabilityByListing([...new Set(rows.map((r) => r.listing_id))]),
+      dispatchLabels(
+        this.prisma,
+        rows.map((r) => r.unit_id),
+      ),
+    ]);
     const descriptions = new Map(
       await Promise.all(
         [...new Set(rows.map((r) => r.sku_id))].map(
@@ -600,7 +717,12 @@ export class OrderReadService {
 
     const groups = new Map<string, DispatchGroupView>();
     for (const row of rows) {
-      const label = labels.get(row.unit_id) ?? UNKNOWN_DISPATCH_LABEL;
+      const stock = availability.get(row.listing_id);
+      const label =
+        (row.unit_id ? unitLabels.get(row.unit_id) : undefined) ??
+        (stock?.supplyPointCode && stock.city
+          ? supplyPointLabel(stock.supplyPointCode, stock.city)
+          : UNKNOWN_DISPATCH_LABEL);
       const description = descriptions.get(row.sku_id) ?? null;
       const group = groups.get(label) ?? { label, machines: [] };
       group.machines.push({
@@ -609,6 +731,8 @@ export class OrderReadService {
         specSummary: description?.specSummary ?? null,
         grade: row.grade as Grade,
         unitPrice: row.unit_price,
+        inspectedAt: row.inspected_at?.toISOString() ?? null,
+        verifiedAt: row.verified_at?.toISOString() ?? null,
       });
       groups.set(label, group);
     }

@@ -3,10 +3,9 @@ import { Link, useNavigate } from 'react-router';
 import { Button, EmptyState, type Step } from '@trugrade/ui';
 import { PageHeader } from '../../../lib/controls';
 import { API, postJson, type SubmitResult, type VendorListing } from '../api';
-import { payoutBlocker, useDraft, type WizardDraft } from './draft';
+import { payoutBlocker, qtyBlocker, qtyOf, useDraft, type WizardDraft } from './draft';
 import { StepMachine } from './StepMachine';
 import { StepCondition } from './StepCondition';
-import { StepSerials } from './StepSerials';
 import { StepPrice } from './StepPrice';
 import { WizardProgress } from './WizardChrome';
 
@@ -14,27 +13,30 @@ import { WizardProgress } from './WizardChrome';
  * ARCHETYPE D — Flow. Step rail + one step.
  * DENSITY: default (vendor portal), set on the app root by the shell.
  *
- * The four-step listing wizard.
+ * The three-step listing wizard: the machine, its condition, and the price
+ * with the quantity.
  *
- * Everything is held client-side until the last button, and that is not laziness
- * about persistence — it is the API's shape. `listing.unit_price` is NOT NULL
- * with `CHECK (> 0)`, so a draft row cannot exist before step 4 has a number,
- * and `POST /:id/units` needs a listing to attach to. So the order is: collect,
- * then create, then attach, then submit. `serials/validate` needs no listing,
- * which is what lets step 3 be live regardless.
+ * **No serial numbers.** A listing is a declared quantity of one machine at
+ * one grade. The serials are recorded by our technician at your site once a
+ * buyer has ordered — so nothing here asks for them, and nothing is inspected
+ * until then. Submit sends the listing to our ops team, who approve it onto the
+ * storefront.
  *
- * The draft survives a navigation away (`sessionStorage`, see `draft.ts`), which
- * is what makes the step-1 handoff to the SKU-request flow non-destructive.
+ * Everything is held client-side until the last button: `listing.unit_price`
+ * is NOT NULL, so a draft row cannot exist before step 3 has a number. The
+ * order is collect, then create, then submit. The draft survives a navigation
+ * away (`sessionStorage`, see `draft.ts`), which is what makes the step-1
+ * handoff to the SKU-request flow non-destructive.
  */
 
-const STEPS = ['Pick the machine', 'Declare the condition', 'Serial numbers', 'Price'] as const;
+const STEPS = ['Pick the machine', 'Declare the condition', 'Price and quantity'] as const;
 
 /** Whether anything has actually been entered, which is what "saved" means here. */
 function draftStarted(draft: WizardDraft): boolean {
   return (
     draft.sku !== null ||
     draft.catalogModel !== null ||
-    draft.serials.length > 0 ||
+    draft.qtyText.trim() !== '' ||
     draft.netPayoutRupees.trim() !== ''
   );
 }
@@ -47,13 +49,9 @@ function blockerFor(draft: WizardDraft): string {
     case 2:
       return draft.pickupLocationId
         ? ''
-        : 'Choose where we collect from. It decides when we can inspect.';
+        : 'Choose where we collect from. It decides where our technician goes.';
     case 3:
-      return draft.serials.length > 0
-        ? ''
-        : 'Add at least one serial number. Every machine is listed individually.';
-    case 4:
-      return payoutBlocker(draft.netPayoutRupees);
+      return qtyBlocker(draft.qtyText) || payoutBlocker(draft.netPayoutRupees);
   }
 }
 
@@ -61,8 +59,7 @@ function blockerFor(draft: WizardDraft): string {
 function submitBlocker(draft: WizardDraft): string {
   if (!draft.sku) return blockerFor({ ...draft, step: 1 });
   if (!draft.pickupLocationId) return blockerFor({ ...draft, step: 2 });
-  if (draft.serials.length === 0) return blockerFor({ ...draft, step: 3 });
-  return blockerFor({ ...draft, step: 4 });
+  return blockerFor({ ...draft, step: 3 });
 }
 
 export function ListingWizardRoute(): React.JSX.Element {
@@ -73,40 +70,25 @@ export function ListingWizardRoute(): React.JSX.Element {
   /**
    * The listing the first `commit()` created, if it got that far.
    *
-   * DECISION_REQUIRED and HELD both come back from `POST /:id/submit` *after*
-   * the listing and its units exist — nothing is rolled back, because the vendor
-   * is being asked a question rather than refused. Answering it therefore has to
-   * re-submit that listing, not build a second one: without this the accept-fee
-   * button ran create → attach → submit again, the attach failed on serials the
-   * vendor's own draft was already holding, and they were left with two drafts,
-   * an error naming their own machines as duplicates, and no inspection.
+   * A submit that fails after the create must re-submit that listing rather
+   * than build a second one; without this a retry left two drafts behind.
    */
   const [listingId, setListingId] = React.useState<string | null>(null);
   const inFlight = React.useRef(false);
   const navigate = useNavigate();
 
-  /**
-   * Create, attach, submit — in that order, and stopping at the first failure.
-   *
-   * Not a transaction and it cannot be: three HTTP calls. What that leaves is a
-   * created draft with no units if the second call fails, which is a recoverable
-   * state the vendor can see in `/vendor/listings` and finish. A silent retry of
-   * the first call would leave two drafts instead, which is not — and `listingId`
-   * is what stops a second press from doing exactly that.
-   */
-  async function commit(choice?: 'HOLD' | 'ACCEPT_FEE'): Promise<void> {
+  /** Create, then submit — stopping at the first failure. */
+  async function commit(): Promise<void> {
     if (submitBlocker(draft) || !draft.sku || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
       const id = listingId ?? (await create());
-      const outcome = await postJson<SubmitResult>(API.submit(id), { choice });
+      const outcome = await postJson<SubmitResult>(API.submit(id), {});
       setResult(outcome);
-      if (outcome.outcome === 'SUBMITTED') {
-        clear();
-        setListingId(null);
-      }
+      clear();
+      setListingId(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -115,7 +97,7 @@ export function ListingWizardRoute(): React.JSX.Element {
     }
   }
 
-  /** Create the listing and attach the serials. Returns the id, and remembers it. */
+  /** Create the listing with its declared quantity. Returns the id, and remembers it. */
   async function create(): Promise<string> {
     if (!draft.sku) throw new Error('Choose a SKU first.');
     const listing = await postJson<VendorListing>(API.listings, {
@@ -133,11 +115,10 @@ export function ListingWizardRoute(): React.JSX.Element {
       oemWarrantyRemaining: draft.oemWarrantyRemaining,
       vendorWarrantyMonths: draft.vendorWarrantyMonths,
       vendorAskPrice: draft.netPayoutRupees.trim(),
+      qtyTotal: qtyOf(draft),
       moq: draft.moq,
       dispatchSlaHours: draft.dispatchSlaHours,
     });
-
-    await postJson(API.listingUnits(listing.id), { serials: draft.serials });
     setListingId(listing.id);
     return listing.id;
   }
@@ -145,22 +126,8 @@ export function ListingWizardRoute(): React.JSX.Element {
   if (result?.outcome === 'SUBMITTED') {
     return (
       <EmptyState
-        title="Inspection requested. Nothing is live yet."
-        body={`Visit ${result.visitNumber} covers ${result.unitCount} ${result.unitCount === 1 ? 'machine' : 'machines'}. We will confirm a slot, inspect at your site, and only then does anything appear to a buyer. Failed machines are never listed — they stay yours.`}
-        action={
-          <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings">
-            See your listings
-          </Link>
-        }
-      />
-    );
-  }
-
-  if (result?.outcome === 'HELD') {
-    return (
-      <EmptyState
-        title="Held until you reach the minimum"
-        body={`You have ${result.unitCount} machines and a visit needs ${result.minUnitsPerVisit}. No inspection has been requested and nothing is on sale, but the listing is saved with your machines on it. Add ${result.shortBy} more and request the inspection, or come back and accept the visit fee.`}
+        title="Sent for approval. Nothing is live yet."
+        body={`${result.unitCount} ${result.unitCount === 1 ? 'machine' : 'machines'} declared. Our team reviews the listing and puts it on the storefront; you will see it as Live on your listings board. When a buyer orders, our technician comes to your site, inspects each machine and records its serial — you do nothing until then.`}
         action={
           <Link className="text-acc-ink underline underline-offset-4" to="/vendor/listings">
             See your listings
@@ -171,18 +138,7 @@ export function ListingWizardRoute(): React.JSX.Element {
   }
 
   const blocker = blockerFor(draft);
-  const decisionOpen = result?.outcome === 'DECISION_REQUIRED';
 
-  /**
-   * The rail is the wizard's own state, told in the component's vocabulary.
-   *
-   * A step behind the current one is `complete` and clickable; the current one
-   * is `current`; anything ahead is `upcoming` and is a `<span aria-disabled>`
-   * rather than a disabled `<button>` — `Stepper` makes that choice for us,
-   * which is the reason to use it rather than the hand-rolled `<ol>` of buttons
-   * this replaced. Forwards stays refused, because step 4's payout preview is
-   * meaningless without a SKU and a unit count.
-   */
   const steps: Step[] = STEPS.map((label, i) => {
     const n = i + 1;
     return {
@@ -210,38 +166,8 @@ export function ListingWizardRoute(): React.JSX.Element {
           <div className="mt-6">
             {draft.step === 1 && <StepMachine draft={draft} patch={patch} />}
             {draft.step === 2 && <StepCondition draft={draft} patch={patch} />}
-            {draft.step === 3 && (
-              <StepSerials
-                serialText={draft.serialText}
-                brandName={draft.sku?.brandName}
-                onChange={(serialText, serials) => patch({ serialText, serials })}
-              />
-            )}
-            {draft.step === 4 && <StepPrice draft={draft} patch={patch} />}
+            {draft.step === 3 && <StepPrice draft={draft} patch={patch} />}
           </div>
-
-          {result?.outcome === 'DECISION_REQUIRED' && (
-            // Not a rejection. A vendor with eighteen machines who is silently
-            // refused concludes the platform does not want them.
-            <div className="tg-card mt-7 rounded-lg border border-warn">
-              <p className="text-body text-ink">
-                {result.unitCount} machines is fewer than the {result.minUnitsPerVisit} a visit is
-                worth.
-              </p>
-              {/*
-            Nothing has been submitted yet. Either hold these until you have more,
-            or accept the visit fee and we come now.
-          */}
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button variant="secondary" loading={busy} onClick={() => void commit('HOLD')}>
-                  Hold until I reach {result.minUnitsPerVisit}
-                </Button>
-                <Button variant="primary" loading={busy} onClick={() => void commit('ACCEPT_FEE')}>
-                  Inspect now
-                </Button>
-              </div>
-            </div>
-          )}
 
           {error && (
             <p className="mt-6 text-body-sm text-fail" role="alert">
@@ -258,7 +184,7 @@ export function ListingWizardRoute(): React.JSX.Element {
               Back
             </Button>
 
-            {draft.step < 4 ? (
+            {draft.step < 3 ? (
               <Button
                 variant="primary"
                 disabledReason={blocker}
@@ -267,21 +193,15 @@ export function ListingWizardRoute(): React.JSX.Element {
                 Continue
               </Button>
             ) : (
-              // Suppressed, not disabled, while the batch-size question is open.
-              // The two buttons in that panel ARE the submit, and leaving a third
-              // amber button under them puts two primary actions on one screen and
-              // makes the wrong one look like the way forward.
-              !decisionOpen && (
-                <Button
-                  variant="primary"
-                  loading={busy}
-                  disabled={busy}
-                  disabledReason={busy ? undefined : submitBlocker(draft)}
-                  onClick={() => void commit()}
-                >
-                  Request the inspection
-                </Button>
-              )
+              <Button
+                variant="primary"
+                loading={busy}
+                disabled={busy}
+                disabledReason={busy ? undefined : submitBlocker(draft)}
+                onClick={() => void commit()}
+              >
+                Send for approval
+              </Button>
             )}
 
             <Button

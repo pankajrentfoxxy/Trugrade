@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { AuthProvider } from '../../lib/auth';
 import { OpsOrderBoardRoute } from './OrderBoard';
@@ -122,6 +122,10 @@ const RECORD_BASE = {
   purchaseOrders: [],
   approval: null,
   timeline: [],
+  inspection: { visits: [], machines: 1, inspected: 1, verified: 1 },
+  verifiedAt: '2026-08-29T22:10:00.000Z',
+  payBy: null,
+  paidAt: '2026-08-30T09:00:00.000Z',
 };
 
 const UNCOVERED = {
@@ -272,7 +276,9 @@ describe('a missing value never renders as a passing one', () => {
     expect(screen.getByText('None raised')).toBeTruthy();
     // The control: the other row raised two and prints the number, so "None
     // raised" is a considered rendering rather than the column being broken.
-    expect(screen.getByText('2')).toBeTruthy();
+    // Scoped to the table: the board's footer also states the total, which on
+    // this fixture is 2 as well.
+    expect(within(screen.getByRole('table')).getByText('2')).toBeTruthy();
   });
 
   it('renders an unstatable margin as the reason, in --ink-4, never as an amount', async () => {
@@ -410,7 +416,8 @@ describe('a link the caller cannot open is not a link', () => {
     drawOrders();
     await screen.findByText('TT-26-00009');
     // The number is still there — the count is a fact SUPPORT is entitled to.
-    expect(screen.getByText('2')).toBeTruthy();
+    // Scoped to the table for the same reason as above: the footer's total is 2.
+    expect(within(screen.getByRole('table')).getByText('2')).toBeTruthy();
     expect(screen.queryByRole('link', { name: '2' })).toBeNull();
   });
 

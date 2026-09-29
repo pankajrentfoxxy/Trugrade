@@ -120,7 +120,7 @@ const PREVIEW = {
 function priceDraft(): WizardDraft {
   return {
     ...EMPTY_DRAFT,
-    step: 4,
+    step: 3,
     sku: {
       skuId: 's1',
       skuCode: 'DEL-LAT-5420-A',
@@ -141,7 +141,7 @@ function priceDraft(): WizardDraft {
       isTouch: false,
       osSupported: 'Windows 11 Pro',
     },
-    serials: Array.from({ length: 50 }, (_, i) => `SER${i}`),
+    qtyText: '50',
     netPayoutRupees: '42000',
   };
 }

@@ -189,6 +189,15 @@ export interface VisitRow {
   geoVarianceMetres: number | null;
   /** The threshold in force, so the console never hard-codes 500 m. */
   geoVarianceAlertMetres: number;
+  /** The order this visit is for, or null for a stock visit. */
+  orderNumber: string | null;
+  addressId: string;
+  arrivedAt: string | null;
+  startedAt: string | null;
+  /** Days past the scheduled date for an open visit, on the server's calendar. Null when not applicable. */
+  daysOverdue: number | null;
+  /** The server's `YYYY-MM-DD` for today, so "Today" on a row is the server's word. */
+  today: string;
 }
 
 export interface VisitBoardFilters {
@@ -199,19 +208,52 @@ export interface VisitBoardFilters {
   to?: string;
 }
 
+/** One visit on the calendar: where it sits in the day, and what it is. */
+export interface ScheduleVisit {
+  id: string;
+  visitNumber: string;
+  vendorName: string;
+  units: number;
+  status: VisitStatus;
+  /** `HH:MM:SS`, or null when the visit was booked without a window. */
+  slotFrom: string | null;
+  slotTo: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  orderNumber: string | null;
+  addressId: string;
+}
+
 export interface ScheduleTechnicianDay {
   date: string;
   availability: 'AVAILABLE' | 'BOOKED' | 'LEAVE' | 'TRAVEL' | 'HOLIDAY' | 'UNSET';
   /** Units already committed on this date across every visit assigned. */
   bookedUnits: number;
   sites: number;
-  visits: Array<{ id: string; visitNumber: string; vendorName: string; units: number }>;
+  visits: ScheduleVisit[];
+}
+
+/** An open visit whose date has passed: the calendar's "needs a day" list. */
+export interface ScheduleOverdueVisit {
+  id: string;
+  visitNumber: string;
+  vendorName: string;
+  facilityLabel: string;
+  units: number;
+  technicianId: string | null;
+  technicianName: string | null;
+  scheduledDate: string;
+  slotFrom: string | null;
+  slotTo: string | null;
+  daysLate: number;
+  addressId: string;
 }
 
 export interface ScheduleTechnician {
   id: string;
   name: string;
   employeeCode: string;
+  isActive: boolean;
   zones: string[];
   certifiedTools: string[];
   dailyCapacityUnits: number;
@@ -224,7 +266,10 @@ export interface ScheduleWeek {
   from: string;
   to: string;
   dates: string[];
+  /** The server's today, `YYYY-MM-DD` in IST. */
+  today: string;
   technicians: ScheduleTechnician[];
+  overdue: ScheduleOverdueVisit[];
   /**
    * `qc_tool_provider.licence_seats` — a hard cap on how many technicians can be
    * certifying at once. Scheduling a thirteenth technician against twelve seats
@@ -245,12 +290,27 @@ export interface ManifestUnit {
   /** As declared on the listing. The inspection compares the scan against this. */
   serialNumber: string;
   listingId: string | null;
+  /** The SKU code. */
   skuLabel: string;
+  /** `Microsoft Surface Pro 7` and `i5-1035G4 · 8 GB · 128 GB NVME_SSD`; null when the SKU is gone. */
+  skuTitle: string | null;
+  specSummary: string | null;
   declaredGrade: Grade | null;
   outcome: UnitOutcome;
   absentReason: string | null;
   qcReportId: string | null;
   durationSeconds: number | null;
+  /** The inspection's own clock, as recorded — read against the visit's. */
+  startedAt: string | null;
+  completedAt: string | null;
+  /** `listing.unit.status`, and whether the machine is on sale on the strength of this visit. */
+  unitStatus: string;
+  isSellable: boolean;
+  /** From the unit's report on this visit; null until one exists. */
+  verdict: Verdict | null;
+  gradeFinal: Grade | null;
+  qcScore: number | null;
+  gradeOverrideReason: string | null;
 }
 
 export interface ToolRunRow {
@@ -270,20 +330,27 @@ export interface ToolRunRow {
 }
 
 export interface PhotoRow {
+  /** The report — and so the machine — this photograph belongs to. */
+  qcReportId: string;
   angle: PhotoAngle;
   fileKey: string;
+  /** SHA-256 of the bytes. Two photographs with one hash are one photograph. */
+  hash: string;
   /** Signed and short-lived. The console never constructs an object-store URL. */
   url: string;
   capturedAt: string | null;
 }
 
 export interface SealRow {
+  qcReportId: string;
   sealCode: string;
   status: SealState;
   appliedAt: string;
   appliedByName: string;
   /** NOT NULL in the schema. There is no seal without a photograph. */
   appliedPhotoUrl: string;
+  /** The object key, so a seal photograph can be recognised as one of the unit photographs. */
+  appliedPhotoKey: string;
   verifiedAt: string | null;
   verifiedByName: string | null;
   brokenAt: string | null;
@@ -331,8 +398,11 @@ export type Tristate = 'YES' | 'NO' | 'UNKNOWN';
 
 export interface ManualInspectionPayload {
   visitId: string;
-  visitUnitId: string;
-  unitId: string;
+  /** A stock visit's manifest line… */
+  visitUnitId?: string;
+  unitId?: string;
+  /** …or, on an order visit, the vacant slot the serial names. One or the other. */
+  slotId?: string;
   technicianId: string;
   serialScanned: string;
   serialMatches: boolean;

@@ -1,14 +1,19 @@
 import * as React from 'react';
 import { Input, Skeleton } from '@trugrade/ui';
 import { NotMeasured } from '../../../lib/controls';
-import { VENDOR_NET_PAYOUT } from '@trugrade/contracts';
+import { LISTING_QTY, VENDOR_NET_PAYOUT } from '@trugrade/contracts';
 import { API, onDate, postJson, rupees, type PayoutPreview } from '../api';
-import { payoutBlocker, type WizardDraft } from './draft';
+import { payoutBlocker, qtyBlocker, qtyOf, type WizardDraft } from './draft';
 
-/** Step 4 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
+/** Step 3 of ARCHETYPE D — `Wizard.tsx` owns the shape; this is its content. */
 
 /**
- * Step 4 — the price, stated as what the vendor receives.
+ * Step 3 — the quantity, and the price stated as what the vendor receives.
+ *
+ * The quantity lives here rather than on a step of its own because the batch
+ * total is what the payout preview prices, and the two numbers belong side by
+ * side. There are no serials on this step or any other: our technician records
+ * them at the vendor's site once a buyer has ordered.
  *
  * **The retail price is not on this screen and must never be added to it.**
  * PHASE_03 Task 3 step 4 is explicit — "your margin is not their business, and
@@ -38,8 +43,9 @@ export function StepPrice({
 }): React.JSX.Element {
   const [preview, setPreview] = React.useState<PayoutPreview | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const units = draft.serials.length;
+  const units = qtyOf(draft);
   const payoutError = payoutBlocker(draft.netPayoutRupees) || undefined;
+  const qtyError = draft.qtyText.trim() === '' ? undefined : qtyBlocker(draft.qtyText) || undefined;
 
   React.useEffect(() => {
     const amount = draft.netPayoutRupees.trim();
@@ -84,6 +90,19 @@ export function StepPrice({
       <div className="grid max-w-2xl gap-7">
         <div className="grid gap-5 sm:grid-cols-2">
           <Input
+            label="How many machines"
+            required
+            mono
+            type="number"
+            min={LISTING_QTY.min}
+            max={LISTING_QTY.max}
+            step={1}
+            hint="Of this model, at this grade, from this pickup address. Serials are recorded by our technician after a buyer orders."
+            error={qtyError}
+            value={draft.qtyText}
+            onChange={(e) => patch({ qtyText: e.target.value })}
+          />
+          <Input
             label="Net payout per machine"
             required
             mono
@@ -91,7 +110,11 @@ export function StepPrice({
             min={VENDOR_NET_PAYOUT.min}
             max={VENDOR_NET_PAYOUT.max}
             step={0.01}
-            hint={`For ${units} ${units === 1 ? 'machine' : 'machines'} in this listing.`}
+            hint={
+              units > 0
+                ? `For ${units} ${units === 1 ? 'machine' : 'machines'} in this listing.`
+                : 'What you receive for each machine, after our deductions.'
+            }
             error={payoutError}
             value={draft.netPayoutRupees}
             onChange={(e) => patch({ netPayoutRupees: e.target.value })}
@@ -128,7 +151,7 @@ export function StepPrice({
             !preview &&
             (units === 0 ? (
               <p className="text-body-sm text-ink-2">
-                Add serial numbers on the previous step and the batch total appears here.
+                Enter how many machines you are offering and the batch total appears here.
               </p>
             ) : (
               <Skeleton lines={5} />

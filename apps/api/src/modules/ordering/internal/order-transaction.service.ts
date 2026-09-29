@@ -21,44 +21,38 @@ import { AutomationService } from '../../../shared/automation/automation.service
 
 /**
  * THE order-confirmation transaction — `02_ARCHITECTURE.md` §4.1, `PHASE_06`
- * Task 3. One `BEGIN…COMMIT`, sixteen numbered steps, and the reason this
- * codebase has one database.
+ * Task 3 — under the order-first inspection flow.
  *
  * Read these five rules before changing a line of it.
  *
- * **1. Locks are taken in ascending `listing_id`, always.** Not for tidiness: a
- * multi-supply-point cart that locks in cart order deadlocks under concurrency —
- * intermittently, in production, at volume, and only once there is enough
- * traffic for two carts to overlap. `LockService.withLocks` sorts, so a caller
- * cannot get it wrong, and the row locks in `reserve()` are taken in the same
- * order for the same reason. `ORD-014` proves the reverse order deadlocks.
+ * **1. Locks are taken in ascending `listing_id`, always.** A multi-supply-point
+ * cart that locks in cart order deadlocks under concurrency. `LockService.withLocks`
+ * sorts, so a caller cannot get it wrong, and the row locks in `reserve()` are
+ * taken in the same order for the same reason (`ORD-014`).
  *
  * **2. The Redis lock is an optimisation. The database is the guarantee.** What
- * actually makes overselling impossible is `chk_qty_balance` —
- * `qty_available + qty_reserved + qty_awaiting_qc + qty_qc_failed <= qty_total`
- * — with `chk_qty_nonneg` beside it. The decrement in step 5 is written as
- * arithmetic on the stored value rather than as a number computed above,
- * precisely so Postgres re-evaluates it against the row the winner of a race
- * committed; the loser then subtracts into the negative and the CHECK refuses
- * the write. `ORD-018` force-expires the lock mid-transaction and proves it
- * still holds. If correctness depended on Redis being up, it would not be
- * correctness.
+ * makes overselling impossible is `chk_qty_balance` with `chk_qty_nonneg`
+ * beside it. The decrement in step 5 is arithmetic on the stored value, so
+ * Postgres re-evaluates it against the row the winner of a race committed; the
+ * loser subtracts into the negative and the CHECK refuses the write.
  *
- * **3. `order_line_unit` is a vacant slot at confirm.** `unit_id`,
- * `serial_number` and `qc_report_id` stay null until the vendor attaches a
- * matching machine. UNIQUE on `unit_id` then refuses a second purchase of the
- * same laptop. Listing stock is still reserved so the qty hold is real.
+ * **3. Nothing is identified at placement.** A listing is a declared quantity
+ * and there are no serials behind it. `order_line_unit` rows are vacant slots
+ * — `unit_id`, `serial_number` and `qc_report_id` all null — that the
+ * technician fills one by one at the vendor's site after ops assigns them.
+ * UNIQUE on `unit_id` then refuses a second purchase of the same laptop.
  *
- * **4. If the PO cannot be raised, the order does not confirm.** No agreed
- * payout, a suspended vendor, units that disagree about their GST valuation —
- * every one of those fails the checkout, and the whole transaction unwinds with
- * it. Better a failed checkout than an order we cannot source.
+ * **4. No purchase order is raised at placement.** The vendor is committed to
+ * only once ops has verified every machine the technician named; that is
+ * `raisePurchaseOrdersForVerified`, and it is the same `raisePurchaseOrder`
+ * body — the payout, the TDS accrual, the payable — called later rather than
+ * a second copy of it. If a PO cannot be raised then, verification fails and
+ * nothing is charged.
  *
  * **5. Nothing in here is buyer-reachable.** Vendor org ids, ask prices and
- * pickup addresses all pass through this file because raising a purchase order
- * needs them. Not one of them appears in a return type: `confirm()` returns
- * identifiers, serials and money, and the buyer-facing projection is assembled
- * in `checkout.service.ts` from an explicit allow-list.
+ * pickup addresses pass through this file. Not one of them appears in a return
+ * type; the buyer-facing projection is assembled in `checkout.service.ts` from
+ * an explicit allow-list.
  */
 
 /* ==========================================================================
@@ -93,30 +87,20 @@ export interface OrderTransactionInput {
   /** Where the movement terminates. The OTHER half, and never the billing state. */
   deliveryStateCode: string;
   lines: readonly OrderLineRequest[];
-  /**
-   * Freight per consignment, keyed by `laneKey(vendorOrgId, pickupAddressId)`.
-   *
-   * Keyed by vendor alone until the supply-point split landed, which meant a
-   * vendor shipping from two warehouses had both lanes' freight summed onto
-   * whichever PO happened to be built first.
-   */
+  /** Freight per consignment, keyed by `laneKey(vendorOrgId, pickupAddressId)`. */
   freightByLane: ReadonlyMap<string, Money>;
   /**
    * Set when a `buyer_approval_policy` threshold fired. The order is created and
-   * stock is held, and **no purchase order is raised** — PHASE_06 Task 2 is
-   * explicit that nothing is committed to a vendor until a human signs it off.
+   * stock is held; nothing moves until a human signs it off.
    */
   approval: { approverUserId: string; policyId: string | null; expiresAt: Date } | null;
   /** How long the hold lasts. 20 minutes normally, 24 hours under approval. */
   holdExpiresAt: Date;
-  /**
-   * Test seam for `ORD-020`. Called at each of the seven points after the
-   * decrement; a throw from it must leave nothing behind.
-   */
+  /** Test seam for `ORD-020`. A throw from it must leave nothing behind. */
   failAt?: (step: PostDecrementStep) => void;
 }
 
-/** The seven points after step 5 at which `ORD-020` injects a failure. */
+/** The points after step 5 at which `ORD-020` injects a failure. */
 export type PostDecrementStep =
   | 'order'
   | 'sub_order'
@@ -132,10 +116,12 @@ export interface AllocatedSerial {
   listingId: string;
 }
 
+export type PlacedStatus = 'AWAITING_INSPECTION' | 'AWAITING_APPROVAL';
+
 export interface OrderTransactionResult {
   orderId: string;
   orderNumber: string;
-  status: 'CONFIRMED' | 'PAYMENT_PENDING' | 'AWAITING_APPROVAL';
+  status: PlacedStatus;
   subtotal: Money;
   freightTotal: Money;
   gstTotal: Money;
@@ -144,19 +130,25 @@ export interface OrderTransactionResult {
   cgst: Money;
   sgst: Money;
   interState: boolean;
+  /** Always empty at placement: serials are named by the technician later. */
   serials: AllocatedSerial[];
+  /** How many machines the order is for. */
+  units: number;
   holdExpiresAt: Date;
-  /** Internal only. `PRC-030` is the test that says a buyer never sees these. */
+  /** Internal only, and always empty at placement. `PRC-030` says a buyer never sees these. */
   purchaseOrderIds: string[];
 }
 
-/**
- * What finishing an approved order produced. Internal: `purchaseOrderIds` is
- * ours to a supply point and never reaches a buyer-facing payload.
- */
+/** What finishing an approved order produced. */
 export interface CommitApprovedResult {
-  status: 'CONFIRMED' | 'PAYMENT_PENDING';
+  status: 'AWAITING_INSPECTION';
   orderNumber: string;
+  purchaseOrderIds: string[];
+  units: number;
+}
+
+/** What verifying an order produced: the purchase orders the vendors now see. */
+export interface VerifiedRaiseResult {
   purchaseOrderIds: string[];
   units: number;
 }
@@ -165,18 +157,13 @@ export interface CommitApprovedResult {
  * Internal shapes
  * ======================================================================== */
 
+/** One identified machine, as `raisePurchaseOrder` needs it. */
 interface AllocatedUnit {
   unitId: string;
   serialNumber: string;
   listingId: string;
   vendorOrgId: string;
-  /**
-   * `listing.pickup_location_id` — the warehouse this machine leaves from.
-   *
-   * Carried on the unit rather than looked up again per purchase order because
-   * the split below is keyed on it, and a key derived twice is a key that can
-   * disagree with itself.
-   */
+  /** `listing.pickup_location_id` — the warehouse this machine leaves from. */
   pickupAddressId: string;
   skuId: string;
   grade: string;
@@ -185,15 +172,21 @@ interface AllocatedUnit {
   qcReportId: string | null;
 }
 
+/** One cart line's reservation: a quantity against a listing, unidentified. */
+interface LineAllocation {
+  listingId: string;
+  vendorOrgId: string;
+  pickupAddressId: string;
+  qty: number;
+}
+
 interface PricedLine {
   request: OrderLineRequest;
   vendorOrgId: string;
-  /** The one warehouse this line's machines leave from. See `AllocatedUnit`. */
   pickupAddressId: string;
-  units: AllocatedUnit[];
+  qty: number;
   /** `unitPrice x qty`. What the buyer sees on the line, before tax. */
   goods: Money;
-  /** Rule 32(5) shrinks this for MARGIN stock. Freight is taxed separately. */
   taxable: Money;
   split: TaxSplit;
 }
@@ -221,15 +214,10 @@ export class OrderTransactionService {
    * Steps 1–16, in one transaction.
    *
    * Step 1 — cart, buyer org status, credit headroom, approval policy — is
-   * evaluated by `CheckoutService` before this is called and its verdict arrives
-   * in `input`. It is stated there rather than here because it is the half a
-   * buyer can act on, so the messages belong beside the screen that shows them,
-   * and because none of it takes a lock. Everything from step 2 is here, where
-   * the transaction is.
+   * evaluated by `CheckoutService` before this is called. Everything from step 2
+   * is here, where the transaction is.
    */
   async confirm(input: OrderTransactionInput): Promise<OrderTransactionResult> {
-    // 2. Locks, ascending listing_id. `withLocks` sorts its keys, so the order
-    //    is a property of the lock service and not of every caller.
     const keys = input.lines.map((l) => `lock:listing:${l.listingId}`);
     return this.locks.withLocks(keys, () =>
       this.prisma.runInTransaction(() => this.body(input), { timeoutMs: 30_000 }),
@@ -240,40 +228,23 @@ export class OrderTransactionService {
     const now = this.clock.now();
     const actorId = this.ctx.principal?.userId ?? input.buyerUserId;
 
-    // The twenty-minute hold, folded back in before anything else happens.
-    //
-    // The held machines return to `LISTED` here so that steps 3–5 and 9 below
-    // are the SAME code whether the buyer came through the checkout screen or
-    // an API client posted a cart straight to `confirm`. One implementation of
-    // the sixteen steps, one set of concurrency properties, one set of tests.
-    // Nothing can take the machines in between: the Redis lock for every listing
-    // in this order is already held, and this is inside the transaction, so a
-    // failure anywhere below restores the hold with everything else.
+    // The twenty-minute hold, folded back in before anything else happens, so
+    // steps 3–5 below are the SAME code whether the buyer came through the
+    // checkout screen or posted a cart straight to `confirm`.
     await this.holds.consume(input.cartId);
 
-    // 3, 4, 5 and 9. Reserve stock and pick the serials, one listing at a time,
-    // in ascending id. The two orderings agreeing is what stops the row locks
-    // and the Redis locks from crossing.
+    // 3, 4 and 5. Reserve the quantity, one listing at a time, in ascending id.
     const ordered = [...input.lines].sort((a, b) => (a.listingId < b.listingId ? -1 : 1));
-    const allocations = new Map<string, AllocatedUnit[]>();
+    const allocations = new Map<string, LineAllocation>();
     for (const line of ordered) {
       allocations.set(line.listingId, await this.reserve(line));
     }
 
     const priced = this.price(input, allocations);
 
-    /**
-     * A purchase order is a vendor's stock at ONE pickup address, not a vendor's
-     * stock on an order. Two warehouses of the same vendor are two POs because
-     * they are two consignments: two lanes, two freight quotes, two dispatch
-     * clocks, and — where the vendor holds more than one GSTIN — two places of
-     * supply. Acknowledging the Gurugram document cannot release the Pune stock.
-     *
-     * This is deliberately the same key `checkout.service.ts` prices freight on.
-     * The two used to disagree: freight was quoted per supply point and summed
-     * per vendor before it reached here, so an order could be quoted as two
-     * lanes and purchased as one document.
-     */
+    // A consignment is a vendor's stock at ONE pickup address. Same key
+    // `checkout.service.ts` prices freight on, so the quote and the order
+    // cannot split the same cart two different ways.
     const bySupplyPoint = groupBy(priced, (l) => laneKey(l.vendorOrgId, l.pickupAddressId));
 
     const subtotal = Money.sum(priced.map((l) => l.goods));
@@ -285,7 +256,7 @@ export class OrderTransactionService {
     const gstTotal = igst.add(cgst).add(sgst);
     const grandTotal = subtotal.add(freightTotal).add(gstTotal);
 
-    const status = input.approval ? 'AWAITING_APPROVAL' : statusFor(input.paymentMode);
+    const status: PlacedStatus = input.approval ? 'AWAITING_APPROVAL' : 'AWAITING_INSPECTION';
     const lineStatus = input.approval ? 'CREATED' : status;
 
     // 6. The order.
@@ -307,8 +278,7 @@ export class OrderTransactionService {
               ${input.paymentMode}::public.payment_mode, 'PENDING'::public.payment_status,
               ${status}::public.order_status, ${now}, ${input.holdExpiresAt})`;
 
-    const serials: AllocatedSerial[] = [];
-    const purchaseOrderIds: string[] = [];
+    let units = 0;
     let vendorIndex = 0;
 
     for (const [supplyPointKey, lines] of bySupplyPoint) {
@@ -317,9 +287,6 @@ export class OrderTransactionService {
       const vendorGoods = Money.sum(lines.map((l) => l.goods));
       const vendorGst = Money.sum(lines.map((l) => l.split.total));
       const vendorFreight = freightOf(input, supplyPointKey);
-      // Sequenced per order, so the same warehouse is Supply Point A on one
-      // order and B on another and nothing correlates across orders.
-      const supplyPointLabel = await this.supplyPointLabel(pickupAddressId, vendorIndex);
 
       // 7. sub_order — INTERNAL grouping. There is one seller, one order and one
       //    invoice; this row exists so a dispatch point can be tracked and a
@@ -347,95 +314,22 @@ export class OrderTransactionService {
              gst_rate, gst_amount, line_total, status)
           VALUES (${lineId}::uuid, ${subOrderId}::uuid, ${line.request.listingId}::uuid,
                   ${line.request.skuId}::uuid, ${line.request.grade}::public.grade_type,
-                  ${line.units.length}, ${line.request.unitPrice.toString()}::numeric,
+                  ${line.qty}, ${line.request.unitPrice.toString()}::numeric,
                   ${line.request.gstRatePct}, ${line.split.total.toString()}::numeric,
                   ${line.goods.add(line.split.total).toString()}::numeric,
                   ${lineStatus}::public.order_status)`;
 
-        // 10. order_line_unit. A vacant SKU + grade slot — the vendor names the
-        //     serial when they attach. Listing stock is still reserved below.
+        // 10. order_line_unit: one vacant SKU + grade slot per machine. The
+        //     technician names the serial when they inspect it at the vendor.
         input.failAt?.('order_line_unit');
-        for (const unit of line.units) {
+        for (let i = 0; i < line.qty; i += 1) {
           await this.prisma.$executeRaw`
             INSERT INTO ordering.order_line_unit
               (order_line_id, unit_id, serial_number, qc_report_id, status)
             VALUES (${lineId}::uuid, NULL, NULL, NULL, 'RESERVED'::public.unit_status)`;
-          serials.push({
-            unitId: unit.unitId,
-            serialNumber: unit.serialNumber,
-            listingId: unit.listingId,
-          });
+          units += 1;
         }
-
-        // 11 and 12. The unit's status and its movement row, in ONE statement.
-        //
-        // Split into an UPDATE and a later INSERT they would have a window in
-        // which a machine has moved and the trail says otherwise, and the
-        // dispute is always about the one unit with no trail. This mirrors
-        // `listing`'s own `StockMovementService.transition` statement for
-        // statement; it is restated rather than called because that service is
-        // `internal/` to another module, and this row is written inside the
-        // order's transaction or not at all.
         input.failAt?.('stock_movement');
-        await this.prisma.$executeRaw`
-          WITH before AS (
-            SELECT u.id, u.status, u.location
-              FROM listing.unit u
-             WHERE u.id = ANY(${line.units.map((u) => u.unitId)}::uuid[])
-             ORDER BY u.id
-               FOR UPDATE
-          ),
-          moved AS (
-            UPDATE listing.unit u
-               SET status = 'RESERVED'::public.unit_status,
-                   order_line_id = ${lineId}::uuid
-              FROM before b
-             WHERE u.id = b.id
-            RETURNING u.id, b.status AS from_status, u.status AS to_status,
-                      b.location AS from_location, u.location AS to_location
-          )
-          INSERT INTO listing.stock_movement
-            (unit_id, from_status, to_status, from_location, to_location,
-             reason, actor_id, ref_type, ref_id, occurred_at)
-          SELECT m.id, m.from_status, m.to_status, m.from_location, m.to_location,
-                 ${`Reserved for order ${orderNumber}`}, ${actorId}::uuid,
-                 'ORDER', ${orderId}::uuid, ${now}
-            FROM moved m`;
-      }
-
-      // 13 and 14. The purchase order, and what we owe against it.
-      //
-      // Skipped entirely while an approval is outstanding: PHASE_06 Task 2 says
-      // stock is held but *nothing is committed*, and a PO sitting in a vendor
-      // portal against an order a manager has not signed is a commitment.
-      if (!input.approval) {
-        const poId = await this.raisePurchaseOrder({
-          orderId,
-          vendorOrgId,
-          pickupAddressId,
-          supplyPointLabel,
-          units: lines.flatMap((l) => l.units),
-          now,
-          failAt: input.failAt,
-        });
-        purchaseOrderIds.push(poId);
-
-        // R1. The rule body IS this transaction — a PO raised after the order
-        // committed would leave a window where the buyer holds stock nobody has
-        // been asked to supply — so the run is recorded rather than wrapped.
-        await this.automation.note('R1', orderNumber, 'OK', {
-          purchaseOrderId: poId,
-          supplyPointLabel,
-          machines: lines.reduce((n, l) => n + l.units.length, 0),
-        });
-
-        // One sub-order, one PO, walked in either direction. The two splits used
-        // to be computed separately from the same data with nothing joining
-        // them, so "which PO does this consignment belong to" was a question
-        // answered by re-deriving the grouping rather than by reading a column.
-        await this.prisma.$executeRaw`
-          UPDATE ordering.sub_order SET purchase_order_id = ${poId}::uuid
-           WHERE id = ${subOrderId}::uuid`;
       }
     }
 
@@ -444,8 +338,8 @@ export class OrderTransactionService {
       type: input.approval ? 'order.approval_requested' : 'order.placed',
       to: status,
       note: input.approval
-        ? `Sent for approval. ${serials.length} ${machines(serials.length)} are held while it is signed off. Serials are named when a machine is attached to this order.`
-        : `Order placed. ${serials.length} ${machines(serials.length)} held. Serials are named when a machine is attached to this order.`,
+        ? `Sent for approval. ${units} ${machines(units)} are held while it is signed off. A technician inspects and names each machine once it is approved.`
+        : `Order placed. ${units} ${machines(units)} held. A technician will inspect each machine at the supply point and record its serial; you pay once every machine is verified.`,
       occurredAt: now,
       actorId,
     });
@@ -459,20 +353,6 @@ export class OrderTransactionService {
                 ${input.approval.approverUserId}::uuid, 'PENDING',
                 ${grandTotal.toString()}::numeric,
                 ${input.approval.policyId}::uuid, ${now}, ${input.approval.expiresAt})`;
-    }
-
-    // 16. The outbox. `EventBus.publish` only ever writes a row; the dispatcher
-    //     drains it after commit, so no subscriber can act on an order that
-    //     rolled back — and the subscribers that matter raise a PO and accrue a
-    //     payable.
-    if (!input.approval) {
-      await this.events.publish('order.confirmed', {
-        orderId,
-        orderNumber,
-        buyerOrgId: input.buyerOrgId,
-        totalValue: grandTotal.toString(),
-        unitIds: serials.map((s) => s.unitId),
-      });
     }
 
     await this.prisma.$executeRaw`
@@ -491,22 +371,30 @@ export class OrderTransactionService {
       cgst,
       sgst,
       interState: !igst.isZero(),
-      serials,
+      serials: [],
+      units,
       holdExpiresAt: input.holdExpiresAt,
-      purchaseOrderIds,
+      purchaseOrderIds: [],
     };
   }
 
   /* ------------------------------------------------------------------------
-   * Steps 3, 4, 5 and 9 — the part that must be right under concurrency
+   * Steps 3, 4 and 5 — the part that must be right under concurrency
    * --------------------------------------------------------------------- */
 
-  private async reserve(line: OrderLineRequest): Promise<AllocatedUnit[]> {
+  private async reserve(line: OrderLineRequest): Promise<LineAllocation> {
     // 3. Re-read under a row lock. A second checkout for the same listing blocks
     //    here and re-reads the committed value when the first one lands, which
     //    is what turns a race into a queue.
-    const [row] = await this.prisma.$queryRaw<Array<{ qty_available: number; status: string }>>`
-      SELECT qty_available, status::text AS status
+    const [row] = await this.prisma.$queryRaw<
+      Array<{
+        qty_available: number;
+        status: string;
+        vendor_org_id: string;
+        pickup_location_id: string;
+      }>
+    >`
+      SELECT qty_available, status::text AS status, vendor_org_id, pickup_location_id
         FROM listing.listing
        WHERE id = ${line.listingId}::uuid
          FOR UPDATE`;
@@ -517,15 +405,13 @@ export class OrderTransactionService {
     if (!row || (row.status !== 'ACTIVE' && row.status !== 'PARTIALLY_ACTIVE')) {
       throw new InsufficientStockError(line.qty, 0, line.supplyPointLabel);
     }
-    if (row.qty_available < line.qty) {
-      throw new InsufficientStockError(line.qty, row.qty_available, line.supplyPointLabel);
+    if (Number(row.qty_available) < line.qty) {
+      throw new InsufficientStockError(line.qty, Number(row.qty_available), line.supplyPointLabel);
     }
 
     // 5. The decrement, written as arithmetic on the stored value rather than as
-    //    a number computed above. Postgres re-evaluates it against whatever the
-    //    winner of a race committed, so the loser subtracts into the negative
-    //    and `chk_qty_nonneg` refuses the row. That CHECK — not the Redis lock —
-    //    is what makes overselling impossible (ORD-018).
+    //    a number computed above. The CHECK — not the Redis lock — is what makes
+    //    overselling impossible (ORD-018).
     await this.prisma.$executeRaw`
       UPDATE listing.listing
          SET qty_available = qty_available - ${line.qty},
@@ -533,79 +419,17 @@ export class OrderTransactionService {
              updated_at    = ${this.clock.now()}
        WHERE id = ${line.listingId}::uuid`;
 
-    // 9a. Candidates from `v_sellable_unit` and nowhere else. The view combines
-    //     the stored flag with the live expiry and seal predicates, so a machine
-    //     whose QC lapsed at midnight stops being sellable at midnight. Ordering
-    //     does not restate that predicate; there is one definition of sellable
-    //     and it lives in the listing schema (PHASE_05 Task 3).
-    const candidates = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM listing.v_sellable_unit
-       WHERE listing_id = ${line.listingId}::uuid
-       ORDER BY id`;
-
-    // 9b. `FOR UPDATE SKIP LOCKED`, so two concurrent orders take DIFFERENT
-    //     machines rather than queueing behind each other. The lock cannot be
-    //     taken through the view — it has an outer join and Postgres refuses to
-    //     lock the nullable side of one — so it is taken on the table, with
-    //     LISTED re-checked to close the gap between the two statements.
-    const units = await this.prisma.$queryRaw<
-      Array<{
-        id: string;
-        serial_number: string;
-        vendor_org_id: string;
-        sku_id: string;
-        grade: string;
-        vendor_ask_price: { toString(): string } | null;
-        valuation_method: string;
-        qc_report_id: string | null;
-        pickup_location_id: string;
-      }>
-    >`
-      SELECT u.id, u.serial_number, u.vendor_org_id, u.sku_id,
-             COALESCE(u.grade_actual, u.grade_declared)::text AS grade,
-             u.vendor_ask_price, u.valuation_method, u.qc_report_id,
-             l.pickup_location_id
-        FROM listing.unit u
-        JOIN listing.listing l ON l.id = u.listing_id
-       WHERE u.id = ANY(${candidates.map((c) => c.id)}::uuid[])
-         AND u.status = 'LISTED'::public.unit_status
-       ORDER BY u.id
-         -- Only the unit row is locked. Locking the listing row here as well
-         -- would serialise every checkout of the same listing behind this
-         -- statement, which is the queue SKIP LOCKED exists to avoid.
-         FOR UPDATE OF u SKIP LOCKED
-       LIMIT ${line.qty}`;
-
-    if (units.length < line.qty) {
-      // The counter and the units disagreed, or a concurrent order took them
-      // between the two statements. Either way this order cannot be filled, and
-      // the transaction is about to take the decrement back with it.
-      throw new InsufficientStockError(line.qty, units.length, line.supplyPointLabel);
-    }
-
-    return units.map((u) => ({
-      unitId: u.id,
-      serialNumber: u.serial_number,
+    return {
       listingId: line.listingId,
-      vendorOrgId: u.vendor_org_id,
-      pickupAddressId: u.pickup_location_id,
-      skuId: u.sku_id,
-      grade: u.grade,
-      vendorAskPrice: u.vendor_ask_price ? Money.parse(u.vendor_ask_price.toString()) : null,
-      valuationMethod: u.valuation_method,
-      qcReportId: u.qc_report_id,
-    }));
+      vendorOrgId: row.vendor_org_id,
+      pickupAddressId: row.pickup_location_id,
+      qty: line.qty,
+    };
   }
 
   /**
    * "Supply Point A - Gurugram" — the only name a buyer ever sees for a
-   * warehouse.
-   *
-   * The letter is the consignment's position in THIS order, so the same
-   * warehouse is A on one order and B on another: a buyer comparing two orders
-   * cannot tell that both came from the same place, which is the whole point of
-   * the label. The city is the address's own, because a delivery estimate that
-   * cannot say where the machine ships from is not an estimate.
+   * warehouse. The letter is the consignment's position in THIS order.
    */
   private async supplyPointLabel(pickupAddressId: string, sequence: number): Promise<string> {
     const [row] = await this.prisma.$queryRaw<Array<{ city: string }>>`
@@ -621,9 +445,7 @@ export class OrderTransactionService {
   private async raisePurchaseOrder(input: {
     orderId: string;
     vendorOrgId: string;
-    /** The one warehouse this PO picks from. Part of its uniqueness. */
     pickupAddressId: string;
-    /** What a buyer may see for this consignment. Never the vendor's name. */
     supplyPointLabel: string;
     units: readonly AllocatedUnit[];
     now: Date;
@@ -631,10 +453,8 @@ export class OrderTransactionService {
   }): Promise<string> {
     const { units, vendorOrgId } = input;
 
-    // Every refusal below fails the checkout. The message names the supply point
-    // rather than the vendor, because the buyer reads it — and it is the wording
-    // PHASE_06 Task 3 gives, so a buyer is told what to do rather than what
-    // broke.
+    // Every refusal below fails the caller. The message names the supply point
+    // rather than the vendor, because the buyer may read it.
     const unpriced = units.find((u) => u.vendorAskPrice === null || !u.vendorAskPrice.isPositive());
     if (unpriced) {
       throw new PreconditionFailedError(SUPPLY_POINT_UNAVAILABLE, {
@@ -644,14 +464,7 @@ export class OrderTransactionService {
     }
 
     // A purchase order carries one `valuation_method`, because Rule 32(5) margin
-    // treatment is decided for the purchase as a whole. Two answers on one PO
-    // would misstate the GST on whichever half lost.
-    //
-    // `uq_po_order_vendor_pickup` allows one PO per vendor per PICKUP ADDRESS
-    // per order, so this refusal is narrower than it was: a vendor whose
-    // Gurugram stock is MARGIN and whose Pune stock is REGULAR is now two
-    // documents with one method each, which is two correct answers rather than
-    // one refused order. Only a single warehouse mixing both still refuses.
+    // treatment is decided for the purchase as a whole.
     const methods = new Set(units.map((u) => u.valuationMethod));
     if (methods.size > 1) {
       throw new PreconditionFailedError(SUPPLY_POINT_UNAVAILABLE, {
@@ -683,33 +496,40 @@ export class OrderTransactionService {
         (id, po_number, vendor_org_id, order_id, pickup_address_id, supply_point_label,
          status, total_net,
          tds_rate_pct, tds_amount, valuation_method, terms_days, created_at, updated_at)
-      -- status carries no ::po_status cast, deliberately. The Phase 6 migration
-      -- created that enum under whatever search_path was current, so it landed
-      -- in the identity schema rather than public: an unqualified cast fails at
-      -- runtime, and a qualified one would hard-code an accident. Postgres
-      -- infers the parameter type from the target column, which stays right if
-      -- the type is ever moved to where it belongs.
+      -- status carries no ::po_status cast, deliberately: the enum landed in the
+      -- identity schema by accident and Postgres infers the type from the column.
+      -- ACKNOWLEDGED from the start, with every line ACCEPTED: the vendor does
+      -- not accept a purchase order under the order-first flow. The machines
+      -- were named and verified at their site, so the document is a record of
+      -- what we are buying, not a question.
       VALUES (${poId}::uuid, ${poNumber}, ${vendorOrgId}::uuid, ${input.orderId}::uuid,
               ${input.pickupAddressId}::uuid, ${input.supplyPointLabel},
-              'RAISED', ${totalNet.toString()}::numeric,
+              'ACKNOWLEDGED', ${totalNet.toString()}::numeric,
               ${tds.ratePct}, ${tds.amount.toString()}::numeric,
               ${valuationMethod}, 15, ${input.now}, ${input.now})`;
+    await this.prisma.$executeRaw`
+      UPDATE procurement.purchase_order SET acknowledged_at = ${input.now}
+       WHERE id = ${poId}::uuid`;
 
     for (const unit of units) {
-      // The line is a SKU + grade slot. The vendor names the serial later
-      // from their listing; `unit_id` stays null until they attach.
+      // The machine is already named: the technician recorded it and ops has
+      // verified it. The line carries the serial from the day it is raised.
       await this.prisma.$executeRaw`
         INSERT INTO procurement.purchase_order_line
-          (po_id, unit_id, sku_id, agreed_net_payout, grade_at_po, qc_report_id, created_at)
-        VALUES (${poId}::uuid, NULL, ${unit.skuId}::uuid,
+          (po_id, unit_id, sku_id, agreed_net_payout, grade_at_po, qc_report_id, line_status, created_at)
+        VALUES (${poId}::uuid, ${unit.unitId}::uuid, ${unit.skuId}::uuid,
                 ${(unit.vendorAskPrice ?? Money.ZERO).toString()}::numeric,
-                ${unit.grade}::public.grade_type, NULL, ${input.now})`;
+                ${unit.grade}::public.grade_type, ${unit.qcReportId}::uuid,
+                'ACCEPTED'::identity.po_line_status, ${input.now})`;
+      // What we agreed to pay for THIS serial, frozen. `trg_lock_purchase_price`
+      // keeps it that way.
+      await this.prisma.$executeRaw`
+        UPDATE listing.unit
+           SET purchase_price = COALESCE(purchase_price, ${(unit.vendorAskPrice ?? Money.ZERO).toString()}::numeric)
+         WHERE id = ${unit.unitId}::uuid`;
     }
 
     // 14. The payable and the TDS ledger entry, in the same breath as the PO.
-    //     s.194Q charges at credit OR payment, whichever is earlier — credit is
-    //     now — so the ledger accrues here and `v_vendor_fy_purchases` stays the
-    //     single answer to "how much have we bought from them this year".
     input.failAt?.('vendor_payable');
     await this.prisma.$executeRaw`
       INSERT INTO procurement.vendor_payable
@@ -746,8 +566,6 @@ export class OrderTransactionService {
     purchaseValue: Money,
     now: Date,
   ): Promise<{ ratePct: number; amount: Money }> {
-    // `v_current_config` and not `platform_config`: config is effective-dated,
-    // and reading the table directly is how a future-dated row goes live early.
     const cfg = new Map(
       (
         await this.prisma.$queryRaw<Array<{ key: string; value_json: unknown }>>`
@@ -786,43 +604,29 @@ export class OrderTransactionService {
   /**
    * The tax split, per line, from OUR state against the DELIVERY state.
    *
-   * s.10(1)(a): the place of supply is where the movement terminates. Resolving
-   * it from the billing address instead is the trap PHASE_06 Task 1 names — a
-   * Delhi-registered buyer taking delivery in Chennai is an inter-state supply,
-   * and billing-address logic would put CGST+SGST on an invoice that owes IGST.
-   * `resolveTaxSplit` is the one implementation of that comparison and its spec
-   * proves all three rows of the `01_DECISIONS` §2.4 table.
+   * s.10(1)(a): the place of supply is where the movement terminates. Declared
+   * stock is REGULAR-valued — Rule 32(5) margin treatment needs a per-serial
+   * purchase price, and there is none until the machine is named.
    */
   private price(
     input: OrderTransactionInput,
-    allocations: ReadonlyMap<string, AllocatedUnit[]>,
+    allocations: ReadonlyMap<string, LineAllocation>,
   ): PricedLine[] {
     return input.lines.map((request) => {
-      const units = allocations.get(request.listingId) ?? [];
-      const goods = request.unitPrice.times(units.length);
-
-      // Rule 32(5): a MARGIN unit is taxed on (sale − purchase) per serial,
-      // never pooled, and a negative margin contributes zero rather than
-      // offsetting another serial's.
-      const taxable = Money.sum(
-        units.map((u) =>
-          u.valuationMethod === 'MARGIN' && u.vendorAskPrice
-            ? Money.max(request.unitPrice.sub(u.vendorAskPrice), Money.ZERO)
-            : request.unitPrice,
-        ),
-      );
-
+      const allocation = allocations.get(request.listingId);
+      const qty = allocation?.qty ?? 0;
+      const goods = request.unitPrice.times(qty);
       return {
         request,
-        vendorOrgId: units[0]?.vendorOrgId ?? '',
-        pickupAddressId: units[0]?.pickupAddressId ?? '',
-        units,
+        vendorOrgId: allocation?.vendorOrgId ?? '',
+        pickupAddressId: allocation?.pickupAddressId ?? '',
+        qty,
         goods,
-        taxable,
+        taxable: goods,
         split: resolveTaxSplit({
           supplierState: input.ourStateCode,
           placeOfSupply: input.deliveryStateCode,
-          taxableAmount: taxable,
+          taxableAmount: goods,
           ratePct: request.gstRatePct,
           basis: 's.10(1)(a) IGST Act — place of supply is where the movement terminates',
         }),
@@ -869,23 +673,9 @@ export class OrderTransactionService {
   /**
    * Finish an order a manager has just signed off.
    *
-   * `AWAITING_APPROVAL` is the one status this transaction can leave behind
-   * unfinished: steps 6 to 12 ran, so the order, its lines and its serials all
-   * exist and the machines are `RESERVED` — but steps 13, 14 and 16 were
-   * deliberately skipped, because a purchase order sitting in a vendor's portal
-   * against an order nobody has signed is a commitment we have not made. This
-   * runs exactly those steps and nothing else.
-   *
-   * **It calls `raisePurchaseOrder`, it does not restate it.** There is one
-   * definition of what raising a PO means — the payout, the TDS accrual, the
-   * frozen `purchase_price`, the payable — and a second copy written for the
-   * approval path is the copy that would drift on the next tax change.
-   *
-   * No listing lock is taken and none is needed: nothing here decrements a
-   * counter or picks a serial. The machines were picked at placement and have
-   * been off sale ever since. What it does check is that they are still ours to
-   * commit — a machine scrapped or found seal-broken while a manager was
-   * thinking is not sold by an approval arriving afterwards.
+   * Under the order-first flow an approval commits nothing to a vendor; it
+   * releases the order into the inspection queue. The purchase orders are
+   * raised later, when ops verifies the machines the technician named.
    */
   async commitApproved(orderId: string): Promise<CommitApprovedResult> {
     return this.prisma.runInTransaction(() => this.commitBody(orderId), { timeoutMs: 30_000 });
@@ -896,16 +686,9 @@ export class OrderTransactionService {
     const actorId = this.ctx.principal?.userId ?? null;
 
     const [order] = await this.prisma.$queryRaw<
-      Array<{
-        order_number: string;
-        buyer_org_id: string;
-        payment_mode: string;
-        status: string;
-        grand_total: string;
-      }>
+      Array<{ order_number: string; buyer_org_id: string; status: string; grand_total: string }>
     >`
-      SELECT order_number, buyer_org_id, payment_mode::text AS payment_mode,
-             status::text AS status, grand_total::text AS grand_total
+      SELECT order_number, buyer_org_id, status::text AS status, grand_total::text AS grand_total
         FROM ordering."order"
        WHERE id = ${orderId}::uuid
          FOR UPDATE`;
@@ -916,68 +699,98 @@ export class OrderTransactionService {
       });
     }
 
-    const slots = await this.prisma.$queryRaw<
-      Array<{ vendor_org_id: string; order_line_id: string; listing_id: string; qty: number }>
-    >`
-      SELECT so.vendor_org_id, ol.id AS order_line_id, ol.listing_id, ol.qty
-        FROM ordering.order_line ol
+    const [count] = await this.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n
+        FROM ordering.order_line_unit olu
+        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
         JOIN ordering.sub_order so ON so.id = ol.sub_order_id
        WHERE so.order_id = ${orderId}::uuid`;
+    const units = count?.n ?? 0;
 
-    const lineIds = slots.map((s) => s.order_line_id);
-    const reserved =
-      lineIds.length === 0
-        ? []
-        : await this.prisma.$queryRaw<
-            Array<{ id: string; serial_number: string; order_line_id: string }>
-          >`
-            SELECT id, serial_number, order_line_id
-              FROM listing.unit
-             WHERE order_line_id = ANY(${lineIds}::uuid[])
-               AND status = 'RESERVED'::public.unit_status
-             ORDER BY id`;
+    const status = 'AWAITING_INSPECTION' as const;
+    await this.prisma.$executeRaw`
+      UPDATE ordering."order" SET status = ${status}::public.order_status
+       WHERE id = ${orderId}::uuid`;
+    await this.prisma.$executeRaw`
+      UPDATE ordering.sub_order SET status = ${status}::public.order_status
+       WHERE order_id = ${orderId}::uuid`;
+    await this.prisma.$executeRaw`
+      UPDATE ordering.order_line ol SET status = ${status}::public.order_status
+        FROM ordering.sub_order so
+       WHERE so.id = ol.sub_order_id AND so.order_id = ${orderId}::uuid`;
 
-    const rows = reserved.map((u) => {
-      const slot = slots.find((s) => s.order_line_id === u.order_line_id);
-      return {
-        vendor_org_id: slot?.vendor_org_id ?? '',
-        unit_id: u.id,
-        serial_number: u.serial_number,
-        listing_id: slot?.listing_id ?? '',
-      };
+    await this.writeEvent(orderId, {
+      type: 'order.approved',
+      from: 'AWAITING_APPROVAL',
+      to: status,
+      note: `Approved. ${units} ${machines(units)} are held. A technician will inspect each machine at the supply point and record its serial.`,
+      occurredAt: now,
+      actorId,
     });
 
-    const units = await this.unitFacts(rows.map((r) => r.unit_id));
+    return { status, orderNumber: order.order_number, purchaseOrderIds: [], units };
+  }
 
-    // Split exactly as placement does — one PO per vendor per pickup address.
-    // The held units carry their own supply point, so an approval released
-    // three days later groups the way the order was quoted rather than the way
-    // this path happened to read it back.
-    const bySupplyPoint = groupBy(rows, (r) =>
-      laneKey(r.vendor_org_id, units.get(r.unit_id)?.pickupAddressId ?? ''),
-    );
+  /* ------------------------------------------------------------------------
+   * Verification — where the vendor is finally committed to
+   * --------------------------------------------------------------------- */
 
-    const status = statusFor(order.payment_mode);
+  /**
+   * Raise one purchase order per consignment for an order whose every machine
+   * ops has verified. Runs inside the caller's transaction.
+   *
+   * The units are the ones the technician created and bound to the order's
+   * slots; their facts are read back from `listing.unit`, which is where the
+   * vendor's ask for that serial was copied when it was named.
+   */
+  async raisePurchaseOrdersForVerified(orderId: string): Promise<VerifiedRaiseResult> {
+    if (!this.prisma.isInTransaction) {
+      throw new Error('raisePurchaseOrdersForVerified() must run inside the verification transaction.');
+    }
+    const now = this.clock.now();
+
+    const slots = await this.prisma.$queryRaw<
+      Array<{ unit_id: string; serial_number: string; listing_id: string; vendor_org_id: string }>
+    >`
+      SELECT olu.unit_id, olu.serial_number, ol.listing_id, so.vendor_org_id
+        FROM ordering.order_line_unit olu
+        JOIN ordering.order_line ol ON ol.id = olu.order_line_id
+        JOIN ordering.sub_order so ON so.id = ol.sub_order_id
+       WHERE so.order_id = ${orderId}::uuid
+         AND olu.unit_id IS NOT NULL
+         AND olu.verified_at IS NOT NULL
+       ORDER BY olu.unit_id`;
+    if (slots.length === 0) return { purchaseOrderIds: [], units: 0 };
+
+    const facts = await this.unitFacts(slots.map((s) => s.unit_id));
+    const rows = slots.flatMap((s) => {
+      const fact = facts.get(s.unit_id);
+      if (!fact) {
+        throw new PreconditionFailedError(
+          'One of the machines on this order is no longer reserved for it, so it cannot be verified. Ask the technician to re-inspect.',
+          { reason: 'verified_unit_not_reserved', unitId: s.unit_id },
+        );
+      }
+      return [{ ...fact, serialNumber: s.serial_number, listingId: s.listing_id }];
+    });
+
+    const bySupplyPoint = groupBy(rows, (r) => laneKey(r.vendorOrgId, r.pickupAddressId));
     const purchaseOrderIds: string[] = [];
     let supplyPointIndex = 0;
 
-    for (const [supplyPointKey, vendorRows] of bySupplyPoint) {
+    for (const [supplyPointKey, allocated] of bySupplyPoint) {
       supplyPointIndex += 1;
       const { vendorOrgId, pickupAddressId } = splitLaneKey(supplyPointKey);
-      const allocated = vendorRows.map((r) => {
-        const fact = units.get(r.unit_id);
-        // The machine moved while the approval sat. Refusing here is the only
-        // honest answer: the alternative is selling a scrapped laptop because a
-        // manager pressed approve after somebody else pressed scrap.
-        if (!fact) {
-          throw new PreconditionFailedError(
-            'One of the machines held for this order is no longer available, so it cannot be confirmed. Nothing has been charged — place the order again and we will hold different stock.',
-            { reason: 'held_unit_no_longer_reserved', unitId: r.unit_id },
-          );
-        }
-        return { ...fact, serialNumber: r.serial_number, listingId: r.listing_id };
-      });
-
+      // One PO per consignment. A second verification pass on an order whose
+      // PO exists already must not raise a second document.
+      const [existing] = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM procurement.purchase_order
+         WHERE order_id = ${orderId}::uuid AND vendor_org_id = ${vendorOrgId}::uuid
+           AND pickup_address_id = ${pickupAddressId}::uuid`;
+      if (existing) {
+        purchaseOrderIds.push(existing.id);
+        continue;
+      }
       const poId = await this.raisePurchaseOrder({
         orderId,
         vendorOrgId,
@@ -989,105 +802,86 @@ export class OrderTransactionService {
       purchaseOrderIds.push(poId);
       await this.prisma.$executeRaw`
         UPDATE ordering.sub_order
-           SET purchase_order_id = ${poId}::uuid,
-               pickup_address_id = ${pickupAddressId}::uuid
+           SET purchase_order_id = ${poId}::uuid
          WHERE order_id = ${orderId}::uuid
            AND vendor_org_id = ${vendorOrgId}::uuid
            AND (pickup_address_id IS NULL OR pickup_address_id = ${pickupAddressId}::uuid)`;
     }
 
-    await this.prisma.$executeRaw`
-      UPDATE ordering."order"
-         SET status = ${status}::public.order_status
-       WHERE id = ${orderId}::uuid`;
-    await this.prisma.$executeRaw`
-      UPDATE ordering.sub_order
-         SET status = ${status}::public.order_status
-       WHERE order_id = ${orderId}::uuid`;
-    await this.prisma.$executeRaw`
-      UPDATE ordering.order_line ol
-         SET status = ${status}::public.order_status
-        FROM ordering.sub_order so
-       WHERE so.id = ol.sub_order_id AND so.order_id = ${orderId}::uuid`;
-
-    await this.writeEvent(orderId, {
-      type: 'order.approved',
-      from: 'AWAITING_APPROVAL',
-      to: status,
-      note: `Approved. ${rows.length} ${machines(rows.length)} are committed. Serials are named when a machine is attached to this order.`,
-      occurredAt: now,
-      actorId,
-    });
-
-    // Step 16, held back until now for the same reason the PO was: the
-    // subscribers on this event act on an order somebody has agreed to.
-    await this.events.publish('order.confirmed', {
-      orderId,
-      orderNumber: order.order_number,
-      buyerOrgId: order.buyer_org_id,
-      totalValue: order.grand_total,
-      unitIds: rows.map((r) => r.unit_id),
-    });
-
-    return { status, orderNumber: order.order_number, purchaseOrderIds, units: rows.length };
+    return { purchaseOrderIds, units: rows.length };
   }
 
   /**
-   * Put an order's held machines back on sale.
+   * Put an order's held quantity back on sale, and un-name its machines.
    *
    * The mirror of `HoldService.release` for the stage after a hold has been
-   * consumed: at `AWAITING_APPROVAL` there is no `checkout_hold` row left to
-   * release, and what holds the stock is `listing.unit.status = 'RESERVED'`
-   * against `order_line_unit`. `AND status = 'RESERVED'` is load bearing here
-   * for the reason it is there in `consume` — a machine scrapped underneath the
-   * order is not resurrected onto the storefront by a rejection.
-   *
-   * `listing.qty_available` is not touched: `trg_listing_counters` recomputes it
-   * from the units on every status change, and a second hand-written arithmetic
-   * correction beside a trigger is how counters end up disagreeing.
+   * consumed. The reservation is a quantity on the listing; any unit the
+   * technician already created goes back to the vendor's shelf — off the order
+   * and outside `uq_unit_active_serial`, so the same serial can be named again
+   * on the next order.
    */
   async releaseOrderStock(orderId: string, reason: string): Promise<number> {
-    const lines = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT ol.id
+    const lines = await this.prisma.$queryRaw<
+      Array<{ id: string; listing_id: string; qty: number; cancelled_qty: number }>
+    >`
+      SELECT ol.id, ol.listing_id, ol.qty, ol.cancelled_qty
         FROM ordering.order_line ol
         JOIN ordering.sub_order so ON so.id = ol.sub_order_id
        WHERE so.order_id = ${orderId}::uuid`;
     if (lines.length === 0) return 0;
 
-    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
-      SELECT id AS unit_id FROM listing.unit
+    let released = 0;
+    for (const line of lines) {
+      const qty = Math.max(Number(line.qty) - Number(line.cancelled_qty), 0);
+      if (qty === 0) continue;
+      await this.prisma.$executeRaw`
+        UPDATE listing.listing
+           SET qty_available = qty_available + ${qty},
+               qty_reserved  = GREATEST(qty_reserved - ${qty}, 0),
+               updated_at    = ${this.clock.now()}
+         WHERE id = ${line.listing_id}::uuid`;
+      released += qty;
+    }
+
+    const units = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM listing.unit
        WHERE order_line_id = ANY(${lines.map((l) => l.id)}::uuid[])
          AND status = 'RESERVED'::public.unit_status
        ORDER BY id`;
-    if (rows.length === 0) return 0;
+    if (units.length > 0) {
+      const ids = units.map((u) => u.id);
+      await this.prisma.$executeRaw`
+        WITH before AS (
+          SELECT u.id, u.status, u.location
+            FROM listing.unit u
+           WHERE u.id = ANY(${ids}::uuid[])
+             AND u.status = 'RESERVED'::public.unit_status
+           ORDER BY u.id
+             FOR UPDATE
+        ),
+        moved AS (
+          UPDATE listing.unit u
+             SET status = 'RETURNED_TO_VENDOR'::public.unit_status, order_line_id = NULL
+            FROM before b
+           WHERE u.id = b.id
+          RETURNING u.id, b.status AS from_status, u.status AS to_status,
+                    b.location AS from_location, u.location AS to_location
+        )
+        INSERT INTO listing.stock_movement
+          (unit_id, from_status, to_status, from_location, to_location,
+           reason, actor_id, ref_type, ref_id, occurred_at)
+        SELECT m.id, m.from_status, m.to_status, m.from_location, m.to_location,
+               ${reason}, ${this.ctx.principal?.userId ?? null}::uuid,
+               'ORDER', ${orderId}::uuid, ${this.clock.now()}
+          FROM moved m`;
+      await this.prisma.$executeRaw`
+        UPDATE ordering.order_line_unit
+           SET unit_id = NULL, serial_number = NULL, qc_report_id = NULL,
+               inspected_at = NULL, verified_at = NULL, verified_by = NULL
+         WHERE unit_id = ANY(${ids}::uuid[])`;
+    }
 
-    const unitIds = rows.map((r) => r.unit_id);
-    await this.prisma.$executeRaw`
-      WITH before AS (
-        SELECT u.id, u.status, u.location
-          FROM listing.unit u
-         WHERE u.id = ANY(${unitIds}::uuid[])
-           AND u.status = 'RESERVED'::public.unit_status
-         ORDER BY u.id
-           FOR UPDATE
-      ),
-      moved AS (
-        UPDATE listing.unit u
-           SET status = 'LISTED'::public.unit_status, order_line_id = NULL
-          FROM before b
-         WHERE u.id = b.id
-        RETURNING u.id, b.status AS from_status, u.status AS to_status,
-                  b.location AS from_location, u.location AS to_location
-      )
-      INSERT INTO listing.stock_movement
-        (unit_id, from_status, to_status, from_location, to_location,
-         reason, actor_id, ref_type, ref_id, occurred_at)
-      SELECT m.id, m.from_status, m.to_status, m.from_location, m.to_location,
-             ${reason}, ${this.ctx.principal?.userId ?? null}::uuid,
-             'ORDER', ${orderId}::uuid, ${this.clock.now()}
-        FROM moved m`;
-
-    return unitIds.length;
+    return released;
   }
 
   /**
@@ -1140,8 +934,7 @@ export class OrderTransactionService {
 
   /**
    * Every transition writes one of these, and the buyer's tracking page renders
-   * them. It is a product surface, not a debug log, which is why `note` is a
-   * sentence written for a stranger reading it months later.
+   * them. It is a product surface, not a debug log.
    */
   async writeEvent(
     orderId: string,
@@ -1161,6 +954,11 @@ export class OrderTransactionService {
       VALUES (${orderId}::uuid, ${e.subOrderId ?? null}::uuid, ${e.type},
               ${e.from ?? null}, ${e.to}, ${e.actorId}::uuid, ${e.note}, ${e.occurredAt})`;
   }
+
+  /** Kept on the class so the automation seam stays wired for R1 when it is re-enabled. */
+  protected get automationSeam(): AutomationService {
+    return this.automation;
+  }
 }
 
 /* ==========================================================================
@@ -1168,12 +966,9 @@ export class OrderTransactionService {
  * ======================================================================== */
 
 /**
- * PHASE_06 Task 3's own wording for every reason a PO cannot be raised.
- *
- * One sentence for four causes, deliberately: a suspended vendor and an
- * unpriced unit are the same fact to a buyer — this supply point cannot fill
- * the line — and naming the cause would name the source. The engineer-facing
- * reason travels in `detail`, which is logged and never serialised.
+ * PHASE_06 Task 3's own wording for every reason a PO cannot be raised. One
+ * sentence for four causes, deliberately: naming the cause would name the
+ * source. The engineer-facing reason travels in `detail`.
  */
 const SUPPLY_POINT_UNAVAILABLE =
   'One of the supply points for this item is temporarily unavailable. Remove it and try again.';
@@ -1191,9 +986,7 @@ function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[
 
 /**
  * The key a consignment is grouped, quoted and purchased on: one vendor's stock
- * at one pickup address. `checkout.service.ts` builds the identical key when it
- * quotes freight, which is what stops the quote and the purchase from splitting
- * the same order two different ways.
+ * at one pickup address.
  */
 export const laneKey = (vendorOrgId: string, pickupAddressId: string): string =>
   `${vendorOrgId}|${pickupAddressId}`;
@@ -1207,13 +1000,3 @@ const freightOf = (input: OrderTransactionInput, supplyPointKey: string): Money 
   input.freightByLane.get(supplyPointKey) ?? Money.ZERO;
 
 const machines = (n: number): string => (n === 1 ? 'machine' : 'machines');
-
-/**
- * A prepaid order is not confirmed until it is paid for.
- *
- * `CONFIRMED` on an unpaid prepaid order would tell a vendor to start picking
- * against money we have not received. Credit terms are the case where the order
- * IS confirmed on placement, because the payment is a receivable by agreement.
- */
-const statusFor = (mode: string): 'CONFIRMED' | 'PAYMENT_PENDING' =>
-  mode === 'CREDIT' ? 'CONFIRMED' : 'PAYMENT_PENDING';

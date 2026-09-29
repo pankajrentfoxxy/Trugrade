@@ -295,3 +295,30 @@ describe('the empty state is not as wide as the table', () => {
     expect(container.querySelectorAll('td')).toHaveLength(0);
   });
 });
+
+describe('DataTable detail row', () => {
+  it('renders a second row under an open row and nothing under a closed one', () => {
+    render(
+      <DataTable
+        caption="2 listings."
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={(r) => r.id}
+        detail={{
+          open: (r) => r.id === 'u2',
+          render: (r) => <p>{r.model} detail</p>,
+          className: 'x-detail',
+        }}
+      />,
+    );
+    const table = screen.getByRole('table');
+    // header + 2 rows + 1 detail row
+    expect(within(table).getAllByRole('row')).toHaveLength(4);
+    const detail = screen.getByText('ThinkPad T14 detail').closest('tr');
+    expect(detail).toHaveClass('x-detail');
+    // It sits directly under its own row and spans every column.
+    expect(detail?.previousElementSibling?.textContent).toContain('ThinkPad T14');
+    expect(detail?.querySelector('td')?.getAttribute('colspan')).toBe('3');
+    expect(screen.queryByText('Latitude 5320 detail')).toBeNull();
+  });
+});

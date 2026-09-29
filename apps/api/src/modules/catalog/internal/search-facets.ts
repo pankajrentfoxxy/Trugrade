@@ -36,7 +36,10 @@ export interface SearchRow {
   city: string | null;
   shipHours: number | null;
   warrantyMonths: number | null;
-  serial: string;
+  /** Null for a declared listing: the serials are named after the order. */
+  serial: string | null;
+  /** How many machines this row stands for. A listing is a quantity, not a serial. */
+  qty: number;
 
   /* --- catalog's half: what the machine is --- */
   brandSlug: string;
@@ -69,6 +72,7 @@ export type CatalogRow = Omit<
   | 'shipHours'
   | 'warrantyMonths'
   | 'serial'
+  | 'qty'
 >;
 
 export type SortKey = 'price' | 'price_desc' | 'score' | 'battery' | 'ships' | 'stock';
@@ -172,7 +176,8 @@ export interface SearchResult {
   shipHours: number | null;
   warrantyMonths: number | null;
   cities: string[];
-  sampleSerial: string;
+  /** Null when no machine in the group has been identified yet. */
+  sampleSerial: string | null;
   ramGb: number;
   storageGb: number;
   storageType: string;
@@ -609,8 +614,8 @@ function aggregate(rows: readonly SearchRow[]): SearchResult[] {
       model: first.modelName,
       spec: SPEC(first),
       fromPrice: Math.min(...g.map((r) => r.price)),
-      unitsAvailable: g.length,
-      supplyPoints: new Set(g.map((r) => r.supplyPointCode)).size,
+      unitsAvailable: g.reduce((n, r) => n + r.qty, 0),
+      supplyPoints: new Set(g.map((r) => `${r.city}|${r.supplyPointCode}`)).size,
       // No score on any unit means no chip, not a zero. A QC chip reading 0 says
       // "we inspected it and it failed"; the truth is that we have no number.
       avgQcScore: scores.length === 0 ? null : Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
@@ -620,7 +625,11 @@ function aggregate(rows: readonly SearchRow[]): SearchResult[] {
       shipHours: ships.length === 0 ? null : Math.min(...ships),
       warrantyMonths: first.warrantyMonths,
       cities: [...new Set(g.map((r) => r.city).filter((c): c is string => c !== null))].sort(),
-      sampleSerial: g.map((r) => r.serial).sort()[0]!,
+      sampleSerial:
+        g
+          .map((r) => r.serial)
+          .filter((s): s is string => s !== null)
+          .sort()[0] ?? null,
       ramGb: first.ramGb,
       storageGb: first.storageGb,
       storageType: first.storageType,

@@ -125,7 +125,7 @@ async function openAssignDialog(user: ReturnType<typeof userEvent.setup>): Promi
   await screen.findByText('QCV-20260903-433E6E96');
   // The board's own record affordance — a button, because a clickable table row
   // is unreachable by keyboard.
-  await user.click(screen.getByRole('button', { name: 'Open' }));
+  await user.click(screen.getByRole('button', { name: 'Open QCV-20260903-433E6E96' }));
   await user.click(await screen.findByRole('button', { name: 'Assign technician' }));
   await screen.findByText('Assign a technician');
 }
@@ -236,7 +236,7 @@ describe('assigning a technician', () => {
     expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
 
     // … and the reopened record knows it is booked.
-    await user.click(screen.getByRole('button', { name: 'Open' }));
+    await user.click(screen.getByRole('button', { name: 'Open QCV-20260903-433E6E96' }));
     expect(await screen.findByRole('button', { name: 'Reassign' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Assign technician' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Rakesh Kumar').length).toBeGreaterThanOrEqual(2);

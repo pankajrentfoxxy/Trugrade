@@ -62,11 +62,15 @@ export interface Standing {
   placed: boolean;
   over: boolean;
   paid: boolean;
-  /** Every dispatch point has answered, or the order has moved past that point. */
+  /** Every machine has been verified, or the order has moved past that point. */
   stockConfirmed: boolean;
+  /** Every machine has a serial recorded by the technician. */
+  inspected: boolean;
+  /** Every machine is verified: "Device verified" on each one. */
+  verified: boolean;
   shipped: boolean;
   delivered: boolean;
-  /** Something is owed and this buyer is the one to pay it. */
+  /** Something is owed and this buyer is the one to pay it. The server decides. */
   payable: boolean;
 }
 
@@ -79,22 +83,29 @@ export function standing(order: Order): Standing {
   const over = OVER.has(order.status);
   const shipped = placed && hasReached(order.status, 'DISPATCHED');
   const delivered = placed && hasReached(order.status, 'DELIVERED');
-  const answered = order.supply.filter((l) => l.qtyAvailable !== null).length;
-  const stockConfirmed =
+  const inspected =
+    placed && order.unitsAllocated > 0 && order.unitsInspected >= order.unitsAllocated;
+  const verified =
     placed &&
-    (shipped ||
-      (order.supply.length > 0
-        ? answered === order.supply.length
-        : hasReached(order.status, 'ACKNOWLEDGED')));
+    ((order.unitsAllocated > 0 && order.unitsVerified >= order.unitsAllocated) ||
+      hasReached(order.status, 'PO_RAISED'));
+  const stockConfirmed = placed && (shipped || verified);
   const paid = order.paymentStatus === 'PAID' || order.paymentMode === 'CREDIT';
-  const payable =
-    placed &&
-    !over &&
-    order.paymentMode !== 'CREDIT' &&
-    (order.paymentStatus === 'PENDING' ||
-      order.paymentStatus === 'FAILED' ||
-      order.paymentStatus === 'PARTIALLY_PAID');
-  return { held, released, placed, over, paid, stockConfirmed, shipped, delivered, payable };
+  // Payable is the server's word: it knows the deadline against its own clock.
+  const payable = placed && !over && order.payable;
+  return {
+    held,
+    released,
+    placed,
+    over,
+    paid,
+    stockConfirmed,
+    inspected,
+    verified,
+    shipped,
+    delivered,
+    payable,
+  };
 }
 
 /**
@@ -111,6 +122,6 @@ export function statusOf(order: Order): { tone: 'neutral' | 'warn'; label: strin
   if (approval?.status === 'PENDING') return { tone: 'warn', label: 'Awaiting approval' };
   if (approval?.status === 'REJECTED') return { tone: 'neutral', label: 'Approval declined' };
   if (approval?.status === 'EXPIRED') return { tone: 'neutral', label: 'Approval expired' };
-  if (order.status === 'PAYMENT_PENDING') return { tone: 'warn', label: 'Payment pending' };
+  if (order.status === 'PAYMENT_PENDING') return { tone: 'warn', label: 'Verified · pay now' };
   return { tone: 'neutral', label: buyerOrderStatusLabel(order.status) };
 }

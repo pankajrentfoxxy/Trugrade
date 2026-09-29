@@ -28,8 +28,13 @@ import { apiFetch } from '../../lib/auth';
  */
 async function failure(res: Response, fallback: string): Promise<Error> {
   try {
-    const body = (await res.json()) as { error?: { message?: string } };
-    const m = body.error?.message;
+    const body = (await res.json()) as {
+      error?: { message?: string; fields?: Record<string, string> };
+    };
+    // A field-level refusal carries its answer in `fields`; its top-level
+    // message is "Some of the details need fixing", which names nothing.
+    const field = Object.values(body.error?.fields ?? {})[0];
+    const m = field ?? body.error?.message;
     if (m) return new Error(m);
   } catch {
     // A non-JSON body from a proxy or a gateway. The status is all there is.

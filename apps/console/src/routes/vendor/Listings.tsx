@@ -51,10 +51,16 @@ const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = 
  */
 const TILES = [
   { status: '', label: 'All listings', dot: 'bg-ink-2' },
-  { status: 'DRAFT', label: 'Draft', dot: 'bg-ink-4', meta: 'Not sent for QC yet' },
-  { status: 'AWAITING_QC', label: 'Awaiting QC', dot: 'bg-ink-3', meta: 'We are testing the units' },
+  { status: 'DRAFT', label: 'Draft', dot: 'bg-ink-4', meta: 'Not sent for approval yet' },
+  {
+    status: 'PENDING_APPROVAL',
+    label: 'Awaiting approval',
+    dot: 'bg-ink-3',
+    meta: 'Our team is reviewing it',
+  },
   // Amber: an active state, rule 1's third meaning.
-  { status: 'ACTIVE', label: 'Active', dot: 'bg-acc', meta: 'Visible to buyers' },
+  { status: 'ACTIVE', label: 'Live', dot: 'bg-acc', meta: 'Visible to buyers' },
+  { status: 'REJECTED', label: 'Rejected', dot: 'bg-ink-4', meta: 'See the reason on the row' },
 ] as const;
 
 const SORTS = [
@@ -213,7 +219,14 @@ export function VendorListingsRoute(): React.JSX.Element {
         key: 'status',
         header: 'Status',
         cell: (l) => (
-          <StatusPill tone={STATUS_TONE[l.status] ?? 'neutral'} label={humanise(l.status)} />
+          <span className="flex flex-col gap-1">
+            <StatusPill tone={STATUS_TONE[l.status] ?? 'neutral'} label={humanise(l.status)} />
+            {l.status === 'REJECTED' && l.rejectionReason ? (
+              // The reason travels with the refusal. A rejected row with no
+              // words on it is a refusal the vendor cannot act on.
+              <span className="max-w-xs text-body-sm text-ink-2">{l.rejectionReason}</span>
+            ) : null}
+          </span>
         ),
       },
       {
@@ -273,10 +286,10 @@ export function VendorListingsRoute(): React.JSX.Element {
         actions={
           <>
             {/* The wizard is off the rail. The dialog is the one-screen path for
-                a vendor who knows what they hold; the wizard is the four-step
-                one for a batch with serials, and both start here. */}
+                a vendor who knows what they hold; the wizard is the three-step
+                one that also declares the condition, and both start here. */}
             <Link className="hub-link text-body-sm" to="/vendor/listings/new">
-              List a batch
+              List with the full form
             </Link>
             <Button variant="primary" size="lg" onClick={() => setCreateOpen(true)}>
               New listing
@@ -374,7 +387,7 @@ export function VendorListingsRoute(): React.JSX.Element {
                     <span className="font-mono tnum">{drafts}</span> draft{drafts === 1 ? '' : 's'}
                   </strong>{' '}
                   with <span className="font-mono tnum">{board.data?.units.DRAFT ?? 0}</span> units
-                  not sent for QC. Units go on sale only after they pass.
+                  not sent for approval. Units go on sale once our team approves the listing.
                 </span>
                 <button
                   type="button"

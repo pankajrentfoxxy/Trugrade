@@ -8,7 +8,7 @@ import { GradeCorrectionsRoute } from './GradeCorrections';
 import { SamplingRulesRoute, checkDraft } from './SamplingRules';
 import { ScheduleRoute } from './Schedule';
 import { VisitBoardRoute } from './VisitBoard';
-import { VisitDetailRoute } from './VisitDetail';
+import { VisitDetailRoute, integrityProblems, onSaleLine } from './VisitDetail';
 import type {
   AuditDashboard,
   GradeCorrectionRow,
@@ -56,6 +56,12 @@ const visit = (over: Partial<VisitRow>): VisitRow => ({
   unitsAbsent: 0,
   geoVarianceMetres: 20,
   geoVarianceAlertMetres: 500,
+  orderNumber: null,
+  addressId: 'addr-1',
+  arrivedAt: '2026-08-28T03:40:00Z',
+  startedAt: '2026-08-28T03:45:00Z',
+  daysOverdue: null,
+  today: '2026-09-29',
   ...over,
 });
 
@@ -127,12 +133,22 @@ const DETAIL: VisitDetail = {
       sequenceNo: 1,
       serialNumber: 'CND4233328',
       listingId: 'l-1',
-      skuLabel: 'HP Victus 16',
+      skuLabel: 'HP-V16-I7-16-512',
+      skuTitle: 'HP Victus 16',
+      specSummary: 'i7 · 16 GB · 512 GB NVMe',
       declaredGrade: 'A',
       outcome: 'UNTESTABLE',
       absentReason: null,
       qcReportId: null,
       durationSeconds: 540,
+      startedAt: '2026-08-26T03:50:00Z',
+      completedAt: '2026-08-26T03:59:00Z',
+      unitStatus: 'QC_MISMATCH',
+      isSellable: false,
+      verdict: null,
+      gradeFinal: null,
+      qcScore: null,
+      gradeOverrideReason: null,
     },
   ],
   toolRuns: [
@@ -153,11 +169,13 @@ const DETAIL: VisitDetail = {
   photos: [],
   seals: [
     {
+      qcReportId: 'r-1',
       sealCode: 'TRG-26HR-0004821',
       status: 'INTACT',
       appliedAt: '2026-08-26T09:20:00Z',
       appliedByName: 'R. Iyer',
       appliedPhotoUrl: '/f/seal.webp',
+      appliedPhotoKey: 'qc/photos/seal.webp',
       verifiedAt: null,
       verifiedByName: null,
       brokenAt: null,
@@ -219,6 +237,89 @@ describe('one visit', () => {
 });
 
 /* ==========================================================================
+ * Whether the visit adds up
+ * ======================================================================== */
+
+/** A closed visit whose record contradicts itself in four ways. */
+const DOUBTFUL: VisitDetail = {
+  ...DETAIL,
+  status: 'COMPLETED',
+  scheduledDate: '2026-08-28',
+  arrivedAt: null,
+  vendorSignoffAt: null,
+  vendorSignoffName: null,
+  geoVarianceMetres: null,
+  toolRuns: [],
+  manifest: [
+    { ...DETAIL.manifest[0]!, outcome: 'PASS', qcReportId: 'r-1', unitStatus: 'QC_MISMATCH', isSellable: false },
+    { ...DETAIL.manifest[0]!, visitUnitId: 'vu-2', unitId: 'u-2', sequenceNo: 2, serialNumber: 'CND4233329', outcome: 'PASS', qcReportId: 'r-2', unitStatus: 'QC_MISMATCH', isSellable: false },
+  ],
+  photos: [
+    { qcReportId: 'r-1', angle: 'LID', fileKey: 'qc/photos/same.png', hash: 'a'.repeat(64), url: '/f/same.png', capturedAt: null },
+    { qcReportId: 'r-2', angle: 'WORST_DEFECT', fileKey: 'qc/photos/same.png', hash: 'a'.repeat(64), url: '/f/same.png', capturedAt: null },
+    { qcReportId: 'r-2', angle: 'BASE', fileKey: 'qc/photos/base.png', hash: 'b'.repeat(64), url: '/f/base.png', capturedAt: null },
+  ],
+  seals: [{ ...DETAIL.seals[0]!, qcReportId: 'r-1', appliedPhotoKey: 'qc/photos/same.png' }],
+};
+
+describe('whether the visit adds up', () => {
+  it('names each contradiction in the record, worst first', () => {
+    const titles = integrityProblems(DOUBTFUL).map((p) => p.title);
+    expect(titles).toEqual([
+      'The same photograph is used more than once.',
+      'It was closed before its date.',
+      'No arrival was recorded, and the vendor never signed off, yet the visit is closed.',
+      'No diagnostic tool run was submitted.',
+    ]);
+    const reuse = integrityProblems(DOUBTFUL)[0]!;
+    expect(reuse.detail).toMatch(/Lid on #1, Worst defect on #2 and the seal on #1/);
+  });
+
+  it('reads whether the machines are on sale from the units, never from the verdict', () => {
+    expect(onSaleLine(DOUBTFUL)).toBe('Neither machine is on sale: qc mismatch.');
+    expect(onSaleLine({ ...DOUBTFUL, manifest: DOUBTFUL.manifest.map((u) => ({ ...u, isSellable: true })) })).toBe(
+      'Both machines are already on sale on the strength of it.',
+    );
+  });
+
+  it('flags the reused image on every machine it appears under, and counts the problems in the header', async () => {
+    mockJson(DOUBTFUL);
+    renderDetail();
+    await screen.findByText('QCV-0001');
+    expect(screen.getByText('4 problems')).toBeInTheDocument();
+    expect(document.querySelectorAll('.vd-ph__img--flag')).toHaveLength(3);
+    // The missing steps are drawn as missing on a closed visit.
+    expect(document.querySelectorAll('.vd-step.is-missing')).toHaveLength(2);
+    expect(screen.getByText('Not signed', { selector: '.vd-step__meta' })).toBeInTheDocument();
+  });
+
+  it('opens a photograph large in the page, and walks the machine with Next', async () => {
+    mockJson(DOUBTFUL);
+    renderDetail();
+    await screen.findByText('QCV-0001');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(screen.getByRole('img', { name: 'Worst defect of CND4233329' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('img', { name: 'Worst defect · CND4233329' })).toHaveAttribute('src', '/f/same.png');
+    expect(within(dialog).getByText(/also filed as another photograph/)).toBeInTheDocument();
+    // No new window: the same document, and a way back.
+    expect(document.querySelectorAll('a[target="_blank"]')).toHaveLength(0);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next photograph' }));
+    expect(within(dialog).getByRole('img', { name: 'Base · CND4233329' })).toHaveAttribute('src', '/f/base.png');
+  });
+
+  it('does not call a step missing while the visit is still open', async () => {
+    mockJson({ ...DOUBTFUL, status: 'IN_PROGRESS', completedAt: null });
+    renderDetail();
+    await screen.findByText('QCV-0001');
+    expect(document.querySelectorAll('.vd-step.is-missing')).toHaveLength(0);
+    expect(document.querySelectorAll('.vd-step.is-next').length).toBeGreaterThan(0);
+  });
+});
+
+/* ==========================================================================
  * Scheduling
  * ======================================================================== */
 
@@ -231,6 +332,7 @@ const WEEK: ScheduleWeek = {
       id: 'tech-1',
       name: 'R. Iyer',
       employeeCode: 'QC-004',
+      isActive: true,
       zones: ['HR-NCR'],
       certifiedTools: ['DEVICESURE'],
       dailyCapacityUnits: 40,
@@ -242,13 +344,27 @@ const WEEK: ScheduleWeek = {
           bookedUnits: 52,
           sites: 2,
           visits: [
-            { id: 'v1', visitNumber: 'QCV-0001', vendorName: 'Northpoint Refurb', units: 52 },
+            {
+              id: 'v1',
+              visitNumber: 'QCV-0001',
+              vendorName: 'Northpoint Refurb',
+              units: 52,
+              status: 'TECH_ASSIGNED',
+              slotFrom: '09:00:00',
+              slotTo: '17:00:00',
+              startedAt: null,
+              completedAt: null,
+              orderNumber: null,
+              addressId: 'addr-1',
+            },
           ],
         },
         { date: '2026-08-25', availability: 'LEAVE', bookedUnits: 0, sites: 0, visits: [] },
       ],
     },
   ],
+  today: '2026-08-24',
+  overdue: [],
   licence: [
     {
       providerCode: 'DEVICESURE',
@@ -262,7 +378,7 @@ describe('the scheduling calendar', () => {
   it('shouts about licence seats, because nothing on our side fixes that morning', async () => {
     mockJson(WEEK);
     inRouter(<ScheduleRoute />);
-    await screen.findByText('Scheduling');
+    await screen.findByRole('heading', { level: 1, name: 'Schedule' });
 
     const breach = screen.getByTestId('seat-breach');
     expect(within(breach).getByText(/3 technicians scheduled against 2 DEVICESURE seats/))
@@ -273,7 +389,7 @@ describe('the scheduling calendar', () => {
   it('marks a day booked past the technician daily capacity', async () => {
     mockJson(WEEK);
     inRouter(<ScheduleRoute />);
-    await screen.findByText('Scheduling');
+    await screen.findByRole('heading', { level: 1, name: 'Schedule' });
 
     // The day's state moved from the <td> to the cell's own element: the
     // scheduling grid is `DataBoard` now, and DataBoard owns its cells at three
@@ -281,13 +397,13 @@ describe('the scheduling calendar', () => {
     // unchanged — only the element carrying the attribute is.
     expect(document.querySelector('[data-state="over"]')).not.toBeNull();
     expect(screen.getByText('Over capacity — this day will not fit')).toBeInTheDocument();
-    expect(screen.getByText('52/40 units')).toBeInTheDocument();
+    expect(document.querySelector('[data-state="over"] .sc-cap__txt')?.textContent).toBe('52 / 40 units');
   });
 
   it('does not offer a day the technician is on leave as capacity', async () => {
     mockJson(WEEK);
     inRouter(<ScheduleRoute />);
-    await screen.findByText('Scheduling');
+    await screen.findByRole('heading', { level: 1, name: 'Schedule' });
     expect(document.querySelector('[data-state="unavailable"]')?.textContent).toBe('leave');
   });
 });

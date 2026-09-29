@@ -110,7 +110,7 @@ export interface ApprovalRecordView {
 export interface ApprovalDecisionResult {
   approval: ApprovalRowView;
   /** What the order became. A rejection cancels it. */
-  orderStatus: 'CONFIRMED' | 'PAYMENT_PENDING' | 'CANCELLED';
+  orderStatus: 'CONFIRMED' | 'PAYMENT_PENDING' | 'CANCELLED' | 'AWAITING_INSPECTION';
   /** Machines committed on an approval, or put back on sale on a rejection. */
   units: number;
 }

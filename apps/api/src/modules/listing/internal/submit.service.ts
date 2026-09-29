@@ -1,70 +1,51 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { money, type Money } from '@trugrade/contracts';
+import { type Money } from '@trugrade/contracts';
 import { PrismaService } from '../../../shared/db/prisma.service';
 import { ClockPort } from '../../../shared/clock';
-import { OrgScope, RequestContextService } from '../../../shared/db/org-scope';
+import { OrgScope } from '../../../shared/db/org-scope';
 import { EventBus } from '../../../shared/events/event-bus';
 import {
-  ConflictError,
   IllegalStateTransitionError,
   NotFoundError,
-  PreconditionFailedError,
   ValidationError,
 } from '../../../shared/errors/domain-errors';
-import { StockMovementService } from './stock-movement.service';
 import { PricingService } from './pricing.service';
 
 /**
- * Submit. The pivot of the whole model: **the listing does not go live.**
+ * Submit. **The listing goes to ops, not to a technician and not to a buyer.**
  *
- * A vendor presses the button and gets an inspection, not a shop window. The
- * listing goes to AWAITING_QC, every unit goes to AWAITING_QC, `qty_available`
- * stays zero and nothing is buyer-visible until a technician has held the
- * machines. Everything else in this file is bookkeeping around that one fact.
+ * A vendor declares a machine, a condition, a price and a quantity — no serial
+ * numbers. Nothing is inspected at this point, because there is nothing to
+ * inspect: the machines are identified only once a buyer has ordered them, when
+ * a technician is sent to the vendor for that order and names one serial per
+ * machine. So submit moves the listing from DRAFT to PENDING_APPROVAL and ops
+ * decides whether it goes live (`ListingApprovalService`).
  *
- * It is one transaction, and it has to be. The failure this prevents is a listing
- * sitting in AWAITING_QC with no visit behind it — units frozen out of the
- * wizard, no technician coming, and nothing in the system that knows to look.
+ * The visit economics that used to live here — minimum units per visit, the
+ * visit fee, HOLD / ACCEPT_FEE — are gone with the pre-order inspection they
+ * priced. `qty_available` stays zero until approval; a buyer cannot see or buy
+ * a listing that is still with ops.
  */
 
+/** Kept as the request shape for one reason: the wizard still sends it. Ignored. */
 export type SubmitChoice = 'HOLD' | 'ACCEPT_FEE';
-
-/**
- * Fewer units than a visit is worth. **Not a rejection** — the vendor is asked,
- * and the caller has to come back with an answer. Silently refusing here is how
- * a vendor with eighteen machines concludes the platform does not want them.
- */
-export interface SubmitDecisionRequired {
-  outcome: 'DECISION_REQUIRED';
-  unitCount: number;
-  minUnitsPerVisit: number;
-  shortBy: number;
-  /** What ACCEPT_FEE would cost. Zero if the waiver already covers this batch. */
-  visitFee: Money;
-  options: readonly SubmitChoice[];
-}
-
-/** They chose to wait. Nothing was written; the listing is still a draft. */
-export interface SubmitHeld {
-  outcome: 'HELD';
-  unitCount: number;
-  minUnitsPerVisit: number;
-  shortBy: number;
-}
 
 export interface SubmitAccepted {
   outcome: 'SUBMITTED';
   listingId: string;
-  status: 'AWAITING_QC';
+  status: 'PENDING_APPROVAL';
+  /** The declared quantity. Named `unitCount` because the wizard already reads it. */
   unitCount: number;
-  qcVisitId: string;
-  visitNumber: string;
-  visitFee: Money;
-  feeBearer: FeeBearer;
+  /**
+   * Our selling price once the margin rule has run, or null when pricing failed.
+   * Null is reported rather than guessed: an unpriced listing is still with ops
+   * and they will see the same gap.
+   */
+  sellingPrice: Money | null;
 }
 
-export type SubmitResult = SubmitDecisionRequired | SubmitHeld | SubmitAccepted;
+export type SubmitResult = SubmitAccepted;
 
 export type FeeBearer = 'TRUETECH' | 'VENDOR' | 'SPLIT' | 'WAIVED';
 
@@ -76,16 +57,6 @@ export interface QcVisitRequest {
   unitsRequested: number;
   visitFee: Money;
   feeBearer: FeeBearer;
-  /**
-   * The machines to inspect, in the order the technician meets them.
-   *
-   * The visit used to be raised with a count alone, so every vendor-raised
-   * visit arrived with an empty manifest: the technician's screen had no
-   * machines to inspect, and closing published nothing because the listing id
-   * lives on the manifest row. The serial is read here, from the listing's own
-   * table, and never taken from a client — it is what a scan is compared
-   * against.
-   */
   units: ReadonlyArray<{ unitId: string; serialNumber: string; listingId: string }>;
 }
 
@@ -95,33 +66,16 @@ export interface QcVisitRef {
 }
 
 /**
- * The one thing `listing` needs from `qc`, and nothing more.
+ * The one thing `listing` may ask of `qc`: raise a visit and get a reference.
  *
- * `qc.qc_visit` belongs to the qc module; listing may not import its internals
- * and may not join to its schema. So the dependency is inverted into this
- * abstract class: submit knows "ask for an inspection and get a reference back",
- * and knows nothing about scheduling, technicians, tool providers or manifests.
- *
- * It is deliberately **not** an outbox event. The outbox dispatches after commit
- * — correct for a notification, wrong for this: it would leave a window in which
- * the listing is AWAITING_QC and no visit exists, and the retry that closes the
- * window is indistinguishable from a duplicate that opens a second one.
- *
- * When qc grows a real visit service, this abstract class moves to a shared
- * ports file and the provider registration swaps. The seam is what matters; the
- * file it currently lives in does not.
+ * No longer called by submit — the pre-order inspection is gone — but kept
+ * bound in the module so a batch inspection can still be requested by hand
+ * from the vendor's listing record without re-plumbing the seam.
  */
 export abstract class QcVisitPort {
   abstract request(input: QcVisitRequest): Promise<QcVisitRef>;
 }
 
-/**
- * The in-process implementation, until `qc` has a service of its own.
- *
- * One INSERT, bound parameters, no join and no read of any listing table — the
- * whole point of the port is that the qc module can take this over without
- * anything on the listing side changing.
- */
 @Injectable()
 export class LocalQcVisitPort extends QcVisitPort {
   constructor(
@@ -144,9 +98,6 @@ export class LocalQcVisitPort extends QcVisitPort {
       RETURNING id, visit_number`;
     const visit = { id: rows[0]!.id, visitNumber: rows[0]!.visit_number };
 
-    // The manifest, in the same transaction as the visit. A visit row without
-    // its units is a technician's screen with nothing on it and a close that
-    // publishes no listing, because `listing_id` lives on these rows.
     for (const [i, unit] of input.units.entries()) {
       await this.prisma.$executeRaw`
         INSERT INTO qc.qc_visit_unit (visit_id, unit_id, serial_number, listing_id, sequence_no)
@@ -158,38 +109,10 @@ export class LocalQcVisitPort extends QcVisitPort {
     return visit;
   }
 
-  /**
-   * The reference a vendor and a technician say out loud to each other.
-   *
-   * ponytail: random suffix, not a per-day sequence. 8 hex characters is about
-   * one collision per 8,000 days at a thousand visits a day, and `visit_number`
-   * is UNIQUE so a collision is a loud failure rather than a shared reference.
-   * If that day arrives, give it a sequence — it needs DDL, so it is not free.
-   */
   private visitNumber(): string {
     const day = this.clock.nowIso().slice(0, 10).replace(/-/g, '');
     return `QCV-${day}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
   }
-}
-
-/**
- * The three `platform_config` keys this flow is tuned by.
- *
- * `qc.visit_fee_waived_above` used to be read here as `qc.visit_fee_waiver_units`
- * — **one number under two names**, and no database had both. The baseline
- * migration writes `waived_above` (which `PricingService` reads); the seed wrote
- * `waiver_units` (which only this file read). So a database built from the seed
- * alone could not price a listing, and one built from migrations alone could not
- * request an inspection. Both names meant "the batch size above which we stop
- * charging the visit fee", and a value that has two keys eventually has two
- * values.
- */
-const CONFIG_KEYS = ['qc.min_units_per_visit', 'qc.visit_fee_inr', 'qc.visit_fee_waived_above'];
-
-interface VisitEconomics {
-  minUnitsPerVisit: number;
-  visitFee: Money;
-  waiverUnits: number;
 }
 
 @Injectable()
@@ -200,270 +123,79 @@ export class SubmitService {
     private readonly prisma: PrismaService,
     private readonly clock: ClockPort,
     private readonly scope: OrgScope,
-    private readonly ctx: RequestContextService,
-    private readonly movements: StockMovementService,
-    private readonly qcVisits: QcVisitPort,
     private readonly bus: EventBus,
     private readonly pricing: PricingService,
   ) {}
 
   /**
-   * Request an inspection for every unit on a draft listing.
+   * Send a draft to ops.
    *
-   * `choice` answers the minimum-units question and is only ever needed after a
-   * DECISION_REQUIRED came back. Passing it when the batch is already large
-   * enough is harmless and ignored — the fee question does not arise.
+   * `_choice` is accepted and ignored so a wizard built for the old three-way
+   * answer keeps working while it is replaced; there is no question to answer
+   * any more.
    */
-  async submit(listingId: string, choice?: SubmitChoice): Promise<SubmitResult> {
-    const economics = await this.economics();
-
-    const result = await this.prisma.runInTransaction(async () => {
-      // FOR UPDATE before anything is read off it: two tabs pressing submit on
-      // the same listing must not each raise a visit for the same machines.
+  async submit(listingId: string, _choice?: SubmitChoice): Promise<SubmitResult> {
+    const submitted = await this.prisma.runInTransaction(async () => {
+      // FOR UPDATE before anything is read off it: two tabs pressing submit must
+      // not each send the same listing to ops.
       const [listing] = await this.prisma.$queryRaw<
-        Array<{
-          id: string;
-          vendor_org_id: string;
-          pickup_location_id: string;
-          status: string;
-        }>
+        Array<{ id: string; vendor_org_id: string; status: string; qty_total: number }>
       >`
-        SELECT id, vendor_org_id, pickup_location_id, status
+        SELECT id, vendor_org_id, status, qty_total
           FROM listing.listing WHERE id = ${listingId}::uuid FOR UPDATE`;
       if (!listing) throw new NotFoundError('listing');
       this.scope.assertOwns(listing.vendor_org_id, 'listing');
       if (listing.status !== 'DRAFT') {
-        throw new IllegalStateTransitionError('listing', listing.status, 'AWAITING_QC');
+        throw new IllegalStateTransitionError('listing', listing.status, 'PENDING_APPROVAL');
       }
-
-      const units = await this.prisma.$queryRaw<Array<{ id: string; serial_number: string }>>`
-        SELECT id, serial_number FROM listing.unit
-         WHERE listing_id = ${listingId}::uuid ORDER BY id`;
-      const unitIds = units.map((r) => r.id);
-
-      if (unitIds.length === 0) {
-        throw new ValidationError('Add at least one serial number before submitting.', {
-          serials: 'A listing with no machines has nothing to inspect.',
+      if (listing.qty_total < 1) {
+        throw new ValidationError('Say how many machines you are offering before submitting.', {
+          qtyTotal: 'A listing with no quantity has nothing for a buyer to order.',
         });
       }
 
-      const shortBy = Math.max(0, economics.minUnitsPerVisit - unitIds.length);
+      const now = this.clock.now();
+      await this.prisma.$executeRaw`
+        UPDATE listing.listing
+           SET status     = 'PENDING_APPROVAL',
+               updated_at = ${now}
+         WHERE id = ${listing.id}::uuid`;
 
-      // HOLD is honoured unconditionally, including once the batch has grown past
-      // the minimum. A client replaying the answer to an older question — the
-      // vendor said "hold", then added twenty more serials in another tab — must
-      // not have that answer turned into a submission. Nothing is written.
-      if (choice === 'HOLD') {
-        return {
-          outcome: 'HELD' as const,
-          unitCount: unitIds.length,
-          minUnitsPerVisit: economics.minUnitsPerVisit,
-          shortBy,
-        };
-      }
-
-      if (shortBy > 0) {
-        // Below the minimum a technician's day is worth. The vendor gets the
-        // choice, not a refusal — hold the units until they reach it, or accept
-        // the fee. Silently rejecting is how a vendor with eighteen machines
-        // decides the platform does not want their stock.
-        const visitFee = unitIds.length > economics.waiverUnits ? money(0) : economics.visitFee;
-        if (choice !== 'ACCEPT_FEE') {
-          return {
-            outcome: 'DECISION_REQUIRED' as const,
-            unitCount: unitIds.length,
-            minUnitsPerVisit: economics.minUnitsPerVisit,
-            shortBy,
-            visitFee,
-            options: ['HOLD', 'ACCEPT_FEE'] as const,
-          };
-        }
-        return this.request(listing, units, visitFee, visitFee.isZero() ? 'WAIVED' : 'VENDOR');
-      }
-
-      // At or above the minimum the visit pays for itself, so we carry it.
-      return this.request(listing, units, money(0), 'TRUETECH');
-    });
-
-    // Priced once the inspection is on its way, and outside the transaction
-    // above so a pricing problem cannot roll a booked visit back.
-    //
-    // Nothing else prices a new listing: `PricingService` was reachable only
-    // from the vendor's own Reprice screen, and the storefront only shows a unit
-    // that carries a `retail_price`. So a batch could pass its inspection, be
-    // sealed and listed, and still be invisible to every buyer until the vendor
-    // happened to open Reprice. A failure here leaves the listing unpriced and
-    // says so in the log rather than failing a submit that has already happened.
-    if (result.outcome === 'SUBMITTED') {
-      try {
-        await this.pricing.priceListing(listingId, {
-          reason: 'Priced when the inspection was requested.',
-          changeSource: 'MARGIN_RULE',
-        });
-      } catch (err) {
-        this.logger.error(
-          `Listing ${listingId} was submitted but could not be priced: ${(err as Error).message}`,
-        );
-      }
-    }
-
-    return result;
-  }
-
-  /** Everything after the fee question is settled. Runs inside the transaction. */
-  private async request(
-    listing: { id: string; vendor_org_id: string; pickup_location_id: string },
-    units: ReadonlyArray<{ id: string; serial_number: string }>,
-    visitFee: Money,
-    feeBearer: FeeBearer,
-  ): Promise<SubmitAccepted> {
-    const facilityId = await this.facilityAt(listing.pickup_location_id, listing.vendor_org_id);
-    const now = this.clock.now();
-    const unitIds = units.map((u) => u.id);
-
-    const visit = await this.qcVisits.request({
-      vendorOrgId: listing.vendor_org_id,
-      facilityId,
-      addressId: listing.pickup_location_id,
-      requestedBy: this.ctx.principal?.userId ?? null,
-      unitsRequested: unitIds.length,
-      visitFee,
-      feeBearer,
-      units: units.map((u) => ({
-        unitId: u.id,
-        serialNumber: u.serial_number,
+      // Ops' "a listing is waiting for you" notification rides this, through
+      // the outbox, so it is sent only if the transaction commits.
+      await this.bus.publish('listing.submitted', {
         listingId: listing.id,
-      })),
+        vendorOrgId: listing.vendor_org_id,
+        facilityId: null,
+        unitCount: listing.qty_total,
+      });
+
+      return { id: listing.id, qtyTotal: listing.qty_total };
     });
 
-    // Every unit moves through the one function that records movements, so the
-    // visit reference is on the trail from the first transition rather than
-    // being reconstructed later from timestamps.
-    //
-    // `is_sellable` is not written here even though Task 4 names it: it is a
-    // computed column, and `trg_recompute_sellable` forces it FALSE on this
-    // transition because AWAITING_QC is not LISTED. Setting it by hand would
-    // give it two authors and hide the day the trigger stops agreeing.
-    // `qty_awaiting_qc` is the same story — `trg_listing_counters` derives it
-    // from the units, which is the only definition that cannot drift.
-    const moved = await this.movements.transition({
-      unitIds,
-      expectedFrom: 'CREATED',
-      to: 'AWAITING_QC',
-      reason: 'Vendor submitted the listing; inspection requested.',
-      refType: 'QC_VISIT',
-      refId: visit.id,
-    });
-
-    if (moved.length !== unitIds.length) {
-      // Something moved a unit off CREATED while the listing was still a draft.
-      // The transaction rolls back, visit included — a half-submitted listing is
-      // worse than a failed submit, because nobody goes looking for it.
-      throw new ConflictError(
-        'Some of these machines changed status while the listing was being submitted. Nothing was submitted — please try again.',
-        { listingId: listing.id, expected: unitIds.length, moved: moved.length },
+    // Priced once it is with ops, and outside the transaction above so a
+    // pricing problem cannot roll a submission back. Ops sees our selling price
+    // beside the vendor's ask on the approval board; a listing that could not
+    // be priced shows the gap there rather than failing the vendor here.
+    let sellingPrice: Money | null = null;
+    try {
+      const priced = await this.pricing.priceListing(submitted.id, {
+        reason: 'Priced when the listing was sent for approval.',
+        changeSource: 'MARGIN_RULE',
+      });
+      sellingPrice = priced.sellingPrice;
+    } catch (err) {
+      this.logger.error(
+        `Listing ${submitted.id} was submitted but could not be priced: ${(err as Error).message}`,
       );
     }
-
-    await this.prisma.$executeRaw`
-      UPDATE listing.unit SET qc_visit_id = ${visit.id}::uuid
-       WHERE id = ANY(${[...unitIds]}::uuid[])`;
-
-    await this.prisma.$executeRaw`
-      UPDATE listing.listing
-         SET status          = 'AWAITING_QC',
-             qc_requested_at = ${now},
-             qc_visit_id     = ${visit.id}::uuid,
-             updated_at      = ${now}
-       WHERE id = ${listing.id}::uuid`;
-
-    // The vendor's "Inspection requested — we'll confirm a slot" message rides
-    // this, through the outbox, so it is sent only if the transaction commits
-    // and never for a submit that rolled back. Whoever owns notifications
-    // subscribes; nothing here knows about templates or channels.
-    await this.bus.publish('listing.submitted', {
-      listingId: listing.id,
-      vendorOrgId: listing.vendor_org_id,
-      facilityId,
-      unitCount: unitIds.length,
-    });
 
     return {
       outcome: 'SUBMITTED',
-      listingId: listing.id,
-      status: 'AWAITING_QC',
-      unitCount: unitIds.length,
-      qcVisitId: visit.id,
-      visitNumber: visit.visitNumber,
-      visitFee,
-      feeBearer,
-    };
-  }
-
-  /**
-   * The facility a technician would actually be sent to.
-   *
-   * `qc_visit.facility_id` is NOT NULL and a listing only carries a pickup
-   * address, so the two are reconciled here — `vendor_facility.address_id` is
-   * UNIQUE, which makes it a lookup rather than a choice. A pickup address with
-   * no facility behind it is a real and recoverable state: it means the vendor
-   * added an address but never described the site, and the fix is a form, not a
-   * support ticket.
-   */
-  private async facilityAt(addressId: string, orgId: string): Promise<string> {
-    const [facility] = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM vendor.vendor_facility
-       WHERE address_id = ${addressId}::uuid AND org_id = ${orgId}::uuid`;
-    if (!facility) {
-      throw new PreconditionFailedError(
-        'We can only send a technician to a registered facility. Add this pickup address as a facility in your vendor profile, then submit again.',
-        { addressId, reason: 'pickup_address_has_no_facility' },
-      );
-    }
-    return facility.id;
-  }
-
-  /**
-   * The visit thresholds, from `platform_config` through `v_current_config` —
-   * effective-dated, latest wins, which is the only view anything reads.
-   *
-   * A missing key throws rather than falling back to the number in the phase
-   * doc. A silent default is worse than an outage here: ops lowering the minimum
-   * to 10 and the code still sending technicians at 25 is a decision that was
-   * made, recorded, and quietly ignored.
-   */
-  private async economics(): Promise<VisitEconomics> {
-    const rows = await this.prisma.$queryRaw<Array<{ key: string; value_json: unknown }>>`
-      SELECT key, value_json FROM platform.v_current_config
-       WHERE key = ANY(${CONFIG_KEYS}::text[])`;
-    const byKey = new Map(rows.map((r) => [r.key, r.value_json]));
-
-    const missing = CONFIG_KEYS.filter((k) => !byKey.has(k));
-    if (missing.length > 0) {
-      throw new PreconditionFailedError(
-        "We can't request inspections just now. Please try again shortly.",
-        { reason: 'missing_platform_config', keys: missing },
-      );
-    }
-
-    const count = (key: string): number => {
-      const v = byKey.get(key);
-      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
-        throw new PreconditionFailedError(
-          "We can't request inspections just now. Please try again shortly.",
-          { reason: 'malformed_platform_config', key, value: v },
-        );
-      }
-      return v;
-    };
-
-    return {
-      minUnitsPerVisit: count('qc.min_units_per_visit'),
-      // Config holds it as a JSON number; `money()` parses the decimal string and
-      // refuses anything with a third decimal place, so a fat-fingered fee is a
-      // loud failure rather than a silently truncated one.
-      visitFee: money(String(byKey.get('qc.visit_fee_inr'))),
-      waiverUnits: count('qc.visit_fee_waived_above'),
+      listingId: submitted.id,
+      status: 'PENDING_APPROVAL',
+      unitCount: submitted.qtyTotal,
+      sellingPrice,
     };
   }
 }

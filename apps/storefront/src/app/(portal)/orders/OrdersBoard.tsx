@@ -105,7 +105,10 @@ function toneOf(status: string): Tone {
 function metaFor(status: string): { text: string; dot: Tone } {
   const dot = toneOf(status);
   if (status === 'AWAITING_APPROVAL') return { text: 'Held until your approver answers', dot };
-  if (status === 'PAYMENT_PENDING') return { text: 'Machines held until you pay', dot };
+  if (status === 'PAYMENT_PENDING') return { text: 'Every machine verified · pay within 24 hours', dot };
+  if (status === 'AWAITING_INSPECTION') return { text: 'A technician inspects your machines next', dot };
+  if (status === 'QC_IN_PROGRESS') return { text: 'Being inspected at the supply point', dot };
+  if (status === 'AWAITING_VERIFICATION') return { text: 'Inspected · we are verifying each machine', dot };
   if (OVER.has(status)) return { text: 'Nothing more is owed', dot };
   if (hasReached(status, 'DELIVERED')) return { text: 'Run delivery check', dot };
   if (hasReached(status, 'DISPATCHED')) return { text: 'On its way', dot };
@@ -593,7 +596,7 @@ function statusOf(order: OrderSummary): { tone: Tone; label: string } {
   if (approval?.status === 'PENDING') return { tone: 'warn', label: 'Awaiting approval' };
   if (approval?.status === 'REJECTED') return { tone: 'neutral', label: 'Approval declined' };
   if (approval?.status === 'EXPIRED') return { tone: 'neutral', label: 'Approval expired' };
-  if (order.status === 'PAYMENT_PENDING') return { tone: 'warn', label: 'Payment pending' };
+  if (order.status === 'PAYMENT_PENDING') return { tone: 'warn', label: 'Verified · pay now' };
   return { tone: toneOf(order.status), label: buyerOrderStatusLabel(order.status) };
 }
 

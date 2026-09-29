@@ -362,33 +362,28 @@ export interface VendorListing {
   qcCompletedAt: IsoDate | null;
   expiresAt: IsoDate | null;
   createdAt: IsoDate;
+  /** Ops' own words when they refused the listing. Null unless REJECTED. */
+  rejectionReason: string | null;
   commissionPct: number | null;
   commissionAmount: MoneyString | null;
 }
 
-/** `POST /vendor/listings/:id/submit` — three honest outcomes, one of which creates a visit. */
-export interface SubmitDecisionRequired {
-  outcome: 'DECISION_REQUIRED';
-  unitCount: number;
-  minUnitsPerVisit: number;
-  shortBy: number;
-  visitFee: MoneyString;
-  options: readonly ('HOLD' | 'ACCEPT_FEE')[];
-}
-export interface SubmitHeld {
-  outcome: 'HELD';
-  unitCount: number;
-  minUnitsPerVisit: number;
-  shortBy: number;
-}
+/**
+ * `POST /vendor/listings/:id/submit` — the listing goes to ops for approval.
+ *
+ * One outcome. The visit economics that used to produce a question here are
+ * gone with the pre-order inspection: nothing is inspected until a buyer orders.
+ */
 export interface SubmitAccepted {
   outcome: 'SUBMITTED';
   listingId: string;
+  status: 'PENDING_APPROVAL';
+  /** The declared quantity. */
   unitCount: number;
-  visitNumber: string;
-  visitFee: MoneyString;
+  /** Our selling price after the margin rule, or null when pricing could not run. */
+  sellingPrice: MoneyString | null;
 }
-export type SubmitResult = SubmitDecisionRequired | SubmitHeld | SubmitAccepted;
+export type SubmitResult = SubmitAccepted;
 
 export interface VendorUnit {
   id: string;

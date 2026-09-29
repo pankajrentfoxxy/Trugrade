@@ -1,26 +1,15 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import {
-  Button,
-  DataBoard,
-  EmptyState,
-  Input,
-  Pagination,
-  StatusPill,
-  type Column,
-} from '@trugrade/ui';
-import { Board, NotMeasured, PageHeader, Select } from '../../lib/controls';
+import { Button, DataBoard, EmptyState, Pagination, cn, type Column } from '@trugrade/ui';
+import { Board, NotMeasured } from '../../lib/controls';
 import { useAuth } from '../../lib/auth';
 import { useResource } from '../../lib/useResource';
 import {
-  APPROVAL_TONE,
   humanise,
   onDate,
   OPS_API,
-  ORDER_TONE,
-  partyLine,
-  PAYMENT_TONE,
   rupees,
+  type OpsOrderAttention,
   type OpsOrderBoard,
   type OpsOrderRow,
 } from './api';
@@ -31,26 +20,79 @@ import {
  *
  * Every order on the platform — `03_UX_SPEC.md` §3C.4.
  *
+ * DRAWN TO A SUPPLIED DESIGN, its markup, metrics and colours verbatim at the
+ * product owner's direction (`.ao-*` in `index.css`, `--admin-*` in
+ * `globals.css`), on the same terms as `/catalog`:
+ *
+ * - **The table is still `DataBoard`**, restyled through its wrapper class.
+ * - **Every figure is read, not typed.** The "Needs attention" strip is the
+ *   server's `attention` block, counted over every order rather than the page;
+ *   the status chips are the server's facets; nothing here is a placeholder.
+ *
  * **One box over seven identifiers.** §3C.4 asks for search by order number, PO
  * number, serial, seal code, GSTIN, buyer name and mobile, and the box takes all
- * seven without asking which one you have. T20 settled that for the buyer's
- * board and the reasoning is stronger here: the person typing is on the phone to
- * a customer who is reading a number off a sticker. The box **matches** — it
- * never parses — and the board prints what it compared against, so nobody
+ * seven without asking which one you have. The box **matches** — it never
+ * parses — and the board still prints what it compared against, so nobody
  * concludes it does not take seal codes because theirs found nothing.
  *
  * **A row says why it matched.** A seal-code search landing on a row with no
- * seal column reads as a bug, so the value that produced the match is printed on
- * the row.
+ * seal column reads as a bug, so the value that produced the match is printed
+ * on the row, under the order number.
+ *
+ * **The design's red.** The supplied design paints a prepaid order we
+ * delivered without being paid in its own red, and its "Unpaid" word in the
+ * same. That is a fact about OUR process, not a verdict on the buyer, and it is
+ * drawn in the design's `--admin-bad`, never `--fail` — the PASS/FAIL pair
+ * stays reserved. An order unpaid because it is on credit terms gets neither
+ * the colour nor the row wash: `paymentMode` is what tells the two apart.
  *
  * **Read-only, and the screen says so rather than showing a dead button.**
  * §3C.4 asks for cancel-with-reason, reallocate-a-unit and force-progress. All
- * three are transactions — cancelling releases units back to sellable, reverses
- * the purchase order, the payable and the TDS accrual — and no service in this
- * codebase performs any of them. A control that looks live and is not is the
- * dead-control pattern this build keeps finding; the honest form is its absence,
- * named.
+ * three are transactions no service in this codebase performs; the honest form
+ * is their absence, named on the record.
  */
+
+/** The design's five chips, and the neutral fallback every other status gets. */
+const STATUS_META: Readonly<Record<string, { label: string; pill: string; dot: string }>> = {
+  PAYMENT_PENDING: { label: 'Payment pending', pill: 's-pp', dot: 'd--pp' },
+  CONFIRMED: { label: 'Confirmed', pill: 's-cf', dot: 'd--cf' },
+  VENDOR_ACCEPTED: { label: 'Vendor accepted', pill: 's-va', dot: 'd--va' },
+  DISPATCHED: { label: 'Dispatched', pill: 's-dp', dot: 'd--dp' },
+  DELIVERED: { label: 'Delivered', pill: 's-dl', dot: 'd--dl' },
+};
+
+const statusMeta = (status: string): { label: string; pill: string; dot: string } =>
+  STATUS_META[status] ?? { label: humanise(status), pill: 's-nt', dot: 'd--nt' };
+
+/** The order pipeline, for chip order. A status the pipeline does not know sorts last. */
+const PIPELINE = [
+  'CREATED',
+  'AWAITING_APPROVAL',
+  'AWAITING_INSPECTION',
+  'QC_IN_PROGRESS',
+  'AWAITING_VERIFICATION',
+  'PAYMENT_PENDING',
+  'CONFIRMED',
+  'VENDOR_ACCEPTED',
+  'DISPATCHED',
+  'DELIVERED',
+  'CANCELLED',
+];
+const pipelineIndex = (status: string): number => {
+  const i = PIPELINE.indexOf(status);
+  return i === -1 ? PIPELINE.length : i;
+};
+
+/**
+ * The two exceptions the design flags on a row, decided the same way the
+ * server decides the attention strip: prepaid, unpaid, and already moving.
+ */
+const isDeliveredUnpaid = (o: OpsOrderRow): boolean =>
+  o.status === 'DELIVERED' && o.paymentStatus !== 'PAID' && o.paymentMode === 'PREPAID';
+const isAcceptedUnpaid = (o: OpsOrderRow): boolean =>
+  (o.status === 'VENDOR_ACCEPTED' || o.status === 'DISPATCHED') &&
+  o.paymentStatus === 'PENDING' &&
+  o.paymentMode === 'PREPAID';
 
 function boardQuery(params: URLSearchParams): string {
   const q = new URLSearchParams();
@@ -61,6 +103,201 @@ function boardQuery(params: URLSearchParams): string {
   q.set('per', '25');
   return q.toString();
 }
+
+/* ---- icons, as the design draws them ---------------------------------- */
+
+const svgProps = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
+
+const CheckIcon = (): React.JSX.Element => (
+  <svg width="13" height="13" strokeWidth="3" {...svgProps}>
+    <path d="M5 12l5 5 9-10" />
+  </svg>
+);
+const ClockIcon = (): React.JSX.Element => (
+  <svg width="13" height="13" strokeWidth="2.4" {...svgProps}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+const WarnIcon = (): React.JSX.Element => (
+  <svg width="13" height="13" strokeWidth="2.4" {...svgProps}>
+    <path d="M12 3l10 18H2z" />
+    <path d="M12 10v4M12 17.5v.01" />
+  </svg>
+);
+const ChevronIcon = (): React.JSX.Element => (
+  <svg width="16" height="16" strokeWidth="2.2" {...svgProps}>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+const SearchIcon = (): React.JSX.Element => (
+  <svg width="18" height="18" strokeWidth="2" {...svgProps}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-3.5-3.5" />
+  </svg>
+);
+const InfoIcon = (): React.JSX.Element => (
+  <svg width="16" height="16" strokeWidth="2" {...svgProps}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v5" />
+    <path d="M12 16.5v.01" />
+  </svg>
+);
+
+/* ---- cells ------------------------------------------------------------- */
+
+function PaymentCell({ o }: { o: OpsOrderRow }): React.JSX.Element {
+  if (isDeliveredUnpaid(o)) {
+    return (
+      <>
+        <span className="p-bad">
+          <WarnIcon />
+          Unpaid
+        </span>
+        <div className="ao-flag ao-flag--bad">Delivered without payment</div>
+      </>
+    );
+  }
+  switch (o.paymentStatus) {
+    case 'PAID':
+      return (
+        <span className="p-paid">
+          <CheckIcon />
+          Paid
+        </span>
+      );
+    case 'PENDING':
+      return (
+        <>
+          <span className="p-pending">
+            <ClockIcon />
+            Pending
+          </span>
+          {isAcceptedUnpaid(o) && (
+            <div className="ao-flag ao-flag--warn">
+              {o.status === 'DISPATCHED' ? 'Dispatched before payment' : 'Accepted before payment'}
+            </div>
+          )}
+        </>
+      );
+    case 'PARTIAL':
+      return (
+        <span className="p-pending">
+          <ClockIcon />
+          Part paid
+        </span>
+      );
+    case 'FAILED':
+      return (
+        <span className="p-bad">
+          <WarnIcon />
+          Failed
+        </span>
+      );
+    default:
+      return <span className="p-neutral">{humanise(o.paymentStatus)}</span>;
+  }
+}
+
+function StatusCell({ o }: { o: OpsOrderRow }): React.JSX.Element {
+  const meta = statusMeta(o.status);
+  const approval = o.approval;
+  const held = approval !== null && (approval.status === 'PENDING' || approval.breached);
+  return (
+    <>
+      <span className={cn('ao-pill', meta.pill)}>{meta.label}</span>
+      {held && (
+        // A breached approval deadline is warn, never fail: the deadline was one
+        // WE set on the buyer's own approver, and letting it lapse is ours.
+        <div
+          className={cn(
+            'ao-flag',
+            approval.breached ? 'ao-flag--warn text-warn' : 'ao-flag--muted',
+          )}
+        >
+          {approval.breached
+            ? `Approver deadline passed · ${onDate(approval.expiresAt)}`
+            : `Held for ${approval.approverName} · until ${onDate(approval.expiresAt)}`}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---- the attention strip ---------------------------------------------- */
+
+function Attention({ attention }: { attention: OpsOrderAttention }): React.JSX.Element | null {
+  const items: React.ReactNode[] = [];
+
+  for (const o of attention.deliveredUnpaid) {
+    items.push(
+      <div className="ao-attn__item" key={`bad-${o.orderNumber}`}>
+        <span className="sev sev--bad" aria-hidden="true" />
+        <span className="txt">
+          <strong>Delivered but not paid.</strong> <span className="mono">{o.orderNumber}</span>{' '}
+          reached {o.buyerName ?? 'the buyer'} and {rupees(o.grandTotal)} is still pending.
+        </span>
+        <Link to={`/orders/${o.orderNumber}`}>Open order →</Link>
+      </div>,
+    );
+  }
+  for (const o of attention.acceptedUnpaid) {
+    items.push(
+      <div className="ao-attn__item" key={`warn-${o.orderNumber}`}>
+        <span className="sev sev--warn" aria-hidden="true" />
+        <span className="txt">
+          <strong>
+            {o.status === 'DISPATCHED' ? 'Dispatched before payment.' : 'Vendor accepted before payment.'}
+          </strong>{' '}
+          <span className="mono">{o.orderNumber}</span> is prepaid, but the vendor has{' '}
+          {o.status === 'DISPATCHED' ? 'dispatched' : 'accepted'} it with {rupees(o.grandTotal)}{' '}
+          unpaid.
+        </span>
+        <Link to={`/orders/${o.orderNumber}`}>Open order →</Link>
+      </div>,
+    );
+  }
+  const pending = attention.paymentPending;
+  if (pending.count > 0) {
+    items.push(
+      <div className="ao-attn__item" key="pending">
+        <span className="sev sev--warn" aria-hidden="true" />
+        <span className="txt">
+          <strong>
+            {pending.count} {pending.count === 1 ? 'order' : 'orders'} waiting for payment
+          </strong>
+          , {rupees(pending.total)} in total.
+          {pending.oldestPlacedAt
+            ? ` The oldest was placed on ${onDate(pending.oldestPlacedAt)}.`
+            : ''}
+        </span>
+        <Link to="/orders?status=PAYMENT_PENDING">Show them →</Link>
+      </div>,
+    );
+  }
+
+  // Nothing to attend to is nothing to draw: a titled strip with no rows under
+  // it is a reassurance nobody asked for.
+  if (items.length === 0) return null;
+  return (
+    <section className="ao-attn" aria-label="Needs attention">
+      <div className="ao-attn__head">
+        <InfoIcon />
+        Needs attention
+      </div>
+      {items}
+    </section>
+  );
+}
+
+/* ======================================================================== */
 
 export function OpsOrderBoardRoute(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
@@ -75,8 +312,8 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
   const page = Number(params.get('page') ?? '1');
   const filtered = Boolean(q || status || payment || approval);
 
-  // The box is debounced locally so a filter does not refetch per keystroke, but
-  // the URL is still the source of truth — Enter and blur both commit it.
+  // The box is committed on Enter and blur rather than per keystroke, but the
+  // URL is still the source of truth.
   const [typed, setTyped] = React.useState(q);
   React.useEffect(() => setTyped(q), [q]);
 
@@ -100,8 +337,8 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
   // `procurement.po.read_any` is a DIFFERENT permission from the one guarding
   // this screen, and SUPPORT — whose board this is, per §3C.4 — does not hold
   // it. A link that 403s for the very role the screen exists for is the
-  // dead-control pattern this build keeps finding, so the count stays a number
-  // for them and becomes a link for everyone who can open it.
+  // dead-control pattern, so the count stays a number for them and becomes a
+  // link for everyone who can open it.
   const { principal } = useAuth();
   const canOpenPos = principal?.permissions.includes('procurement.po.read_any') ?? false;
 
@@ -111,51 +348,48 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
         key: 'orderNumber',
         header: 'Order',
         cell: (o) => (
-          <span className="flex flex-col gap-1">
-            <Link
-              className="whitespace-nowrap font-mono tnum text-ink underline underline-offset-4 hover:text-acc-ink"
-              to={`/orders/${o.orderNumber}`}
-            >
+          <>
+            <Link className="ao-id" to={`/orders/${o.orderNumber}`}>
               {o.orderNumber}
             </Link>
+            <div className="ao-small">
+              {onDate(o.placedAt)} ·{' '}
+              {o.purchaseOrders > 0 ? (
+                <>
+                  {canOpenPos ? (
+                    <Link to={`/procurement/pos?q=${encodeURIComponent(o.orderNumber)}`}>
+                      {o.purchaseOrders}
+                    </Link>
+                  ) : (
+                    <span>{o.purchaseOrders}</span>
+                  )}{' '}
+                  {o.purchaseOrders === 1 ? 'PO' : 'POs'}
+                </>
+              ) : (
+                // **Never a bare 0 here.** On a DISPATCHED or DELIVERED row it
+                // means we shipped a machine with no record of buying it.
+                <NotMeasured
+                  why="No purchase order was ever raised for this order, so what we paid for its machines is not recorded"
+                  label="None raised"
+                />
+              )}
+            </div>
             {o.matchedOn.length > 0 && (
               // Why this row is in the result. Without it, a seal-code search
               // lands on a board with no seal column and reads as a mistake.
-              <span className="text-body-sm text-ink-3">
+              <div className="ao-small">
                 matched on{' '}
                 {o.matchedOn.map((m, i) => (
                   <React.Fragment key={`${m.kind}-${m.value}`}>
                     {i > 0 && ', '}
-                    <span
-                      className={
-                        // Nowrap on the identifiers: a seal code broken across
-                        // two lines is a value nobody can read back over a phone.
-                        m.kind === 'serial' || m.kind === 'seal'
-                          ? 'whitespace-nowrap font-mono tnum text-ink-2'
-                          : 'text-ink-2'
-                      }
-                    >
+                    <span className={m.kind === 'serial' || m.kind === 'seal' ? 'mono' : undefined}>
                       {m.value}
                     </span>
                   </React.Fragment>
                 ))}
-              </span>
+              </div>
             )}
-          </span>
-        ),
-      },
-      {
-        // Its own column rather than a chip beside the order number. Sharing a
-        // cell, "PAYMENT PENDING" wrapped to a second line on six of thirteen
-        // rows, which doubles a 34px compact row for no information gained.
-        key: 'status',
-        header: 'Status',
-        cell: (o) => (
-          <StatusPill
-            tone={ORDER_TONE[o.status] ?? 'neutral'}
-            label={humanise(o.status)}
-            className="whitespace-nowrap"
-          />
+          </>
         ),
       },
       {
@@ -163,7 +397,12 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
         header: 'Buyer',
         cell: (o) =>
           o.buyer ? (
-            <span className="text-ink-2">{partyLine(o.buyer)}</span>
+            <>
+              <div className="ao-buyer">{o.buyer.legalName}</div>
+              {o.buyer.tradeName && o.buyer.tradeName !== o.buyer.legalName && (
+                <div className="ao-buyer-sub">{o.buyer.tradeName}</div>
+              )}
+            </>
           ) : (
             <NotMeasured
               why="The organisation on this order could not be resolved"
@@ -171,97 +410,24 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
             />
           ),
       },
-      {
-        key: 'placedAt',
-        header: 'Placed',
-        cell: (o) => <span className="font-mono tnum text-ink-2">{onDate(o.placedAt)}</span>,
-      },
-      {
-        key: 'payment',
-        header: 'Payment',
-        cell: (o) => (
-          <StatusPill
-            tone={PAYMENT_TONE[o.paymentStatus] ?? 'neutral'}
-            label={humanise(o.paymentStatus)}
-            className="whitespace-nowrap"
-          />
-        ),
-      },
+      { key: 'status', header: 'Status', cell: (o) => <StatusCell o={o} /> },
+      { key: 'payment', header: 'Payment', cell: (o) => <PaymentCell o={o} /> },
       { key: 'units', header: 'Machines', numeric: true, cell: (o) => o.units },
-      {
-        key: 'pos',
-        header: 'POs raised',
-        numeric: true,
-        cell: (o) =>
-          o.purchaseOrders > 0 ? (
-            canOpenPos ? (
-              <Link
-                className="whitespace-nowrap font-mono tnum text-ink underline underline-offset-4 hover:text-acc-ink"
-                to={`/procurement/pos?q=${encodeURIComponent(o.orderNumber)}`}
-              >
-                {o.purchaseOrders}
-              </Link>
-            ) : (
-              <span className="whitespace-nowrap font-mono tnum text-ink-2">
-                {o.purchaseOrders}
-              </span>
-            )
-          ) : (
-            // **Never a bare 0 here.** On a DISPATCHED or DELIVERED row it means
-            // we shipped a machine with no record of buying it, and a zero in a
-            // numeric column reads as a measured, unremarkable value.
-            <NotMeasured
-              why="No purchase order was ever raised for this order, so what we paid for its machines is not recorded"
-              label="None raised"
-            />
-          ),
-      },
       {
         key: 'grandTotal',
         header: 'Order value',
         numeric: true,
-        cell: (o) => rupees(o.grandTotal),
+        cell: (o) => <span className="ao-val">{rupees(o.grandTotal)}</span>,
       },
       {
-        key: 'approval',
-        header: 'Approval',
-        cell: (o) =>
-          o.approval === null ? (
-            <span className="text-ink-3">Not required</span>
-          ) : (
-            <span className="flex flex-col gap-1">
-              <StatusPill
-                // A breached approval deadline is `warn`, never `fail`: the
-                // deadline is one WE set on the buyer's own approver and letting
-                // it lapse is our failure, not a verdict on anybody. A decided
-                // approval — approved OR rejected — is terminal and neutral.
-                tone={
-                  o.approval.breached ? 'warn' : (APPROVAL_TONE[o.approval.status] ?? 'neutral')
-                }
-                label={humanise(o.approval.status)}
-                className="whitespace-nowrap"
-              />
-              <span className="font-mono tnum text-body-sm text-ink-3">
-                {onDate(o.approval.expiresAt)}
-              </span>
-            </span>
-          ),
-      },
-      {
-        key: 'actions',
-        header: 'Actions',
+        key: 'open',
+        header: 'Open',
         headerHidden: true,
+        numeric: true,
         cell: (o) => (
-          // Not amber. Twenty-five rows of amber links is a colour spent on
-          // everything and therefore marking nothing.
-          <span className="flex justify-end">
-            <Link
-              className="text-ink underline underline-offset-4 hover:text-acc-ink"
-              to={`/orders/${o.orderNumber}`}
-            >
-              Open
-            </Link>
-          </span>
+          <Link className="ao-open" to={`/orders/${o.orderNumber}`} aria-label={`Open ${o.orderNumber}`}>
+            <ChevronIcon />
+          </Link>
         ),
       },
     ],
@@ -277,100 +443,115 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
     );
   }
 
-  return (
-    <div className="tg-stack">
-      <PageHeader title="Orders">
-        Every order on the platform. This is the only place the buyer’s side and the purchase orders
-        we raised against it appear together, so it is staff-only — open a row to see both.
-      </PageHeader>
+  const statusFacets = [...(data?.facets.status ?? [])].sort(
+    (a, b) => pipelineIndex(a.value) - pipelineIndex(b.value),
+  );
+  const allCount = statusFacets.reduce((n, f) => n + f.count, 0);
+  const from = data && data.total > 0 ? (data.page - 1) * data.per + 1 : 0;
+  const to = data ? Math.min(data.total, data.page * data.per) : 0;
 
-      {/* Two rows, not one. `items-end` on a single row aligns the BOTTOM of
-          each control, and the search box is taller than a select by exactly the
-          height of its hint — so the input floated a line above the selects it
-          was meant to sit beside. The box also earns its own row: it is the
-          control an operator on the phone reaches for first. */}
+  return (
+    <div className="orders-board">
+      <div className="ao-head">
+        <h1 className="ao-title">Orders</h1>
+        <p className="ao-sub">Every buyer order on the platform, newest first.</p>
+      </div>
+
+      {data?.attention && <Attention attention={data.attention} />}
+
       <form
-        className="flex flex-col gap-4"
+        className="ao-toolbar"
         onSubmit={(e) => {
           e.preventDefault();
           setFilter('q', typed.trim());
         }}
       >
-        {/* The wrapper carries the width: `Input`'s own `className` lands on the
-            `<input>`, and the label and hint sit in a wrapper that would not
-            grow with it. */}
-        <div className="max-w-xl">
-          <Input
-            label="Search"
+        <label className="ao-search">
+          <SearchIcon />
+          <input
+            type="search"
+            placeholder="Order no., PO, serial, seal code, buyer, GSTIN or mobile"
+            aria-label="Search orders"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             onBlur={() => setFilter('q', typed.trim())}
-            placeholder="TT-26-00004, a serial, a seal code, a GSTIN…"
-            hint={
-              data?.searchedFor
-                ? `Compared against ${data.searchedFor.join(', ')}.`
-                : 'One box over the order number, the buyer’s own PO reference, a serial, a seal code, the buyer’s name, their GSTIN and the mobile it was placed from.'
-            }
           />
-        </div>
-        <div className="flex flex-wrap items-end gap-4">
-          <Select
-            label="Status"
-            value={status}
-            onChange={(e) => setFilter('status', e.target.value)}
-            options={[
-              { value: '', label: 'Every status' },
-              ...(data?.facets.status ?? []).map((f) => ({
-                value: f.value,
-                label: `${f.label} (${f.count})`,
-              })),
-            ]}
-          />
-          <Select
-            label="Payment"
-            value={payment}
-            onChange={(e) => setFilter('payment', e.target.value)}
-            options={[
-              { value: '', label: 'Any payment state' },
-              ...(data?.facets.payment ?? []).map((f) => ({
-                value: f.value,
-                label: `${f.label} (${f.count})`,
-              })),
-            ]}
-          />
-          <Select
-            label="Approval"
-            value={approval}
-            onChange={(e) => setFilter('approval', e.target.value)}
-            options={[
-              { value: '', label: 'Any' },
-              { value: 'pending', label: 'Held for a buyer’s approver' },
-            ]}
-          />
-          <Select
-            label="Sort"
-            value={sort}
-            onChange={(e) => setFilter('sort', e.target.value)}
-            options={[
-              { value: 'recent', label: 'Newest first' },
-              { value: 'oldest', label: 'Oldest first' },
-              { value: 'value', label: 'Largest first' },
-              { value: 'value_asc', label: 'Smallest first' },
-            ]}
-          />
-        </div>
+        </label>
+        <label className="ao-select">
+          Payment
+          <select value={payment} onChange={(e) => setFilter('payment', e.target.value)}>
+            <option value="">Any</option>
+            {(data?.facets.payment ?? []).map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="ao-select">
+          Approval
+          <select value={approval} onChange={(e) => setFilter('approval', e.target.value)}>
+            <option value="">Any</option>
+            <option value="pending">Needs approval</option>
+            <option value="approved">Approved</option>
+            <option value="none">Not required</option>
+          </select>
+        </label>
+        <label className="ao-select">
+          Sort
+          <select value={sort} onChange={(e) => setFilter('sort', e.target.value)}>
+            <option value="recent">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="value">Value: high to low</option>
+          </select>
+        </label>
       </form>
+      {data?.searchedFor && (
+        <p className="ao-hint">Compared against {data.searchedFor.join(', ')}.</p>
+      )}
 
-      <Board>
+      <div className="ao-status" role="group" aria-label="Order status">
+        <button
+          type="button"
+          className="ao-chip"
+          aria-pressed={status === ''}
+          onClick={() => setFilter('status', '')}
+        >
+          All <span className="n">{allCount}</span>
+        </button>
+        {statusFacets.map((f) => {
+          const meta = statusMeta(f.value);
+          return (
+            <button
+              key={f.value}
+              type="button"
+              className="ao-chip"
+              aria-pressed={status === f.value}
+              onClick={() => setFilter('status', status === f.value ? '' : f.value)}
+            >
+              <span className={cn('d', meta.dot)} aria-hidden="true" />
+              {meta.label} <span className="n">{f.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <Board className="ao-card">
         <DataBoard
+          className="ao-table"
           caption={
             data
-              ? `${data.total} ${data.total === 1 ? 'order' : 'orders'} match, newest first.`
+              ? `${data.total} ${data.total === 1 ? 'order' : 'orders'} match, ${
+                  sort === 'oldest' ? 'oldest first' : sort === 'value' ? 'largest first' : 'newest first'
+                }.`
               : 'Loading the order board.'
           }
           columns={columns}
           rows={data?.rows ?? []}
           rowKey={(o) => o.orderNumber}
+          rowClassName={(o) =>
+            isDeliveredUnpaid(o) ? 'is-bad' : isAcceptedUnpaid(o) ? 'is-warn' : undefined
+          }
           loading={!data}
           skeletonRows={8}
           empty={
@@ -391,16 +572,31 @@ export function OpsOrderBoardRoute(): React.JSX.Element {
             />
           }
         />
+        <div className="ao-foot">
+          <span>
+            {data ? (
+              <>
+                Showing{' '}
+                <strong>
+                  {from}–{to}
+                </strong>{' '}
+                of <strong>{data.total}</strong> {data.total === 1 ? 'order' : 'orders'}
+              </>
+            ) : (
+              'Loading the order board.'
+            )}
+          </span>
+          {data && data.pages > 1 ? (
+            <Pagination
+              className="ao-pages"
+              page={page}
+              pageCount={data.pages}
+              onPage={(next) => setFilter('page', String(next))}
+              label="Pages"
+            />
+          ) : null}
+        </div>
       </Board>
-
-      {data && data.pages > 1 && (
-        <Pagination
-          page={page}
-          pageCount={data.pages}
-          onPage={(next) => setFilter('page', String(next))}
-          label="Order board pages"
-        />
-      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
 import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import { moneyFromDb, permissionsFor, type Role } from '@trugrade/contracts';
+import { permissionsFor, type Role } from '@trugrade/contracts';
 import type { Principal } from '../../src/shared/db/org-scope';
 import { ClockPort, FixedClock } from '../../src/shared/clock';
 import { AppConfig, ConfigModule } from '../../src/shared/config';
@@ -144,179 +144,55 @@ async function draft(units: number): Promise<string> {
   return listingId;
 }
 
-describe('submit requests an inspection instead of going live', () => {
-  it('moves the listing and every unit to AWAITING_QC and raises a REQUESTED visit', async () => {
-    const listingId = await draft(30);
+describe('submit sends the listing to ops instead of going live', () => {
+  it('moves a draft to PENDING_APPROVAL with nothing on sale and no visit raised', async () => {
+    const listingId = await draft(1);
     const result = await as(vendor(), () => submit.submit(listingId));
 
     expect(result.outcome).toBe('SUBMITTED');
-    if (result.outcome !== 'SUBMITTED') return;
-    expect(result.unitCount).toBe(30);
-    expect(result.visitFee.toString()).toBe('0.00');
-    expect(result.visitNumber).toMatch(/^QCV-20260826-[0-9A-F]{8}$/);
+    expect(result.status).toBe('PENDING_APPROVAL');
+    expect(result.unitCount).toBe(1);
 
-    const [listing] = await raw.$queryRaw<
-      Array<{
-        status: string;
-        qty_available: number;
-        qty_awaiting_qc: number;
-        qty_total: number;
-        qc_visit_id: string | null;
-        qc_requested_at: Date | null;
-      }>
+    const [row] = await raw.$queryRaw<
+      Array<{ status: string; qty_available: number; qc_visit_id: string | null }>
     >`
-      SELECT status, qty_available, qty_awaiting_qc, qty_total, qc_visit_id, qc_requested_at
+      SELECT status::text AS status, qty_available, qc_visit_id
         FROM listing.listing WHERE id = ${listingId}::uuid`;
-    expect(listing!.status).toBe('AWAITING_QC');
-    // The rule that decides the phase: nothing is buyer-visible.
-    expect(listing!.qty_available).toBe(0);
-    expect(listing!.qty_awaiting_qc).toBe(30);
-    expect(listing!.qty_total).toBe(30);
-    expect(listing!.qc_visit_id).toBe(result.qcVisitId);
-    expect(listing!.qc_requested_at).not.toBeNull();
+    expect(row?.status).toBe('PENDING_APPROVAL');
+    // Nothing is buyer-visible until ops approve it.
+    expect(row?.qty_available).toBe(0);
+    expect(row?.qc_visit_id).toBeNull();
 
-    const [units] = await raw.$queryRaw<Array<{ n: bigint; sellable: bigint; visits: bigint }>>`
-      SELECT count(*)::bigint AS n,
-             count(*) FILTER (WHERE is_sellable)::bigint AS sellable,
-             count(DISTINCT qc_visit_id)::bigint AS visits
-        FROM listing.unit
-       WHERE listing_id = ${listingId}::uuid AND status = 'AWAITING_QC'`;
-    expect(Number(units!.n)).toBe(30);
-    expect(Number(units!.sellable)).toBe(0);
-    expect(Number(units!.visits)).toBe(1);
-
-    // The manifest, and the price. Without the first the technician's screen is
-    // empty and closing publishes nothing (the listing id lives on these rows);
-    // without the second a passed machine is invisible to every buyer, because
-    // the storefront only shows a unit that carries a retail price.
-    const [manifest] = await raw.$queryRaw<
-      Array<{ n: bigint; with_listing: bigint; serials: bigint }>
-    >`
-      SELECT count(*)::bigint AS n,
-             count(*) FILTER (WHERE vu.listing_id = ${listingId}::uuid)::bigint AS with_listing,
-             count(DISTINCT vu.serial_number)::bigint AS serials
-        FROM qc.qc_visit_unit vu
-       WHERE vu.visit_id = ${result.qcVisitId}::uuid`;
-    expect(Number(manifest!.n)).toBe(30);
-    expect(Number(manifest!.with_listing)).toBe(30);
-    expect(Number(manifest!.serials)).toBe(30);
-
-    const [priced] = await raw.$queryRaw<Array<{ n: bigint }>>`
-      SELECT count(*)::bigint AS n FROM listing.unit
-       WHERE listing_id = ${listingId}::uuid AND retail_price IS NOT NULL`;
-    expect(Number(priced!.n)).toBe(30);
-
-    const [visit] = await raw.$queryRaw<
-      Array<{ status: string; units_requested: number; visit_fee: unknown; fee_bearer: string }>
-    >`SELECT status, units_requested, visit_fee, fee_bearer
-        FROM qc.qc_visit WHERE id = ${result.qcVisitId}::uuid`;
-    expect(visit!.status).toBe('REQUESTED');
-    expect(visit!.units_requested).toBe(30);
-    expect(moneyFromDb(visit!.visit_fee as string)!.toString()).toBe('0.00');
-    expect(visit!.fee_bearer).toBe('TRUETECH');
-
-    const [mv] = await raw.$queryRaw<Array<{ n: bigint; froms: string; refs: bigint }>>`
-      SELECT count(*)::bigint AS n,
-             string_agg(DISTINCT from_status::text, ',') AS froms,
-             count(*) FILTER (WHERE ref_type = 'QC_VISIT' AND ref_id = ${result.qcVisitId}::uuid)::bigint AS refs
-        FROM listing.stock_movement m
-       WHERE m.unit_id IN (SELECT id FROM listing.unit WHERE listing_id = ${listingId}::uuid)`;
-    expect(Number(mv!.n)).toBe(30);
-    expect(mv!.froms).toBe('CREATED');
-    expect(Number(mv!.refs)).toBe(30);
-
-    const [outbox] = await raw.$queryRaw<Array<{ n: bigint }>>`
-      SELECT count(*)::bigint AS n FROM platform.event_outbox
-       WHERE event_name = 'listing.submitted'
-         AND payload_json ->> 'listingId' = ${listingId}`;
-    expect(Number(outbox!.n)).toBe(1);
-
-    const drift = await raw.$queryRaw<unknown[]>`SELECT * FROM listing.v_stock_drift`;
-    expect(drift).toHaveLength(0);
-  });
-
-  it('asks rather than rejecting below the minimum, and holds without writing', async () => {
-    const listingId = await draft(5);
-
-    const asked = await as(vendor(), () => submit.submit(listingId));
-    expect(asked.outcome).toBe('DECISION_REQUIRED');
-    if (asked.outcome !== 'DECISION_REQUIRED') return;
-    expect(asked.minUnitsPerVisit).toBe(25);
-    expect(asked.shortBy).toBe(20);
-    expect(asked.visitFee.toString()).toBe('1500.00');
-
-    const held = await as(vendor(), () => submit.submit(listingId, 'HOLD'));
-    expect(held.outcome).toBe('HELD');
-
-    const [still] = await raw.$queryRaw<Array<{ status: string }>>`
-      SELECT status FROM listing.listing WHERE id = ${listingId}::uuid`;
-    expect(still!.status).toBe('DRAFT');
     const [visits] = await raw.$queryRaw<Array<{ n: bigint }>>`
-      SELECT count(*)::bigint AS n FROM qc.qc_visit`;
-    expect(Number(visits!.n)).toBe(0);
-
-    const paid = await as(vendor(), () => submit.submit(listingId, 'ACCEPT_FEE'));
-    expect(paid.outcome).toBe('SUBMITTED');
-    if (paid.outcome !== 'SUBMITTED') return;
-    expect(paid.visitFee.toString()).toBe('1500.00');
-    expect(paid.feeBearer).toBe('VENDOR');
-
-    const [visit] = await raw.$queryRaw<Array<{ visit_fee: unknown; fee_bearer: string }>>`
-      SELECT visit_fee, fee_bearer FROM qc.qc_visit WHERE id = ${paid.qcVisitId}::uuid`;
-    expect(moneyFromDb(visit!.visit_fee as string)!.toString()).toBe('1500.00');
-    expect(visit!.fee_bearer).toBe('VENDOR');
+      SELECT count(*)::bigint AS n FROM qc.qc_visit WHERE vendor_org_id = ${orgId}::uuid`;
+    expect(Number(visits?.n ?? 0)).toBe(0);
   });
 
-  it('is one transaction: no facility means no visit and no movement', async () => {
-    await raw.$executeRaw`DELETE FROM vendor.vendor_facility WHERE org_id = ${orgId}::uuid`;
-    const listingId = await draft(30);
-
-    await expect(as(vendor(), () => submit.submit(listingId))).rejects.toThrow(
-      /registered facility/,
-    );
-
-    const [after] = await raw.$queryRaw<Array<{ status: string; created: bigint }>>`
-      SELECT l.status,
-             (SELECT count(*)::bigint FROM listing.unit u
-               WHERE u.listing_id = l.id AND u.status = 'CREATED') AS created
-        FROM listing.listing l WHERE l.id = ${listingId}::uuid`;
-    expect(after!.status).toBe('DRAFT');
-    expect(Number(after!.created)).toBe(30);
-    const [mv] = await raw.$queryRaw<Array<{ n: bigint }>>`
-      SELECT count(*)::bigint AS n FROM listing.stock_movement`;
-    expect(Number(mv!.n)).toBe(0);
-  });
-
-  it('refuses a listing that is not a draft, and one with no serials', async () => {
-    const listingId = await draft(30);
+  it('refuses a listing that is not a draft, and one with no quantity', async () => {
+    const listingId = await draft(2);
     await as(vendor(), () => submit.submit(listingId));
-    await expect(as(vendor(), () => submit.submit(listingId))).rejects.toThrow(
-      /isn't available from the current status/,
-    );
+    await expect(as(vendor(), () => submit.submit(listingId))).rejects.toMatchObject({
+      name: 'IllegalStateTransitionError',
+    });
 
     const empty = await draft(0);
-    await expect(as(vendor(), () => submit.submit(empty))).rejects.toThrow(/at least one serial/);
+    await raw.$executeRaw`UPDATE listing.listing SET qty_total = 0 WHERE id = ${empty}::uuid`;
+    await expect(as(vendor(), () => submit.submit(empty))).rejects.toMatchObject({
+      name: 'ValidationError',
+    });
   });
 
   it('will not submit another vendor’s listing', async () => {
-    const listingId = await draft(30);
-    const otherOrg = await makeOrganization({ legal_name: 'Beta Systems' }, raw);
+    const listingId = await draft(1);
+    const otherOrg = await makeOrganization({}, raw);
     const otherUser = await makeUser(otherOrg, {}, raw);
-    const roles: Role[] = ['VENDOR_OWNER'];
-    await expect(
-      as(
-        {
-          userId: otherUser,
-          orgId: otherOrg,
-          orgType: 'VENDOR',
-          roles,
-          permissions: permissionsFor(roles),
-          sessionId: 's2',
-          mfaSatisfied: true,
-        },
-        () => submit.submit(listingId),
-      ),
-    ).rejects.toThrow(/access to that listing/);
+    const stranger: Principal = { ...vendor(), orgId: otherOrg, userId: otherUser };
+    await expect(as(stranger, () => submit.submit(listingId))).rejects.toMatchObject({
+      name: 'ForbiddenError',
+    });
+    const [row] = await raw.$queryRaw<Array<{ status: string }>>`
+      SELECT status::text AS status FROM listing.listing WHERE id = ${listingId}::uuid`;
+    expect(row?.status).toBe('DRAFT');
   });
 });
 

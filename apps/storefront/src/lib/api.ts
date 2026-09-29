@@ -107,10 +107,12 @@ export interface PublicOffer {
   fromPrice: string;
   unitsAvailable: number;
   supplyPoints: number;
-  avgQcScore: number;
-  batteryMin: number;
-  batteryMax: number;
-  sampleSerial: string;
+  /** Null: nothing behind a declared listing has been inspected yet. Never 0. */
+  avgQcScore: number | null;
+  batteryMin: number | null;
+  batteryMax: number | null;
+  /** A real serial when one is known; null for declared stock. */
+  sampleSerial: string | null;
 }
 
 /** Thirty seconds: stock moves, and a stale grid offers machines that are gone. */
@@ -190,7 +192,8 @@ export interface SearchResult {
   warrantyMonths: number | null;
   /** Cities only. The supply-point code plus the city is all a buyer ever sees. */
   cities: string[];
-  sampleSerial: string;
+  /** Null when no machine in the group has been identified yet. */
+  sampleSerial: string | null;
   ramGb: number;
   storageGb: number;
   storageType: string;

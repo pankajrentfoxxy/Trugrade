@@ -64,9 +64,11 @@ export function Board({
     quality: r.quality,
     totalWarrantyMonths: r.totalWarrantyMonths,
     unitsAvailable: r.unitsAvailable,
-    inspectedOn: r.inspectedOn ?? 'Not recorded',
-    qcExpiresOn: r.qcExpiresOn ?? 'Not recorded',
-    qcExpiresInDays: r.qcExpiresInDays ?? 0,
+    // Null stays null. A declared listing has no inspection behind it yet, and
+    // a zero here drew "Expires in 0 days" on a machine nobody had opened.
+    inspectedOn: r.inspectedOn,
+    qcExpiresOn: r.qcExpiresOn,
+    qcExpiresInDays: r.qcExpiresInDays,
     dispatchCommitment: r.dispatchCommitment,
   }));
 

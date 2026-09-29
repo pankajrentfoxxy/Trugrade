@@ -129,6 +129,12 @@ const CONFIRMED: Order = {
   billingAddress: { ...ADDRESS },
   deliveryAddress: { ...ADDRESS },
   unitsAllocated: 3,
+  unitsInspected: 3,
+  unitsVerified: 3,
+  verifiedAt: null,
+  payBy: null,
+  paidAt: null,
+  payable: false,
   dispatchGroups: [
     {
       label: 'Supply Point L · Gurugram',
@@ -139,6 +145,8 @@ const CONFIRMED: Order = {
           specSummary: 'Core i5 · 16 GB · 512 GB NVME_SSD · 14"',
           grade: 'A',
           unitPrice: '44900.00',
+          inspectedAt: null,
+          verifiedAt: null,
         },
       ],
     },
@@ -151,6 +159,8 @@ const CONFIRMED: Order = {
           specSummary: 'Core i5 · 16 GB · 512 GB NVME_SSD · 14"',
           grade: 'A',
           unitPrice: '41900.00',
+          inspectedAt: null,
+          verifiedAt: null,
         },
         {
           serialNumber: 'TGD810C882D',
@@ -158,6 +168,8 @@ const CONFIRMED: Order = {
           specSummary: 'Core i5 · 16 GB · 512 GB NVME_SSD · 14"',
           grade: 'A',
           unitPrice: '41900.00',
+          inspectedAt: null,
+          verifiedAt: null,
         },
       ],
     },
@@ -205,6 +217,12 @@ const awaiting = (over: Partial<OrderApproval> = {}): Order => ({
   buyerPoNumber: null,
   costCentre: null,
   unitsAllocated: 6,
+  unitsInspected: 6,
+  unitsVerified: 6,
+  verifiedAt: null,
+  payBy: null,
+  paidAt: null,
+  payable: false,
   approval: { ...APPROVAL, ...over },
 });
 

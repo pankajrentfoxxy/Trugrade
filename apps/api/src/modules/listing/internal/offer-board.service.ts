@@ -11,7 +11,7 @@ import { ClockPort } from '../../../shared/clock';
 import { ValidationError } from '../../../shared/errors/domain-errors';
 import { LogisticsService, type FreightQuote } from '../../logistics';
 import { QcService, type SupplyPointQuality } from '../../qc';
-import { ListingRepository, type PublicBoardUnit } from './listing.repository';
+import { ListingRepository, type PublicBoardOffer } from './listing.repository';
 import { PricingService } from './pricing.service';
 
 /**
@@ -24,20 +24,19 @@ import { PricingService } from './pricing.service';
  *      `listing.supply_point` is unique on `(vendor_org_id, city)` and on
  *      `(city, code)`, and the letter is assigned per city at random — so "F" is
  *      one vendor in Noida and a different one in Faridabad. Keying on the
- *      letter alone silently welds two vendors into one row, and the seeded
- *      board has exactly that pair in it so the mistake fails a test rather than
- *      shipping.
+ *      letter alone silently welds two vendors into one row.
  *
  *   2. **No vendor identifier is in the answer, at any depth.** The org id is
- *      used once, inside the repository's JOIN, to resolve the supply point; the
- *      vendor's ask, their purchase price and their share of the warranty never
- *      leave the module. What a buyer gets is a letter, a city, and performance.
+ *      used once, inside the repository, to resolve the supply point; the
+ *      vendor's ask and their share of the warranty never leave the module. What
+ *      a buyer gets is a letter, a city, and performance.
  *
- *   3. **A number nobody measured is not rendered.** An unquotable lane is not
- *      free freight (CP e-Comm r.6(5)), a battery nobody opened is not 0%, and a
- *      score computed on three machines is not a score (r.7(2)) — the last of
- *      those is decided in `qc` and arrives here already suppressed, as a
- *      discriminated union that has no percentage to render.
+ *   3. **A number nobody measured is not rendered.** Under the order-first flow
+ *      a listing is a declared quantity with no inspected machines behind it
+ *      until a buyer orders, so the per-row battery range, inspection date and
+ *      serial list are honestly empty: `null`, zero measured, no units. What a
+ *      supply point has earned across its past inspections still arrives from
+ *      `qc` as a headline, already suppressed below the small-sample floor.
  */
 
 /** A boxed 14" laptop with its charger. `catalog.sku.weight_kg` is catalog's. */
@@ -48,12 +47,8 @@ export interface BoardQuery {
   grade?: Grade;
   /**
    * Optional, and the absence is a distinct answer rather than a default.
-   *
-   * There is no landed price without a destination, and inventing one — the
-   * warehouse's own pincode, the last buyer's — publishes a delivered price to
-   * somewhere the buyer never named. So no pincode returns the board's evidence
-   * with no prices on it and `delivery.kind = 'NONE'`, and the screen asks.
-   * "We did not ask" and "we cannot deliver there" are different sentences.
+   * There is no landed price without a destination, so no pincode returns the
+   * board's evidence with no prices on it and `delivery.kind = 'NONE'`.
    */
   pincode?: string;
   /** Our place of supply, from `@trugrade/config`. Not this module's to know. */
@@ -72,7 +67,6 @@ export interface GradeAvailability {
 export interface BoardUnit {
   serialNumber: string;
   qcScore: number | null;
-  /** `null` when the battery was not measured. The screen prints so. */
   batteryHealthPct: number | null;
   inspectedOn: string | null;
   expiresOn: string | null;
@@ -87,11 +81,7 @@ export interface BoardOffer {
   city: string;
   label: string;
   grade: Grade;
-  /**
-   * Our selling price for one machine, before GST and freight. Always present:
-   * it needs no destination, and it is what the board shows until a pincode
-   * turns it into a landed figure.
-   */
+  /** Our selling price for one machine, before GST and freight. Always present. */
   unitPrice: Money;
   /** Null when no pincode was given: the row's evidence without its landed price. */
   landed: LandedPrice | null;
@@ -107,6 +97,10 @@ export interface BoardOffer {
   qcExpiresInDays: number | null;
   dispatchHours: number;
   dispatchCommitment: string;
+  /**
+   * Machines already identified. Empty for a declared listing: the serials are
+   * named by the technician after the order, and the screen says so.
+   */
   units: BoardUnit[];
 }
 
@@ -124,27 +118,8 @@ export interface OfferBoard {
   offers: BoardOffer[];
   unitsAvailable: number;
   supplyPoints: number;
-  /**
-   * Supply points holding this machine that we could not price to this pincode.
-   * Counted rather than dropped in silence: a row that vanishes without a reason
-   * is indistinguishable from stock that is gone.
-   */
+  /** Supply points holding this machine that we could not price to this pincode. */
   unpricedSupplyPoints: number;
-}
-
-/** Everything one row is built from, before it is priced. */
-interface Group {
-  key: string;
-  listingId: string;
-  supplyPointCode: string;
-  city: string;
-  grade: Grade;
-  valuationMethod: 'REGULAR' | 'MARGIN';
-  pickupLocationId: string;
-  dispatchHours: number;
-  units: PublicBoardUnit[];
-  /** Lexicographically smallest unit id in the group. The sort's tie-break. */
-  sortId: string;
 }
 
 @Injectable()
@@ -158,11 +133,11 @@ export class OfferBoardService {
   ) {}
 
   async board(query: BoardQuery): Promise<OfferBoard> {
-    const units = await this.listings.publicBoardUnits(query.skuId);
-    const grades = summariseGrades(units);
+    const all = await this.listings.publicBoardOffers(query.skuId);
+    const grades = summariseGrades(all);
     if (grades.length === 0) {
-      throw new ValidationError('Nothing sealed is available for this machine right now.', {
-        skuId: 'No sellable unit carries a current inspection for this SKU.',
+      throw new ValidationError('Nothing is on sale for this machine right now.', {
+        skuId: 'No live listing holds stock for this SKU.',
       });
     }
 
@@ -170,14 +145,8 @@ export class OfferBoardService {
     // a grade nobody holds returns that grade's empty board rather than quietly
     // showing a different grade's prices.
     const grade = query.grade ?? grades[0]!.grade;
-    const forGrade = units.filter((u) => u.grade === grade);
+    const forGrade = all.filter((o) => o.grade === grade);
 
-    // "Cannot deliver there" is a refusal and returns no rows. "Nobody has
-    // said where" is not: the board's evidence — which supply points hold the
-    // machine, how many, inspected when, on what warranty — stands without a
-    // destination. Only the landed price needs one, so without a pincode every
-    // row comes back with `landed: null` and the screen asks for the pincode
-    // beside a price it cannot yet give, rather than beside an empty table.
     const refusal: BoardDelivery | null = query.pincode
       ? await this.serviceability(query.pincode)
       : null;
@@ -190,7 +159,7 @@ export class OfferBoardService {
         pincode: query.pincode ?? null,
         delivery: refusal,
         offers: [],
-        unitsAvailable: forGrade.length,
+        unitsAvailable: countUnits(forGrade),
         supplyPoints: countSupplyPoints(forGrade),
         unpricedSupplyPoints: countSupplyPoints(forGrade),
       };
@@ -208,7 +177,6 @@ export class OfferBoardService {
     const [quality, facts, freightBy] = await Promise.all([
       this.qc.qualityForSupplyPoints(points, { skuId: query.skuId, grade }),
       this.listings.publicPricingFacts([...new Set(groups.map((g) => g.listingId))]),
-      // No destination, no lane: nothing is quoted and nothing is invented.
       pincode === null
         ? Promise.resolve(new Map<string, FreightQuote>())
         : this.quoteLanes(groups, pincode),
@@ -228,7 +196,6 @@ export class OfferBoardService {
       const q = qualityBy.get(`${group.city}|${group.supplyPointCode}`);
 
       if (pincode === null) {
-        // The row without its price. Counted as unpriced, because it is.
         unpriced += 1;
         offers.push(this.toOffer(group, fact.sellingPrice, null, q, warranties.get(group.listingId)));
         continue;
@@ -249,12 +216,10 @@ export class OfferBoardService {
       offers.push(this.toOffer(group, fact.sellingPrice, landed, q, warranties.get(group.listingId)));
     }
 
-    // Unpriced rows all compare equal on price, so dispatch time and then the
-    // stable id decide their order — the same tie-break a priced board uses.
     offers.sort((a, b) =>
       compareOffers(
-        { landedPaise: (a.landed?.total ?? a.unitPrice).paise, dispatchHours: a.dispatchHours, id: idOf(groups, a) },
-        { landedPaise: (b.landed?.total ?? b.unitPrice).paise, dispatchHours: b.dispatchHours, id: idOf(groups, b) },
+        { landedPaise: (a.landed?.total ?? a.unitPrice).paise, dispatchHours: a.dispatchHours, id: a.listingId },
+        { landedPaise: (b.landed?.total ?? b.unitPrice).paise, dispatchHours: b.dispatchHours, id: b.listingId },
       ),
     );
 
@@ -266,7 +231,7 @@ export class OfferBoardService {
       delivery:
         pincode === null ? { kind: 'NONE' } : { kind: 'DELIVERABLE', etaDays: slowestEta(freightBy) },
       offers,
-      unitsAvailable: forGrade.length,
+      unitsAvailable: countUnits(forGrade),
       supplyPoints: countSupplyPoints(forGrade),
       unpricedSupplyPoints: unpriced,
     };
@@ -275,87 +240,33 @@ export class OfferBoardService {
   // -------------------------------------------------------------------------
 
   /**
-   * Rows are `(supply point, valuation pool, listing)`.
+   * Rows are `(supply point, valuation pool)`; one listing per row.
    *
-   * `(code, city)` is the supply point — see the note at the top of the file.
-   * The valuation method is part of the key because a MARGIN unit gives the
-   * buyer thinner input credit than a REGULAR one at the same price, so the two
-   * are different offers however identical the rupees look (PHASE_05 Task 5).
-   *
-   * ponytail: where one supply point holds two listings of the same machine at
-   * the same grade, the cheaper listing is the row and the dearer one is not
-   * shown. Two rows reading "Supply Point A · Gurugram" is a worse answer than
-   * one, and the seeded board has one listing per supply point. If vendors start
-   * running parallel price books, the row needs a price band rather than a
-   * second row.
+   * Where one supply point holds two listings of the same machine at the same
+   * grade, the cheaper listing is the row and the dearer one is not shown. Two
+   * rows reading "Supply Point A · Gurugram" is a worse answer than one.
    */
-  private group(units: readonly PublicBoardUnit[]): Group[] {
-    const byKey = new Map<string, Group>();
-
-    for (const unit of units) {
-      if (!unit.listingId) continue;
-      const key = `${unit.city}|${unit.supplyPointCode}|${unit.valuationMethod}`;
+  private group(offers: readonly PublicBoardOffer[]): PublicBoardOffer[] {
+    const byKey = new Map<string, PublicBoardOffer>();
+    for (const offer of offers) {
+      const key = `${offer.city}|${offer.supplyPointCode}|${offer.valuationMethod}`;
       const existing = byKey.get(key);
-
-      if (!existing) {
-        byKey.set(key, {
-          key,
-          listingId: unit.listingId,
-          supplyPointCode: unit.supplyPointCode,
-          city: unit.city,
-          grade: unit.grade,
-          valuationMethod: unit.valuationMethod,
-          pickupLocationId: unit.pickupLocationId,
-          dispatchHours: unit.dispatchSlaHours,
-          units: [unit],
-          sortId: unit.id,
-        });
-        continue;
-      }
-
-      if (unit.listingId === existing.listingId) {
-        existing.units.push(unit);
-        if (unit.id < existing.sortId) existing.sortId = unit.id;
-        continue;
-      }
-
-      // A second listing at the same supply point: keep the cheaper one whole.
-      const cheaper = unit.retailPrice.lt(existing.units[0]!.retailPrice);
-      if (cheaper) {
-        byKey.set(key, { ...existing, listingId: unit.listingId, units: [unit], sortId: unit.id, dispatchHours: unit.dispatchSlaHours, pickupLocationId: unit.pickupLocationId });
-      }
+      if (!existing || offer.sellingPrice.lt(existing.sellingPrice)) byKey.set(key, offer);
     }
-
     return [...byKey.values()];
   }
 
-  /**
-   * Is the destination reachable at all?
-   *
-   * Asked once for the destination rather than once per lane, because it is a
-   * fact about the pincode: `isServiceable` is the filter-level question and a
-   * "no" here is the whole board's answer, not one row's. The per-lane quotes
-   * that follow can still fail individually, and those rows are counted out as
-   * `unpricedSupplyPoints` rather than shown at a price they do not have.
-   */
   private async serviceability(pincode: string): Promise<BoardDelivery | null> {
     if (await this.logistics.isServiceable(pincode)) return null;
     return {
       kind: 'UNSERVICEABLE',
-      // A sentence a buyer can act on, and one that names no origin.
       reason: `No carrier we work with delivers to ${pincode} yet. Send us the pincode and we will quote it by hand — most of India is reachable; it is the rate card that has not caught up.`,
     };
   }
 
-  /**
-   * Every lane on the board in one batch.
-   *
-   * Ten supply points priced one at a time is thirty statements against the rate
-   * card and the single largest thing between this endpoint and its 500 ms
-   * budget; `quoteFreightBatch` prices the lot in three.
-   */
+  /** Every lane on the board in one batch. */
   private async quoteLanes(
-    groups: readonly Group[],
+    groups: readonly PublicBoardOffer[],
     toPincode: string,
   ): Promise<Map<string, FreightQuote>> {
     const pickupIds = [...new Set(groups.map((g) => g.pickupLocationId))];
@@ -369,9 +280,6 @@ export class OfferBoardService {
     });
     const quotes = await this.logistics.quoteFreightBatch(requests);
 
-    // Re-keyed on the pickup address, because that is what a row holds. The
-    // pincode itself stops here: it is finer than a city and a buyer never sees
-    // one.
     const out = new Map<string, FreightQuote>();
     for (const id of pickupIds) {
       const from = pincodes.get(id);
@@ -383,19 +291,12 @@ export class OfferBoardService {
   }
 
   private toOffer(
-    group: Group,
+    group: PublicBoardOffer,
     unitPrice: Money,
     landed: LandedPrice | null,
     quality: SupplyPointQuality | undefined,
     warrantyMonths: number | undefined,
   ): BoardOffer {
-    const measured = group.units
-      .map((u) => u.batteryHealthPct)
-      .filter((b): b is number => b !== null);
-
-    const inspected = latest(group.units.map((u) => u.qcPassedAt));
-    const expires = earliest(group.units.map((u) => u.qcValidUntil));
-
     return {
       listingId: group.listingId,
       supplyPointCode: group.supplyPointCode,
@@ -406,49 +307,29 @@ export class OfferBoardService {
       landed,
       valuationMethod: group.valuationMethod,
       // No quality row at all means nothing has been inspected under this supply
-      // point for this machine — which is the same statement "New supplier" makes
-      // and is made the same way, never as an absent column.
+      // point for this machine — which is the same statement "New supplier" makes.
       quality: quality?.headline ?? {
         kind: 'NEW_SUPPLIER',
         unitsInspected: 0,
         label: 'New supplier · 0 units inspected',
       },
-      batteryHealthPct:
-        measured.length === 0
-          ? null
-          : { min: Math.round(Math.min(...measured)), max: Math.round(Math.max(...measured)) },
-      batteryMeasured: measured.length,
-      // Never zero. `customerWarrantyMonths` floors at the platform minimum, so
-      // an absent answer here means the listing vanished mid-request, and the
-      // row is better dropped than sold with a warranty of nothing.
+      // Nothing behind a declared listing has been opened yet. Null, and zero
+      // measured, so the screen prints "Not measured" rather than a range.
+      batteryHealthPct: null,
+      batteryMeasured: 0,
       totalWarrantyMonths: warrantyMonths ?? 0,
-      unitsAvailable: group.units.length,
-      inspectedOn: this.day(inspected),
-      qcExpiresOn: this.day(expires),
-      qcExpiresInDays: this.daysUntil(expires),
-      dispatchHours: group.dispatchHours,
-      dispatchCommitment: `Ships in ${group.dispatchHours} h`,
-      units: group.units
-        .slice()
-        .sort((a, b) => a.serialNumber.localeCompare(b.serialNumber))
-        .map((u) => ({
-          serialNumber: u.serialNumber,
-          qcScore: u.qcScore,
-          batteryHealthPct: u.batteryHealthPct,
-          inspectedOn: this.day(u.qcPassedAt),
-          expiresOn: this.day(u.qcValidUntil),
-          expiresInDays: this.daysUntil(u.qcValidUntil),
-          valuationMethod: u.valuationMethod,
-        })),
+      unitsAvailable: group.qtyAvailable,
+      inspectedOn: null,
+      qcExpiresOn: null,
+      qcExpiresInDays: null,
+      dispatchHours: group.dispatchSlaHours,
+      dispatchCommitment: `Ships in ${group.dispatchSlaHours} h`,
+      units: [],
     };
   }
 
-  /**
-   * `22 Aug 2026`, formatted here because `packages/ui` has no clock and must
-   * not acquire one — a component that formats a date is a component with an
-   * opinion about the reader's timezone.
-   */
-  private day(value: Date | null): string | null {
+  /** Kept for the day a row carries an inspected date again. */
+  protected day(value: Date | null): string | null {
     if (!value) return null;
     return new Intl.DateTimeFormat('en-IN', {
       day: '2-digit',
@@ -458,8 +339,7 @@ export class OfferBoardService {
     }).format(value);
   }
 
-  /** Whole days, on the IST calendar — a QC certificate expires on a date. */
-  private daysUntil(value: Date | null): number | null {
+  protected daysUntil(value: Date | null): number | null {
     if (!value) return null;
     const today = Date.parse(`${this.clock.todayInIst()}T00:00:00+05:30`);
     const then = Date.parse(`${value.toISOString().slice(0, 10)}T00:00:00+05:30`);
@@ -473,20 +353,23 @@ export class OfferBoardService {
 
 const GRADE_ORDER: Record<string, number> = { A_PLUS: 0, A: 1, B: 2 };
 
-function summariseGrades(units: readonly PublicBoardUnit[]): GradeAvailability[] {
-  const byGrade = new Map<Grade, PublicBoardUnit[]>();
-  for (const unit of units) {
-    const bucket = byGrade.get(unit.grade) ?? [];
-    bucket.push(unit);
-    byGrade.set(unit.grade, bucket);
+function summariseGrades(offers: readonly PublicBoardOffer[]): GradeAvailability[] {
+  const byGrade = new Map<Grade, PublicBoardOffer[]>();
+  for (const offer of offers) {
+    const bucket = byGrade.get(offer.grade) ?? [];
+    bucket.push(offer);
+    byGrade.set(offer.grade, bucket);
   }
 
   return [...byGrade.entries()]
     .map(([grade, rows]) => ({
       grade,
-      unitsAvailable: rows.length,
+      unitsAvailable: countUnits(rows),
       supplyPoints: countSupplyPoints(rows),
-      fromPrice: rows.reduce((low, r) => (r.retailPrice.lt(low) ? r.retailPrice : low), rows[0]!.retailPrice),
+      fromPrice: rows.reduce(
+        (low, r) => (r.sellingPrice.lt(low) ? r.sellingPrice : low),
+        rows[0]!.sellingPrice,
+      ),
     }))
     // Most stock first, so the default grade is the one the buyer can actually
     // fill an order from; ties fall back to the published grade order.
@@ -497,20 +380,13 @@ function summariseGrades(units: readonly PublicBoardUnit[]): GradeAvailability[]
     );
 }
 
-/** `(code, city)`, always. See the note at the top of the file. */
-function countSupplyPoints(units: readonly PublicBoardUnit[]): number {
-  return new Set(units.map((u) => `${u.city}|${u.supplyPointCode}`)).size;
+function countUnits(offers: readonly PublicBoardOffer[]): number {
+  return offers.reduce((n, o) => n + o.qtyAvailable, 0);
 }
 
-function idOf(groups: readonly Group[], offer: BoardOffer): string {
-  return (
-    groups.find(
-      (g) =>
-        g.city === offer.city &&
-        g.supplyPointCode === offer.supplyPointCode &&
-        g.valuationMethod === offer.valuationMethod,
-    )?.sortId ?? offer.listingId
-  );
+/** `(code, city)`, always. See the note at the top of the file. */
+function countSupplyPoints(offers: readonly PublicBoardOffer[]): number {
+  return new Set(offers.map((o) => `${o.city}|${o.supplyPointCode}`)).size;
 }
 
 /** The slowest transit band among the lanes that priced. Zero when none did. */
@@ -518,12 +394,4 @@ function slowestEta(quotes: ReadonlyMap<string, FreightQuote>): number {
   let days = 0;
   for (const q of quotes.values()) if (q.serviceable) days = Math.max(days, q.etaDays);
   return days;
-}
-
-function latest(dates: ReadonlyArray<Date | null>): Date | null {
-  return dates.reduce<Date | null>((a, b) => (b && (!a || b > a) ? b : a), null);
-}
-
-function earliest(dates: ReadonlyArray<Date | null>): Date | null {
-  return dates.reduce<Date | null>((a, b) => (b && (!a || b < a) ? b : a), null);
 }

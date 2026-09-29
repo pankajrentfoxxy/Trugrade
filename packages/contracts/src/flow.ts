@@ -12,6 +12,10 @@
  */
 export const ORDER_FLOW = [
   { k: 'AWAITING_APPROVAL', label: 'Awaiting approval', who: 'Customer' },
+  // The order-first inspection: a technician names each machine at the supply
+  // point, then ops verifies every one. Only then is a PO with the vendor.
+  { k: 'INSPECTION', label: 'Inspection', who: 'Technician' },
+  { k: 'VERIFICATION', label: 'Verification', who: 'Ops' },
   { k: 'PO_RAISED', label: 'PO with vendor', who: 'Vendor' },
   { k: 'ACKNOWLEDGED', label: 'Acknowledged', who: 'Vendor' },
   { k: 'PACKED', label: 'Packed', who: 'Vendor' },
@@ -66,6 +70,8 @@ const EXCEPTION_POSITION: Readonly<Record<FlowException, FlowStage>> = Object.fr
 const STATUS_TO_STAGE: Readonly<Record<string, FlowStage | FlowException>> = Object.freeze({
   CREATED: 'PO_RAISED',
   AWAITING_APPROVAL: 'AWAITING_APPROVAL',
+  AWAITING_INSPECTION: 'INSPECTION',
+  AWAITING_VERIFICATION: 'VERIFICATION',
   PAYMENT_PENDING: 'PO_RAISED',
   CONFIRMED: 'PO_RAISED',
   PARTIALLY_CONFIRMED: 'PARTIALLY_CONFIRMED',
@@ -78,7 +84,7 @@ const STATUS_TO_STAGE: Readonly<Record<string, FlowStage | FlowException>> = Obj
   AT_HUB: 'IN_TRANSIT',
   IN_TRANSIT: 'IN_TRANSIT',
   OUT_FOR_DELIVERY: 'IN_TRANSIT',
-  QC_IN_PROGRESS: 'IN_TRANSIT',
+  QC_IN_PROGRESS: 'INSPECTION',
   QC_HOLD: 'IN_TRANSIT',
   QC_CLEARED: 'IN_TRANSIT',
   INVOICED: 'DELIVERED',

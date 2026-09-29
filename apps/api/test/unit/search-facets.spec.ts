@@ -96,6 +96,7 @@ function sku(over: Partial<CatalogRow> & { skuId: string; brandSlug: string }): 
 function unit(spec: CatalogRow, over: Partial<SearchRow> = {}): SearchRow {
   return {
     ...spec,
+    qty: 1,
     grade: 'A',
     price: 30000,
     battery: 90,

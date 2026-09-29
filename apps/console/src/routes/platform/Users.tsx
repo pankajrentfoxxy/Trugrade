@@ -13,6 +13,7 @@ import {
 } from '@trugrade/ui';
 import { Board, NotMeasured, PageHeader, Select } from '../../lib/controls';
 import { useAuth } from '../../lib/auth';
+import { roleLabel } from '../../lib/roles';
 import {
   MOBILE_PREFIX,
   addUserFormValid,
@@ -44,35 +45,6 @@ import {
  * ARCHETYPE B — Board. Platform staff in the signed-in organisation.
  * DENSITY: compact (admin), set on the app root by the shell.
  */
-
-const ROLE_LABEL: Record<string, string> = {
-  PLATFORM_SUPERADMIN: 'Super admin',
-  OPS_MANAGER: 'Operations',
-  KYC_REVIEWER: 'KYC reviewer',
-  CATALOG_ADMIN: 'Catalog',
-  PRICING_ADMIN: 'Pricing',
-  QC_MANAGER: 'QC manager',
-  TECHNICIAN: 'Technician',
-  LOGISTICS_MANAGER: 'Logistics',
-  RIDER: 'Rider',
-  FINANCE: 'Finance',
-  SUPPORT: 'Support',
-  AUDITOR: 'Auditor',
-  DPO: 'DPO',
-  VENDOR_OWNER: 'Owner',
-  VENDOR_ADMIN: 'Admin',
-  VENDOR_OPS: 'Operations',
-  VENDOR_FINANCE: 'Finance',
-  VENDOR_VIEWER: 'Viewer',
-  CUSTOMER_OWNER: 'Account owner',
-  CUSTOMER_ADMIN: 'Admin',
-  CUSTOMER_BUYER: 'Procurer',
-  CUSTOMER_APPROVER: 'Approver',
-  CUSTOMER_FINANCE: 'Finance',
-  CUSTOMER_VIEWER: 'Viewer',
-};
-
-const roleLabel = (code: string): string => ROLE_LABEL[code] ?? code;
 
 const stamp = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-IN', {

@@ -52,11 +52,18 @@ import {
  * The five steps
  * ======================================================================== */
 
+/**
+ * Four steps, and none of them is payment. Under the order-first flow nothing
+ * is charged at checkout: placing the order holds the machines, our technician
+ * names and inspects each one at the supply point, we verify every one, and
+ * the buyer pays then — on the order, within the deadline verification sets.
+ * A "how you will pay" step here would ask for a decision the buyer cannot
+ * act on for days, on a screen with a twenty-minute hold on it.
+ */
 const STEPS = [
   { code: 'BILLING', title: 'GSTIN and billing' },
   { code: 'DELIVERY', title: 'Delivery site' },
   { code: 'REFERENCE', title: 'Your PO reference' },
-  { code: 'PAYMENT', title: 'How you are paying' },
   { code: 'CONFIRM', title: 'Confirm' },
 ] as const;
 
@@ -128,6 +135,13 @@ function Flow(): React.JSX.Element {
   const [gstProfileId, setGst] = React.useState<string | null>(null);
   const [billingAddressId, setBilling] = React.useState<string | null>(null);
   const [deliveryAddressId, setDelivery] = React.useState<string | null>(null);
+  /**
+   * The account's method, not a choice made here. Payment happens on the order
+   * after verification; the API still records a mode on the booking, so it is
+   * the one the server already had for this cart, else the account's first
+   * allowed one — prepaid for most buyers, credit terms where the account has
+   * them.
+   */
   const [paymentMode, setPaymentMode] = React.useState<PaymentMode | null>(null);
   const [poNumber, setPoNumber] = React.useState('');
   const [costCentre, setCostCentre] = React.useState('');
@@ -141,7 +155,13 @@ function Flow(): React.JSX.Element {
     setGst((v) => v ?? next.selection.gstProfileId);
     setBilling((v) => v ?? next.selection.billingAddressId);
     setDelivery((v) => v ?? next.selection.deliveryAddressId);
-    setPaymentMode((v) => v ?? (next.selection.paymentMode as PaymentMode | null));
+    setPaymentMode(
+      (v) =>
+        v ??
+        (next.selection.paymentMode as PaymentMode | null) ??
+        next.paymentModes.find((m) => m.allowed)?.mode ??
+        null,
+    );
   }, []);
 
   const onExpired = React.useCallback(() => setPhase({ k: 'expired' }), []);
@@ -271,14 +291,6 @@ function Flow(): React.JSX.Element {
       });
       return;
     }
-    if (step === 'PAYMENT') {
-      if (!paymentMode) {
-        setFieldErrors({ paymentMode: 'Choose how you are paying for this order.' });
-        return;
-      }
-      if (!(await requote({ paymentMode }))) return;
-    }
-
     goTo(index + 1);
   };
 
@@ -308,7 +320,9 @@ function Flow(): React.JSX.Element {
   const blockedReason =
     session && session.breakUp?.grandTotal == null
       ? 'Delivery to that site cannot be priced, so there is no total to agree to. Go back and choose another site.'
-      : null;
+      : session && !paymentMode
+        ? 'No payment method is enabled on your account yet, so an order cannot be booked to it. Your account owner can turn one on under Account.'
+        : null;
 
   const place = async (): Promise<void> => {
     const id = cartId.current;
@@ -380,7 +394,6 @@ function Flow(): React.JSX.Element {
       <Terminal>
         <Placed
           order={phase.order}
-          paidBy={session?.paymentModes.find((m) => m.mode === paymentMode)?.label ?? null}
           site={session?.deliverySites.find((d) => d.id === deliveryAddressId) ?? null}
           poNumber={poNumber.trim()}
         />
@@ -402,7 +415,6 @@ function Flow(): React.JSX.Element {
       return site ? `${site.city} ${site.pincode}` : undefined;
     })(),
     REFERENCE: poNumber.trim() || 'No PO reference',
-    PAYMENT: session.paymentModes.find((m) => m.mode === paymentMode)?.label,
   };
 
   const rail: Step[] = STEPS.map((s, i) => ({
@@ -485,14 +497,6 @@ function Flow(): React.JSX.Element {
               errors={fieldErrors}
               onPo={setPoNumber}
               onCostCentre={setCostCentre}
-            />
-          )}
-          {step === 'PAYMENT' && (
-            <PaymentStep
-              session={session}
-              paymentMode={paymentMode}
-              errors={fieldErrors}
-              onSelect={setPaymentMode}
             />
           )}
           {step === 'CONFIRM' && (
@@ -891,51 +895,7 @@ function ReferenceStep({
 }
 
 /* ==========================================================================
- * Step 4 — payment mode
- * ======================================================================== */
-
-function PaymentStep({
-  session,
-  paymentMode,
-  errors,
-  onSelect,
-}: {
-  session: CheckoutSession;
-  paymentMode: PaymentMode | null;
-  errors: Record<string, string>;
-  onSelect: (mode: PaymentMode) => void;
-}): React.JSX.Element {
-  return (
-    <section className="ck-step" aria-label="How you are paying">
-      <fieldset className="ck-opts">
-        <legend className="sr-only">Choose a payment method</legend>
-        {session.paymentModes.map((option) => (
-          <Option
-            key={option.mode}
-            name="paymentMode"
-            value={option.mode}
-            checked={option.mode === paymentMode}
-            disabled={!option.allowed}
-            onSelect={() => onSelect(option.mode)}
-          >
-            <b>{option.label}</b>
-            {/* A control that is off says why, on the screen — not in a title
-                attribute, which is unreachable by touch and by keyboard. */}
-            {option.reason && <small>{option.reason}</small>}
-          </Option>
-        ))}
-      </fieldset>
-      {errors.paymentMode && (
-        <p role="alert" className="ck-err">
-          {errors.paymentMode}
-        </p>
-      )}
-    </section>
-  );
-}
-
-/* ==========================================================================
- * Step 5 — confirm
+ * Step 4 — confirm
  * ======================================================================== */
 
 function ConfirmStep({
@@ -995,7 +955,14 @@ function ConfirmStep({
               po ? (cc ? `${po} · ${cc}` : po) : 'None — your organisation does not require one'
             }
           />
-          <Fact label="Paying by" value={mode?.label ?? null} />
+          <Fact
+            label="Payment"
+            value={
+              mode?.mode === 'CREDIT'
+                ? 'Nothing today. Invoiced on your credit terms once every machine is verified.'
+                : 'Nothing today. You pay once every machine is inspected and verified, within 24 hours of verification.'
+            }
+          />
         </dl>
       </div>
 
@@ -1166,14 +1133,6 @@ function whyFor(step: StepCode, session: CheckoutSession): WhyRailItem[] {
             : 'Your PO reference prints on our invoice so your finance team can match it — many corporates won’t process one without it. The cost centre carries into order history.',
         },
       ];
-    case 'PAYMENT':
-      return [
-        {
-          term: 'Methods follow your buying policy',
-          explanation:
-            'A junior buyer can often pay now but not draw on the company credit line — the reason is on each one that’s off.',
-        },
-      ];
     case 'CONFIRM':
       return [
         {
@@ -1181,6 +1140,11 @@ function whyFor(step: StepCode, session: CheckoutSession): WhyRailItem[] {
           explanation: session.approval
             ? `${BRAND.legalEntity} buys these exact serials on your behalf. Placing the order sends it to your approver — the machines stay held, nothing is charged, and no supplier is committed until they say yes.`
             : `${BRAND.legalEntity} buys these exact serials on your behalf. Placing the order is agreement to the total on the right — nothing is added after.`,
+        },
+        {
+          term: 'Nothing is charged today',
+          explanation:
+            'Placing the order holds the machines. Our technician inspects each one at the supply point and records its serial, we verify every one, and only then do you pay — on the order, within 24 hours of verification.',
         },
       ];
     default:
@@ -1286,12 +1250,10 @@ function Failed({ message }: { message: string }): React.JSX.Element {
  */
 function Placed({
   order,
-  paidBy,
   site,
   poNumber,
 }: {
   order: OrderConfirmation;
-  paidBy: string | null;
   site: DeliverySite | null;
   poNumber: string;
 }): React.JSX.Element {
@@ -1320,17 +1282,11 @@ function Placed({
         <h1 className="ck-h1">
           {awaiting
             ? 'Sent for approval. The machines stay held.'
-            : 'Order placed. The machines are yours.'}
+            : 'Order placed. Inspection comes next.'}
         </h1>
         <p className="ck-lede ck-done-meta">
           Order <b className="ck-order-id tnum">{order.orderNumber}</b> ·{' '}
           <span className="tnum">{rupees(order.grandTotal)}</span> · <span>{machines(count)}</span>
-          {paidBy ? (
-            <>
-              {' '}
-              · <span>{paidBy}</span>
-            </>
-          ) : null}
         </p>
         <p className="ck-lede ck-done-next">
           {awaiting ? (
@@ -1340,16 +1296,17 @@ function Placed({
             </>
           ) : (
             <>
-              Your order is with <b>{BRAND.legalEntity}</b> — we now raise the purchase orders, the
-              machines are picked, and dispatch follows
+              Your order is with <b>{BRAND.legalEntity}</b> and nothing is charged yet. Our
+              technician inspects each machine at the supply point and records its serial, we
+              verify every one, and then you pay — within <span className="tnum">24</span> hours
+              of verification. Dispatch follows
               {siteName ? (
                 <>
                   {' '}
                   to <b>{siteName}</b>
                 </>
               ) : null}
-              . Serial numbers are named as each machine is attached to this order, and your{' '}
-              <b>GST invoice</b>{' '}
+              , and your <b>GST invoice</b>{' '}
               {poNumber ? (
                 <>
                   carries your reference <b className="tnum">{poNumber}</b>

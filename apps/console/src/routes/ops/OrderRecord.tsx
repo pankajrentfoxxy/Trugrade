@@ -1,181 +1,427 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router';
-import { type Grade } from '@trugrade/contracts';
-import {
-  DataBoard,
-  EmptyState,
-  GradeBadge,
-  RecordHeader,
-  SidePanel,
-  Skeleton,
-  StatusPill,
-  Timeline,
-  type Column,
-  type TimelineEvent,
-} from '@trugrade/ui';
-import { Board, Datum, NotMeasured, Section } from '../../lib/controls';
+import { Button, DataBoard, EmptyState, Input, Modal, Skeleton, cn, type Column } from '@trugrade/ui';
 import { useAuth } from '../../lib/auth';
+import { pincodeStateMismatch } from '../../lib/pincode-region';
+import { nowMs } from '../../lib/clock';
 import { useResource } from '../../lib/useResource';
+import { send } from '../qc/api';
 import {
-  APPROVAL_TONE,
   humanise,
   onDate,
-  onDateTime,
   OPS_API,
-  ORDER_TONE,
-  PAYMENT_TONE,
-  PO_TONE,
-  partyLine,
   rupees,
+  type AssignResult,
   type OpsOrderMachine,
   type OpsOrderRecord,
   type OpsPurchaseOrderOnOrder,
+  type OpsSubOrder,
+  type OpsTimelineEvent,
+  type OpsOrderVisit,
+  type TechnicianLoad,
+  type TechnicianOption,
+  type VerifyResult,
 } from './api';
 
 /**
  * ARCHETYPE C — Record. Identity header + evidence panel + actions side panel.
  * DENSITY: compact (admin), set on the app root by the shell.
  *
- * One order end-to-end — `03_UX_SPEC.md` §3C.4.
+ * One order end-to-end — `03_UX_SPEC.md` §3C.4 — and the two decisions the
+ * order-first flow puts on the platform's desk: assign a technician, then
+ * verify each machine they named. The last verification raises the purchase
+ * orders and starts the buyer's payment clock.
  *
- * **This is the only screen in the product where both sides sit together**, and
- * the spec says so: the buyer's side and the purchase orders we raised against
- * it, with the margin between them, ADMIN-only. The buyer's own
- * `/account/orders/[orderNumber]` reads `procurement` nowhere at all and must
- * never learn to; the vendor's `/vendor/orders/[poId]` carries no buyer and not
- * even the buyer's order number. The seam is enforced on the server in three
- * separate services, and this is the one permitted to see across it.
+ * DRAWN TO A SUPPLIED DESIGN, its markup, metrics and colours verbatim at the
+ * product owner's direction (`.xo-*` in `index.css`, `--admin-*` in
+ * `globals.css`), on the same terms as the boards:
  *
- * **The margin is refused rather than approximated.** Three orders on this
- * database have machines and no purchase order at all, two of them delivered —
- * a margin over partial cover would read as the real one and be wrong by
- * whatever those machines cost. The server decides, and sends the reason.
+ * - **Every figure is read.** The stepper is the order's own events; the money
+ *   tiles are the server's `money` and `margin`; the tracking alert is what
+ *   the supply point typed at dispatch. Nothing on this screen is a placeholder.
+ * - **The machine tables are still `DataBoard`**, restyled through their
+ *   wrapper class; the totals line under each is drawn to the design's
+ *   `tfoot` rather than adding a footer slot to the shared component.
+ * - **The design's "Add AWB number" button is not here.** No endpoint records
+ *   a tracking number after dispatch, and a control that looks live and is
+ *   not is the dead-control pattern. The one primary action is the real next
+ *   step of the flow, verifying what the technician recorded.
  *
- * **No action panel action, and the panel says why.** Cancel, reallocate and
- * force-progress are all transactions no service in this codebase performs. The
- * side panel names them and names what is missing, which is the honest form of a
- * control that does not exist.
+ * **This is the only screen in the product where both sides sit together**:
+ * the buyer's side and the purchase orders we raised against it, with the
+ * margin between them. ADMIN-only; the seam is enforced on the server.
+ *
+ * **The margin is refused rather than approximated.** A margin over partial
+ * cover would read as the real one and be wrong by whatever those machines
+ * cost. The server decides, and sends the reason; the tile prints it in
+ * `--ink-4`, never a figure.
  */
 
-const MACHINE_COLUMNS: ReadonlyArray<Column<OpsOrderMachine>> = [
+/* ---- words for the enum -------------------------------------------------- */
+
+const STATUS_PILL: Readonly<Record<string, { label: string; cls: string }>> = {
+  PAYMENT_PENDING: { label: 'Payment pending', cls: 'xo-pill--pp' },
+  CONFIRMED: { label: 'Confirmed', cls: 'xo-pill--cf' },
+  VENDOR_ACCEPTED: { label: 'Vendor accepted', cls: 'xo-pill--va' },
+  DISPATCHED: { label: 'Dispatched', cls: 'xo-pill--dp' },
+  DELIVERED: { label: 'Delivered', cls: 'xo-pill--dl' },
+};
+const statusPill = (status: string): { label: string; cls: string } =>
+  STATUS_PILL[status] ?? { label: humanise(status), cls: 'xo-pill--nt' };
+
+const EVENT_TITLE: Readonly<Record<string, string>> = {
+  'order.placed': 'Order placed',
+  'order.approval_requested': 'Approval requested',
+  'order.technician_assigned': 'Technician assigned',
+  'order.inspected': 'Order inspected',
+  'order.verified': 'Order verified',
+  'order.paid': 'Order paid',
+  PO_DISPATCHED: 'PO dispatched',
+  PO_VENDOR_RESPONSE: 'Vendor responded',
+  ORDER_STATUS: 'Status changed',
+  STATUS_CHANGE: 'Status changed',
+};
+const eventTitle = (type: string): string => EVENT_TITLE[type] ?? humanise(type);
+
+/** "11:00 am" — the stepper and the feed show the clock; the header shows the date. */
+const clock = (iso: string): string =>
+  new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+
+const num = (money: string): number => Number(money);
+const money = (n: number): string => rupees(n.toFixed(2));
+
+/** A tracking number has digits in it. "no air way bill" is a note, not one. */
+const usableAwb = (awb: string | null): boolean => awb !== null && /\d/.test(awb);
+
+/* ---- icons, as the design draws them ------------------------------------ */
+
+const svg = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
+const InfoIcon = ({ size = 20 }: { size?: number }): React.JSX.Element => (
+  <svg width={size} height={size} strokeWidth="2" {...svg}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v5" />
+    <path d="M12 16.5v.01" />
+  </svg>
+);
+const CheckIcon = (): React.JSX.Element => (
+  <svg width="18" height="18" strokeWidth="2.4" {...svg}>
+    <path d="M5 12l5 5 9-10" />
+  </svg>
+);
+const ClockIcon = (): React.JSX.Element => (
+  <svg width="18" height="18" strokeWidth="2.4" {...svg}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+
+/* ---- the stepper ---------------------------------------------------------- */
+
+interface Step {
+  label: string;
+  at: string | null;
+}
+
+/**
+ * Seven stations, each dated by the event that reached it (or the field the
+ * server keeps for it), so the strip is the order's own history and not a
+ * guess from its status.
+ */
+function steps(data: OpsOrderRecord): Step[] {
+  const earliest = (type: string): string | null => {
+    // The feed is newest-first; the station is reached at the FIRST such event.
+    const hits = data.timeline.filter((e) => e.type === type);
+    return hits.length > 0 ? hits[hits.length - 1]!.at : null;
+  };
+  const machines = data.subOrders.flatMap((s) => s.machines);
+  const latest = (dates: Array<string | null>): string | null => {
+    const known = dates.filter((d): d is string => d !== null).sort();
+    return known.length > 0 ? known[known.length - 1]! : null;
+  };
+  const firstOf = (dates: Array<string | null>): string | null => {
+    const known = dates.filter((d): d is string => d !== null).sort();
+    return known[0] ?? null;
+  };
+  return [
+    { label: 'Placed', at: data.placedAt },
+    { label: 'Technician assigned', at: earliest('order.technician_assigned') },
+    { label: 'Inspected', at: earliest('order.inspected') ?? latest(machines.map((m) => m.inspectedAt)) },
+    { label: 'Verified', at: earliest('order.verified') ?? data.verifiedAt },
+    { label: 'Paid', at: earliest('order.paid') ?? data.paidAt },
+    {
+      label: 'Dispatched',
+      at: earliest('PO_DISPATCHED') ?? firstOf(data.purchaseOrders.map((po) => po.dispatchedAt)),
+    },
+    {
+      label: 'Delivered',
+      at:
+        latest(data.subOrders.map((s) => s.deliveredAt)) ??
+        (data.status === 'DELIVERED'
+          ? (data.timeline.find((e) => e.toStatus === 'DELIVERED')?.at ?? null)
+          : null),
+    },
+  ];
+}
+
+function Stepper({ data }: { data: OpsOrderRecord }): React.JSX.Element {
+  const list = steps(data);
+  // The furthest station reached is the current one; a cancelled order has no
+  // current station, only the ones it got to.
+  let current = -1;
+  list.forEach((s, i) => {
+    if (s.at !== null) current = i;
+  });
+  if (data.status === 'CANCELLED') current = -1;
+  return (
+    <ol className="xo-steps" aria-label="Order progress">
+      {list.map((s, i) => {
+        const state = s.at === null ? 'is-next' : i === current ? 'is-current' : 'is-done';
+        return (
+          <li
+            key={s.label}
+            className={cn('xo-step', state)}
+            aria-current={state === 'is-current' ? 'step' : undefined}
+          >
+            <div className="xo-step__track">
+              <span className="xo-step__dot" />
+              <span className="xo-step__line" />
+            </div>
+            <span className="xo-step__label">{s.label}</span>
+            <span className="xo-step__time">{s.at ? clock(s.at) : '—'}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/* ---- machines --------------------------------------------------------------- */
+
+const machineColumns = (
+  canVerify: boolean,
+  busySlot: string | null,
+  onVerify: (slotId: string) => void,
+): ReadonlyArray<Column<OpsOrderMachine>> => [
   {
     key: 'serial',
     header: 'Serial',
-    cell: (m) => (
-      // 0.08em tracking because a serial is compared to a sticker by a person
-      // holding the laptop, exactly as T32's pick list found.
-      <span className="font-mono tnum tracking-[0.08em] text-ink">{m.serialNumber}</span>
-    ),
+    cell: (m) =>
+      m.serialNumber ? (
+        // 0.08em tracking because a serial is compared to a sticker by a person
+        // holding the laptop.
+        <span className="xo-serial tnum">{m.serialNumber}</span>
+      ) : (
+        <span className="xo-none">Not recorded</span>
+      ),
   },
   {
     key: 'title',
     header: 'Machine',
-    cell: (m) =>
-      m.title ?? (
-        <NotMeasured
-          why="The SKU behind this line has been withdrawn from the catalog"
-          label="Model withdrawn"
-        />
-      ),
+    cell: (m) => m.title ?? <span className="xo-none">Model withdrawn</span>,
   },
-  {
-    key: 'grade',
-    header: 'Grade',
-    // Neutral, always. A+/A/B are all sellable and a position on a scale is not
-    // a verdict — that is what `GradeBadge` exists to keep true.
-    cell: (m) => <GradeBadge grade={m.grade as Grade} />,
-  },
+  { key: 'grade', header: 'Grade', cell: (m) => <span className="xo-grade">{m.grade.replace('_PLUS', '+')}</span> },
   { key: 'sold', header: 'Sold at', numeric: true, cell: (m) => rupees(m.unitPrice) },
   {
     key: 'cost',
     header: 'We pay',
     numeric: true,
+    // Never ₹0 for a machine no purchase order covers: that is a missing value.
+    cell: (m) =>
+      m.purchaseCost === null ? <span className="xo-none">No PO line</span> : rupees(m.purchaseCost),
+  },
+  {
+    key: 'margin',
+    header: 'Margin',
+    numeric: true,
     cell: (m) =>
       m.purchaseCost === null ? (
-        <NotMeasured
-          why="No purchase-order line covers this serial, so what we agreed to pay for it is not recorded"
-          label="No PO line"
-        />
+        <span className="xo-none">—</span>
       ) : (
-        <span className="text-ink-2">{rupees(m.purchaseCost)}</span>
+        money(num(m.unitPrice) - num(m.purchaseCost))
       ),
   },
   {
-    key: 'status',
-    header: 'Unit state',
-    cell: (m) => <span className="text-ink-2">{humanise(m.status)}</span>,
+    key: 'verified',
+    header: 'Verified',
+    cell: (m) =>
+      m.verifiedAt ? (
+        <>
+          <span className="xo-ok">✓</span> <span className="xo-time">{clock(m.verifiedAt)}</span>
+        </>
+      ) : m.inspectedAt ? (
+        <>
+          {/* The engine's word on the machine, so a verifier knows whether they
+              are confirming a certified pass or reviewing one the engine held. */}
+          {m.status === 'QC_MISMATCH' ? (
+            <span className="xo-warn">Held for review</span>
+          ) : m.status === 'QC_FAILED' ? (
+            <span className="xo-bad">Failed</span>
+          ) : (
+            <span className="xo-ok">Passed</span>
+          )}{' '}
+          <span className="xo-time">· inspected {clock(m.inspectedAt)}</span>
+        </>
+      ) : (
+        <span className="xo-none">Not yet</span>
+      ),
+  },
+  {
+    key: 'actions',
+    header: 'Actions',
+    headerHidden: true,
+    numeric: true,
+    cell: (m) =>
+      // A failed machine is not verified for purchase; it is re-inspected or refused.
+      canVerify && m.inspectedAt && !m.verifiedAt && m.status !== 'QC_FAILED' ? (
+        <Button variant="secondary" size="sm" loading={busySlot === m.slotId} onClick={() => onVerify(m.slotId)}>
+          Verify
+        </Button>
+      ) : null,
   },
 ];
 
-/**
- * `canOpenPos` gates the ONE link on this table, and it is not decoration.
- *
- * The purchase-order board is guarded on `procurement.po.read_any`, which is a
- * different permission from the one guarding this screen — SUPPORT, whose screen
- * §3C.4 says this is, does not hold it. Linking the number for them would put a
- * control that 403s on the record they use all day.
- */
-const poColumns = (canOpenPos: boolean): ReadonlyArray<Column<OpsPurchaseOrderOnOrder>> => [
-  {
-    key: 'poNumber',
-    header: 'Purchase order',
-    cell: (po) => (
-      <span className="flex flex-wrap items-center gap-2">
-        {canOpenPos ? (
-          <Link
-            className="whitespace-nowrap font-mono tnum text-ink underline underline-offset-4 hover:text-acc-ink"
-            to={`/procurement/pos?q=${encodeURIComponent(po.poNumber)}`}
-          >
-            {po.poNumber}
-          </Link>
-        ) : (
-          <span className="whitespace-nowrap font-mono tnum text-ink">{po.poNumber}</span>
-        )}
-        <StatusPill
-          tone={PO_TONE[po.status] ?? 'neutral'}
-          label={humanise(po.status)}
-          className="whitespace-nowrap"
-        />
-      </span>
-    ),
-  },
-  {
-    key: 'vendor',
-    header: 'Supply point',
-    cell: (po) =>
-      po.vendorLegalName ?? (
-        <NotMeasured
-          why="The supplier organisation on this purchase order could not be resolved"
-          label="Unresolved"
-        />
-      ),
-  },
-  { key: 'lines', header: 'Machines', numeric: true, cell: (po) => po.lines },
-  { key: 'totalNet', header: 'We pay', numeric: true, cell: (po) => rupees(po.totalNet) },
-  { key: 'tds', header: 'TDS on it', numeric: true, cell: (po) => rupees(po.tdsAmount) },
-  {
-    key: 'accepted',
-    header: 'Accepted',
-    cell: (po) =>
-      po.acknowledgedAt ? (
-        <span className="font-mono tnum text-ink-2">{onDate(po.acknowledgedAt)}</span>
-      ) : (
-        <NotMeasured
-          why="The supply point has not accepted this purchase order yet. There is no acceptance deadline in this product, so it is not late"
-          label="Not accepted"
-        />
-      ),
-  },
-];
+function Consignment({
+  sub,
+  canVerify,
+  busySlot,
+  onVerify,
+}: {
+  sub: OpsSubOrder;
+  canVerify: boolean;
+  busySlot: string | null;
+  onVerify: (slotId: string) => void;
+}): React.JSX.Element {
+  const pill = statusPill(sub.status);
+  const sold = sub.machines.reduce((n, m) => n + num(m.unitPrice), 0);
+  const costKnown = sub.machines.length > 0 && sub.machines.every((m) => m.purchaseCost !== null);
+  const cost = costKnown ? sub.machines.reduce((n, m) => n + num(m.purchaseCost!), 0) : null;
+  const n = sub.machines.length;
+  return (
+    <>
+      <div className="xo-sp">
+        <div>
+          <div className="xo-sp__name">{sub.vendorLegalName ?? 'Supply point unresolved'}</div>
+          <div className="xo-sp__meta">
+            Consignment <span className="mono">{sub.subOrderNumber}</span> · {n}{' '}
+            {n === 1 ? 'machine' : 'machines'} · {rupees(sub.subtotal)} ex GST
+          </div>
+        </div>
+        <div className="xo-sp__right">
+          <span className={cn('xo-pill xo-pill--sm', pill.cls)}>{pill.label}</span>
+        </div>
+      </div>
+      <DataBoard
+        className="xo-table"
+        caption={`${n} ${n === 1 ? 'machine' : 'machines'} from ${sub.vendorLegalName ?? 'this supply point'}.`}
+        columns={machineColumns(canVerify, busySlot, onVerify)}
+        rows={sub.machines}
+        rowKey={(m) => m.slotId}
+        empty={
+          <EmptyState
+            title="No machine is on this consignment"
+            body="A consignment with no slots against it means the order was written by a path that does not create them."
+          />
+        }
+      />
+      {n > 0 && (
+        <div className="xo-tfoot" aria-label="Consignment totals">
+          <span>
+            {n} {n === 1 ? 'machine' : 'machines'}
+          </span>
+          <span className="mono tnum">{money(sold)}</span>
+          <span className="mono tnum">{cost === null ? <span className="xo-none">—</span> : money(cost)}</span>
+          <span className="mono tnum">
+            {cost === null ? <span className="xo-none">—</span> : money(sold - cost)}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---- activity ---------------------------------------------------------------- */
+
+function Activity({ events }: { events: OpsTimelineEvent[] }): React.JSX.Element {
+  return (
+    <ol className="xo-feed">
+      {events.map((e, i) => (
+        <li key={`${e.at}-${i}`} className={cn('xo-ev', i === 0 && 'xo-ev--current')}>
+          <span className="xo-ev__dot" aria-hidden="true" />
+          <div className="xo-ev__top">
+            <span className="xo-ev__title">{eventTitle(e.type)}</span>
+            {e.fromStatus && e.toStatus && (
+              <span className="xo-ev__move">
+                <span>{humanise(e.fromStatus)}</span>→<span>{humanise(e.toStatus)}</span>
+              </span>
+            )}
+            <span className="xo-ev__when">{clock(e.at)}</span>
+          </div>
+          <div className="xo-ev__by">
+            {e.actorName ? (
+              <>
+                by <strong>{e.actorName}</strong>
+              </>
+            ) : (
+              'No person recorded against this event'
+            )}
+          </div>
+          {e.note && <p className="xo-ev__note">{e.note}</p>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/* ============================================================================ */
 
 export function OpsOrderRecordRoute(): React.JSX.Element {
   const { orderNumber = '' } = useParams();
   const { principal } = useAuth();
   const canOpenPos = principal?.permissions.includes('procurement.po.read_any') ?? false;
+  const canAssign = principal?.permissions.includes('qc.visit.schedule') ?? false;
+  const canVerify = principal?.permissions.includes('ordering.any.override') ?? false;
+  const [reloadToken, setReloadToken] = React.useState(0);
   const { data, error } = useResource<OpsOrderRecord>(
     OPS_API.order(orderNumber),
     'That order could not be opened',
+    reloadToken,
   );
+
+  const [busySlot, setBusySlot] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [failure, setFailure] = React.useState<string | null>(null);
+
+  async function verify(slotIds: string[]): Promise<void> {
+    setBusySlot(slotIds[0] ?? 'ALL');
+    setFailure(null);
+    try {
+      const result = await send<VerifyResult>(
+        OPS_API.verify(orderNumber),
+        'POST',
+        { slotIds },
+        'The machines could not be verified',
+      );
+      setNotice(
+        result.payBy
+          ? `Every machine verified. ${result.purchaseOrders} purchase ${result.purchaseOrders === 1 ? 'order is' : 'orders are'} with the supply points and the buyer has until ${onDate(result.payBy)}, ${clock(result.payBy)} to pay.`
+          : result.status === 'CONFIRMED'
+            ? 'Every machine verified. Confirmed on the buyer’s credit terms; the supply points have their purchase orders.'
+            : `${result.verified} of ${result.total} machines verified.`,
+      );
+      setReloadToken((n) => n + 1);
+    } catch (e) {
+      setFailure((e as Error).message);
+    } finally {
+      setBusySlot(null);
+    }
+  }
 
   if (error) {
     return (
@@ -196,346 +442,691 @@ export function OpsOrderRecordRoute(): React.JSX.Element {
 
   if (!data) {
     return (
-      <div className="tg-stack">
+      <div className="order-record">
         <Skeleton lines={3} />
-        <div className="tg-card rounded-lg border border-rule bg-sheet">
+        <div className="xo-card xo-card__body">
           <Skeleton lines={6} />
         </div>
       </div>
     );
   }
 
-  const machines = data.subOrders.reduce((n, s) => n + s.machines.length, 0);
+  const { inspection } = data;
+  const verifiable = inspection.inspected - inspection.verified;
+  const needsTechnician =
+    (data.status === 'AWAITING_INSPECTION' || data.status === 'QC_IN_PROGRESS') && canAssign;
+  const prepaid = data.paymentMode === 'PREPAID';
+  const unpaidDelivered = data.status === 'DELIVERED' && data.paymentStatus !== 'PAID' && prepaid;
 
-  const timeline: TimelineEvent[] = data.timeline.map((e, i) => ({
-    key: `${e.at}-${i}`,
-    action:
-      e.fromStatus && e.toStatus
-        ? `${humanise(e.type)} — ${humanise(e.fromStatus)} to ${humanise(e.toStatus)}`
-        : humanise(e.type),
-    // Required by `TimelineEvent` and deliberately not defaulted to "System":
-    // an audit line whose actor is a guess is worse than one that admits it
-    // does not know which person, or that no person was involved.
-    actor: e.actorName ?? 'No person recorded against this event',
-    at: onDateTime(e.at),
-    dateTime: e.at,
-    ...(e.note ? { reason: e.note } : {}),
-    ...(i === 0 ? { current: true } : {}),
-  }));
+  const status = statusPill(data.status);
+  const payment: { label: string; cls: string } =
+    data.paymentStatus === 'PAID'
+      ? { label: 'Paid', cls: 'xo-pill--ok' }
+      : data.paymentStatus === 'PENDING'
+        ? unpaidDelivered
+          ? { label: 'Unpaid', cls: 'xo-pill--bad' }
+          : { label: 'Pending', cls: 'xo-pill--warn' }
+        : data.paymentStatus === 'PARTIAL'
+          ? { label: 'Part paid', cls: 'xo-pill--warn' }
+          : data.paymentStatus === 'FAILED'
+            ? { label: 'Failed', cls: 'xo-pill--bad' }
+            : { label: humanise(data.paymentStatus), cls: 'xo-pill--nt' };
+
+  // The consignments that left without a tracking number anybody can use.
+  const untracked: OpsPurchaseOrderOnOrder[] = data.purchaseOrders.filter(
+    (po) => (po.status === 'DISPATCHED' || po.dispatchedAt) && !usableAwb(po.awb),
+  );
+
+  const poTotal = data.purchaseOrders.reduce((n, po) => n + num(po.totalNet), 0);
+  const tdsTotal = data.purchaseOrders.reduce((n, po) => n + num(po.tdsAmount), 0);
+  const machineCount = inspection.machines;
+  const pct = data.margin ? Number(data.margin.pct) : null;
+  const payPct = pct === null ? null : Math.max(0, 100 - pct);
+  const mismatch = data.shipTo ? pincodeStateMismatch(data.shipTo.pincode, data.shipTo.state) : null;
+
+  const poRef = (po: OpsPurchaseOrderOnOrder, className?: string): React.ReactNode =>
+    canOpenPos ? (
+      <Link className={className} to={`/procurement/pos?q=${encodeURIComponent(po.poNumber)}`}>
+        {po.poNumber}
+      </Link>
+    ) : (
+      <span className={className}>{po.poNumber}</span>
+    );
 
   return (
-    <div className="tg-stack">
-      <RecordHeader
-        title={data.orderNumber}
-        subtitle={partyLine(data.buyer) ?? 'The organisation on this order could not be resolved'}
-        status={
-          <StatusPill tone={ORDER_TONE[data.status] ?? 'neutral'} label={humanise(data.status)} />
-        }
-        identifiers={[
-          { label: 'Placed', value: onDate(data.placedAt) },
-          {
-            label: 'Their PO reference',
-            value: data.buyerPoNumber ?? (
-              <NotMeasured why="Their procurement system gave no reference" label="None given" />
-            ),
-          },
-          {
-            label: 'GSTIN',
-            value: data.buyerGstin ?? (
-              <NotMeasured
-                why="No GST registration is recorded against this order"
-                label="Not recorded"
-              />
-            ),
-          },
-        ]}
-      />
-
-      <div className="grid [&>*]:min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {/* T35. `min-w-0` on the evidence column: a grid item's default
-            `min-width` is `auto`, so without it this column refuses to shrink
-            below the min-content of the widest machine table and the PAGE
-            scrolls sideways at 600px, under a footer that stops at the viewport
-            edge. Measured here at 736px inside a 600px viewport. */}
-        <div className="min-w-0">
-          {/* ------------------------------------------------------------- */}
-          <Section
-            title="The two sides"
-            subtitle="What the buyer is charged, what the supply points are owed, and the difference. This screen is the only one in the product that shows both."
-          >
-            <div className="grid gap-x-8 sm:grid-cols-2">
-              <Datum label="Machines, ex GST">{rupees(data.money.subtotal)}</Datum>
-              <Datum label="Freight">{rupees(data.money.freight)}</Datum>
-              <Datum label="GST">{rupees(data.money.gstTotal)}</Datum>
-              <Datum label="TCS">{rupees(data.money.tcs)}</Datum>
-              <Datum label="Buyer pays, all in">
-                <span className="text-ink">{rupees(data.money.grandTotal)}</span>
-              </Datum>
-              <Datum label="Payment">
-                <StatusPill
-                  tone={PAYMENT_TONE[data.paymentStatus] ?? 'neutral'}
-                  label={humanise(data.paymentStatus)}
-                />
-              </Datum>
+    <div className="order-record">
+      {/* ---- header --------------------------------------------------- */}
+      <div>
+        <nav className="xo-crumb" aria-label="Breadcrumb">
+          <Link to="/orders">Orders</Link>
+          <span aria-hidden="true">/</span>
+          <span className="mono">{data.orderNumber}</span>
+        </nav>
+        <div className="xo-head">
+          <div>
+            <div className="xo-title-row">
+              <h1 className="xo-title">
+                Order <span className="mono">{data.orderNumber}</span>
+              </h1>
+              <span className={cn('xo-pill', status.cls)}>{status.label}</span>
+              <span className={cn('xo-pill', payment.cls)}>{payment.label}</span>
             </div>
+            <p className="xo-sub">
+              <strong>{data.buyer?.legalName ?? 'Buyer unresolved'}</strong> · {machineCount}{' '}
+              {machineCount === 1 ? 'machine' : 'machines'} · placed {onDate(data.placedAt)},{' '}
+              {clock(data.placedAt)}
+              {data.placedByName ? ` by ${data.placedByName}` : ''}
+            </p>
+          </div>
+          <div className="xo-actions">
+            {/* Each purchase order, as the design's secondary buttons. A link
+                only for a caller who may open the procurement board. */}
+            {data.purchaseOrders.map((po) => (
+              <React.Fragment key={po.poId}>{poRef(po, 'xo-btn mono')}</React.Fragment>
+            ))}
+            {canVerify && verifiable > 0 && (
+              <button
+                type="button"
+                className="xo-btn xo-btn--primary"
+                aria-disabled={busySlot === 'ALL' || undefined}
+                onClick={() => {
+                  if (busySlot === null) void verify([]);
+                }}
+              >
+                {busySlot === 'ALL'
+                  ? 'Verifying…'
+                  : `Verify ${verifiable === machineCount ? 'every machine' : `${verifiable} inspected`}`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
-            <div className="mt-5 rounded border border-rule bg-sheet-2 p-4">
-              {data.margin ? (
-                <dl className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
-                  <div className="flex flex-col gap-1">
-                    <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                      Sold for
-                    </dt>
-                    <dd className="font-mono tnum text-body text-ink">
-                      {rupees(data.margin.soldFor)}
-                    </dd>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                      We pay
-                    </dt>
-                    <dd className="font-mono tnum text-body text-ink">
-                      {rupees(data.margin.paid)}
-                    </dd>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                      Margin
-                    </dt>
-                    {/* Amber, and this is the one measured value on the screen
-                        that earns it — rule 1's second meaning. */}
-                    <dd className="font-mono tnum text-h3 text-acc-ink">
-                      {rupees(data.margin.amount)}
-                    </dd>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                      As a share
-                    </dt>
-                    {/* Every percentage carries its denominator. */}
-                    <dd className="text-body-sm text-ink-2">
-                      <span className="font-mono tnum text-ink">{data.margin.pct}%</span> of{' '}
-                      <span className="font-mono tnum">{rupees(data.margin.soldFor)}</span> sold, ex
-                      GST and ex freight
-                    </dd>
-                  </div>
-                </dl>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  <span className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                    Margin
+      {/* ---- alerts --------------------------------------------------- */}
+      {notice && (
+        <div className="xo-alert xo-alert--ok" role="status">
+          <CheckIcon />
+          <p className="txt">{notice}</p>
+        </div>
+      )}
+      {failure && (
+        <div className="xo-alert xo-alert--bad" role="alert">
+          <InfoIcon />
+          <p className="txt">{failure}</p>
+        </div>
+      )}
+      {untracked.map((po) => (
+        <div className="xo-alert" role="status" key={po.poId}>
+          <InfoIcon />
+          <p className="txt">
+            <strong>Dispatched without a usable tracking number.</strong>{' '}
+            {po.vendorLegalName ?? 'The supply point'} sent <span className="mono">{po.poNumber}</span>
+            {po.carrier ? ` by ${po.carrier}` : ''}, but{' '}
+            {po.awb ? (
+              <>
+                the AWB recorded is <span className="mono">“{po.awb}”</span>
+              </>
+            ) : (
+              'no AWB number was recorded'
+            )}
+            , so neither we nor the buyer can track the shipment.
+          </p>
+        </div>
+      ))}
+      {unpaidDelivered && (
+        <div className="xo-alert xo-alert--bad" role="status">
+          <InfoIcon />
+          <p className="txt">
+            <strong>Delivered but not paid.</strong> This prepaid order reached the buyer with{' '}
+            {rupees(data.money.grandTotal)} still pending.
+          </p>
+        </div>
+      )}
+
+      {/* ---- progress ------------------------------------------------- */}
+      <Stepper data={data} />
+
+      <div className="xo-grid">
+        <div className="xo-col">
+          {/* ---- money -------------------------------------------------- */}
+          <section className="xo-card" aria-labelledby="xo-money-h">
+            <div className="xo-card__head">
+              <h2 id="xo-money-h">Money on this order</h2>
+              <span className="meta">Only admins see both sides</span>
+            </div>
+            <div className="xo-card__body">
+              <div className="xo-money">
+                <div className="xo-fig">
+                  <span className="xo-fig__label">{data.paidAt ? 'Buyer paid' : 'Buyer pays'}</span>
+                  <span className="xo-fig__value tnum">{rupees(data.money.grandTotal)}</span>
+                  <span className="xo-fig__note">
+                    {data.paidAt
+                      ? `All in · ${onDate(data.paidAt)}, ${clock(data.paidAt)}`
+                      : data.payBy
+                        ? `All in · due by ${onDate(data.payBy)}, ${clock(data.payBy)}`
+                        : 'All in'}
                   </span>
-                  {/* Never a zero and never a dash. `--ink-4`, with the reason. */}
-                  <p className="max-w-prose text-body-sm text-ink-4">
-                    {data.marginUnavailable ?? 'Not calculated.'}
-                  </p>
+                </div>
+                <div className="xo-fig">
+                  <span className="xo-fig__label">We pay supply points</span>
+                  {data.purchaseOrders.length > 0 ? (
+                    <>
+                      <span className="xo-fig__value tnum">{money(poTotal)}</span>
+                      <span className="xo-fig__note">
+                        {data.purchaseOrders.length} {data.purchaseOrders.length === 1 ? 'PO' : 'POs'} ·{' '}
+                        {tdsTotal > 0 ? `TDS ${money(tdsTotal)}` : 'no TDS'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="xo-fig__value xo-none">No PO yet</span>
+                      <span className="xo-fig__note">Raised when the last machine is verified</span>
+                    </>
+                  )}
+                </div>
+                <div className="xo-fig xo-fig--margin">
+                  <span className="xo-fig__label">Our margin</span>
+                  {data.margin ? (
+                    <>
+                      <span className="xo-fig__value tnum">{rupees(data.margin.amount)}</span>
+                      <span className="xo-fig__note">
+                        {data.margin.pct}% of machine price, ex GST &amp; freight
+                      </span>
+                    </>
+                  ) : (
+                    // No amount, no share, no zero: a margin we cannot state is
+                    // a sentence in --ink-4, the colour of a value we do not have.
+                    <p className="xo-fig__note text-ink-4">
+                      {data.marginUnavailable ?? 'Not calculated.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {data.margin && pct !== null && payPct !== null && (
+                <div className="xo-split">
+                  <div className="xo-split__bar" aria-hidden="true">
+                    <span className="pay" style={{ width: `${payPct}%` }} />
+                    <span className="mar" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="xo-split__legend">
+                    <span>
+                      <i className="pay" />
+                      Supply points {payPct.toFixed(1)}%
+                    </span>
+                    <span>
+                      <i className="mar" />
+                      Our margin {data.margin.pct}%
+                    </span>
+                    {/* Every percentage carries its denominator. */}
+                    <span>As a share</span>
+                    <span>
+                      <b className="mono tnum">{data.margin.pct}%</b> of {rupees(data.margin.soldFor)} sold,
+                      ex GST and ex freight
+                    </span>
+                  </div>
                 </div>
               )}
-            </div>
-          </Section>
 
-          {/* ------------------------------------------------------------- */}
-          <Section
-            title="Purchase orders we raised"
-            subtitle={
-              data.purchaseOrders.length > 0
-                ? 'One per supply point on this order. A purchase order is created inside the order-confirmation transaction and is never raised by hand.'
-                : undefined
-            }
-          >
-            {data.purchaseOrders.length > 0 ? (
-              <Board tableMinWidth={620}>
-                <DataBoard
-                  caption={`${data.purchaseOrders.length} purchase ${data.purchaseOrders.length === 1 ? 'order' : 'orders'} on this order.`}
-                  columns={poColumns(canOpenPos)}
-                  rows={data.purchaseOrders}
-                  rowKey={(po) => po.poId}
-                />
-              </Board>
-            ) : (
-              <EmptyState
-                title="No purchase order was ever raised"
-                body={
-                  <>
-                    A purchase order is written inside the order-confirmation transaction, so an
-                    order with machines and none of them is a gap in the record rather than a stage
-                    not yet reached. Nothing on this screen can create one — that is a leg of the
-                    order transaction, not a button.
-                  </>
-                }
-              />
-            )}
-          </Section>
-
-          {/* ------------------------------------------------------------- */}
-          {data.subOrders.map((sub) => (
-            <Section
-              key={sub.subOrderNumber}
-              title={sub.vendorLegalName ?? 'Supply point unresolved'}
-              subtitle={
-                <>
-                  Consignment{' '}
-                  <span className="font-mono tnum text-ink-2">{sub.subOrderNumber}</span> ·{' '}
-                  {sub.machines.length} {sub.machines.length === 1 ? 'machine' : 'machines'} ·{' '}
-                  {rupees(sub.subtotal)} ex GST
-                </>
-              }
-              aside={
-                <StatusPill
-                  tone={ORDER_TONE[sub.status] ?? 'neutral'}
-                  label={humanise(sub.status)}
-                />
-              }
-            >
-              <div className="mb-4 grid gap-x-8 sm:grid-cols-2">
-                <Datum label="Dispatch due">
-                  {sub.dispatchSlaDueAt ? (
-                    onDateTime(sub.dispatchSlaDueAt)
+              <div className="xo-sides">
+                <div>
+                  <h3>What the buyer is charged</h3>
+                  <dl className="xo-lines">
+                    <div>
+                      <dt>Machines, ex GST</dt>
+                      <dd className="tnum">{rupees(data.money.subtotal)}</dd>
+                    </div>
+                    <div>
+                      <dt>Freight</dt>
+                      <dd className="tnum">{rupees(data.money.freight)}</dd>
+                    </div>
+                    <div>
+                      <dt>GST</dt>
+                      <dd className="tnum">{rupees(data.money.gstTotal)}</dd>
+                    </div>
+                    <div>
+                      <dt>TCS</dt>
+                      <dd className="tnum">{rupees(data.money.tcs)}</dd>
+                    </div>
+                    <div className="total">
+                      <dt>Buyer pays</dt>
+                      <dd className="tnum">{rupees(data.money.grandTotal)}</dd>
+                    </div>
+                  </dl>
+                </div>
+                <div>
+                  <h3>What we owe supply points</h3>
+                  {data.purchaseOrders.length > 0 ? (
+                    <dl className="xo-lines">
+                      {data.purchaseOrders.map((po) => (
+                        <div key={po.poId}>
+                          <dt>
+                            {po.vendorLegalName ?? 'Supply point unresolved'} · {po.poNumber}
+                          </dt>
+                          <dd className="tnum">{rupees(po.totalNet)}</dd>
+                        </div>
+                      ))}
+                      <div>
+                        <dt>TDS deducted</dt>
+                        <dd className="tnum">{money(tdsTotal)}</dd>
+                      </div>
+                      <div className="total">
+                        <dt>We pay</dt>
+                        <dd className="tnum">{money(poTotal)}</dd>
+                      </div>
+                      <div>
+                        <dt className="note">PO raised when the last machine was verified</dt>
+                        <dd className="note">{onDate(data.purchaseOrders[0]!.raisedAt)}</dd>
+                      </div>
+                    </dl>
                   ) : (
-                    <NotMeasured
-                      why="No dispatch deadline was recorded on this consignment"
-                      label="Not set"
-                    />
+                    <p className="xo-lines note" style={{ fontSize: 13, color: 'inherit' }}>
+                      No purchase order yet. One is raised to each supply point inside the
+                      transaction that verifies the last machine; until then nothing is committed
+                      to a vendor.
+                    </p>
                   )}
-                </Datum>
-                <Datum label="Delivered">
-                  {sub.deliveredAt ? (
-                    onDateTime(sub.deliveredAt)
-                  ) : (
-                    <NotMeasured
-                      why="This consignment has not been recorded as delivered"
-                      label="Not yet"
-                    />
-                  )}
-                </Datum>
+                </div>
               </div>
-              <Board tableMinWidth={680}>
-                <DataBoard
-                  caption={`${sub.machines.length} ${sub.machines.length === 1 ? 'machine' : 'machines'} leaving ${sub.vendorLegalName ?? 'this supply point'}.`}
-                  columns={MACHINE_COLUMNS}
-                  rows={sub.machines}
-                  rowKey={(m) => m.serialNumber}
-                  empty={
-                    <EmptyState
-                      title="No machine is allocated to this consignment"
-                      body="A consignment with no serials against it means allocation never completed. Nothing was shipped."
-                    />
-                  }
-                />
-              </Board>
-            </Section>
-          ))}
+            </div>
+          </section>
 
-          {/* ------------------------------------------------------------- */}
-          <Section
-            title="Everything that happened"
-            subtitle="Every event on this order, with the person behind it where one was recorded."
-          >
-            {timeline.length > 0 ? (
-              <Timeline events={timeline} label="Order timeline" />
+          {/* ---- machines --------------------------------------------- */}
+          <section className="xo-card" aria-labelledby="xo-mach-h">
+            <div className="xo-card__head">
+              <h2 id="xo-mach-h">Machines &amp; inspection</h2>
+              <span className="meta">
+                <strong>
+                  {inspection.verified} of {machineCount} verified
+                </strong>
+              </span>
+            </div>
+            {inspection.visits.length > 0 ? (
+              inspection.visits.map((v) => {
+                const done = v.status === 'COMPLETED';
+                return (
+                  <div className="xo-qc" key={v.visitId}>
+                    <span className={cn('xo-qc__icon', !done && 'xo-qc__icon--pending')}>
+                      {done ? <CheckIcon /> : <ClockIcon />}
+                    </span>
+                    <div className="xo-qc__main">
+                      {v.technicianName ? (
+                        <>
+                          Inspected by <strong>{v.technicianName}</strong> at the supply point
+                        </>
+                      ) : (
+                        'No technician on this visit'
+                      )}{' '}
+                      · {v.unitsInspected} of {v.unitsRequested} serials recorded
+                      <br />
+                      <span className="mono">{v.visitNumber}</span>
+                    </div>
+                    <span className={cn('xo-pill xo-pill--sm', done ? 'xo-pill--ok' : 'xo-pill--warn')}>
+                      {done ? 'QC completed' : humanise(v.status)}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="xo-qc">
+                <span className="xo-qc__icon xo-qc__icon--pending">
+                  <ClockIcon />
+                </span>
+                <div className="xo-qc__main">
+                  No technician has been sent yet.{' '}
+                  {canAssign
+                    ? 'Assign one from the panel on the right.'
+                    : 'Somebody with scheduling rights assigns one from this screen.'}
+                </div>
+              </div>
+            )}
+            {data.subOrders.map((sub) => (
+              <Consignment
+                key={sub.subOrderNumber}
+                sub={sub}
+                canVerify={canVerify}
+                busySlot={busySlot}
+                onVerify={(slotId) => void verify([slotId])}
+              />
+            ))}
+          </section>
+
+          {/* ---- activity --------------------------------------------- */}
+          <section className="xo-card" aria-labelledby="xo-act-h">
+            <div className="xo-card__head">
+              <h2 id="xo-act-h">Activity</h2>
+              <span className="meta">
+                Newest first{data.timeline[0] ? ` · ${onDate(data.timeline[0].at)}` : ''}
+              </span>
+            </div>
+            {data.timeline.length > 0 ? (
+              <Activity events={data.timeline} />
             ) : (
               <EmptyState
                 title="No event was ever written for this order"
                 body="An order carries an event for every state it passes through. None here means the order was written by a path that does not record them."
               />
             )}
-          </Section>
+          </section>
         </div>
 
-        {/* --------------------------------------------------------------- */}
-        <SidePanel
-          title="This order"
-          description="A record screen, and read-only. Everything below is a fact, not a control."
-          footnote={
-            <>
-              §3C.4 also asks for cancel-with-reason, reallocate-a-unit and force-progress. None of
-              the three is built: cancelling releases units back to sellable, reverses the purchase
-              order, the payable and the TDS accrual inside one transaction, and no service in this
-              product does any of that. A button that looks like it works and does not is worse than
-              its absence.
-            </>
-          }
-        >
-          <div className="flex flex-col">
-            <Datum label="Machines on this order">
-              <span className="font-mono tnum">{machines}</span>
-            </Datum>
-            <Datum label="Payment mode">{humanise(data.paymentMode)}</Datum>
-            <Datum label="Cost centre">
-              {data.costCentre ?? (
-                <NotMeasured why="The buyer recorded no cost centre" label="None given" />
-              )}
-            </Datum>
-            <Datum label="Placed by">
-              {data.placedByName ?? (
-                <NotMeasured
-                  why="The user who placed this order could not be resolved"
-                  label="Unresolved"
-                />
-              )}
-            </Datum>
-            <Datum label="Their mobile">
-              {data.placedByMobile ? (
-                <span className="font-mono tnum">{data.placedByMobile}</span>
-              ) : (
-                <NotMeasured
-                  why="No mobile is recorded against that account"
-                  label="Not recorded"
-                />
-              )}
-            </Datum>
-            {data.approval && (
-              <Datum label="Approval">
-                <span className="flex flex-col gap-1">
-                  <StatusPill
-                    tone={
-                      data.approval.breached
-                        ? 'warn'
-                        : (APPROVAL_TONE[data.approval.status] ?? 'neutral')
-                    }
-                    label={humanise(data.approval.status)}
-                  />
-                  <span className="text-body-sm text-ink-2">
-                    {data.approval.approverName}, by{' '}
-                    <span className="font-mono tnum">{onDateTime(data.approval.expiresAt)}</span>
-                  </span>
-                </span>
-              </Datum>
-            )}
-          </div>
+        {/* ---- side ----------------------------------------------------- */}
+        <aside className="xo-col">
+          {needsTechnician && (
+            <section className="xo-card xo-side" aria-labelledby="xo-tech-h">
+              <h2 id="xo-tech-h">Technician</h2>
+              <AssignTechnician
+                orderNumber={data.orderNumber}
+                visit={inspection.visits[0] ?? null}
+                onAssigned={(result) => {
+                  setNotice(
+                    `${result.technicianName} is assigned to ${result.visits.length === 1 ? 'the visit' : `${result.visits.length} visits`} for ${result.orderNumber}.`,
+                  );
+                  setReloadToken((n) => n + 1);
+                }}
+              />
+            </section>
+          )}
 
-          <div className="mt-4">
-            <h3 className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-              Ships to
-            </h3>
+          <section className="xo-card xo-side" aria-labelledby="xo-buyer-h">
+            <h2 id="xo-buyer-h">Buyer</h2>
+            <dl className="xo-kv">
+              <div>
+                <dt>Business</dt>
+                <dd>{data.buyer?.legalName ?? <span className="empty">Unresolved</span>}</dd>
+              </div>
+              <div>
+                <dt>GSTIN</dt>
+                <dd className="mono tnum">
+                  {data.buyerGstin ?? <span className="empty">Not recorded</span>}
+                </dd>
+              </div>
+              <div>
+                <dt>Placed by</dt>
+                <dd>{data.placedByName ?? <span className="empty">Unresolved</span>}</dd>
+              </div>
+              <div>
+                <dt>Mobile</dt>
+                <dd>
+                  {data.placedByMobile ? (
+                    <a href={`tel:${data.placedByMobile}`} className="mono tnum">
+                      {data.placedByMobile}
+                    </a>
+                  ) : (
+                    <span className="empty">Not recorded</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Payment mode</dt>
+                <dd>{humanise(data.paymentMode)}</dd>
+              </div>
+              <div>
+                <dt>Buyer&rsquo;s PO ref</dt>
+                <dd>{data.buyerPoNumber ?? <span className="empty">None given</span>}</dd>
+              </div>
+              <div>
+                <dt>Cost centre</dt>
+                <dd>{data.costCentre ?? <span className="empty">None given</span>}</dd>
+              </div>
+              {data.approval && (
+                <div>
+                  <dt>Approval</dt>
+                  {/* A breached deadline is warn, never fail: the deadline was
+                      one WE set on the buyer's own approver. */}
+                  <dd className={data.approval.breached ? 'text-warn' : undefined}>
+                    {humanise(data.approval.status)} · {data.approval.approverName}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </section>
+
+          <section className="xo-card xo-side" aria-labelledby="xo-ship-h">
+            <h2 id="xo-ship-h">Ships to</h2>
             {data.shipTo ? (
-              <address className="mt-2 not-italic text-body-sm text-ink-2">
-                {data.shipTo.label && <span className="block text-ink">{data.shipTo.label}</span>}
-                <span className="block">{data.shipTo.line1}</span>
-                {data.shipTo.line2 && <span className="block">{data.shipTo.line2}</span>}
-                <span className="block">
+              <>
+                {data.shipTo.label && <div className="xo-addr-name">{data.shipTo.label}</div>}
+                <address className="xo-addr">
+                  {data.shipTo.line1}
+                  {data.shipTo.line2 ? `, ${data.shipTo.line2}` : ''}
+                  <br />
                   {data.shipTo.city}, {data.shipTo.state}{' '}
-                  <span className="font-mono tnum">{data.shipTo.pincode}</span>
-                </span>
-                <span className="mt-2 block">
+                  <span className="mono tnum">{data.shipTo.pincode}</span>
+                  <br />
                   {data.shipTo.contactName} ·{' '}
-                  <span className="font-mono tnum">{data.shipTo.contactMobile}</span>
-                </span>
-              </address>
+                  <span className="mono tnum">{data.shipTo.contactMobile}</span>
+                </address>
+                {mismatch && (
+                  <div className="xo-mini-warn" role="note">
+                    <InfoIcon size={14} />
+                    <span>
+                      <span className="mono">{data.shipTo.pincode}</span> is{' '}
+                      {mismatch.length === 1 ? `a ${mismatch[0]}` : `${mismatch.join(' or ')}`} PIN,
+                      but the state is {data.shipTo.state}. Check before the courier is booked.
+                    </span>
+                  </div>
+                )}
+              </>
             ) : (
-              <p className="mt-2 text-body-sm text-ink-4">
+              <p className="xo-addr xo-none">
                 The delivery address on this order could not be resolved. Do not dispatch against
                 it.
               </p>
             )}
-          </div>
+          </section>
 
-          <p className="mt-4 text-body-sm text-ink-3">
-            Grades on this screen are the inspected grade recorded at the time of the purchase
-            order. A+, A and B are all sellable, so the badge carries no verdict.
+          <p className="xo-hint">
+            Grade is the grade the listing was sold at. A+, A and B are all sellable, so a grade is
+            not a pass or fail.
           </p>
-        </SidePanel>
+          <p className="xo-hint">
+            Cancel, reallocate and force-progress are not offered on this screen. None of the three
+            is built: each is a transaction that releases units, reverses the purchase order and
+            its payable, and no service performs it yet.
+          </p>
+        </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * The technician select, in the side column.
+ *
+ * Reads the roster once the panel is on screen; the assign call creates one
+ * visit per consignment on the order, or moves the technician on the existing
+ * ones. Never the primary colour: the primary action on this screen is
+ * verification.
+ */
+/**
+ * Who goes, and when.
+ *
+ * The card states the booking — the person, the day, the slot — and one button
+ * opens the dialog that changes it. The dialog asks for the same three facts
+ * the stock-visit dialog asks for, because the visit this books sits on the
+ * same Visits and Schedule boards, and a visit with a person but no slot is one
+ * nobody can plan a day around. Each technician's load on the chosen day sits
+ * beside their name for the same reason the stock dialog shows it:
+ * `SchedulingService` refuses a day over capacity anyway, and being refused
+ * after choosing is the worse experience.
+ */
+function AssignTechnician({
+  orderNumber,
+  visit,
+  onAssigned,
+}: {
+  orderNumber: string;
+  visit: OpsOrderVisit | null;
+  onAssigned: (result: AssignResult) => void;
+}): React.JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const current = visit?.technicianName ?? null;
+  return (
+    <div className="flex flex-col gap-3" data-testid="assign-technician">
+      <dl className="xo-kv">
+        <div>
+          <dt>Technician</dt>
+          <dd>{current ?? <span className="empty">Not assigned</span>}</dd>
+        </div>
+        <div>
+          <dt>Date</dt>
+          <dd className="mono tnum">
+            {visit?.scheduledDate ? onDate(visit.scheduledDate) : <span className="empty">Not booked</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>Slot</dt>
+          <dd className="mono tnum">
+            {visit?.slotFrom && visit.slotTo ? (
+              `${visit.slotFrom}–${visit.slotTo}`
+            ) : (
+              <span className="empty">Not booked</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+      <div>
+        <button type="button" className="xo-btn" onClick={() => setOpen(true)}>
+          {current ? 'Reassign' : 'Assign technician'}
+        </button>
+      </div>
+      <AssignDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        orderNumber={orderNumber}
+        current={current}
+        onAssigned={(result) => {
+          setOpen(false);
+          onAssigned(result);
+        }}
+      />
+    </div>
+  );
+}
+
+export function AssignDialog({
+  open,
+  onClose,
+  orderNumber,
+  current,
+  onAssigned,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orderNumber: string;
+  current: string | null;
+  onAssigned: (result: AssignResult) => void;
+}): React.JSX.Element {
+  // Fetched only while the dialog is open: the roster and the fortnight's load
+  // are the decision's data, not the record's.
+  const { data: technicians, error } = useResource<TechnicianOption[]>(
+    open ? OPS_API.technicians : '',
+    'The technician roster is unavailable',
+  );
+  const { data: loads } = useResource<TechnicianLoad[]>(
+    open ? OPS_API.technicianWorkload : '',
+    'The workload could not be loaded',
+  );
+  // Tomorrow. A visit booked for today is a visit whose slot has usually gone.
+  const [date, setDate] = React.useState(new Date(nowMs() + 86_400_000).toISOString().slice(0, 10));
+  // `qc_visit.slot_from` is a `time` column and the endpoint wants `HH:MM`,
+  // which is exactly what a time input gives.
+  const [from, setFrom] = React.useState('10:00');
+  const [to, setTo] = React.useState('13:00');
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [failure, setFailure] = React.useState<string | null>(null);
+  const active = (technicians ?? []).filter((t) => t.isActive);
+  const loadOf = new Map((loads ?? []).map((l) => [l.technicianId, l]));
+
+  // Padded, because both notations reach the endpoint and '09:30' sorts before
+  // '09:30:00' as a raw string.
+  const asSeconds = (t: string): string => (t.length === 5 ? `${t}:00` : t);
+  const slotBackwards = Boolean(from && to) && asSeconds(to) <= asSeconds(from);
+  const blocker = !date
+    ? 'Pick the date of the visit.'
+    : !from || !to
+      ? 'Give the slot a start and an end time.'
+      : slotBackwards
+        ? 'The slot has to end after it starts.'
+        : undefined;
+
+  async function assign(technicianId: string): Promise<void> {
+    if (blocker) {
+      setFailure(blocker);
+      return;
+    }
+    setBusy(technicianId);
+    setFailure(null);
+    try {
+      const result = await send<AssignResult>(
+        OPS_API.assignTechnician,
+        'POST',
+        { orderNumber, technicianId, scheduledDate: date, slotFrom: from, slotTo: to },
+        'The technician could not be assigned',
+      );
+      onAssigned(result);
+    } catch (e) {
+      setFailure((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={current ? `Reassign from ${current}` : 'Assign a technician'}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <Input label="Slot from" type="time" mono value={from} onChange={(e) => setFrom(e.target.value)} required />
+        <Input
+          label="Slot to"
+          type="time"
+          mono
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          required
+          error={slotBackwards ? 'End time must be later than the start time.' : undefined}
+        />
+      </div>
+      {(failure ?? error) && (
+        <p className="text-body-sm text-fail" role="alert">
+          {failure ?? error}
+        </p>
+      )}
+      <ul className="flex flex-col gap-1">
+        {active.map((t) => {
+          const load = loadOf.get(t.id);
+          const onThatDay = load?.byDay[date] ?? 0;
+          return (
+            <li key={t.id} className="flex items-center justify-between gap-3">
+              <span className="text-body-sm text-ink">
+                {t.name}
+                <span className="mono tnum text-ink-4">
+                  {' '}
+                  {t.employeeCode}
+                  {load ? ` · ${onThatDay} that day · ${load.openVisits} open` : ''}
+                </span>
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={busy === t.id}
+                {...(blocker ? { disabledReason: blocker } : {})}
+                onClick={() => void assign(t.id)}
+              >
+                Assign
+              </Button>
+            </li>
+          );
+        })}
+        {technicians && active.length === 0 && (
+          <li className="text-body-sm text-ink-4">No active technician is on the roster.</li>
+        )}
+        {!technicians && !error && <li className="text-body-sm text-ink-4">Loading the roster…</li>}
+      </ul>
+      <p className="text-body-sm text-ink-3">
+        The visit is booked into their day and appears on the Inspections, Visits and Schedule boards.
+      </p>
+    </Modal>
   );
 }

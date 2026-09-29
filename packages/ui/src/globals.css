@@ -397,6 +397,95 @@
     --cream-tape-soft: rgba(255, 246, 227, 0.55);
   }
 
+  /* ---- KYC review queue status pill ----------------------------------------
+     The console's `/kyc` board, matched exactly to its supplied design: a
+     light-blue chip for an application ready to look at, a light-amber chip
+     for one waiting on the applicant's own reply. Console-only; nothing else
+     should reach for these. Literal hex is allowed here and nowhere else. */
+  :root {
+    --kyc-ready-tint: #e6effa;
+    --kyc-ready-ink: #1e4e86;
+    --kyc-waiting-tint: #fdf1de;
+    --kyc-waiting-ink: #8a4b06;
+  }
+
+  /* ---- Supplied admin-console board design ---------------------------------
+     The console's `/catalog` board is drawn to a supplied design whose values
+     are used verbatim at the product owner's direction — including its grey
+     secondary text (`--admin-muted`, `--admin-faint`, `--admin-fainter`),
+     which the locked palette above otherwise resolves to full ink. The teal
+     and the greens are the same figures the storefront's order board reads as
+     `--board-*`; a second copy under its own name because that block is
+     board-only by its own comment and this is a different app. Console only;
+     nothing outside `.catalog-board` should reach for these. Literal hex is
+     allowed here and nowhere else. */
+  :root {
+    --admin-accent: #0e7c7b;
+    --admin-accent-ink: #0a5f5e;
+    --admin-accent-link: #0a6b6a;
+    --admin-accent-tint: #e3f3f3;
+    --admin-accent-line: #bfe0e1;
+    --admin-ok: #1f8a4c;
+    --admin-ok-ink: #166a3a;
+    --admin-ok-tint: #e4f4ea;
+    --admin-ink: #16202a;
+    --admin-ink-2: #3a4652;
+    --admin-muted: #56636f;
+    --admin-faint: #7a8792;
+    --admin-fainter: #a3aeb7;
+    --admin-on-dark: #ffffff;
+    --admin-on-ink-2: #c9d2d9;
+    --admin-line: #e3e7eb;
+    --admin-line-soft: #eef1f3;
+    --admin-field: #cbd5dc;
+    --admin-chip: #f1f5f7;
+    --admin-head: #fafbfc;
+    --admin-hover: #f8fafb;
+    --admin-hover-2: #fafcfc;
+    --admin-surface: #ffffff;
+    --admin-page: #f4f6f8;
+    /* The orders board's status families and its two row washes, from the
+       same supplied design. `--admin-bad` is that design's word for an order
+       we delivered without being paid — a fact about our own process, drawn
+       in its colour at the product owner's direction; it is not `--fail`. */
+    --admin-warn: #d97706;
+    --admin-warn-ink: #8a4b06;
+    --admin-warn-tint: #fdf1de;
+    --admin-warn-line: #f4d9ae;
+    --admin-info: #2563a8;
+    --admin-info-ink: #1e4e86;
+    --admin-info-tint: #e6effa;
+    --admin-violet: #5b45c2;
+    --admin-violet-ink: #4a3aa8;
+    --admin-violet-tint: #eeeafb;
+    --admin-bad: #c4320a;
+    --admin-bad-ink: #a1290a;
+    --admin-bad-tint: #fdede8;
+    --admin-bad-line: #f6cbbe;
+    --admin-row-bad: #fff8f6;
+    --admin-row-warn: #fffbf4;
+    /* The order record: its amber alert's text, the figure tiles' ground and
+       the grey half of the margin split bar. */
+    --admin-alert-text: #5a3304;
+    --admin-fig: #f7f9fa;
+    --admin-bar-pay: #9aa7b1;
+    /* The purchase-order board: the Raised stage's dot and the density
+       toggle's trough. */
+    --admin-dot-raised: #8a96a0;
+    --admin-seg: #e9edf0;
+    /* The listing approvals: a selected row's wash and the A+ grade chip. */
+    --admin-selected: #f2f9f9;
+    --admin-ok-tint-2: #ddf1e6;
+    /* The schedule week: a suggested booking's wash and stripes, today's
+       column, and a day off. */
+    --admin-plan-tint: #f2fafa;
+    --admin-plan-stripe: #9ed3d3;
+    --admin-plan-stripe-2: #cbe8e8;
+    --admin-today: #f6fbfb;
+    --admin-stat-bad: #fffbfa;
+    --admin-off: #f7f8f9;
+  }
+
   /* A CONSTANT white, identical in every theme.
 
      Third-party artwork — manufacturer logos, payment marks, certification
@@ -494,11 +583,12 @@
   }
 
   /**
-   * SUPPLIER HUB — the vendor surface. Light, roomy, familiar to anyone who has
-   * used an Indian seller portal. Composes with data-t and data-density.
+   * SUPPLIER HUB — the vendor surface, and now the internal console's too
+   * (`OpsShell`). Light, roomy, familiar to anyone who has used an Indian
+   * seller portal. Composes with data-t and data-density.
    *
    * ONE DELIBERATE DEPARTURE from 09_FRONTEND_LOCKED: the top bar here is WHITE,
-   * not --chrome. The dark chrome is the buyer brand; the supplier portal is a
+   * not --chrome. The dark chrome is the buyer brand; this surface is a
    * different product on a different subdomain with a different audience. This
    * is a decision, not a drift — do not "fix" it back.
    */
@@ -576,9 +666,13 @@
   }
 
   /**
-   * OPS — the internal console. Composes with data-t and data-density.
+   * OPS — the internal console's former palette. NOT CURRENTLY ACTIVATED:
+   * `OpsShell` composes onto `data-surface='hub'` above instead (see
+   * `apps/console/src/lib/ops-surface.tsx`), so nothing sets `data-surface`
+   * to `'ops'` any more. Left in place rather than deleted in case that
+   * decision is reversed. Composes with data-t and data-density.
    *
-   * THE RAIL IS NEAR-BLACK WITH A PLUM UNDERTONE, and that is the one
+   * THE RAIL IS NEAR-BLACK WITH A PLUM UNDERTONE, and that was the one
    * deliberate departure from the supplier hub above. It earns its place twice:
    * it separates chrome from content so the eye lands on the data rather than
    * on the navigation, and it makes internal tooling look unmistakably unlike

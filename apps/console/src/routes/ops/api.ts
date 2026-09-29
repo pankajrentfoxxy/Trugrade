@@ -23,7 +23,14 @@ export type { MoneyString, IsoDate } from '../vendor/api';
 export const OPS_API = {
   orders: '/api/ops/orders',
   order: (orderNumber: string) => `/api/ops/orders/${encodeURIComponent(orderNumber)}`,
+  verify: (orderNumber: string) => `/api/ops/orders/${encodeURIComponent(orderNumber)}/verify`,
   purchaseOrders: '/api/ops/purchase-orders',
+  listings: '/api/ops/listings',
+  approveListing: (id: string) => `/api/ops/listings/${id}/approve`,
+  rejectListing: (id: string) => `/api/ops/listings/${id}/reject`,
+  technicians: '/api/qc/technicians',
+  technicianWorkload: '/api/qc/inspections/workload',
+  assignTechnician: '/api/qc/order-inspections/assign',
 } as const;
 
 export interface OpsFacetOption {
@@ -59,6 +66,8 @@ export interface OpsOrderRow {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  /** `PREPAID`, or credit terms. Unpaid on credit is normal; unpaid prepaid is not. */
+  paymentMode: string;
   placedAt: string;
   buyer: OpsOrderParty | null;
   buyerPoNumber: string | null;
@@ -69,6 +78,23 @@ export interface OpsOrderRow {
   matchedOn: OpsOrderMatch[];
 }
 
+export interface OpsOrderAttentionItem {
+  orderNumber: string;
+  status: string;
+  buyerName: string | null;
+  grandTotal: string;
+}
+
+/**
+ * The board's "Needs attention" strip, computed by the server over every
+ * order — not the page — and only for prepaid ones.
+ */
+export interface OpsOrderAttention {
+  deliveredUnpaid: OpsOrderAttentionItem[];
+  acceptedUnpaid: OpsOrderAttentionItem[];
+  paymentPending: { count: number; total: string; oldestPlacedAt: string | null };
+}
+
 export interface OpsOrderBoard {
   rows: OpsOrderRow[];
   total: number;
@@ -76,17 +102,68 @@ export interface OpsOrderBoard {
   per: number;
   pages: number;
   facets: { status: OpsFacetOption[]; payment: OpsFacetOption[] };
+  /** Optional on the client only so an older payload (or a test fixture) renders the board without the strip. */
+  attention?: OpsOrderAttention;
   searchedFor: string[] | null;
 }
 
 export interface OpsOrderMachine {
-  serialNumber: string;
+  /** The `order_line_unit` row. Stable before a serial exists. */
+  slotId: string;
+  /** Null until the technician names the machine at the supply point. */
+  serialNumber: string | null;
   title: string | null;
   grade: string;
   unitPrice: string;
   /** What we agreed to pay for this exact serial. Null when no PO covers it. */
   purchaseCost: string | null;
   status: string;
+  inspectedAt: string | null;
+  verifiedAt: string | null;
+}
+
+export interface OpsOrderVisit {
+  visitId: string;
+  visitNumber: string;
+  status: string;
+  technicianName: string | null;
+  /** `YYYY-MM-DD` and `HH:MM`: the booking, or null when not booked. */
+  scheduledDate: string | null;
+  slotFrom: string | null;
+  slotTo: string | null;
+  unitsRequested: number;
+  unitsInspected: number;
+}
+
+export interface TechnicianOption {
+  id: string;
+  name: string;
+  employeeCode: string;
+  isActive: boolean;
+}
+
+/** `GET /api/qc/inspections/workload` — a technician's next fortnight, and their open visits. */
+export interface TechnicianLoad {
+  technicianId: string;
+  name: string | null;
+  /** `YYYY-MM-DD` → visits that day. */
+  byDay: Record<string, number>;
+  openVisits: number;
+}
+
+export interface VerifyResult {
+  orderNumber: string;
+  status: string;
+  verified: number;
+  total: number;
+  payBy: string | null;
+  purchaseOrders: number;
+}
+
+export interface AssignResult {
+  orderNumber: string;
+  visits: Array<{ visitId: string; visitNumber: string; units: number }>;
+  technicianName: string;
 }
 
 export interface OpsSubOrder {
@@ -109,6 +186,10 @@ export interface OpsPurchaseOrderOnOrder {
   lines: number;
   raisedAt: string;
   acknowledgedAt: string | null;
+  /** The consignment as the supply point typed it at dispatch. Verbatim; the screen judges it. */
+  carrier: string | null;
+  awb: string | null;
+  dispatchedAt: string | null;
 }
 
 export interface OpsMargin {
@@ -166,6 +247,16 @@ export interface OpsOrderRecord {
   marginUnavailable: string | null;
   approval: OpsOrderApproval | null;
   timeline: OpsTimelineEvent[];
+  inspection: {
+    visits: OpsOrderVisit[];
+    machines: number;
+    inspected: number;
+    verified: number;
+  };
+  verifiedAt: string | null;
+  /** The buyer's 24-hour payment deadline. Null until verified, or on credit terms. */
+  payBy: string | null;
+  paidAt: string | null;
 }
 
 /* ==========================================================================
@@ -230,6 +321,11 @@ export const ORDER_TONE: Record<string, Tone> = {
   CREATED: 'neutral',
   /** Stock is held, a deadline is running, and nobody here can move it. */
   AWAITING_APPROVAL: 'warn',
+  /** Somebody here has to assign a technician. */
+  AWAITING_INSPECTION: 'warn',
+  QC_IN_PROGRESS: 'processing',
+  /** Somebody here has to verify the machines. */
+  AWAITING_VERIFICATION: 'warn',
   PAYMENT_PENDING: 'processing',
   CONFIRMED: 'processing',
   DISPATCHED: 'processing',
@@ -315,3 +411,66 @@ export function partyLine(party: OpsOrderParty | null): string | null {
     ? `${party.legalName} · ${party.tradeName}`
     : party.legalName;
 }
+
+/* ==========================================================================
+ * Listing approvals — `GET /api/ops/listings`
+ * ======================================================================== */
+
+export interface OpsListingRow {
+  listingId: string;
+  status: string;
+  vendorOrgId: string;
+  /** Named: this is our console and the vendor is our counterparty. */
+  vendorLegalName: string | null;
+  title: string | null;
+  specSummary: string | null;
+  grade: string;
+  qtyTotal: number;
+  qtyAvailable: number;
+  qtyReserved: number;
+  /** What the vendor wants per machine. */
+  vendorAskPrice: string | null;
+  /** Our selling price after the margin rule. Null while a draft. */
+  sellingPrice: string | null;
+  /** True when only an ops floor override can take this listing live. */
+  belowFloor: boolean;
+  /** The pricing service's flag on this row, or null. See the API service note. */
+  priceFlag: {
+    reason: 'below_floor' | 'unpriced' | 'below_band';
+    floorPrice: string | null;
+    bandMedian: string | null;
+    bandRatio: number | null;
+  } | null;
+  pickupCity: string | null;
+  submittedAt: string;
+  createdAt: string;
+  approvedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface OpsListingBoard {
+  rows: OpsListingRow[];
+  total: number;
+  page: number;
+  per: number;
+  pages: number;
+  /** Under the current filter: machines, and what they fetch at our prices. */
+  totals: { units: number; value: string };
+  /** Rows under the current status, search and vendor that carry a price flag. */
+  flagged: number;
+  facets: { status: OpsFacetOption[]; vendor: OpsFacetOption[] };
+}
+
+/** A listing status, from ops' side. Amber is reserved for the one live state. */
+export const LISTING_TONE: Record<string, Tone> = {
+  DRAFT: 'neutral',
+  PENDING_APPROVAL: 'warn',
+  ACTIVE: 'info',
+  PARTIALLY_ACTIVE: 'info',
+  PAUSED: 'neutral',
+  OUT_OF_STOCK: 'neutral',
+  REJECTED: 'neutral',
+  SUSPENDED: 'warn',
+  EXPIRED: 'neutral',
+  DELISTED: 'neutral',
+};

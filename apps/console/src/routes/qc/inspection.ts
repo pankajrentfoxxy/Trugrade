@@ -20,6 +20,7 @@ import {
   type UploadedFile,
   type Verdict,
 } from './types';
+import type { OrderInspectionSlot } from './order-inspection-types';
 
 /**
  * Everything the manual inspection form refuses to submit, and why.
@@ -70,7 +71,14 @@ export interface HardwareEntry {
 }
 
 export interface InspectionState {
+  /**
+   * A manifest line chosen by hand. Normally empty: the serial finds the line
+   * (`resolveUnit`). Set only from the hard-stop box, to say which manifest
+   * unit carried a label that matched nothing, so it can be closed UNTESTABLE.
+   */
   visitUnitId: string;
+  /** On an order visit: the vacant slot the typed serial will name. */
+  slotId: string;
   technicianId: string;
   serialScanned: string;
   startedAt: string;
@@ -91,6 +99,7 @@ export interface InspectionState {
 export function emptyInspection(technicianId = ''): InspectionState {
   return {
     visitUnitId: '',
+    slotId: '',
     technicianId,
     serialScanned: '',
     startedAt: '',
@@ -146,6 +155,51 @@ export interface InspectionCheck {
 const gradeRank = (g: Grade): number => GRADES.indexOf(g);
 
 /**
+ * An ordered machine has no manifest line until its serial names one of these:
+ * the order's slots that no serial has filled yet.
+ */
+export interface OrderTarget {
+  openSlots: readonly OrderInspectionSlot[];
+  /** False while the order's slots are still on their way (or failed to come). Defaults to true. */
+  loaded?: boolean;
+}
+
+/** One model still open on the order, and the slots a serial of it can fill. */
+export interface OrderModel {
+  key: string;
+  title: string | null;
+  specSummary: string | null;
+  grade: string;
+  slotIds: string[];
+}
+
+/** The distinct models among the open slots, in order-line order. */
+export function modelsOf(openSlots: readonly OrderInspectionSlot[]): OrderModel[] {
+  const out = new Map<string, OrderModel>();
+  for (const s of openSlots) {
+    const key = `${s.title ?? ''}|${s.grade}`;
+    const m = out.get(key) ?? { key, title: s.title, specSummary: s.specSummary, grade: s.grade, slotIds: [] };
+    m.slotIds.push(s.slotId);
+    out.set(key, m);
+  }
+  return [...out.values()];
+}
+
+/**
+ * The manifest line the form is about. The serial finds it — there is no
+ * dropdown to pick a machine from, because the machine in the technician's
+ * hands is the one whose sticker they are reading. A line chosen by hand
+ * (`visitUnitId`) wins, so a wrong label can still be closed against the unit
+ * it was on.
+ */
+export function resolveUnit(state: InspectionState, manifest: readonly ManifestUnit[]): ManifestUnit | undefined {
+  const chosen = manifest.find((m) => m.visitUnitId === state.visitUnitId);
+  if (chosen) return chosen;
+  const serial = normalisePastedSerial(state.serialScanned);
+  return serial === '' ? undefined : manifest.find((m) => normalisePastedSerial(m.serialNumber) === serial);
+}
+
+/**
  * The grade ceiling the area results impose, per `GRADE_CAP_RULES`.
  *
  * A weighted mean cannot express "one critical component failed" — eleven areas
@@ -182,6 +236,16 @@ export function gradeCap(areas: Record<QcAreaCode, AreaEntry>): { cap: Grade; re
   return null;
 }
 
+/**
+ * A `datetime-local` value (`2026-09-29T10:00`, the technician's own clock, no
+ * zone) as the ISO instant the API's `z.string().datetime()` accepts. The
+ * browser is in the room with the machine, so its zone is the right one.
+ */
+export const toInstant = (local: string): string => {
+  const ms = new Date(local).getTime();
+  return Number.isNaN(ms) ? local : new Date(ms).toISOString();
+};
+
 const isPass = (v: Verdict): boolean => v === 'PASS' || v === 'PASS_WITH_NOTE';
 
 const num = (s: string): number | null => {
@@ -194,13 +258,26 @@ const num = (s: string): number | null => {
 export function checkInspection(
   state: InspectionState,
   manifest: readonly ManifestUnit[],
+  /** Given on an order visit, where the serial names a slot instead of matching a line. */
+  order?: OrderTarget,
 ): InspectionCheck {
   const blockers: Blocker[] = [];
   const notices: string[] = [];
-  const unit = manifest.find((m) => m.visitUnitId === state.visitUnitId);
+  const unit = order ? undefined : resolveUnit(state, manifest);
   const normalisedSerial = normalisePastedSerial(state.serialScanned);
 
-  if (!unit) blockers.push({ field: 'visitUnitId', message: 'Choose the unit being inspected.' });
+  if (order) {
+    if (order.loaded === false) {
+      blockers.push({ field: 'slotId.pending', message: 'The order’s machines have not loaded yet, so there is nothing to name the serial against.' });
+    } else if (order.openSlots.length === 0) {
+      blockers.push({
+        field: 'slotId',
+        message: 'Every machine on this order has already been recorded. There is nothing left to inspect on this visit.',
+      });
+    } else if (!order.openSlots.some((s) => s.slotId === state.slotId)) {
+      blockers.push({ field: 'slotId', message: 'Say which ordered machine this is.' });
+    }
+  }
   if (!state.technicianId) {
     blockers.push({ field: 'technicianId', message: 'Record which technician did the inspection.' });
   }
@@ -209,6 +286,15 @@ export function checkInspection(
   let hardStop = false;
   if (normalisedSerial === '') {
     blockers.push({ field: 'serialScanned', message: 'Scan or type the serial off the machine.' });
+  } else if (!order && !unit) {
+    hardStop = true;
+    blockers.push({
+      field: 'serialScanned',
+      message:
+        `The machine reads ${normalisedSerial}, and no unit on this visit's manifest carries that serial. ` +
+        'The label does not belong to any laptop we were sent to see. Do not grade it, do not seal it — ' +
+        'record it UNTESTABLE against the unit it was on and raise it to the QC manager.',
+    });
   } else if (unit && normalisedSerial !== normalisePastedSerial(unit.serialNumber)) {
     hardStop = true;
     blockers.push({
@@ -343,22 +429,30 @@ export function checkInspection(
  * rest by name so the absence is a recorded decision rather than an omission
  * nobody can tell apart from a technician who ran out of time.
  */
+/** What the report is recorded against: a manifest line, or the ordered slot the serial names. */
+export type PayloadTarget = { unit: ManifestUnit } | { slotId: string };
+
 export function toPayload(
   state: InspectionState,
   visitId: string,
-  unit: ManifestUnit,
   normalisedSerial: string,
+  target: PayloadTarget,
 ): ManualInspectionPayload {
   const h = state.hardware;
   return {
     visitId,
-    visitUnitId: unit.visitUnitId,
-    unitId: unit.unitId,
+    ...('unit' in target
+      ? {
+          visitUnitId: target.unit.visitUnitId,
+          unitId: target.unit.unitId,
+          serialMatches: normalisedSerial === normalisePastedSerial(target.unit.serialNumber),
+        }
+      : // The serial is the identity: there is no earlier claim for it to match.
+        { slotId: target.slotId, serialMatches: true }),
     technicianId: state.technicianId,
     serialScanned: normalisedSerial,
-    serialMatches: normalisedSerial === normalisePastedSerial(unit.serialNumber),
-    startedAt: state.startedAt,
-    completedAt: state.completedAt,
+    startedAt: toInstant(state.startedAt),
+    completedAt: toInstant(state.completedAt),
     areaResults: QC_AREA_CODES.filter(
       (a) => state.areas[a].status !== '' && state.areas[a].status !== 'NOT_MEASURED',
     ).map((a) => ({

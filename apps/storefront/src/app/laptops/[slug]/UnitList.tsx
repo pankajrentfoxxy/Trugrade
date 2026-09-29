@@ -116,10 +116,23 @@ export function UnitList({
     },
   ];
 
+  if (units.length === 0) {
+    // A declared listing: the machines exist at the supply point and are
+    // identified by our technician once you order. Said plainly, in --ink-4,
+    // rather than as an empty table that reads as "nothing here".
+    return (
+      <p className="notmeasured ulist-none" data-testid="unit-list-none">
+        No serial numbers yet at {label}. Each machine is inspected and its serial recorded by
+        our technician after you order; you see every serial, and pay, only once we have
+        verified them.
+      </p>
+    );
+  }
+
   return (
     <div className="tbl lview">
       <DataBoard
-        caption={`${units.length} sealed unit${units.length === 1 ? '' : 's'} at ${label}, listed by serial.`}
+        caption={`${units.length} inspected unit${units.length === 1 ? '' : 's'} at ${label}, listed by serial.`}
         columns={columns}
         rows={units}
         rowKey={(u) => u.serialNumber}

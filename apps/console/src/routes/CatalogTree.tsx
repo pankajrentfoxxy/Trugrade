@@ -1,16 +1,37 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { DataBoard, EmptyState, Input, Pagination, Skeleton, StatusPill, type Column } from '@trugrade/ui';
-import { Board, PageHeader } from '../lib/controls';
+import { DataBoard, EmptyState, Pagination, Skeleton, type Column, type RowGroup } from '@trugrade/ui';
+import { Board } from '../lib/controls';
 import { useResource } from '../lib/useResource';
 
 /**
  * ARCHETYPE B — Board. Filter rail + data table + row actions.
  * DENSITY: compact (admin), set on the app root by the shell.
  *
- * Pagination and search live in the URL and on the server. The nested tree
- * endpoint remains for callers that need the whole hierarchy; this board reads
- * `/api/catalog/board` one page at a time.
+ * Pagination and every filter live in the URL and on the server. The nested
+ * tree endpoint remains for callers that need the whole hierarchy; this board
+ * reads `/api/catalog/board` one page at a time.
+ *
+ * DRAWN TO A SUPPLIED DESIGN, its markup, metrics and colours verbatim at the
+ * product owner's direction (`.ct-*` in `index.css`, `--admin-*` in
+ * `globals.css`). Two things it keeps from the codebase rather than the mock:
+ *
+ * - **The table is still `DataBoard`.** The mock's own `<table>` would have
+ *   been a second table component; the shared one grew a `group` prop instead,
+ *   which is what folds each model's configurations under its header row.
+ * - **Every figure is read, not typed.** The mock's "201 SKUs across 8
+ *   brands", its "9 configurations", its "1 live listing" are the shape; the
+ *   numbers come from `/api/catalog/brands` and per-row model totals the board
+ *   endpoint now returns. A model header counts the whole model, not just the
+ *   configurations that happen to fall on this page.
+ *
+ * Two of the mock's controls have no destination of their own here and go to
+ * the nearest honest one: "Add SKU" opens the SKU-request queue, which is how
+ * a SKU is added on this product (the other way is the CSV importer, which has
+ * no screen); "Open model" filters this board to that model.
+ *
+ * The section tabs the mock draws above the title are the shell's tab strip,
+ * already rendered by `OpsShell` for the Catalog domain — not repeated here.
  */
 
 export interface CatalogSku {
@@ -19,6 +40,13 @@ export interface CatalogSku {
   label: string;
   isActive: boolean;
   liveListingCount: number;
+  cpuFamily: string;
+  cpuModel: string;
+  ramGb: number;
+  storageGb: number;
+  storageType: string;
+  screenSizeInch: number;
+  resolution: string;
 }
 
 /** Kept for tests and any caller that still types the tree shape. */
@@ -50,7 +78,10 @@ interface CatalogRow {
   brandId: string;
   brandName: string;
   seriesName: string;
+  modelId: string;
   modelName: string;
+  modelSkuCount: number;
+  modelLiveListingCount: number;
   sku: CatalogSku;
 }
 
@@ -61,12 +92,152 @@ interface CatalogPage {
   pageSize: number;
 }
 
+interface CatalogFacets {
+  cpuFamilies: string[];
+  ramGb: number[];
+}
+
 const PAGE_SIZE = 25;
+
+/**
+ * The catalog stores codes (`NVME_SSD`, `RETINA`); the board prints the words
+ * a buyer would. Anything not listed falls back to the code with its
+ * underscores as spaces, so a new value is readable rather than invisible.
+ */
+const STORAGE_TYPE: Readonly<Record<string, string>> = { NVME_SSD: 'NVMe SSD', EMMC: 'eMMC' };
+const RESOLUTION: Readonly<Record<string, string>> = { RETINA: 'Retina' };
+
+/** "512 GB NVMe SSD", "1 TB NVMe SSD" — a whole number of terabytes reads as one. */
+function storage(gb: number, type: string): string {
+  const size = gb >= 1024 && gb % 1024 === 0 ? `${gb / 1024} TB` : `${gb} GB`;
+  return `${size} ${STORAGE_TYPE[type] ?? type.replace(/_/g, ' ')}`;
+}
+
+const resolution = (code: string): string => RESOLUTION[code] ?? code.replace(/_/g, ' ');
+
+const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+
+function Chevron(): React.JSX.Element {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+const COLUMNS: ReadonlyArray<Column<CatalogRow>> = [
+  {
+    key: 'skuCode',
+    header: 'SKU code',
+    cell: (r) => (
+      <Link to={`/catalog/skus/${r.sku.id}`} className="ct-sku">
+        {r.sku.skuCode}
+      </Link>
+    ),
+  },
+  { key: 'cpu', header: 'Processor', cell: (r) => <span className="ct-spec">{r.sku.cpuModel}</span> },
+  { key: 'ram', header: 'RAM', cell: (r) => <span className="ct-spec">{r.sku.ramGb} GB</span> },
+  {
+    key: 'storage',
+    header: 'Storage',
+    cell: (r) => <span className="ct-spec">{storage(r.sku.storageGb, r.sku.storageType)}</span>,
+  },
+  {
+    key: 'display',
+    header: 'Display',
+    cell: (r) => (
+      <span className="ct-spec--muted">
+        {r.sku.screenSizeInch}″ {resolution(r.sku.resolution)}
+      </span>
+    ),
+  },
+  {
+    key: 'live',
+    header: 'Live listings',
+    cell: (r) =>
+      r.sku.liveListingCount > 0 ? (
+        <span className="ct-live">{r.sku.liveListingCount} live</span>
+      ) : (
+        <span className="ct-none" aria-label="No live listings">
+          —
+        </span>
+      ),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (r) =>
+      r.sku.isActive ? (
+        <span className="ct-status">Active</span>
+      ) : (
+        <span className="ct-status ct-status--off">Deprecated</span>
+      ),
+  },
+];
+
+/** Each model's configurations under one header row — the board's grouping. */
+const GROUP: RowGroup<CatalogRow> = {
+  of: (r) => r.modelId,
+  className: 'ct-model',
+  header: ({ rows, expanded, toggle }) => {
+    const m = rows[0]!;
+    return (
+      <div className="ct-model__wrap">
+        <button
+          type="button"
+          className="ct-model__toggle"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${m.modelName}`}
+          onClick={toggle}
+        >
+          <Chevron />
+        </button>
+        <div>
+          <div className="ct-model__name">{m.modelName}</div>
+          <div className="ct-model__path">
+            {m.brandName} · {m.seriesName}
+          </div>
+        </div>
+        <div className="ct-model__meta">
+          <span>
+            <strong>{m.modelSkuCount}</strong>{' '}
+            {plural(m.modelSkuCount, 'configuration', 'configurations')}
+          </span>
+          <span>
+            {m.modelLiveListingCount > 0 ? (
+              <>
+                <strong>{m.modelLiveListingCount}</strong>{' '}
+                live {plural(m.modelLiveListingCount, 'listing', 'listings')}
+              </>
+            ) : (
+              'No live listings'
+            )}
+          </span>
+          <Link to={`/catalog?model=${m.modelId}`}>Open model</Link>
+        </div>
+      </div>
+    );
+  },
+};
 
 export function CatalogTreeRoute(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
   const brandId = params.get('brand') ?? '';
+  const modelId = params.get('model') ?? '';
+  const cpu = params.get('cpu') ?? '';
+  const ram = params.get('ram') ?? '';
+  const liveOnly = params.get('live') === '1';
   const page = Math.max(1, Number(params.get('page') ?? '1') || 1);
 
   const boardQuery = new URLSearchParams({
@@ -75,12 +246,21 @@ export function CatalogTreeRoute(): React.JSX.Element {
   });
   if (query.trim()) boardQuery.set('q', query.trim());
   if (brandId) boardQuery.set('brandId', brandId);
+  if (modelId) boardQuery.set('modelId', modelId);
+  if (cpu) boardQuery.set('cpuFamily', cpu);
+  if (ram) boardQuery.set('ramGb', ram);
+  if (liveOnly) boardQuery.set('live', '1');
 
-  const {
-    data: brands,
-    error: brandsError,
-  } = useResource<CatalogBrandOption[]>('/api/catalog/brands', 'Catalog brands unavailable');
-
+  const { data: brands, error: brandsError } = useResource<CatalogBrandOption[]>(
+    '/api/catalog/brands',
+    'Catalog brands unavailable',
+  );
+  // The two selects. A failed read leaves them at "Any" rather than blocking
+  // the board — the filter is a convenience, the SKUs are the point.
+  const { data: facets } = useResource<CatalogFacets>(
+    '/api/catalog/board/facets',
+    'Catalog filters unavailable',
+  );
   const { data: board, error: boardError } = useResource<CatalogPage>(
     `/api/catalog/board?${boardQuery.toString()}`,
     'Catalog unavailable',
@@ -99,85 +279,15 @@ export function CatalogTreeRoute(): React.JSX.Element {
     );
   }
 
+  /** Every filter resets the page; a brand change also drops a model filter, which was inside a brand. */
   function setFilter(key: string, value: string): void {
     patchParams((next) => {
       if (value) next.set(key, value);
       else next.delete(key);
       if (key !== 'page') next.delete('page');
+      if (key === 'brand') next.delete('model');
     });
   }
-
-  function setSearch(value: string): void {
-    patchParams((next) => {
-      if (value === '') next.delete('q');
-      else next.set('q', value);
-      next.delete('page');
-    });
-  }
-
-  function pickBrand(id: string): void {
-    patchParams((next) => {
-      if (id) next.set('brand', id);
-      else next.delete('brand');
-      next.delete('page');
-    });
-  }
-
-  const columns = React.useMemo<ReadonlyArray<Column<CatalogRow>>>(
-    () => [
-      {
-        key: 'path',
-        header: 'Machine',
-        cell: (r) => (
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-body-sm font-medium text-ink">{r.modelName}</span>
-            <span className="text-body-sm text-ink-3">{`${r.brandName} · ${r.seriesName}`}</span>
-          </span>
-        ),
-      },
-      {
-        key: 'skuCode',
-        header: 'SKU',
-        cell: (r) => (
-          <Link
-            to={`/catalog/skus/${r.sku.id}`}
-            className="font-mono text-data tnum text-ink underline underline-offset-4 hover:text-acc-ink"
-          >
-            {r.sku.skuCode}
-          </Link>
-        ),
-      },
-      {
-        key: 'label',
-        header: 'Configuration',
-        cell: (r) => <span className="text-body-sm text-ink-2">{r.sku.label}</span>,
-      },
-      {
-        key: 'status',
-        header: 'Status',
-        cell: (r) =>
-          r.sku.isActive ? (
-            <StatusPill tone="neutral" label="Active" />
-          ) : (
-            <StatusPill tone="neutral" label="Deprecated" />
-          ),
-      },
-      {
-        key: 'listings',
-        header: 'Live listings',
-        numeric: true,
-        cell: (r) =>
-          r.sku.liveListingCount > 0 ? (
-            <span className="font-mono tnum text-ink-2">
-              {`${r.sku.liveListingCount} live ${r.sku.liveListingCount === 1 ? 'listing' : 'listings'}`}
-            </span>
-          ) : (
-            <span className="text-ink-4">None</span>
-          ),
-      },
-    ],
-    [],
-  );
 
   if (error) {
     return (
@@ -190,8 +300,13 @@ export function CatalogTreeRoute(): React.JSX.Element {
 
   if (!brands) {
     return (
-      <div className="tg-stack catalog-board">
-        <PageHeader title="Catalog">Loading the catalog.</PageHeader>
+      <div className="catalog-board">
+        <div className="ct-head">
+          <div>
+            <h1 className="ct-title">Catalog</h1>
+            <p className="ct-sub">Loading the catalog.</p>
+          </div>
+        </div>
         <Skeleton lines={8} />
       </div>
     );
@@ -221,90 +336,173 @@ export function CatalogTreeRoute(): React.JSX.Element {
 
   const totalSkus = brands.reduce((n, b) => n + b.skuCount, 0);
   const pageCount = board ? Math.max(1, Math.ceil(board.total / board.pageSize)) : 1;
-  const filteredBySearch = query.trim() !== '';
-  const filteredByBrand = brandId !== '';
-  const filteredEmpty = board !== null && board.total === 0 && (filteredBySearch || filteredByBrand);
+  const filtered = Boolean(query.trim() || brandId || modelId || cpu || ram || liveOnly);
+  const from = board && board.total > 0 ? (board.page - 1) * board.pageSize + 1 : 0;
+  const to = board ? Math.min(board.total, board.page * board.pageSize) : 0;
 
   return (
-    <div className="tg-stack catalog-board">
-      <PageHeader title="Catalog">
-        Brand, series, model, configuration. Search or pick a brand — every SKU is one row, with
-        the full path visible so you can jump straight to the record.
-      </PageHeader>
-
-      <div className="catalog-toolbar">
-        <div className="catalog-search">
-          <Input
-            label="Search"
-            placeholder="Brand, model or SKU code"
-            value={query}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="catalog-board">
+      <div className="ct-head">
+        <div>
+          <h1 className="ct-title">Catalog</h1>
+          <p className="ct-sub">
+            <strong>
+              {totalSkus} {plural(totalSkus, 'SKU', 'SKUs')}
+            </strong>{' '}
+            across {brands.length} {plural(brands.length, 'brand', 'brands')}. Each SKU is one
+            model in one configuration.
+          </p>
         </div>
+        <Link
+          to="/catalog/sku-requests"
+          className="ct-btn ct-btn--primary"
+          title="A SKU is added by approving a vendor's request, or by the CSV importer"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add SKU
+        </Link>
+      </div>
 
-        <div className="catalog-brand-rail" role="group" aria-label="Filter by brand">
+      <div className="ct-filters">
+        <div className="ct-row">
+          <label className="ct-search">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search brand, model or SKU code"
+              aria-label="Search the catalog"
+              value={query}
+              onChange={(e) => setFilter('q', e.target.value)}
+            />
+          </label>
+          <label className="ct-select">
+            Processor
+            <select value={cpu} onChange={(e) => setFilter('cpu', e.target.value)}>
+              <option value="">Any</option>
+              {(facets?.cpuFamilies ?? []).map((family) => (
+                <option key={family} value={family}>
+                  {family}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="ct-select">
+            RAM
+            <select value={ram} onChange={(e) => setFilter('ram', e.target.value)}>
+              <option value="">Any</option>
+              {(facets?.ramGb ?? []).map((gb) => (
+                <option key={gb} value={String(gb)}>
+                  {gb} GB
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
-            className={`catalog-brand-chip${brandId === '' ? ' catalog-brand-chip-active' : ''}`}
-            onClick={() => pickBrand('')}
+            className="ct-toggle"
+            aria-pressed={liveOnly}
+            onClick={() => setFilter('live', liveOnly ? '' : '1')}
           >
-            All brands
-            <span className="font-mono tnum">{totalSkus}</span>
+            Only with live listings
+          </button>
+        </div>
+        <div className="ct-brands" role="group" aria-label="Brand">
+          <button
+            type="button"
+            className="ct-brand"
+            aria-pressed={brandId === ''}
+            onClick={() => setFilter('brand', '')}
+          >
+            All brands <span>{totalSkus}</span>
           </button>
           {brands.map((brand) => (
             <button
               key={brand.id}
               type="button"
-              className={`catalog-brand-chip${brandId === brand.id ? ' catalog-brand-chip-active' : ''}`}
-              onClick={() => pickBrand(brand.id)}
+              className="ct-brand"
+              aria-pressed={brandId === brand.id}
+              onClick={() => setFilter('brand', brand.id)}
             >
-              {brand.name}
-              <span className="font-mono tnum">{brand.skuCount}</span>
+              {brand.name} <span>{brand.skuCount}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {board === null ? (
-        <Skeleton lines={8} />
-      ) : filteredEmpty ? (
-        <EmptyState
-          title={
-            query.trim() ? `Nothing matches “${query.trim()}”` : 'Nothing matches this filter'
+      <Board className="ct-card">
+        <DataBoard
+          className="ct-table"
+          caption={
+            board
+              ? filtered
+                ? `${board.total} of ${totalSkus} SKUs match, grouped by model.`
+                : `${board.total} ${plural(board.total, 'SKU', 'SKUs')} across ${brands.length} ${plural(brands.length, 'brand', 'brands')}, grouped by model.`
+              : 'Loading the catalog.'
           }
-          body="The catalog is not empty — this filter is. Clear it to see everything, or ask ops whether the machine needs a SKU request."
-        />
-      ) : (
-        <>
-          <Board>
-            <DataBoard
-              caption={
-                filteredBySearch || filteredByBrand
-                  ? `${board.total} of ${totalSkus} SKUs match.`
-                  : `${board.total} ${board.total === 1 ? 'SKU' : 'SKUs'} across ${brands.length} ${brands.length === 1 ? 'brand' : 'brands'}.`
+          columns={COLUMNS}
+          rows={board?.rows ?? []}
+          rowKey={(r) => r.sku.id}
+          rowClassName={() => 'ct-sku-row'}
+          loading={board === null}
+          skeletonRows={8}
+          group={GROUP}
+          empty={
+            <EmptyState
+              title={
+                query.trim() ? `Nothing matches “${query.trim()}”` : 'Nothing matches this filter'
               }
-              columns={columns}
-              rows={board.rows}
-              rowKey={(r) => r.sku.id}
-              empty={
-                <EmptyState
-                  title="Nothing on this page"
-                  body="This page is empty. Go back a page or clear your filters."
-                />
-              }
+              body="The catalog is not empty — this filter is. Clear it to see everything, or ask ops whether the machine needs a SKU request."
             />
-          </Board>
-
-          {pageCount > 1 && (
+          }
+        />
+        <div className="ct-foot">
+          <span>
+            {board ? (
+              <>
+                Showing SKUs{' '}
+                <strong>
+                  {from}–{to}
+                </strong>{' '}
+                of <strong>{board.total}</strong>
+              </>
+            ) : (
+              'Loading the catalog.'
+            )}
+          </span>
+          {board && pageCount > 1 ? (
             <Pagination
+              className="ct-pages"
               page={page}
               pageCount={pageCount}
               onPage={(next) => setFilter('page', String(next))}
-              label="Catalog board pages"
+              label="Pages"
             />
-          )}
-        </>
-      )}
+          ) : null}
+        </div>
+      </Board>
     </div>
   );
 }

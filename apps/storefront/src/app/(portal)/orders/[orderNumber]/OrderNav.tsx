@@ -5,6 +5,8 @@ import type { Route } from 'next';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { usePortal } from '../../shell/PortalContext';
+import { useSharedOrder } from './order-context';
+import { standing } from './order-state';
 
 /**
  * The sub-navigation for one order record.
@@ -35,6 +37,13 @@ interface OrderTab {
 interface OrderTabDef extends OrderTab {
   /** What a seat needs to open it. Absent means anyone who can read the order. */
   permission?: string;
+  /**
+   * Offered only once every machine on the order is inspected and verified.
+   * Before that the view has nothing measured to show, and a tab of "not
+   * inspected" cells reads as a page of failures for machines nobody has
+   * looked at yet.
+   */
+  afterVerification?: boolean;
 }
 
 const TABS: readonly OrderTabDef[] = [
@@ -43,7 +52,7 @@ const TABS: readonly OrderTabDef[] = [
   // is owed for it — two documents, two tabs, one URL each.
   { segment: '', label: 'Booking order' },
   { segment: '/sales-order', label: 'Sales order' },
-  { segment: '/units', label: 'Machines' },
+  { segment: '/units', label: 'Machines', afterVerification: true },
   // GET /buyer/orders/:n/documents checks `payment.invoice.read_own`, which an
   // approver and a viewer do not hold. The tab used to render for them and 403.
   { segment: '/documents', label: 'Documents', permission: 'payment.invoice.read_own' },
@@ -54,11 +63,16 @@ const TABS: readonly OrderTabDef[] = [
 export function OrderNav({ orderNumber }: { orderNumber: string }): React.JSX.Element {
   const pathname = usePathname();
   const { session } = usePortal();
+  const shared = useSharedOrder();
+  const verified = shared?.k === 'ready' ? standing(shared.order).verified : false;
   const base = `/orders/${encodeURIComponent(orderNumber)}`;
   // A tab that would 403 is absent rather than dimmed: unlike a rail entry, a
   // tab strip is a set of views of one record, and a locked view of a record
-  // you are already reading says nothing a reader can act on.
-  const tabs = TABS.filter((t) => !t.permission || session.permissions.includes(t.permission));
+  // you are already reading says nothing a reader can act on. The same for a
+  // view whose moment has not come: Machines waits for verification.
+  const tabs = TABS.filter(
+    (t) => (!t.permission || session.permissions.includes(t.permission)) && (!t.afterVerification || verified),
+  );
 
   return (
     <nav className="rectabs" aria-label={`Order ${orderNumber}`}>

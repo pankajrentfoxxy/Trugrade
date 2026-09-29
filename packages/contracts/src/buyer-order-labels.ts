@@ -10,7 +10,11 @@
 const BUYER_ORDER_STATUS_LABEL: Record<string, string> = {
   CREATED: 'Not yet placed',
   AWAITING_APPROVAL: 'Awaiting approval',
-  PAYMENT_PENDING: 'Payment pending',
+  // The order-first inspection: placed, then a technician names each machine,
+  // then we verify, then the buyer pays. The buyer's words for each step.
+  AWAITING_INSPECTION: 'Placed · inspection next',
+  AWAITING_VERIFICATION: 'Inspected · being verified',
+  PAYMENT_PENDING: 'Verified · pay now',
   CONFIRMED: 'Confirmed',
   // The dispatch point's answer and the steps to the door, in the buyer's
   // words. The enum names a vendor; a buyer never reads that word.
@@ -19,7 +23,7 @@ const BUYER_ORDER_STATUS_LABEL: Record<string, string> = {
   PICKUP_SCHEDULED: 'Being prepared',
   PACKED: 'Being prepared',
   INVOICED: 'Being prepared',
-  QC_IN_PROGRESS: 'Being prepared',
+  QC_IN_PROGRESS: 'Being inspected',
   QC_HOLD: 'Being prepared',
   QC_CLEARED: 'Being prepared',
   PICKED_UP: 'On its way',

@@ -3,6 +3,8 @@ import type { Permission } from '@trugrade/contracts';
 import { AuditRecheckRoute } from './AuditRecheck';
 import { GradeCorrectionsRoute } from './GradeCorrections';
 import { ManualInspectionRoute } from './ManualInspection';
+import { OrderInspectionRoute } from './OrderInspection';
+import { OrderInspectionsRoute } from './OrderInspections';
 import { SamplingRulesRoute } from './SamplingRules';
 import { ScheduleRoute } from './Schedule';
 import { ToolProvidersRoute } from './ToolProviders';
@@ -49,6 +51,20 @@ export interface ConsoleRoute {
 }
 
 export const qcRoutes: ConsoleRoute[] = [
+  // The order-first inspection queue: a technician's own visits, or every
+  // order visit for anyone who can schedule. `qc.visit.execute` is what the
+  // API checks on the technician's list and on recording a serial.
+  {
+    path: '/qc/orders',
+    element: React.createElement(OrderInspectionsRoute),
+    permission: 'qc.visit.execute',
+    label: 'Order inspections',
+  },
+  {
+    path: '/qc/orders/:visitId',
+    element: React.createElement(OrderInspectionRoute),
+    permission: 'qc.visit.execute',
+  },
   {
     path: '/qc/visits',
     element: React.createElement(VisitBoardRoute),

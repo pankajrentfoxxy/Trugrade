@@ -19,12 +19,17 @@ import { call, type ApiResult } from '../../../register/api';
 
 /** `A_PLUS` | `A` | `B`, as the grade enum spells it. */
 export interface OrderedMachine {
-  serialNumber: string;
+  /** Null until the technician has inspected the machine and recorded its serial. */
+  serialNumber: string | null;
   /** Null when the SKU has been withdrawn since. Never an invented title. */
   title: string | null;
   specSummary: string | null;
   grade: string;
   unitPrice: string;
+  /** ISO 8601 when the technician recorded it. Null before. */
+  inspectedAt: string | null;
+  /** ISO 8601 when we verified it. "Device verified" reads this and nothing else. */
+  verifiedAt: string | null;
 }
 
 export interface DispatchGroup {
@@ -130,8 +135,37 @@ export interface OrderRecord {
   /** What each dispatch point said it can supply, line by line. */
   supply: SupplyLine[];
   approval: OrderApproval | null;
+  /** How many machines the technician has recorded, of `unitsAllocated`. */
+  unitsInspected: number;
+  /** How many machines we have verified, of `unitsAllocated`. */
+  unitsVerified: number;
+  /** ISO 8601 when the last machine was verified. */
+  verifiedAt: string | null;
+  /**
+   * The payment deadline, ISO 8601. Set when the last machine is verified;
+   * null before, and null on credit terms. A real deadline: the order is
+   * cancelled and the machines released when it passes.
+   */
+  payBy: string | null;
+  paidAt: string | null;
+  /** True exactly when the Pay button should be on screen. The server decides. */
+  payable: boolean;
+}
+
+export interface PayResult {
+  orderNumber: string;
+  status: 'CONFIRMED';
+  paymentStatus: 'PAID';
+  paidAt: string;
+  amount: string;
 }
 
 /** One order, scoped to the reader's organisation by the repository. */
 export const getOrder = (orderNumber: string): Promise<ApiResult<OrderRecord>> =>
   call<OrderRecord>(`/api/buyer/orders/${encodeURIComponent(orderNumber)}`, { method: 'GET' });
+
+/** Pay for a verified order. Refused with the reason outside the 24-hour window. */
+export const payOrder = (orderNumber: string): Promise<ApiResult<PayResult>> =>
+  call<PayResult>(`/api/buyer/orders/${encodeURIComponent(orderNumber)}/pay`, {
+    method: 'POST',
+  });

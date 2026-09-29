@@ -61,7 +61,7 @@ export function ResultBar({
         </span>
       ) : (
         <span className="cnt">
-          <b className="mono">{total.toLocaleString('en-IN')}</b> sealed unit{total === 1 ? '' : 's'}{' '}
+          <b className="mono">{total.toLocaleString('en-IN')}</b> unit{total === 1 ? '' : 's'} on sale{' '}
           match &middot; <b className="mono">{models.toLocaleString('en-IN')}</b> model
           {models === 1 ? '' : 's'}
           {pincode === null ? (

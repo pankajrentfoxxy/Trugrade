@@ -218,6 +218,7 @@ async function makeDraft(ask: Money, serials: string[], grade: Grade = 'A'): Pro
       vendorWarrantyMonths: 3,
       vendorWarrantyScope: null,
       vendorAskPrice: ask,
+      qtyTotal: Math.max(serials.length, 1),
       moq: 1,
       dispatchSlaHours: 48,
     }),

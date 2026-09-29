@@ -84,7 +84,16 @@ function navigationRows(entries: readonly NavEntry[]): Row[] {
   }));
 }
 
-export function CommandPalette(): React.JSX.Element | null {
+export interface CommandPaletteProps {
+  /**
+   * `chrome` (default): the pill on the dark admin top bar. `hub` sits the same
+   * dialog behind a search-shaped trigger for the white hub masthead, matching
+   * `VendorShell`'s `hub-mast__search` without duplicating the search logic.
+   */
+  variant?: 'chrome' | 'hub';
+}
+
+export function CommandPalette({ variant = 'chrome' }: CommandPaletteProps): React.JSX.Element | null {
   const { principal } = useAuth();
   const navigate = useNavigate();
   const dialogRef = React.useRef<HTMLDialogElement>(null);
@@ -279,16 +288,29 @@ export function CommandPalette(): React.JSX.Element | null {
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        className={cn(
-          'flex h-[38px] min-w-0 items-center gap-2 rounded border border-chrome-line-2 px-3',
-          'text-body-sm text-on-chrome-2 transition-colors hover:bg-chrome-2 hover:text-on-chrome',
-        )}
+        aria-label={variant === 'hub' ? 'Search everything' : undefined}
+        className={
+          variant === 'hub'
+            ? cn(
+                'flex h-[42px] w-full min-w-0 items-center gap-2 rounded-full bg-acc-wash px-[18px]',
+                'text-body-sm text-ink-3 transition-colors hover:text-ink',
+              )
+            : cn(
+                'flex h-[38px] min-w-0 items-center gap-2 rounded border border-chrome-line-2 px-3',
+                'text-body-sm text-on-chrome-2 transition-colors hover:bg-chrome-2 hover:text-on-chrome',
+              )
+        }
       >
         <span aria-hidden="true">⌕</span>
-        <span className="hidden sm:inline">Search</span>
+        <span className={variant === 'hub' ? undefined : 'hidden sm:inline'}>Search</span>
         {/* Not amber. This is a control that opens a search box, not the primary
             action of any screen it sits over. */}
-        <kbd className="hidden font-mono text-label tracking-[0.08em] text-on-chrome-3 md:inline">
+        <kbd
+          className={cn(
+            'ml-auto hidden font-mono text-label tracking-[0.08em] md:inline',
+            variant === 'hub' ? 'text-ink-4' : 'text-on-chrome-3',
+          )}
+        >
           Ctrl K
         </kbd>
       </button>

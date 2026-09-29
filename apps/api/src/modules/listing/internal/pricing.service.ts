@@ -413,6 +413,31 @@ export class PricingService {
    * re-deriving consent by scanning `price_history` means a scan that picks the
    * wrong row silently re-authorises a listing nobody approved.
    */
+  /**
+   * What the floor guard would say, without saying it.
+   *
+   * The approval queue runs this over every waiting listing so the row can
+   * carry "review the price" before anyone presses Approve and meets the
+   * PreconditionFailed below. Same inputs, same arithmetic — it is
+   * `assertActivatable` minus the throw, and an override still wins.
+   */
+  async floorOf(
+    listingId: string,
+  ): Promise<{ floorPrice: Money; belowFloor: boolean; overridden: boolean }> {
+    const listing = await this.requireListing(listingId);
+    const cfg = await this.config();
+    const { floorPrice } = await this.compute({
+      cfg,
+      skuId: listing.skuId,
+      grade: listing.grade,
+      vendorWarrantyMonths: listing.vendorWarrantyMonths,
+      vendorAskPrice: this.askOf(listing),
+      units: listing.qtyTotal,
+    });
+    const overridden = listing.floorOverrideAt !== null;
+    return { floorPrice, belowFloor: !overridden && listing.unitPrice.lt(floorPrice), overridden };
+  }
+
   async assertActivatable(listingId: string): Promise<void> {
     const listing = await this.requireListing(listingId);
     if (listing.floorOverrideAt) return;

@@ -20,6 +20,12 @@ const deliveryOverrideSchema = z.object({
   reason: z.string().trim().min(8).max(500),
 });
 type DeliveryOverrideDto = z.infer<typeof deliveryOverrideSchema>;
+
+const verifySchema = z.object({
+  slotIds: z.array(z.string().uuid()).max(500).optional(),
+});
+type VerifyDto = z.infer<typeof verifySchema>;
+import { OrderVerificationService, type VerifyResult } from './internal/order-verification.service';
 import {
   OpsOrderService,
   type OpsOrderBoardView,
@@ -42,7 +48,25 @@ export class OrderingOpsController {
     private readonly documents: OrderDocumentsService,
     private readonly delivery: DeliveryService,
     private readonly board: OpsOrderService,
+    private readonly verification: OrderVerificationService,
   ) {}
+
+  /**
+   * Verify the machines the technician named.
+   *
+   * `slotIds` empty verifies every inspected machine on the order. The last
+   * verification makes the order payable, raises the purchase orders and
+   * starts the buyer's 24-hour clock — all inside one transaction.
+   */
+  @Post(':orderNumber/verify')
+  @HttpCode(200)
+  @RequirePermissions('ordering.any.override')
+  verify(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+    @Body(new ZodValidationPipe(verifySchema)) body: VerifyDto,
+  ): Promise<VerifyResult> {
+    return this.verification.verify(orderNumber, body.slotIds ?? []);
+  }
 
   /**
    * The order board — T39, `03_UX_SPEC.md` §3C.4.

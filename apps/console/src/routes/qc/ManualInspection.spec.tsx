@@ -5,6 +5,16 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QC_AREAS } from '@trugrade/contracts';
 import { ManualInspectionRoute } from './ManualInspection';
+import { send, uploadPhoto } from './api';
+import type * as Api from './api';
+
+// The writes go through `./api`; the reads through `apiFetch`, which the fetch
+// spy below answers. Stubbing the writes is what lets a test submit the form.
+vi.mock('./api', async (importOriginal) => ({
+  ...(await importOriginal<typeof Api>()),
+  send: vi.fn(),
+  uploadPhoto: vi.fn(),
+}));
 import { QC_AREA_CODES, type TechnicianOption, type VisitDetail } from './types';
 
 const VISIT: VisitDetail = {
@@ -28,6 +38,10 @@ const VISIT: VisitDetail = {
   unitsAbsent: 0,
   geoVarianceMetres: 40,
   geoVarianceAlertMetres: 500,
+  orderNumber: null,
+  addressId: 'addr-1',
+  daysOverdue: null,
+  today: '2026-09-29',
   requestedAt: '2026-08-20T10:00:00Z',
   arrivedAt: '2026-08-26T03:35:00Z',
   startedAt: '2026-08-26T03:40:00Z',
@@ -45,11 +59,21 @@ const VISIT: VisitDetail = {
       serialNumber: 'CND4233328',
       listingId: 'l-1',
       skuLabel: 'HP Victus 16 · i7 · 16 GB · 512 GB NVMe',
+      skuTitle: 'HP Victus 16',
+      specSummary: 'i7 · 16 GB · 512 GB NVMe',
       declaredGrade: 'A',
       outcome: 'PENDING',
       absentReason: null,
       qcReportId: null,
       durationSeconds: null,
+      startedAt: null,
+      completedAt: null,
+      unitStatus: 'AWAITING_QC',
+      isSellable: false,
+      verdict: null,
+      gradeFinal: null,
+      qcScore: null,
+      gradeOverrideReason: null,
     },
   ],
   toolRuns: [],
@@ -87,7 +111,7 @@ describe('the form captures the twelve areas the database actually allows', () =
   it('renders the schema codes, not the cosmetic vocabulary the doc lists', async () => {
     mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
     // The twelve areas are a <fieldset> each rather than twelve rows of a
     // <table>: four controls per area is a form, and DataBoard reads data rather
@@ -106,7 +130,7 @@ describe('the form captures the twelve areas the database actually allows', () =
   it('offers "not measured" on every single area', async () => {
     mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
     const rows = document.querySelectorAll('[data-area]');
     for (const row of rows) {
@@ -123,10 +147,9 @@ describe('the serial hard stop', () => {
     const user = userEvent.setup();
     mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
-    await user.selectOptions(screen.getByLabelText('Unit on the manifest'), 'vu-1');
-    await user.type(screen.getByLabelText('Serial read off the machine'), 'CND9999999');
+    await user.type(screen.getByLabelText(/Serial number, read off the machine/), 'CND9999999');
 
     expect(screen.getByText('Stop. This is not the machine on the manifest.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Record as untestable/ })).toBeInTheDocument();
@@ -136,10 +159,9 @@ describe('the serial hard stop', () => {
     const user = userEvent.setup();
     mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
-    await user.selectOptions(screen.getByLabelText('Unit on the manifest'), 'vu-1');
-    await user.type(screen.getByLabelText('Serial read off the machine'), 'CND4233328');
+    await user.type(screen.getByLabelText(/Serial number, read off the machine/), 'CND4233328');
 
     expect(screen.getByText('Matches the manifest: CND4233328')).toBeInTheDocument();
     expect(
@@ -148,14 +170,130 @@ describe('the serial hard stop', () => {
   });
 });
 
+describe('an order visit', () => {
+  // An ordered machine has no manifest line: the serial names one of the
+  // order's open slots, and the form never asks for a unit.
+  const ORDER_VISIT: VisitDetail = { ...VISIT, id: 'visit-2', orderNumber: 'TT-26-00039', manifest: [] };
+  const openSlot = (slotId: string) => ({
+    slotId,
+    title: 'Dell Latitude 5420',
+    specSummary: 'i5-1145G7 · 16 GB · 512 GB NVMe',
+    grade: 'A',
+    serialNumber: null,
+    inspectedAt: null,
+    verifiedAt: null,
+  });
+  const ORDER_VIEW = {
+    visitId: 'visit-2',
+    visitNumber: 'QCV-20260928-FD0569A7',
+    status: 'TECH_ASSIGNED',
+    orderNumber: 'TT-26-00039',
+    vendorLegalName: null,
+    site: null,
+    technicianId: 'tech-1',
+    technicianName: 'R. Iyer',
+    assignedAt: null,
+    assignedByName: null,
+    scheduledDate: null,
+    startedAt: null,
+    completedAt: null,
+    verifiedAt: null,
+    verifiedByName: null,
+    purchaseOrderNumber: null,
+    unitsRequested: 2,
+    unitsInspected: 0,
+    slots: [openSlot('s1'), openSlot('s2')],
+  };
+  function mockOrderApi() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes('/technicians') ? TECHS : url.includes('/order-inspections/') ? ORDER_VIEW : ORDER_VISIT;
+      return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
+    });
+  }
+
+  // Flips the moment the report is sent: the refetch that follows sees slot 1 named.
+  let named = false;
+
+  /** Answer every section with the least a FAIL report needs, then submit. */
+  async function fillAndRecord(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    vi.mocked(uploadPhoto).mockImplementation(async () => ({ fileKey: 'k/x', url: '/f/x', hash: 'c'.repeat(64) }) as never);
+    vi.mocked(send).mockImplementation(async () => {
+      named = true;
+      return { reportId: 'rep-1' } as never;
+    });
+    await user.type(screen.getByLabelText(/Serial number, read off the machine/), 'ABCD1234');
+    await user.type(screen.getByLabelText(/^Started/), '2026-09-29T10:00');
+    await user.type(screen.getByLabelText(/^Completed/), '2026-09-29T10:20');
+    for (const row of document.querySelectorAll('[data-area]')) {
+      await user.click(within(row as HTMLElement).getByLabelText('Fail'));
+      await user.type(within(row as HTMLElement).getByRole('spinbutton'), '0');
+    }
+    for (const input of document.querySelectorAll('input[type=file][aria-label^="Photo:"]')) {
+      if ((input as HTMLInputElement).getAttribute('aria-label')?.includes('Seal')) continue;
+      await user.upload(input as HTMLInputElement, new File(['x'], 'x.jpg', { type: 'image/jpeg' }));
+    }
+    await user.click(screen.getByLabelText('✕ Fail'));
+    await user.type(screen.getByLabelText(/^QC score/), '10');
+    await user.click(screen.getByRole('button', { name: 'Record inspection' }));
+  }
+
+  it('leads from a recorded machine straight to the next one, keeping the technician', async () => {
+    const user = userEvent.setup();
+    named = false;
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes('/technicians')
+        ? TECHS
+        : url.includes('/order-inspections/')
+          ? { ...ORDER_VIEW, slots: named ? [{ ...openSlot('s1'), serialNumber: 'ABCD1234', inspectedAt: '2026-09-29T04:50:00Z' }, openSlot('s2')] : ORDER_VIEW.slots }
+          : ORDER_VISIT;
+      return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
+    });
+    renderForm();
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
+    await screen.findByTestId('ordered-machine');
+    expect(screen.queryByTestId('recorded-on-visit')).toBeNull();
+
+    await fillAndRecord(user);
+    expect(vi.mocked(send)).toHaveBeenCalledTimes(1);
+    expect((vi.mocked(send).mock.calls[0]?.[2] as { slotId: string }).slotId).toBe('s1');
+
+    // The success page counts what the refetched order still has open.
+    const next = await screen.findByRole('button', { name: 'Record the next machine (1 left)' });
+    await user.click(next);
+
+    await screen.findByTestId('recorded-on-visit');
+    expect(screen.getByTestId('recorded-on-visit')).toHaveTextContent('ABCD1234');
+    expect(screen.getByTestId('ordered-machine')).toHaveTextContent('1 of 2 still to record');
+    expect(screen.getByLabelText(/Serial number, read off the machine/)).toHaveValue('');
+    expect(screen.getByLabelText(/^Technician/)).toHaveValue('tech-1');
+  }, 30_000);
+
+  it('asks for no manifest unit: the serial names the ordered machine', async () => {
+    const user = userEvent.setup();
+    mockOrderApi();
+    renderForm();
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
+
+    expect(screen.queryByLabelText(/Unit on the manifest/)).toBeNull();
+    expect(await screen.findByTestId('ordered-machine')).toHaveTextContent('Dell Latitude 5420 · Grade A');
+    expect(screen.getByTestId('ordered-machine')).toHaveTextContent('2 of 2 still to record');
+
+    await user.type(screen.getByLabelText(/Serial number, read off the machine/), 'ABCD1234');
+    expect(screen.getByText(/will name this machine on order TT-26-00039/)).toBeInTheDocument();
+    expect(screen.queryByText('Stop. This is not the machine on the manifest.')).not.toBeInTheDocument();
+  });
+});
+
 describe('submitting', () => {
   it('lists everything outstanding and posts nothing', async () => {
     const user = userEvent.setup();
     const fetchSpy = mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
-    await user.click(screen.getByRole('button', { name: 'Record the inspection' }));
+    await user.click(screen.getByRole('button', { name: 'Record inspection' }));
 
     const blockers = await screen.findByTestId('blockers');
     expect(within(blockers).getByText(/Scan or type the serial/)).toBeInTheDocument();
@@ -175,11 +313,11 @@ describe('the cycle count', () => {
     const user = userEvent.setup();
     mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
-    const field = screen.getByLabelText('Cycle count');
+    const field = screen.getByLabelText(/^Cycle count/);
     await user.type(field, '0');
-    await user.click(screen.getByLabelText(/Not reported by this system/));
+    await user.click(screen.getByLabelText(/This machine doesn’t report it/));
 
     // A disabled box holding a stale zero is exactly the zero-default that
     // 07 section 3.5 says a never-fabricate policy leaks through.
@@ -193,12 +331,12 @@ describe('the grade cap is on screen, not only in the blocker list', () => {
     const user = userEvent.setup();
     mockApi();
     renderForm();
-    await screen.findByText('Manual inspection');
+    await screen.findByRole('heading', { level: 1, name: 'Record an inspection' });
 
     const ports = document.querySelector('[data-area="PORTS"]') as HTMLElement;
     await user.click(within(ports).getByLabelText('Fail'));
 
-    expect(screen.getByText('Caps this machine at B')).toBeInTheDocument();
+    expect(screen.getByText('Caps this machine at B.')).toBeInTheDocument();
     expect(screen.getByText(/A weighted mean would swallow that/)).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  LISTING_QTY,
   gradeSchema,
   paginationSchema,
   uuidSchema,
@@ -103,6 +104,16 @@ export const createListingDraftSchema = z.object({
    * put there before the pricing engine has run.
    */
   vendorAskPrice: vendorNetPayoutSchema,
+  /**
+   * How many machines the vendor is offering. Declared, not counted: serials
+   * are named by the technician once a buyer has ordered, so a listing goes
+   * live on this number alone. VR-080 bounds it.
+   */
+  qtyTotal: z
+    .number()
+    .int()
+    .min(LISTING_QTY.min!, LISTING_QTY.message)
+    .max(LISTING_QTY.max!, LISTING_QTY.message),
   moq: z.number().int().min(1).max(5000).default(1),
   dispatchSlaHours: z.number().int().min(1).max(720).default(48),
 });

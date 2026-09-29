@@ -99,8 +99,11 @@ export const OPS_DOMAINS: readonly OpsDomain[] = [
     key: 'quality',
     label: 'Quality',
     tabs: [
-      // Inspections first: it is the queue where the next move is ours, and the
-      // visit board beside it is the detailed view of the same work.
+      // The order-first flow's two queues first: listings waiting for approval,
+      // and the technician visits raised per order. The batch inspection board
+      // beside them is the older, pre-order path.
+      { to: '/listings/approvals', label: 'Listing approvals', permission: 'listing.any.write' },
+      { to: '/qc/orders', label: 'Order inspections', permission: 'qc.visit.execute' },
       {
         to: '/supply/inspections',
         label: 'Inspections',

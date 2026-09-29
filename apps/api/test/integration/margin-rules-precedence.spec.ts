@@ -373,6 +373,7 @@ async function makeDraft(ask: Money, serials: string[], grade: 'A_PLUS' | 'A' | 
       vendorWarrantyMonths: 3,
       vendorWarrantyScope: null,
       vendorAskPrice: ask,
+      qtyTotal: Math.max(serials.length, 1),
       moq: 1,
       dispatchSlaHours: 48,
     }),

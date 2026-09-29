@@ -1,26 +1,31 @@
 'use client';
 
 import * as React from 'react';
-import { Button, EmptyState, GradeBadge, Skeleton, StatusPill } from '@trugrade/ui';
+import { EmptyState, GradeBadge, Skeleton, StatusPill } from '@trugrade/ui';
 import { BRAND } from '@trugrade/config/brand';
 import { Money, type Grade } from '@trugrade/contracts';
 import type { ApiFailure } from '../../../../register/api';
-import { inIst } from '../../../../../lib/deadline';
+import { Deadline, inIst } from '../../../../../lib/deadline';
+import { PayButton, useReloadOrder } from '../OrderChrome';
 import { getSalesOrder, type SalesOrder as SalesOrderView, type SalesOrderLine } from './api';
 
 /**
- * The sales order: what the dispatch points confirmed, and what it comes to.
+ * The sales order: what we verified, and what it comes to.
  *
- * Three states, each drawn as itself:
+ * Under the order-first flow nobody waits on a dispatch point to answer. Our
+ * technician names each machine at the supply point, we verify every one, and
+ * at that moment there is a sales order to price and the buyer is asked to pay.
+ * The tab has four faces, each drawn as itself:
  *
- * - **Waiting.** Not every dispatch point has answered. There are no totals,
- *   because a total of a partly answered order is a figure the buyer would be
- *   asked to pay and then asked to pay again. The lines are listed with what
- *   was ordered and, per line, what has been confirmed so far or "not confirmed
- *   yet" as an absence.
- * - **Ready.** Every line's confirmed quantity, priced, then GST and freight,
- *   then the payment — the one primary action on this screen.
- * - **Cancelled.** Every dispatch point refused. Nothing is owed, said plainly.
+ * - **Waiting.** Machines are still being inspected or verified. There are no
+ *   totals — a total of a partly verified order is a figure the buyer would be
+ *   asked to pay and then asked to pay again — and nothing has been charged.
+ *   Each line shows what was ordered, how many have a serial, how many are
+ *   verified.
+ * - **Verified, unpaid.** Every verified machine priced, then GST and freight,
+ *   the deadline, and the payment — the one primary action on this screen.
+ * - **Paid.** The same figures as what was paid, with when.
+ * - **Cancelled.** Nothing is owed, said plainly.
  *
  * The order's own header, progress and tab strip are the layout's `OrderChrome`;
  * this is the body under them. No vendor anywhere: a dispatch point is
@@ -60,8 +65,12 @@ const PAYMENT_MODE: Readonly<Record<string, string>> = {
   CREDIT: 'Credit terms',
 };
 
+const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+
 export function SalesOrder({ orderNumber }: { orderNumber: string }): React.JSX.Element {
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
+  const [generation, setGeneration] = React.useState(0);
+  const reloadOrder = useReloadOrder();
 
   React.useEffect(() => {
     let live = true;
@@ -76,7 +85,7 @@ export function SalesOrder({ orderNumber }: { orderNumber: string }): React.JSX.
     return () => {
       live = false;
     };
-  }, [orderNumber]);
+  }, [orderNumber, generation]);
 
   if (phase.k === 'loading') {
     return (
@@ -136,20 +145,49 @@ export function SalesOrder({ orderNumber }: { orderNumber: string }): React.JSX.
     );
   }
 
-  return <Record data={phase.data} />;
+  return (
+    <Record
+      data={phase.data}
+      onPaid={() => {
+        // The tab and the chrome above it both re-read the order: one payment,
+        // one truth, no patched copy.
+        setGeneration((n) => n + 1);
+        reloadOrder();
+      }}
+    />
+  );
 }
 
 /* ==========================================================================
  * The record
  * ======================================================================== */
 
-function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
-  const state =
-    data.state === 'READY'
-      ? { tone: 'neutral' as const, label: 'Confirmed' }
-      : data.state === 'CANCELLED'
-        ? { tone: 'neutral' as const, label: 'Cancelled' }
-        : { tone: 'warn' as const, label: 'Waiting for confirmation' };
+/**
+ * The pill. `warn` where somebody has to act — the buyer, once verified and
+ * unpaid — and neutral everywhere else: green and red are PASS and FAIL, and an
+ * order state is neither.
+ */
+function pillOf(data: SalesOrderView): { tone: 'neutral' | 'warn'; label: string } {
+  switch (data.stage) {
+    case 'INSPECTION':
+      return {
+        tone: 'warn',
+        label: data.machines.inspected > 0 ? 'Inspection in progress' : 'Awaiting inspection',
+      };
+    case 'VERIFICATION':
+      return { tone: 'warn', label: 'Awaiting verification' };
+    case 'PAYMENT':
+      return { tone: 'warn', label: 'Verified · pay now' };
+    case 'PAID':
+      return { tone: 'neutral', label: data.payment.mode === 'CREDIT' ? 'On credit terms' : 'Paid' };
+    case 'CANCELLED':
+      return { tone: 'neutral', label: 'Cancelled' };
+  }
+}
+
+function Record({ data, onPaid }: { data: SalesOrderView; onPaid: () => void }): React.JSX.Element {
+  const pill = pillOf(data);
+  const m = data.machines;
 
   return (
     <div className="od-grid">
@@ -159,7 +197,7 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
             <h2 id="so-head">
               Sales order · <span className="mono">{data.orderNumber}</span>
             </h2>
-            <StatusPill tone={state.tone} label={state.label} />
+            <StatusPill tone={pill.tone} label={pill.label} />
           </header>
           <div className="od-card__body">
             <p className="od-lead">
@@ -167,20 +205,35 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
             </p>
             <dl className="od-facts">
               <div>
-                <dt>Dispatch points confirmed</dt>
+                <dt>Machines verified</dt>
                 <dd className="mono">
-                  {data.dispatchPointsAnswered} of {data.dispatchPoints}
+                  {m.verified} of {m.ordered}
                 </dd>
               </div>
               <div>
-                <dt>Confirmed on</dt>
-                <dd className={data.confirmedAt ? 'mono' : 'notmeasured'}>
-                  {data.confirmedAt ? inIst(data.confirmedAt) : 'Not yet'}
+                <dt>Verified on</dt>
+                <dd className={data.verifiedAt ? 'mono' : 'notmeasured'}>
+                  {data.verifiedAt ? inIst(data.verifiedAt) : 'Not yet'}
                 </dd>
               </div>
               <div>
                 <dt>Payment</dt>
-                <dd>{PAYMENT_MODE[data.payment.mode] ?? data.payment.mode}</dd>
+                <dd>
+                  {PAYMENT_MODE[data.payment.mode] ?? data.payment.mode}
+                  {data.paidAt ? (
+                    <>
+                      {' '}
+                      · paid <span className="mono">{inIst(data.paidAt)}</span>
+                    </>
+                  ) : data.payment.payable && data.payBy ? (
+                    <>
+                      {' '}
+                      · due <span className="mono">{inIst(data.payBy)}</span>
+                    </>
+                  ) : (
+                    ` · ${(PAYMENT_STATUS[data.payment.status] ?? data.payment.status).toLowerCase()}`
+                  )}
+                </dd>
               </div>
             </dl>
           </div>
@@ -190,13 +243,16 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
         {data.state === 'CANCELLED' && (
           <section className="od-card oappr" role="status" aria-labelledby="so-cancelled">
             <header className="od-card__head">
-              <h2 id="so-cancelled">Every dispatch point turned this order down</h2>
+              <h2 id="so-cancelled">This order was cancelled</h2>
             </header>
             <div className="od-card__body">
               <p className="oapprlead">
-                None of the machines you ordered could be supplied, so there is no sales order and
-                nothing is owed. Nothing was charged. If you still need these machines, put them in
-                a cart again — we will hold whatever is in stock.
+                There is no sales order and nothing is owed.{' '}
+                {data.payment.status === 'PAID'
+                  ? 'What was paid is refunded to the account it came from.'
+                  : 'Nothing was charged.'}{' '}
+                If you still need these machines, put them in a cart again — we will hold whatever
+                is in stock.
               </p>
             </div>
           </section>
@@ -205,12 +261,12 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
         <section className="od-card" aria-labelledby="so-lines">
           <header className="od-card__head">
             <h2 id="so-lines">
-              {data.state === 'READY' ? 'What you will be invoiced for' : 'The lines on this order'}
+              {data.state === 'READY' ? (data.stage === 'PAID' ? 'What you were invoiced for' : 'What you will be invoiced for') : 'The lines on this order'}
             </h2>
             <span>
               {data.state === 'READY'
-                ? 'Confirmed quantities only. A machine nobody can supply is not on the invoice.'
-                : 'Quantities appear here as each dispatch point confirms them'}
+                ? 'Verified machines only. A machine we did not verify is not on the invoice.'
+                : 'Each machine is named by our technician, then verified by us'}
             </span>
           </header>
           <ul className="od-sup">
@@ -223,7 +279,7 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
 
       <aside className="od-col">
         {data.state === 'READY' && data.totals ? (
-          <Summary data={data} totals={data.totals} />
+          <Summary data={data} totals={data.totals} onPaid={onPaid} />
         ) : (
           <section className="od-card od-summary" aria-labelledby="so-money">
             <h2 id="so-money">
@@ -232,7 +288,7 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
             <p className="od-lead">
               {data.state === 'CANCELLED'
                 ? 'No sales order exists for this booking, so there is no invoice and no payment.'
-                : `The price, the GST and the freight appear here once every dispatch point has confirmed what it can send — ${data.dispatchPointsAnswered} of ${data.dispatchPoints} ${data.dispatchPoints === 1 ? 'has' : 'have'} so far. Nothing is charged until then.`}
+                : `The price, the GST and the freight appear here once every machine is verified — ${m.verified} of ${m.ordered} ${plural(m.verified, 'is', 'are')} so far. Nothing is charged until then.`}
             </p>
             <div className="od-total">
               <div className="od-total__label">Total</div>
@@ -246,44 +302,73 @@ function Record({ data }: { data: SalesOrderView }): React.JSX.Element {
 }
 
 function Headline({ data }: { data: SalesOrderView }): React.JSX.Element {
+  const m = data.machines;
+  if (data.state === 'CANCELLED') {
+    return <>This order was cancelled. Nothing is owed{data.payment.status === 'PAID' ? ', and what was paid is refunded' : ' and nothing was charged'}.</>;
+  }
   if (data.state === 'WAITING') {
-    return (
+    return data.stage === 'VERIFICATION' ? (
       <>
-        Waiting for {data.dispatchPoints === 1 ? 'the dispatch point' : 'the dispatch points'} to
-        confirm what {data.dispatchPoints === 1 ? 'it' : 'they'} can send. The sales order — the
-        quantities, the price, the GST and the freight — appears here the moment the last one
-        answers.
+        Every machine has a serial recorded by our technician; we are verifying each one. The sales
+        order — the machines, the price, the GST and the freight — appears here the moment the last
+        one is verified, and that is when you pay.
+      </>
+    ) : (
+      <>
+        Our technician is naming each machine at the supply point and recording its serial; we then
+        verify every one. The sales order — the machines, the price, the GST and the freight —
+        appears here the moment the last one is verified, and that is when you pay.
       </>
     );
   }
-  if (data.state === 'CANCELLED') {
-    return <>Every dispatch point refused this order. Nothing is owed and nothing was charged.</>;
+  if (data.stage === 'PAID') {
+    return (
+      <>
+        <b className="mono">{m.verified}</b> of the <b className="mono">{m.ordered}</b> machines you
+        ordered were verified by us{data.verifiedAt ? ` on ${inIst(data.verifiedAt)}` : ''}, and{' '}
+        {data.payment.mode === 'CREDIT' ? (
+          <>this is what {BRAND.legalEntity} invoices on your credit terms.</>
+        ) : (
+          <>
+            you paid {BRAND.legalEntity} in full{data.paidAt ? ` on ${inIst(data.paidAt)}` : ''}. The
+            dispatch point is sending your verified machines.
+          </>
+        )}
+      </>
+    );
   }
-  const confirmed = data.lines.reduce((n, l) => n + (l.qtyConfirmed ?? 0), 0);
-  const ordered = data.lines.reduce((n, l) => n + l.qtyOrdered, 0);
   return (
     <>
-      <b className="mono">{confirmed}</b> of the <b className="mono">{ordered}</b> machines you
-      ordered are confirmed by the dispatch points, and this is what they come to from{' '}
-      {BRAND.legalEntity} on one invoice.
+      <b className="mono">{m.verified}</b> of the <b className="mono">{m.ordered}</b> machines you
+      ordered were verified by us{data.verifiedAt ? ` on ${inIst(data.verifiedAt)}` : ''}, and this is
+      what they come to from {BRAND.legalEntity} on one invoice. Pay to confirm the order
+      {data.payBy ? (
+        <>
+          {' '}
+          by <b className="mono">{inIst(data.payBy)}</b>
+        </>
+      ) : null}
+      .
     </>
   );
 }
 
 function Waiting({ data }: { data: SalesOrderView }): React.JSX.Element {
+  const m = data.machines;
   return (
     <section className="od-card oappr pending" role="status" aria-labelledby="so-waiting">
       <header className="od-card__head">
-        <h2 id="so-waiting">Waiting for the dispatch points to confirm</h2>
+        <h2 id="so-waiting">Waiting for every machine to be verified</h2>
       </header>
       <div className="od-card__body">
         <p className="oapprlead">
-          <b className="mono">{data.dispatchPointsAnswered}</b> of{' '}
-          <b className="mono">{data.dispatchPoints}</b>{' '}
-          {data.dispatchPoints === 1 ? 'dispatch point has' : 'dispatch points have'} confirmed what
-          they can send. Until the last one answers there is no sales order to price, so there is no
-          amount here and <b>nothing has been charged</b>. You will see the confirmed quantities,
-          the price, the GST and the freight the moment it lands.
+          <b className="mono">{m.inspected}</b> of <b className="mono">{m.ordered}</b> machines{' '}
+          {plural(m.ordered, 'has', 'have')} a serial recorded by our technician, and{' '}
+          <b className="mono">{m.verified}</b> of <b className="mono">{m.ordered}</b>{' '}
+          {plural(m.verified, 'is', 'are')} verified. Until the last one is verified there is no
+          sales order to price, so there is no amount here and <b>nothing has been charged</b>. You
+          will see the verified machines, the price, the GST and the freight the moment it lands,
+          with the date to pay by.
         </p>
       </div>
     </section>
@@ -291,7 +376,7 @@ function Waiting({ data }: { data: SalesOrderView }): React.JSX.Element {
 }
 
 function Line({ line, ready }: { line: SalesOrderLine; ready: boolean }): React.JSX.Element {
-  const short = line.qtyConfirmed !== null && line.qtyConfirmed < line.qtyOrdered;
+  const short = ready && line.qtyVerified < line.qtyOrdered;
   return (
     <li>
       <div className="od-sup__row">
@@ -313,9 +398,15 @@ function Line({ line, ready }: { line: SalesOrderLine; ready: boolean }): React.
             <dd className="mono">{line.qtyOrdered}</dd>
           </div>
           <div>
-            <dt>Confirmed</dt>
-            <dd className={line.qtyConfirmed === null ? 'notmeasured' : 'mono'}>
-              {line.qtyConfirmed === null ? 'Not yet' : line.qtyConfirmed}
+            <dt>Serial recorded</dt>
+            <dd className="mono">
+              {line.qtyInspected} of {line.qtyOrdered}
+            </dd>
+          </div>
+          <div>
+            <dt>Verified</dt>
+            <dd className="mono">
+              {line.qtyVerified} of {line.qtyOrdered}
             </dd>
           </div>
           <div>
@@ -336,9 +427,9 @@ function Line({ line, ready }: { line: SalesOrderLine; ready: boolean }): React.
       </div>
       {short && (
         <p className="od-sup__short">
-          This dispatch point can send <span className="mono">{line.qtyConfirmed}</span> of the{' '}
-          <span className="mono">{line.qtyOrdered}</span> you ordered.{' '}
-          {ready ? 'Only the confirmed machines are priced here.' : 'We are sourcing the rest.'}
+          <span className="mono">{line.qtyVerified}</span> of the{' '}
+          <span className="mono">{line.qtyOrdered}</span> you ordered were verified. Only the
+          verified machines are priced here; the rest are not charged.
         </p>
       )}
     </li>
@@ -352,23 +443,25 @@ function Line({ line, ready }: { line: SalesOrderLine; ready: boolean }): React.
 function Summary({
   data,
   totals,
+  onPaid,
 }: {
   data: SalesOrderView;
   totals: NonNullable<SalesOrderView['totals']>;
+  onPaid: () => void;
 }): React.JSX.Element {
   const tax = totals.tax;
   const taxable = Money.parse(totals.subtotal).add(Money.parse(totals.freight));
   const paid = data.payment.status === 'PAID';
   return (
     <section className="od-card od-summary" aria-labelledby="so-money">
-      <h2 id="so-money">What this sales order comes to</h2>
+      <h2 id="so-money">{paid ? 'What you paid' : 'What this sales order comes to'}</h2>
       <p className="od-lead">
-        The confirmed machines, the freight to your site, and the GST on both. This is the figure
-        the invoice will carry.
+        The verified machines, the freight to your site, and the GST on both.{' '}
+        {paid ? 'This is the figure on your invoice.' : 'This is the figure the invoice will carry.'}
       </p>
       <dl className="od-lines">
         <div>
-          <dt>Confirmed machines</dt>
+          <dt>Verified machines</dt>
           <dd>{rupees(totals.subtotal)}</dd>
         </div>
         <div>
@@ -410,11 +503,19 @@ function Summary({
         </div>
         <div className="od-total__amt mono">{rupees(totals.grandTotal)}</div>
       </div>
-      <PayControl data={data} />
+      <PayControl data={data} onPaid={onPaid} />
       <dl className="od-kv">
         <div>
           <dt>Payment</dt>
-          <dd>{PAYMENT_STATUS[data.payment.status] ?? data.payment.status}</dd>
+          <dd>
+            {PAYMENT_STATUS[data.payment.status] ?? data.payment.status}
+            {data.paidAt ? (
+              <>
+                {' '}
+                · <span className="mono">{inIst(data.paidAt)}</span>
+              </>
+            ) : null}
+          </dd>
         </div>
         <div>
           <dt>Seller</dt>
@@ -426,15 +527,10 @@ function Summary({
 }
 
 /**
- * The one primary action on this screen.
- *
- * Online payment is not connected in this product yet — there is no gateway
- * adapter and no `/checkout/pay` route, only the spec for one — so the control
- * is here, for the amount, with the reason it cannot be pressed stated on it.
- * It is never drawn as a working button that leads nowhere: `disabledReason`
- * keeps it reachable and says what will change it.
+ * The one primary action on this screen: the same button the order record
+ * offers, so paying from either tab is the same payment.
  */
-function PayControl({ data }: { data: SalesOrderView }): React.JSX.Element | null {
+function PayControl({ data, onPaid }: { data: SalesOrderView; onPaid: () => void }): React.JSX.Element | null {
   if (!data.totals) return null;
   if (data.payment.status === 'PAID') {
     return (
@@ -451,15 +547,24 @@ function PayControl({ data }: { data: SalesOrderView }): React.JSX.Element | nul
       </p>
     );
   }
-  if (!data.payment.payable) return null;
+  if (!data.payment.payable) {
+    return (
+      <p className="fnote off">
+        {data.payBy
+          ? `The time to pay ran out at ${inIst(data.payBy)}. The machines have gone back on sale; put them in a cart again if you still need them.`
+          : 'This order cannot be paid here right now.'}
+      </p>
+    );
+  }
   return (
-    <Button
-      variant="primary"
-      block
-      className="od-btn--primary"
-      disabledReason="Online payment is not connected yet. Your account manager will send payment instructions for this amount, and this button will take the payment once it is."
-    >
-      Pay {rupees(data.totals.grandTotal)}
-    </Button>
+    <div className="od-paynow__body">
+      {data.payBy && (
+        <p className="od-paynow__deadline">
+          Pay by <span className="mono">{inIst(data.payBy)}</span> · <Deadline expiresAt={data.payBy} />.
+          After that the order is cancelled and the machines go back on sale.
+        </p>
+      )}
+      <PayButton orderNumber={data.orderNumber} amount={data.totals.grandTotal} onPaid={onPaid} />
+    </div>
   );
 }

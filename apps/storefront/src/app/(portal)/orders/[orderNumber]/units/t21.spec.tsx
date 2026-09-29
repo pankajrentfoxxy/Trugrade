@@ -28,6 +28,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import '@testing-library/jest-dom';
 import { findVendorIdentityLeaks, type VendorIdentity } from '@trugrade/contracts';
 import { UnitsBoard } from './UnitsBoard';
+import { OrderContext } from '../order-context';
+import type { OrderRecord } from '../api';
 import type { OrderUnits, OrderedUnit } from './api';
 
 const push = jest.fn();
@@ -390,6 +392,98 @@ describe('vendor anonymity', () => {
 /* ==========================================================================
  * 7. The states that are not the board
  * ======================================================================== */
+
+/** An order the technician is still working through: one machine named, none verified. */
+const UNVERIFIED: OrderRecord = {
+  orderNumber: 'TT-26-00004',
+  status: 'QC_IN_PROGRESS',
+  paymentMode: 'PREPAID',
+  paymentStatus: 'PENDING',
+  placedAt: '2026-09-29T06:55:18.067Z',
+  buyerPoNumber: null,
+  costCentre: null,
+  subtotal: '6450.00',
+  freight: '149.00',
+  gstTotal: '1187.82',
+  grandTotal: '7786.82',
+  tax: {
+    interState: true,
+    igst: '1187.82',
+    cgst: '0.00',
+    sgst: '0.00',
+    stateTaxLabel: 'UTGST',
+    ratePct: 18,
+    ourStateCode: '06',
+    placeOfSupplyStateCode: '07',
+    placeOfSupplyState: 'Delhi',
+    basis: 's.10(1)(a) IGST Act — place of supply is where the movement terminates',
+  },
+  billedTo: { gstin: '06AABCA1429B1Z8', legalName: 'Acme Industries Pvt. Ltd.', tradeName: 'Acme' },
+  billingAddress: {
+    label: null,
+    line1: '11th floor, Barakhamba Road',
+    line2: null,
+    city: 'New Delhi',
+    state: 'Delhi',
+    stateCode: '07',
+    pincode: '110001',
+    contactName: 'Suresh Pillai',
+    contactMobile: '+919811223344',
+    landmark: null,
+    gateInstructions: null,
+    receivingHours: null,
+  },
+  deliveryAddress: {
+    label: null,
+    line1: '11th floor, Barakhamba Road',
+    line2: null,
+    city: 'New Delhi',
+    state: 'Delhi',
+    stateCode: '07',
+    pincode: '110001',
+    contactName: 'Suresh Pillai',
+    contactMobile: '+919811223344',
+    landmark: null,
+    gateInstructions: null,
+    receivingHours: null,
+  },
+  unitsAllocated: 2,
+  dispatchGroups: [],
+  supply: [],
+  approval: null,
+  unitsInspected: 1,
+  unitsVerified: 0,
+  verifiedAt: null,
+  payBy: null,
+  paidAt: null,
+  payable: false,
+};
+
+describe('before every machine is verified', () => {
+  it('says the machines are still being inspected, asks the API for nothing, and offers the sales order', async () => {
+    render(
+      <OrderContext.Provider value={{ k: 'ready', order: UNVERIFIED }}>
+        <UnitsBoard orderNumber="TT-26-00004" query="" />
+      </OrderContext.Provider>,
+    );
+    const state = await screen.findByTestId('units-not-yet');
+    expect(state).toHaveTextContent('The machines are still being inspected and verified');
+    expect(state).toHaveTextContent('1 of 2 has a serial recorded and 0 of 2 are verified');
+    expect(screen.getByRole('link', { name: 'See where the order is' })).toHaveAttribute('href', '/orders/TT-26-00004/sales-order');
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('draws the board once the order says every machine is verified', async () => {
+    mockGet.mockResolvedValue({ ok: true, data: units() });
+    render(
+      <OrderContext.Provider value={{ k: 'ready', order: { ...UNVERIFIED, status: 'CONFIRMED', unitsInspected: 2, unitsVerified: 2 } }}>
+        <UnitsBoard orderNumber="TT-26-00004" query="" />
+      </OrderContext.Provider>,
+    );
+    expect(await screen.findByRole('table')).toBeInTheDocument();
+  });
+});
 
 describe('the states that are not the board', () => {
   it('answers a foreign order and a missing one with the same screen', async () => {

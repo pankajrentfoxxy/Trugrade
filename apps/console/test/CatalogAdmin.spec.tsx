@@ -19,7 +19,10 @@ function flattenCatalog(brands: CatalogBrand[]) {
     brandId: string;
     brandName: string;
     seriesName: string;
+    modelId: string;
     modelName: string;
+    modelSkuCount: number;
+    modelLiveListingCount: number;
     sku: CatalogBrand['series'][0]['models'][0]['skus'][0];
   }> = [];
   for (const brand of brands) {
@@ -30,7 +33,12 @@ function flattenCatalog(brands: CatalogBrand[]) {
             brandId: brand.id,
             brandName: brand.name,
             seriesName: series.name,
+            modelId: model.id,
             modelName: model.name,
+            // The whole model's figures, as the endpoint returns them — not
+            // the page's slice.
+            modelSkuCount: model.skus.length,
+            modelLiveListingCount: model.skus.reduce((n, s) => n + s.liveListingCount, 0),
             sku,
           });
         }
@@ -39,6 +47,17 @@ function flattenCatalog(brands: CatalogBrand[]) {
   }
   return rows;
 }
+
+/** The configuration columns every fixture SKU carries; the code and label vary per SKU. */
+const SPEC = {
+  cpuFamily: 'Core i5',
+  cpuModel: 'i5-1145G7',
+  ramGb: 16,
+  storageGb: 512,
+  storageType: 'NVMe SSD',
+  screenSizeInch: 14,
+  resolution: 'FHD',
+} as const;
 
 function mockJson(body: unknown): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
@@ -59,6 +78,15 @@ function mockCatalogApi(brands: CatalogBrand[], pageSize = 25): void {
         ok: true,
         json: async () =>
           brands.map((b) => ({ id: b.id, name: b.name, skuCount: skuCount([b]) })),
+      } as Response);
+    }
+    if (url.pathname === '/api/catalog/board/facets') {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          cpuFamilies: [...new Set(rows.map((r) => r.sku.cpuFamily))].sort(),
+          ramGb: [...new Set(rows.map((r) => r.sku.ramGb))].sort((a, b) => a - b),
+        }),
       } as Response);
     }
     if (url.pathname === '/api/catalog/board') {
@@ -106,6 +134,7 @@ const CATALOG: CatalogBrand[] = [
                 label: 'i5-1145G7 · 16 GB · 512 GB NVMe',
                 isActive: true,
                 liveListingCount: 4,
+                ...SPEC,
               },
               {
                 id: 'k2',
@@ -113,6 +142,9 @@ const CATALOG: CatalogBrand[] = [
                 label: 'i5-1145G7 · 8 GB · 256 GB NVMe',
                 isActive: false,
                 liveListingCount: 0,
+                ...SPEC,
+                ramGb: 8,
+                storageGb: 256,
               },
             ],
           },
@@ -138,6 +170,9 @@ const CATALOG: CatalogBrand[] = [
                 label: 'i7-1165G7 · 16 GB · 512 GB NVMe',
                 isActive: true,
                 liveListingCount: 0,
+                ...SPEC,
+                cpuFamily: 'Core i7',
+                cpuModel: 'i7-1165G7',
               },
             ],
           },
@@ -164,7 +199,12 @@ describe('the catalog tree keeps all four levels', () => {
     expect(screen.getAllByText('Latitude 5420').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Dell · Latitude').length).toBeGreaterThan(0);
     expect(screen.getByText('Deprecated')).toBeInTheDocument();
-    expect(screen.getByText('4 live listings')).toBeInTheDocument();
+    // The SKU's own count on its row, and the model folded above it.
+    expect(screen.getByText('4 live')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse Latitude 5420' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
   });
 
   it('filters on the whole path, so a brand name keeps the SKUs under it', async () => {
@@ -177,7 +217,7 @@ describe('the catalog tree keeps all four levels', () => {
     );
     await screen.findByRole('link', { name: 'DEL-LAT5420-I5-16-512' });
 
-    await user.type(screen.getByLabelText('Search'), 'lenovo');
+    await user.type(screen.getByLabelText('Search the catalog'), 'lenovo');
 
     expect(await screen.findByText('ThinkPad T14 Gen 2')).toBeInTheDocument();
     await waitFor(() => {
@@ -195,7 +235,7 @@ describe('the catalog tree keeps all four levels', () => {
     );
     await screen.findByRole('link', { name: 'DEL-LAT5420-I5-16-512' });
 
-    await user.type(screen.getByLabelText('Search'), 'macbook');
+    await user.type(screen.getByLabelText('Search the catalog'), 'macbook');
 
     expect(await screen.findByText(/The catalog is not empty/)).toBeInTheDocument();
     expect(screen.queryByText('The catalog is empty')).not.toBeInTheDocument();

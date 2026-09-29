@@ -83,7 +83,7 @@ export function SearchResultCard({ r }: { r: SearchResult }): React.JSX.Element 
       <div className="ptile-media">
         {isGrade(r.grade) && <GradeBadge grade={r.grade} className="ptile-ribbon" />}
         <span className="ptile-sealed">
-          <b className="mono">{r.unitsAvailable}</b> sealed
+          <b className="mono">{r.unitsAvailable}</b> on sale
         </span>
         {photo ? <img className="ptile-photo" src={photo} alt="" loading="lazy" /> : <LaptopShell />}
       </div>

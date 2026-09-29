@@ -350,6 +350,8 @@ export interface QcSealRow {
 export interface QcVisitRow {
   id: string;
   visitNumber: string;
+  /** Set on an order-first visit: the order whose machines it is for. Null on a stock visit. */
+  orderId: string | null;
   vendorOrgId: string;
   facilityId: string;
   addressId: string;
@@ -733,6 +735,7 @@ function toVisit(r: Raw): QcVisitRow {
   return {
     id: r.id as string,
     visitNumber: r.visit_number as string,
+    orderId: (r.order_id as string | null | undefined) ?? null,
     vendorOrgId: r.vendor_org_id as string,
     facilityId: r.facility_id as string,
     addressId: r.address_id as string,
@@ -1857,7 +1860,7 @@ export class QcRepository {
                 slot_to::text AS slot_to, status, arrived_at, started_at, completed_at,
                 arrival_geo_lat, arrival_geo_lng, geo_variance_metres, vendor_contact_id,
                 vendor_otp_hash, vendor_signoff_at, vendor_signoff_name, visit_fee, fee_bearer,
-                fee_waiver_reason, reschedule_count, cancellation_reason, notes`;
+                fee_waiver_reason, reschedule_count, cancellation_reason, notes, order_id`;
     return toVisit(rows[0]!);
   }
 
@@ -1870,7 +1873,7 @@ export class QcRepository {
              slot_to::text AS slot_to, status, arrived_at, started_at, completed_at,
              arrival_geo_lat, arrival_geo_lng, geo_variance_metres, vendor_contact_id,
              vendor_otp_hash, vendor_signoff_at, vendor_signoff_name, visit_fee, fee_bearer,
-             fee_waiver_reason, reschedule_count, cancellation_reason, notes
+             fee_waiver_reason, reschedule_count, cancellation_reason, notes, order_id
         FROM qc.qc_visit WHERE id = ${id}::uuid`;
     return rows[0] ? toVisit(rows[0]) : null;
   }
@@ -1884,7 +1887,7 @@ export class QcRepository {
              slot_to::text AS slot_to, status, arrived_at, started_at, completed_at,
              arrival_geo_lat, arrival_geo_lng, geo_variance_metres, vendor_contact_id,
              vendor_otp_hash, vendor_signoff_at, vendor_signoff_name, visit_fee, fee_bearer,
-             fee_waiver_reason, reschedule_count, cancellation_reason, notes
+             fee_waiver_reason, reschedule_count, cancellation_reason, notes, order_id
         FROM qc.qc_visit WHERE visit_number = ${visitNumber}`;
     return rows[0] ? toVisit(rows[0]) : null;
   }
@@ -1907,7 +1910,7 @@ export class QcRepository {
              slot_to::text AS slot_to, status, arrived_at, started_at, completed_at,
              arrival_geo_lat, arrival_geo_lng, geo_variance_metres, vendor_contact_id,
              vendor_otp_hash, vendor_signoff_at, vendor_signoff_name, visit_fee, fee_bearer,
-             fee_waiver_reason, reschedule_count, cancellation_reason, notes,
+             fee_waiver_reason, reschedule_count, cancellation_reason, notes, order_id,
              count(*) OVER () AS total_count
         FROM qc.qc_visit
        WHERE (${filter.status ?? null}::public.qc_visit_status IS NULL
@@ -1965,7 +1968,7 @@ export class QcRepository {
                 v.arrived_at, v.started_at, v.completed_at, v.arrival_geo_lat, v.arrival_geo_lng,
                 v.geo_variance_metres, v.vendor_contact_id, v.vendor_otp_hash,
                 v.vendor_signoff_at, v.vendor_signoff_name, v.visit_fee, v.fee_bearer,
-                v.fee_waiver_reason, v.reschedule_count, v.cancellation_reason, v.notes`;
+                v.fee_waiver_reason, v.reschedule_count, v.cancellation_reason, v.notes, v.order_id`;
     return rows[0] ? toVisit(rows[0]) : null;
   }
 
@@ -2013,7 +2016,7 @@ export class QcRepository {
                 v.arrived_at, v.started_at, v.completed_at, v.arrival_geo_lat, v.arrival_geo_lng,
                 v.geo_variance_metres, v.vendor_contact_id, v.vendor_otp_hash,
                 v.vendor_signoff_at, v.vendor_signoff_name, v.visit_fee, v.fee_bearer,
-                v.fee_waiver_reason, v.reschedule_count, v.cancellation_reason, v.notes`;
+                v.fee_waiver_reason, v.reschedule_count, v.cancellation_reason, v.notes, v.order_id`;
     return rows[0] ? toVisit(rows[0]) : null;
   }
 

@@ -305,6 +305,7 @@ export class CatalogPublicController {
           shipHours: u.dispatchSlaHours,
           warrantyMonths: u.warrantyMonths,
           serial: u.serialNumber,
+          qty: u.qtyAvailable,
         },
       ];
     });

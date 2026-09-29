@@ -95,7 +95,7 @@ export default async function SearchPage({
 
                 {data.results.length === 0 ? (
                   <div className="empty">
-                    <h3>No sealed unit matches all of those filters</h3>
+                    <h3>Nothing on sale matches all of those filters</h3>
                     <p>
                       Every option in the rail still shows how many units it would return on its
                       own, so the one that took the count to zero is the one reading{' '}

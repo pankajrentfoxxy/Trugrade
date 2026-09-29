@@ -491,10 +491,18 @@ export const manualPhotoSchema = z.object({
  * through `VerdictService`, and its answer is what the report ends up carrying.
  * Sending them anyway is what makes a disagreement visible instead of invisible.
  */
-export const manualReportSchema = z.object({
+export const manualReportSchema = z
+  .object({
   visitId: uuidSchema,
-  visitUnitId: uuidSchema,
-  unitId: uuidSchema,
+  /**
+   * The machine, one of two ways. A stock visit's manifest already lists it:
+   * `visitUnitId` + `unitId`. An ordered machine has no identity until the
+   * technician reads its serial: `slotId` is the vacant `order_line_unit` the
+   * serial names, and the server creates the unit and the manifest line.
+   */
+  visitUnitId: uuidSchema.optional(),
+  unitId: uuidSchema.optional(),
+  slotId: uuidSchema.optional(),
   technicianId: uuidSchema,
   serialScanned: z.string().min(1).max(64),
   serialMatches: z.boolean(),
@@ -515,7 +523,17 @@ export const manualReportSchema = z.object({
   verdict: qcVerdictValueSchema,
   notes: z.string().max(2000).nullable(),
   nonce: nonceSchema.optional(),
-});
+  })
+  .superRefine((b, ctx) => {
+    const manifest = Boolean(b.visitUnitId && b.unitId);
+    if (manifest === Boolean(b.slotId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['slotId'],
+        message: 'Name the machine once: a manifest line (visitUnitId and unitId) or an ordered slot (slotId).',
+      });
+    }
+  });
 export type ManualReportDto = z.infer<typeof manualReportSchema>;
 
 /**

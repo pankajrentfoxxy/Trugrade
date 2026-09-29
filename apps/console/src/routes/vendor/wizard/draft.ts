@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { VENDOR_NET_PAYOUT } from '@trugrade/contracts';
+import { LISTING_QTY, VENDOR_NET_PAYOUT } from '@trugrade/contracts';
 import type { SkuDetail } from '../api';
 
 /**
@@ -7,18 +7,17 @@ import type { SkuDetail } from '../api';
  *
  * PHASE_03 Task 3 step 1: if the SKU is not in the catalog, hand off to the SKU
  * request flow **without losing the wizard state**. That is the whole reason
- * this is not four `useState` calls in a component — a vendor who has declared
- * twelve fields and pasted fifty serials, then discovers their machine is not
- * catalogued, must come back to all of it. So the draft lives in
- * `sessionStorage` and every step writes through.
+ * this is not three `useState` calls in a component — a vendor who has declared
+ * twelve fields, then discovers their machine is not catalogued, must come back
+ * to all of it. So the draft lives in `sessionStorage` and every step writes
+ * through.
  *
- * `sessionStorage`, not `localStorage`: a half-finished listing is not something
- * to resurrect on a shared warehouse machine a week later, and the tab is the
- * right lifetime for "I stepped out to request a SKU".
+ * There is no serial step. A listing is a declared quantity; the serials are
+ * recorded by our technician at the vendor's site once a buyer has ordered.
  */
 
 export interface WizardDraft {
-  step: 1 | 2 | 3 | 4;
+  step: 1 | 2 | 3;
 
   // Step 1
   sku: SkuDetail | null;
@@ -38,12 +37,9 @@ export interface WizardDraft {
   vendorWarrantyMonths: number;
   pickupLocationId: string;
 
-  // Step 3 — the raw text is kept, not just the accepted list, so a vendor
-  // returning to the step sees their own paste and can fix line 34 in place.
-  serialText: string;
-  serials: string[];
-
-  // Step 4
+  // Step 3
+  /** How many machines are on offer. Kept as text so a cleared field stays cleared. */
+  qtyText: string;
   netPayoutRupees: string;
   moq: number;
   dispatchSlaHours: number;
@@ -65,8 +61,7 @@ export const EMPTY_DRAFT: WizardDraft = {
   oemWarrantyRemaining: 'NONE',
   vendorWarrantyMonths: 0,
   pickupLocationId: '',
-  serialText: '',
-  serials: [],
+  qtyText: '',
   netPayoutRupees: '',
   moq: 1,
   dispatchSlaHours: 48,
@@ -86,6 +81,21 @@ export function payoutBlocker(rupees: string): string {
   return '';
 }
 
+/** Empty string means the quantity is ready to send. VR-080 is the rule. */
+export function qtyBlocker(qtyText: string): string {
+  const text = qtyText.trim();
+  if (text === '') return 'Say how many machines you are offering.';
+  if (!/^\d+$/.test(text)) return 'Enter a whole number of machines.';
+  const n = Number(text);
+  if (n < LISTING_QTY.min! || n > LISTING_QTY.max!) return LISTING_QTY.message;
+  return '';
+}
+
+/** The quantity as a number, or 0 while the field is not yet valid. */
+export function qtyOf(draft: WizardDraft): number {
+  return qtyBlocker(draft.qtyText) ? 0 : Number(draft.qtyText.trim());
+}
+
 const KEY = 'trugrade.vendor.listing-wizard';
 
 function read(): WizardDraft {
@@ -93,8 +103,11 @@ function read(): WizardDraft {
     const raw = sessionStorage.getItem(KEY);
     // A shape from an older deploy is not worth migrating — the vendor loses a
     // half-finished draft, which is far better than a screen that throws on a
-    // field that is no longer there.
-    return raw ? { ...EMPTY_DRAFT, ...(JSON.parse(raw) as Partial<WizardDraft>) } : EMPTY_DRAFT;
+    // field that is no longer there. A step beyond the last is clamped for the
+    // same reason: the old wizard had four.
+    const parsed = raw ? (JSON.parse(raw) as Partial<WizardDraft>) : {};
+    const merged = { ...EMPTY_DRAFT, ...parsed };
+    return { ...merged, step: merged.step > 3 ? 3 : merged.step };
   } catch {
     return EMPTY_DRAFT;
   }
@@ -117,8 +130,7 @@ export function useDraft(): [WizardDraft, (patch: Partial<WizardDraft>) => void,
         sessionStorage.setItem(KEY, JSON.stringify(next));
       } catch {
         // Private mode, or a quota. The wizard still works for this tab; only
-        // the survive-a-navigation promise is lost, and there is nothing
-        // useful to tell the vendor about it mid-keystroke.
+        // the survive-a-navigation promise is lost.
       }
       return next;
     });

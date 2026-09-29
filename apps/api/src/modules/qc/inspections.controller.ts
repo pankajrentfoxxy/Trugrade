@@ -1,9 +1,9 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { BoardEnvelope, BoardQuery } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import {
   InspectionBoardService,
-  type InspectionRow,
+  type InspectionBoard,
+  type InspectionQuery,
   type TechnicianLoad,
 } from './internal/inspection-board.service';
 
@@ -22,14 +22,14 @@ export class InspectionsController {
 
   @Get()
   @RequirePermissions('qc.visit.read')
-  visits(@Query() query: Record<string, string>): Promise<BoardEnvelope<InspectionRow>> {
+  visits(@Query() query: Record<string, string>): Promise<InspectionBoard> {
     const facet: Record<string, string> = {};
     for (const [key, value] of Object.entries(query)) {
       if (key.startsWith('facet.') && value) facet[key.slice(6)] = value;
     }
     const page = Number(query.page);
     const per = Number(query.per);
-    const parsed: BoardQuery = {
+    const parsed: InspectionQuery = {
       ...(query.view ? { view: query.view } : {}),
       ...(query.q ? { q: query.q } : {}),
       ...(Number.isFinite(page) && page > 0 ? { page } : {}),

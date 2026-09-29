@@ -53,7 +53,8 @@ export const vendorSuspendedPayload = z.object({
 export const listingSubmittedPayload = z.object({
   listingId: z.string().uuid(),
   vendorOrgId: z.string().uuid(),
-  facilityId: z.string().uuid(),
+  /** Null since listings are submitted for approval rather than for a visit. */
+  facilityId: z.string().uuid().nullable(),
   unitCount: z.number().int().positive(),
 });
 

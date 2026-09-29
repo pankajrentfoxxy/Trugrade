@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { Button, GradeBadge, Input, Modal, Skeleton } from '@trugrade/ui';
-import { GRADES, VENDOR_NET_PAYOUT, type Grade } from '@trugrade/contracts';
+import { GRADES, LISTING_QTY, VENDOR_NET_PAYOUT, type Grade } from '@trugrade/contracts';
 import { Select } from '../../../lib/controls';
 import { useResource } from '../../../lib/useResource';
 import {
@@ -97,6 +97,9 @@ export function CreateListingDialog({
         oemWarrantyRemaining: 'NONE',
         vendorWarrantyMonths: 6,
         vendorAskPrice: ask.trim(),
+        // The declared quantity. This dialog has always collected it for the
+        // payout preview; it is now what goes on sale once ops approve.
+        qtyTotal: units,
         moq: 1,
         dispatchSlaHours: 48,
       });
@@ -159,7 +162,9 @@ export function CreateListingDialog({
             label="Quantity"
             type="number"
             required
-            min={1}
+            min={LISTING_QTY.min}
+            max={LISTING_QTY.max}
+            hint="Serials are recorded by our technician after a buyer orders."
             value={qty}
             onChange={(e) => setQty(e.target.value)}
           />
@@ -270,8 +275,8 @@ export function CreateListingDialog({
                   ? 'Pick a facility.'
                   : !askOk
                     ? 'Enter a valid ask.'
-                    : units < 1
-                      ? 'Quantity must be at least 1.'
+                    : !Number.isInteger(units) || units < 1 || units > LISTING_QTY.max!
+                      ? LISTING_QTY.message
                       : ''
             }
             onClick={() => void submit()}

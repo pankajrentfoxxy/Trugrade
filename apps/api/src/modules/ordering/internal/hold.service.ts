@@ -3,7 +3,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
 import { ClockPort } from '../../../shared/clock';
 import { PrismaService } from '../../../shared/db/prisma.service';
-import { RequestContextService } from '../../../shared/db/org-scope';
 import { InsufficientStockError } from '../../../shared/errors/domain-errors';
 import { LockService } from '../../../shared/redis/redis.service';
 
@@ -12,34 +11,39 @@ import { LockService } from '../../../shared/redis/redis.service';
  *
  * T15's cart panel says, in as many words, that "stock is held for 20 minutes
  * when you start checkout, and the hold and its countdown are shown there".
- * This file is what makes that sentence true. A countdown against nothing would
- * be a scarcity device wearing a clock — the first dishonest pixel on the site
- * — so the deadline on the checkout screen is read straight off `expires_at`
- * here, and when it passes the machines really do go back on sale.
+ * This file is what makes that sentence true: the deadline on the checkout
+ * screen is read straight off `expires_at` here, and when it passes the stock
+ * really does go back on sale.
+ *
+ * **The hold takes a quantity, not machines.** A listing is a declared count
+ * with no serials behind it until a buyer orders, so there is nothing to pick.
+ * The hold decrements `listing.qty_available` and writes how much to give back
+ * to `checkout_hold_line`; the order transaction consumes that line and takes
+ * the same quantity as a reservation of its own.
  *
  * Three properties, each of which is a rule somebody will otherwise break:
  *
- * **1. The hold takes exact machines, not a quantity.** `checkout_hold_unit`
- * names serials, so the buyer who reaches step 6 gets the machines they were
- * shown, and `unit_id UNIQUE` means no second cart can hold one of them.
+ * **1. The decrement is arithmetic on the stored value.** Postgres re-evaluates
+ * it against whatever the winner of a race committed, so the loser subtracts
+ * into the negative and `chk_qty_nonneg` refuses the row. The Redis lock is an
+ * optimisation; the CHECK is the guarantee.
  *
  * **2. It is released by the same code that took it.** By expiry (the cron
  * below), by the buyer leaving checkout, or by the order transaction consuming
- * it. There is no fourth path, because a hold released by something that did not
- * take it is how inventory leaks.
+ * it. There is no fourth path, because a hold released by something that did
+ * not take it is how inventory leaks.
  *
- * **3. The counters are not written here.** Flipping a unit to `RESERVED` fires
- * `trg_listing_counters`, which recomputes `qty_available` and `qty_reserved`
- * from the units themselves. Writing them by hand as well would give the
- * database two authors for one number.
+ * **3. The listing's counters are written here and in the order transaction,
+ * and nowhere else.** `trg_listing_counters` no longer derives them from the
+ * units, because a live listing has no units.
  */
 
 export interface HeldStock {
   holdId: string;
   cartId: string;
   expiresAt: Date;
-  /** unit ids, by listing. What the confirm transaction re-allocates. */
-  unitsByListing: ReadonlyMap<string, string[]>;
+  /** Quantity held, by listing. What the confirm transaction re-reserves. */
+  qtyByListing: ReadonlyMap<string, number>;
   unitCount: number;
 }
 
@@ -57,7 +61,6 @@ export class HoldService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: ClockPort,
-    private readonly ctx: RequestContextService,
     private readonly locks: LockService,
   ) {}
 
@@ -65,10 +68,9 @@ export class HoldService {
    * Take, or refresh, the hold for one cart.
    *
    * Idempotent by cart: a second tab, or a reload of the checkout screen, joins
-   * the hold that already exists rather than taking a second one against the
-   * same lines. **It does not extend the deadline**, and that is deliberate —
-   * a hold a buyer can renew by pressing F5 is not a twenty-minute hold, and
-   * the machines belong to everyone else again at the time we said they would.
+   * the hold that already exists rather than taking a second one. **It does
+   * not extend the deadline** — a hold a buyer can renew by pressing F5 is not
+   * a twenty-minute hold.
    */
   async take(input: {
     cartId: string;
@@ -96,12 +98,10 @@ export class HoldService {
                   ${input.userId}::uuid, ${expiresAt}, ${this.clock.now()})`;
 
         for (const line of [...input.lines].sort((a, b) => (a.listingId < b.listingId ? -1 : 1))) {
-          const unitIds = await this.pick(line);
+          await this.reserve(line);
           await this.prisma.$executeRaw`
-            INSERT INTO ordering.checkout_hold_unit (hold_id, unit_id, listing_id)
-            SELECT ${holdId}::uuid, u, ${line.listingId}::uuid
-              FROM unnest(${unitIds}::uuid[]) AS u`;
-          await this.move(unitIds, 'RESERVED', 'Held for checkout', input.cartId);
+            INSERT INTO ordering.checkout_hold_line (hold_id, listing_id, qty)
+            VALUES (${holdId}::uuid, ${line.listingId}::uuid, ${line.qty})`;
         }
       }),
     );
@@ -117,89 +117,69 @@ export class HoldService {
       SELECT id, expires_at FROM ordering.checkout_hold WHERE cart_id = ${cartId}::uuid`;
     if (!hold) return null;
 
-    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string; listing_id: string }>>`
-      SELECT unit_id, listing_id FROM ordering.checkout_hold_unit
-       WHERE hold_id = ${hold.id}::uuid ORDER BY unit_id`;
+    const rows = await this.prisma.$queryRaw<Array<{ listing_id: string; qty: number }>>`
+      SELECT listing_id, qty FROM ordering.checkout_hold_line
+       WHERE hold_id = ${hold.id}::uuid ORDER BY listing_id`;
 
-    const unitsByListing = new Map<string, string[]>();
-    for (const r of rows) {
-      const bucket = unitsByListing.get(r.listing_id);
-      if (bucket) bucket.push(r.unit_id);
-      else unitsByListing.set(r.listing_id, [r.unit_id]);
-    }
+    const qtyByListing = new Map(rows.map((r) => [r.listing_id, Number(r.qty)]));
     return {
       holdId: hold.id,
       cartId,
       expiresAt: hold.expires_at,
-      unitsByListing,
-      unitCount: rows.length,
+      qtyByListing,
+      unitCount: rows.reduce((n, r) => n + Number(r.qty), 0),
     };
   }
 
   /**
-   * Put the machines back on sale and forget the hold.
+   * Put the quantity back on sale and forget the hold.
    *
-   * `reason` is written onto every `stock_movement` row, so a year later the
-   * trail says whether a machine came back because a buyer walked away or
-   * because a clock ran out.
+   * `reason` is kept for the log line: with no unit rows there is no
+   * `stock_movement` to write it onto, and the listing counters are the record.
    */
   async release(cartId: string, reason: string): Promise<number> {
     return this.prisma.runInTransaction(async () => {
-      const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
-        SELECT hu.unit_id
-          FROM ordering.checkout_hold_unit hu
-          JOIN ordering.checkout_hold h ON h.id = hu.hold_id
+      const rows = await this.prisma.$queryRaw<Array<{ listing_id: string; qty: number }>>`
+        SELECT hl.listing_id, hl.qty
+          FROM ordering.checkout_hold_line hl
+          JOIN ordering.checkout_hold h ON h.id = hl.hold_id
          WHERE h.cart_id = ${cartId}::uuid
-         ORDER BY hu.unit_id`;
-      if (rows.length === 0) {
-        await this.prisma.$executeRaw`
-          DELETE FROM ordering.checkout_hold WHERE cart_id = ${cartId}::uuid`;
-        return 0;
-      }
-      const unitIds = rows.map((r) => r.unit_id);
+         ORDER BY hl.listing_id`;
       await this.prisma.$executeRaw`
         DELETE FROM ordering.checkout_hold WHERE cart_id = ${cartId}::uuid`;
-      await this.move(unitIds, 'LISTED', reason, cartId);
-      return unitIds.length;
+      let units = 0;
+      for (const row of rows) {
+        await this.giveBack(row.listing_id, Number(row.qty));
+        units += Number(row.qty);
+      }
+      if (units > 0) this.logger.log(`Released ${units} unit(s) for cart ${cartId}: ${reason}`);
+      return units;
     });
   }
 
   /**
-   * Hand the held machines to the order transaction, inside its transaction.
+   * Hand the held quantity to the order transaction, inside its transaction.
    *
-   * The units go back to `LISTED` **without a movement row**, and that is the
-   * honest entry rather than the missing one: nothing left the hold. The release
-   * and the re-allocation happen in the same instant, under the same listing
-   * locks, so a machine never became available to anyone. Writing "released" and
-   * then "reserved" a microsecond later would put two events in the trail for
-   * something that did not happen twice — and the movement that DID happen, the
-   * one that says "reserved for order TT-26-00001", is written by the order
-   * transaction a few statements later.
+   * The quantity goes back to available here and the order transaction takes
+   * it again a few statements later, under the same listing locks, so it never
+   * became available to anyone else. One implementation of the reservation,
+   * whichever door the buyer came through.
    */
   async consume(cartId: string): Promise<void> {
     if (!this.prisma.isInTransaction) {
       throw new Error('consume() must run inside the order transaction that re-allocates.');
     }
-    const rows = await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
-      SELECT hu.unit_id
-        FROM ordering.checkout_hold_unit hu
-        JOIN ordering.checkout_hold h ON h.id = hu.hold_id
+    const rows = await this.prisma.$queryRaw<Array<{ listing_id: string; qty: number }>>`
+      SELECT hl.listing_id, hl.qty
+        FROM ordering.checkout_hold_line hl
+        JOIN ordering.checkout_hold h ON h.id = hl.hold_id
        WHERE h.cart_id = ${cartId}::uuid
-       ORDER BY hu.unit_id`;
+       ORDER BY hl.listing_id`;
     if (rows.length === 0) return;
 
     await this.prisma.$executeRaw`
       DELETE FROM ordering.checkout_hold WHERE cart_id = ${cartId}::uuid`;
-    // `AND status = 'RESERVED'` is load bearing. A held machine can still move
-    // underneath the hold — an ops correction, a seal found broken, a unit
-    // scrapped — and without the guard this UPDATE would put a SCRAPPED laptop
-    // back on sale and sell it. Restoring only what is still ours means the
-    // allocation below simply finds one machine short and the whole transaction
-    // fails cleanly, which is the right answer.
-    await this.prisma.$executeRaw`
-      UPDATE listing.unit SET status = 'LISTED'::public.unit_status, order_line_id = NULL
-       WHERE id = ANY(${rows.map((r) => r.unit_id)}::uuid[])
-         AND status = 'RESERVED'::public.unit_status`;
+    for (const row of rows) await this.giveBack(row.listing_id, Number(row.qty));
   }
 
   /* ------------------------------------------------------------------------
@@ -227,7 +207,7 @@ export class HoldService {
       try {
         units += await this.release(
           row.cart_id,
-          'The twenty-minute checkout hold expired and the machines went back on sale.',
+          'The twenty-minute checkout hold expired and the stock went back on sale.',
         );
       } catch (e) {
         this.logger.error(`Releasing hold for cart ${row.cart_id} failed: ${(e as Error).message}`);
@@ -244,78 +224,38 @@ export class HoldService {
    * --------------------------------------------------------------------- */
 
   /**
-   * Pick exact machines for one line.
+   * Take `qty` off one listing's availability.
    *
-   * Candidates come from `v_sellable_unit` and nowhere else — it re-evaluates
-   * the expiry and seal predicates on read, so a machine whose inspection lapsed
-   * at midnight stops being holdable at midnight. The lock cannot be taken
-   * through that view (it has an outer join, and Postgres refuses to lock the
-   * nullable side of one), so it is taken on the table with `SKIP LOCKED`: two
-   * buyers holding at the same instant take different machines rather than
-   * queueing.
+   * Row-locked and re-read, so two carts holding the last machine queue behind
+   * each other and the second one is refused with the true remaining count.
    */
-  private async pick(line: HoldRequest): Promise<string[]> {
-    const candidates = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM listing.v_sellable_unit
-       WHERE listing_id = ${line.listingId}::uuid
-       ORDER BY id`;
-
-    const picked = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM listing.unit
-       WHERE id = ANY(${candidates.map((c) => c.id)}::uuid[])
-         AND status = 'LISTED'::public.unit_status
-       ORDER BY id
-         FOR UPDATE SKIP LOCKED
-       LIMIT ${line.qty}`;
-
-    if (picked.length < line.qty) {
-      throw new InsufficientStockError(line.qty, picked.length, line.supplyPointLabel);
+  private async reserve(line: HoldRequest): Promise<void> {
+    const [row] = await this.prisma.$queryRaw<Array<{ qty_available: number; status: string }>>`
+      SELECT qty_available, status::text AS status
+        FROM listing.listing WHERE id = ${line.listingId}::uuid FOR UPDATE`;
+    if (!row || (row.status !== 'ACTIVE' && row.status !== 'PARTIALLY_ACTIVE')) {
+      throw new InsufficientStockError(line.qty, 0, line.supplyPointLabel);
     }
-    return picked.map((p) => p.id);
+    if (Number(row.qty_available) < line.qty) {
+      throw new InsufficientStockError(line.qty, Number(row.qty_available), line.supplyPointLabel);
+    }
+    await this.prisma.$executeRaw`
+      UPDATE listing.listing
+         SET qty_available = qty_available - ${line.qty},
+             qty_reserved  = qty_reserved  + ${line.qty},
+             updated_at    = ${this.clock.now()}
+       WHERE id = ${line.listingId}::uuid`;
   }
 
-  /**
-   * Move units and record the move in one statement.
-   *
-   * Mirrors `listing`'s own `StockMovementService.transition`: the UPDATE and
-   * the `stock_movement` row are the same statement, so there is no window in
-   * which a machine has moved and the trail says otherwise. It is restated
-   * rather than called because that service is `internal/` to another module and
-   * these rows are written inside this transaction or not at all.
-   */
-  private async move(
-    unitIds: readonly string[],
-    to: 'RESERVED' | 'LISTED',
-    reason: string,
-    cartId: string,
-  ): Promise<void> {
+  private async giveBack(listingId: string, qty: number): Promise<void> {
+    // `GREATEST` on the reserved side: a hold coming back after ops re-approved
+    // the listing with a smaller total must not drive the counter negative.
+    // `chk_qty_balance` still refuses an available count above the total.
     await this.prisma.$executeRaw`
-      WITH before AS (
-        SELECT u.id, u.status, u.location
-          FROM listing.unit u
-         WHERE u.id = ANY(${[...unitIds]}::uuid[])
-           -- Only units still in the status this move expects. Releasing a hold
-           -- must never resurrect a machine that has since been scrapped, failed
-           -- QC or had its seal broken; one that is not where we left it is no
-           -- longer ours to move, and it simply does not come back in the result.
-           AND u.status = ${to === 'RESERVED' ? 'LISTED' : 'RESERVED'}::public.unit_status
-         ORDER BY u.id
-           FOR UPDATE
-      ),
-      moved AS (
-        UPDATE listing.unit u
-           SET status = ${to}::public.unit_status
-          FROM before b
-         WHERE u.id = b.id
-        RETURNING u.id, b.status AS from_status, u.status AS to_status,
-                  b.location AS from_location, u.location AS to_location
-      )
-      INSERT INTO listing.stock_movement
-        (unit_id, from_status, to_status, from_location, to_location,
-         reason, actor_id, ref_type, ref_id, occurred_at)
-      SELECT m.id, m.from_status, m.to_status, m.from_location, m.to_location,
-             ${reason}, ${this.ctx.principal?.userId ?? null}::uuid,
-             'CHECKOUT_HOLD', ${cartId}::uuid, ${this.clock.now()}
-        FROM moved m`;
+      UPDATE listing.listing
+         SET qty_available = qty_available + ${qty},
+             qty_reserved  = GREATEST(qty_reserved - ${qty}, 0),
+             updated_at    = ${this.clock.now()}
+       WHERE id = ${listingId}::uuid`;
   }
 }

@@ -42,7 +42,7 @@ export const opsOrderListQuerySchema = z.object({
    * "Orders held for a buyer's approver" tile links to, so the number on that
    * tile and the count on this board are the same predicate.
    */
-  approval: z.enum(['pending']).optional(),
+  approval: z.enum(['pending', 'approved', 'none']).optional(),
   sort: z.enum(['recent', 'oldest', 'value', 'value_asc']).default('recent'),
   page: z.coerce.number().int().min(1).max(1000).default(1),
   /** Twenty-five rows at the console's 34px compact density is one screen. */

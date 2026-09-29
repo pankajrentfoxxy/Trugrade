@@ -6,7 +6,7 @@ import { EmptyState, GradeBadge, InfoPopover, Skeleton, StatusPill } from '@trug
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
 import { Money } from '@trugrade/contracts';
 import { Deadline, inIst } from '../../../../lib/deadline';
-import { useSharedOrder } from './OrderChrome';
+import { PayButton, useReloadOrder, useSharedOrder } from './OrderChrome';
 import { FileIcon, LaptopIcon, LinesIcon, PinIcon } from './icons';
 import { isGrade, problem, rupees, standing, type OrderPhase, type Standing } from './order-state';
 import {
@@ -40,7 +40,9 @@ import {
 
 export function OrderRecord({ orderNumber }: { orderNumber: string }): React.JSX.Element {
   const shared = useSharedOrder();
+  const reload = useReloadOrder();
   const [own, setOwn] = React.useState<OrderPhase>({ k: 'loading' });
+  const [generation, setGeneration] = React.useState(0);
   const standalone = shared === null;
 
   React.useEffect(() => {
@@ -57,7 +59,7 @@ export function OrderRecord({ orderNumber }: { orderNumber: string }): React.JSX
     return () => {
       live = false;
     };
-  }, [orderNumber, standalone]);
+  }, [orderNumber, standalone, generation]);
 
   const phase = shared ?? own;
 
@@ -66,14 +68,57 @@ export function OrderRecord({ orderNumber }: { orderNumber: string }): React.JSX
   if (phase.k === 'missing') return <Missing orderNumber={orderNumber} />;
   if (phase.k === 'error') return <Failed message={phase.message} />;
 
-  return <Body order={phase.order} />;
+  return (
+    <Body
+      order={phase.order}
+      onPaid={() => {
+        // Inside the chrome, the chrome re-reads the order for every panel.
+        // Standalone, this component re-reads it itself.
+        if (standalone) {
+          setOwn({ k: 'loading' });
+          setGeneration((n) => n + 1);
+        } else {
+          reload();
+        }
+      }}
+    />
+  );
 }
 
 /* ==========================================================================
  * The record
  * ======================================================================== */
 
-function Body({ order }: { order: Order }): React.JSX.Element {
+/**
+ * Pay, with the deadline beside it.
+ *
+ * The one primary action on the record, and the one countdown besides the
+ * approval's: `pay_by` is a real column set when the last machine was
+ * verified, and a job cancels the order and releases the machines when it
+ * passes. The panel says all of that in words, so the clock is a deadline and
+ * not a scarcity device.
+ */
+function PaymentPanel({ order, onPaid }: { order: Order; onPaid: () => void }): React.JSX.Element {
+  return (
+    <section className="od-card od-paynow" aria-labelledby="paynow" role="status">
+      <h2 id="paynow">Every machine is verified. Pay to confirm.</h2>
+      <p className="od-paynow__lede">
+        <span className="mono">{order.unitsVerified}</span> of{' '}
+        <span className="mono">{order.unitsAllocated}</span> machines were inspected at the supply
+        point and verified by us. Nothing has been charged yet.
+      </p>
+      {order.payBy && (
+        <p className="od-paynow__deadline">
+          Pay by <span className="mono">{inIst(order.payBy)}</span> · <Deadline expiresAt={order.payBy} />
+          . After that the order is cancelled and the machines go back on sale.
+        </p>
+      )}
+      <PayButton orderNumber={order.orderNumber} amount={order.grandTotal} onPaid={onPaid} />
+    </section>
+  );
+}
+
+function Body({ order, onPaid }: { order: Order; onPaid: () => void }): React.JSX.Element {
   const at = standing(order);
   const pdf = `/api/buyer/orders/${encodeURIComponent(order.orderNumber)}/confirmation.pdf`;
 
@@ -87,7 +132,12 @@ function Body({ order }: { order: Order }): React.JSX.Element {
         {/* Only once the order is placed: a held or released order has no
             consignment for a dispatch point to answer, so there is nothing
             honest to show. */}
-        {at.placed && order.supply.length > 0 && <SupplySection lines={order.supply} />}
+        {/* The dispatch point's own answer, only once one has been given. Under
+            the order-first flow the machines are named and verified by us, so
+            an unanswered line is not a gap worth a panel. */}
+        {at.placed && order.supply.some((l) => l.qtyAvailable !== null) && (
+          <SupplySection lines={order.supply} />
+        )}
 
         <DeliveryCard address={order.deliveryAddress} />
 
@@ -95,6 +145,7 @@ function Body({ order }: { order: Order }): React.JSX.Element {
       </div>
 
       <aside className="od-col">
+        {at.payable && <PaymentPanel order={order} onPaid={onPaid} />}
         <Summary order={order} at={at} />
         <Billing order={order} />
         <p className="od-help">
@@ -267,7 +318,13 @@ function MachinesCard({ order, at }: { order: Order; at: Standing }): React.JSX.
             ? 'Off sale to everyone else until the answer comes'
             : at.released
               ? 'The hold is gone'
-              : 'Allocated by serial number'}
+              : at.verified
+                ? 'Every machine verified'
+                : at.inspected
+                  ? 'Named by serial, being verified'
+                  : n > 0 && order.unitsInspected > 0
+                    ? `${order.unitsInspected} of ${n} named so far`
+                    : 'Named by serial at inspection'}
         </span>
       </header>
       {order.dispatchGroups.map((g, i) => (
@@ -330,16 +387,25 @@ function DispatchBlock({
               one click from there.
             */}
             {m.serialNumber ? (
-              <Link
-                className="mono od-serial"
-                href={`/orders/${encodeURIComponent(orderNumber)}/units#${m.serialNumber}`}
-              >
-                {m.serialNumber}
-              </Link>
+              <span className="od-serial-row">
+                <Link
+                  className="mono od-serial"
+                  href={`/orders/${encodeURIComponent(orderNumber)}/units#${m.serialNumber}`}
+                >
+                  {m.serialNumber}
+                </Link>
+                {/* "Device verified" reads `verifiedAt` and nothing else. An
+                    inspected-but-unverified machine says so; it is never a tick. */}
+                {m.verifiedAt ? (
+                  <StatusPill tone="info" label="Device verified" className="od-verified" />
+                ) : (
+                  <StatusPill tone="neutral" label="Inspected · verifying" className="od-verified" />
+                )}
+              </span>
             ) : (
-              // A line the dispatch point has not yet put a serial against.
-              // An absence, never an empty link.
-              <span className="notmeasured od-serial">Serial not yet allocated</span>
+              // A machine the technician has not yet inspected. An absence,
+              // never an empty link and never a tick.
+              <span className="notmeasured od-serial">Serial recorded at inspection</span>
             )}
           </div>
           <div className="od-price">
@@ -358,6 +424,8 @@ function DispatchBlock({
         {at.placed &&
           (at.shipped ? (
             <StatusPill tone="neutral" label="Shipped" className="od-stock" />
+          ) : at.verified ? (
+            <StatusPill tone="neutral" label="Every machine verified" className="od-stock" />
           ) : (
             <StockPill lines={supply} />
           ))}
@@ -381,9 +449,9 @@ function DispatchBlock({
 function StockPill({ lines }: { lines: SupplyLine[] }): React.JSX.Element | null {
   if (lines.length === 0) return null;
   const unanswered = lines.some((l) => l.qtyAvailable === null);
-  if (unanswered) {
-    return <span className="od-stock notmeasured">Stock not confirmed yet</span>;
-  }
+  // Nothing has been answered: the inspection is what confirms these machines,
+  // and the progress strip already says where that is. No pill.
+  if (unanswered) return null;
   const ordered = lines.reduce((n, l) => n + l.qtyOrdered, 0);
   const confirmed = lines.reduce((n, l) => n + (l.qtyAvailable ?? 0), 0);
   return (

@@ -113,6 +113,17 @@ export const NAV: readonly NavEntry[] = [
   // both would offer one of them a screen that 403s. `orgType` on top, as the
   // QC group does: both are `*.any.*` and no tenant role holds either, but a
   // rail is cheap to be sure about.
+  // The listing approval queue sits with the supply side: it is the step
+  // between a vendor's submit and a live listing. Gated on `listing.any.write`,
+  // the permission behind approve and reject, so a technician's read-only
+  // `listing.any.read` does not surface a queue they cannot work.
+  {
+    to: '/listings/approvals',
+    label: 'Listing approvals',
+    permission: 'listing.any.write',
+    group: 'Supply',
+    orgType: 'PLATFORM',
+  },
   {
     to: '/orders',
     label: 'Orders',

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import type { Route } from 'next';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   BatteryBar,
@@ -20,6 +21,9 @@ import {
 import { type Grade } from '@trugrade/contracts';
 import type { ApiFailure } from '../../../../register/api';
 import { getOrderUnits, type OrderUnits, type OrderedUnit, type QcVerdict } from './api';
+import { useSharedOrder } from '../order-context';
+import { standing } from '../order-state';
+import type { OrderRecord } from '../api';
 
 /**
  * The per-serial QC board. See `page.tsx` for the archetype and the rules.
@@ -142,8 +146,15 @@ export function UnitsBoard({
   const router = useRouter();
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const params = React.useMemo(() => new URLSearchParams(query), [query]);
+  // The layout has already read the order. Until every machine on it is
+  // inspected and verified there is nothing measured here to draw, and the tab
+  // is not offered — but the URL still exists, so it says why rather than
+  // drawing a page of "not inspected".
+  const shared = useSharedOrder();
+  const notYet = shared?.k === 'ready' && !standing(shared.order).verified ? shared.order : null;
 
   React.useEffect(() => {
+    if (notYet) return undefined;
     let live = true;
     void (async () => {
       const result = await getOrderUnits(orderNumber);
@@ -156,7 +167,7 @@ export function UnitsBoard({
     return () => {
       live = false;
     };
-  }, [orderNumber]);
+  }, [orderNumber, notYet]);
 
   const base = `/orders/${encodeURIComponent(orderNumber)}/units`;
 
@@ -181,6 +192,7 @@ export function UnitsBoard({
     commit(next);
   };
 
+  if (notYet) return <NotYet order={notYet} />;
   if (phase.k === 'signed-out') return <SignedOut orderNumber={orderNumber} />;
   if (phase.k === 'missing') return <Missing orderNumber={orderNumber} />;
   if (phase.k === 'error') return <Failed message={phase.message} />;
@@ -649,6 +661,31 @@ function ExportButton({
 /* ==========================================================================
  * States that are not the board
  * ======================================================================== */
+
+/** Reached by URL before every machine is verified: what is happening, and where to watch it. */
+function NotYet({ order }: { order: OrderRecord }): React.JSX.Element {
+  const n = order.unitsAllocated;
+  const one = (k: number): string => (k === 1 ? 'has' : 'have');
+  return (
+    <div className="ostate">
+      <div className="empty" role="status" data-testid="units-not-yet">
+        <h3>The machines are still being inspected and verified</h3>
+        <p>
+          Each machine is named by our technician at the supply point and then verified by us.{' '}
+          <span className="mono">{order.unitsInspected}</span> of <span className="mono">{n}</span>{' '}
+          {one(order.unitsInspected)} a serial recorded and <span className="mono">{order.unitsVerified}</span> of{' '}
+          <span className="mono">{n}</span> {order.unitsVerified === 1 ? 'is' : 'are'} verified. This list — each
+          machine&rsquo;s grade, score, battery and seal — appears the moment the last one is verified.
+        </p>
+        <p>
+          <Link className="hub-link" href={`/orders/${encodeURIComponent(order.orderNumber)}/sales-order` as Route}>
+            See where the order is
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function SignedOut({ orderNumber }: { orderNumber: string }): React.JSX.Element {
   return (

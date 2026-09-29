@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { checkInspection, emptyInspection, toPayload, type InspectionState } from './inspection';
+import { checkInspection, emptyInspection, modelsOf, toInstant, toPayload, type InspectionState } from './inspection';
+import type { OrderInspectionSlot } from './order-inspection-types';
 import { PHOTO_ANGLES, QC_AREA_CODES, type ManifestUnit } from './types';
 
 const UNIT: ManifestUnit = {
@@ -9,11 +10,21 @@ const UNIT: ManifestUnit = {
   serialNumber: 'CND4233328',
   listingId: 'l-1',
   skuLabel: 'HP Victus 16 · i7 · 16 GB · 512 GB NVMe',
+  skuTitle: 'HP Victus 16',
+  specSummary: 'i7 · 16 GB · 512 GB NVMe',
   declaredGrade: 'A',
   outcome: 'PENDING',
   absentReason: null,
   qcReportId: null,
   durationSeconds: null,
+  startedAt: null,
+  completedAt: null,
+  unitStatus: 'AWAITING_QC',
+  isSellable: false,
+  verdict: null,
+  gradeFinal: null,
+  qcScore: null,
+  gradeOverrideReason: null,
 };
 
 const MANIFEST = [UNIT];
@@ -125,7 +136,7 @@ describe('never-fabricate', () => {
     const state = good({ gradeProposed: 'A', gradeFinal: 'A' });
     state.areas.THERMAL = { status: 'NOT_MEASURED', score: '', note: 'No sensor' };
 
-    const payload = toPayload(state, 'visit-1', UNIT, 'CND4233328');
+    const payload = toPayload(state, 'visit-1', 'CND4233328', { unit: UNIT });
 
     // The column's CHECK has no NOT_MEASURED, so the only truthful record of it
     // is an absent row plus the explicit list. A PASS row here would be a lie
@@ -149,17 +160,17 @@ describe('never-fabricate', () => {
     const state = good();
     state.hardware.cycleCount = '0';
     state.hardware.cycleCountNotReported = true;
-    expect(toPayload(state, 'visit-1', UNIT, 'CND4233328').hardware.cycleCount).toBeNull();
+    expect(toPayload(state, 'visit-1', 'CND4233328', { unit: UNIT }).hardware.cycleCount).toBeNull();
   });
 
   it('keeps a real cycle count when there is one', () => {
     const state = good();
     state.hardware.cycleCount = '412';
-    expect(toPayload(state, 'visit-1', UNIT, 'CND4233328').hardware.cycleCount).toBe(412);
+    expect(toPayload(state, 'visit-1', 'CND4233328', { unit: UNIT }).hardware.cycleCount).toBe(412);
   });
 
   it('defaults the three lock checks to "not checked" rather than to "no"', () => {
-    const p = toPayload(good(), 'visit-1', UNIT, 'CND4233328');
+    const p = toPayload(good(), 'visit-1', 'CND4233328', { unit: UNIT });
     expect(p.hardware.biosLocked).toBe('UNKNOWN');
     expect(p.hardware.mdmLocked).toBe('UNKNOWN');
     expect(p.hardware.computraceActive).toBe('UNKNOWN');
@@ -183,7 +194,7 @@ describe('the seal', () => {
 
   it('sends no seal at all on a failed unit', () => {
     const state = good({ verdict: 'FAIL', sealCode: '', sealPhoto: null, gradeFinal: '' });
-    expect(toPayload(state, 'visit-1', UNIT, 'CND4233328').seal).toBeNull();
+    expect(toPayload(state, 'visit-1', 'CND4233328', { unit: UNIT }).seal).toBeNull();
   });
 });
 
@@ -235,7 +246,7 @@ describe('the rest of the record', () => {
   });
 
   it('carries the twelve schema area codes, not the cosmetic ones', () => {
-    const payload = toPayload(good(), 'visit-1', UNIT, 'CND4233328');
+    const payload = toPayload(good(), 'visit-1', 'CND4233328', { unit: UNIT });
     // Writing CHASSIS or PALMREST here fails qc_area_result_area_check on every
     // row, and the doc and @trugrade/contracts both still name that vocabulary.
     expect(payload.areaResults.map((a) => a.area).sort()).toEqual([...QC_AREA_CODES].sort());
@@ -243,8 +254,80 @@ describe('the rest of the record', () => {
   });
 
   it('records whether the serial matched, alongside the normalised value', () => {
-    const p = toPayload(good({ serialScanned: 's/n: cnd-4233328' }), 'v', UNIT, 'CND4233328');
+    const p = toPayload(good({ serialScanned: 's/n: cnd-4233328' }), 'v', 'CND4233328', { unit: UNIT });
     expect(p.serialMatches).toBe(true);
     expect(p.serialScanned).toBe('CND4233328');
+  });
+});
+
+describe('a stock visit finds the manifest line by serial', () => {
+  it('needs no line chosen by hand when the serial is on the manifest', () => {
+    const check = checkInspection(good({ visitUnitId: '' }), MANIFEST);
+    expect(check.blockers).toEqual([]);
+    expect(check.hardStop).toBe(false);
+  });
+
+  it('stops on a serial the manifest does not carry', () => {
+    const check = checkInspection(good({ visitUnitId: '', serialScanned: 'CND9999999' }), MANIFEST);
+    expect(check.hardStop).toBe(true);
+    expect(check.blockers.map((b) => b.message).join(' ')).toMatch(/no unit on this visit's manifest/);
+  });
+});
+
+describe('an ordered machine', () => {
+  const SLOT: OrderInspectionSlot = {
+    slotId: 's1',
+    title: 'Dell Latitude 5420',
+    specSummary: null,
+    grade: 'A',
+    serialNumber: null,
+    inspectedAt: null,
+    verifiedAt: null,
+  };
+  const ordered = (over: Partial<InspectionState> = {}): InspectionState =>
+    good({ visitUnitId: '', slotId: 's1', serialScanned: 'NEW123456', ...over });
+
+  it('needs no manifest line: the serial names the slot', () => {
+    const check = checkInspection(ordered(), [], { openSlots: [SLOT] });
+    expect(check.blockers).toEqual([]);
+    expect(check.hardStop).toBe(false);
+  });
+
+  it('asks which ordered machine it is until a slot is named', () => {
+    const check = checkInspection(ordered({ slotId: '' }), [], { openSlots: [SLOT] });
+    expect(check.blockers.map((b) => b.field)).toContain('slotId');
+    expect(check.hardStop).toBe(false);
+  });
+
+  it('refuses when every slot on the order is already recorded', () => {
+    const check = checkInspection(ordered({ slotId: '' }), [], { openSlots: [] });
+    expect(check.blockers.map((b) => b.message).join(' ')).toMatch(/already been recorded/);
+  });
+
+  it('groups the open slots by model, keeping order-line order', () => {
+    const models = modelsOf([SLOT, { ...SLOT, slotId: 's2' }, { ...SLOT, slotId: 's3', grade: 'B' }]);
+    expect(models.map((m) => m.slotIds)).toEqual([['s1', 's2'], ['s3']]);
+  });
+
+  it('sends the slot, not a manifest line', () => {
+    const p = toPayload(ordered(), 'v', 'NEW123456', { slotId: 's1' });
+    expect(p.slotId).toBe('s1');
+    expect(p.visitUnitId).toBeUndefined();
+    expect(p.unitId).toBeUndefined();
+    expect(p.serialMatches).toBe(true);
+  });
+});
+
+describe('the two times travel as instants', () => {
+  it('turns the datetime-local value into ISO 8601 with a zone, which is what the API accepts', () => {
+    const p = toPayload(good(), 'v', 'CND4233328', { unit: UNIT });
+    expect(p.startedAt).toHaveLength(24);
+    expect(p.startedAt.endsWith('Z')).toBe(true);
+    expect(new Date(p.startedAt).getTime()).toBe(new Date('2026-08-26T09:00').getTime());
+    expect(new Date(p.completedAt).getTime()).toBeGreaterThan(new Date(p.startedAt).getTime());
+  });
+
+  it('leaves an unparseable value alone for the server to refuse by name', () => {
+    expect(toInstant('not a time')).toBe('not a time');
   });
 });

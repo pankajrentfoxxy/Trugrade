@@ -69,8 +69,44 @@ export interface OpsPoFacetOption {
   count: number;
 }
 
+/** One stage of the pipeline, counted over EVERY purchase order, not the page. */
+export interface OpsPoStage {
+  status: string;
+  count: number;
+  /** Sum of `total_net` at this stage. */
+  value: string;
+  /**
+   * How many at this stage have waited past the board's threshold for it:
+   * RAISED past `ackDays` without acknowledgement, ACKNOWLEDGED past
+   * `dispatchDays` without dispatch. Zero for every other stage — no other
+   * stage has a wait the board measures.
+   */
+  late: number;
+  lateValue: string;
+}
+
+/**
+ * The two stuck sets the board's attention strip names, with the facts the
+ * sentence needs: the oldest of the unacknowledged and who it is with, and
+ * which supply points are sitting on acknowledged-but-undispatched orders.
+ */
+export interface OpsPoAttention {
+  unacknowledged: {
+    count: number;
+    value: string;
+    oldest: { poNumber: string; vendorLegalName: string | null; raisedAt: string } | null;
+  };
+  undispatched: { count: number; value: string; vendors: string[] };
+}
+
 export interface OpsPoBoardView {
   rows: OpsPoRow[];
+  /** The whole board before any filter: how many, to how many supply points, worth how much. */
+  summary: { pos: number; vendors: number; payable: string };
+  stages: OpsPoStage[];
+  attention: OpsPoAttention;
+  /** The waits `stages[].late` and `attention` are measured against, in days. */
+  thresholds: { ackDays: number; dispatchDays: number };
   /**
    * The saved views, with their counts, in the same response as the page.
    *
@@ -92,6 +128,20 @@ export interface OpsPoBoardView {
 }
 
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/**
+ * The board's two waits, in days.
+ *
+ * Not deadlines — the row note on `waitingHours` still holds, and nothing here
+ * penalises anyone. They are the points past which the board stops calling a
+ * purchase order "waiting" and starts calling it "stuck", so an operator sees
+ * eleven stuck orders as one line rather than as eleven rows to compare dates
+ * on. Echoed to the client in `thresholds` so the copy quotes the same number
+ * the count was made with.
+ */
+export const ACK_STALE_DAYS = 7;
+export const DISPATCH_STALE_DAYS = 14;
 
 const STATUS_LABEL: Record<string, string> = {
   RAISED: 'Raised, not yet accepted',
@@ -147,6 +197,11 @@ export class OpsPurchaseOrderService {
     const vendor = query.vendor ?? null;
     const from = query.from ?? null;
     const to = query.to ?? null;
+    const late = query.late ?? null;
+
+    const now = this.clock.now().getTime();
+    const ackCutoff = new Date(now - ACK_STALE_DAYS * DAY);
+    const dispatchCutoff = new Date(now - DISPATCH_STALE_DAYS * DAY);
 
     // An order number lives in `ordering` and a serial in `listing`, so each is
     // resolved inside its own module's schema first and handed to this one's
@@ -158,8 +213,18 @@ export class OpsPurchaseOrderService {
         ? [[] as string[], [] as string[]]
         : await Promise.all([this.ordersMatching(like), this.unitsBySerial(like)]);
 
-    const where = Prisma.sql`(${status}::text IS NULL OR po.status::text = ${status})
-      AND (${vendor}::uuid IS NULL OR po.vendor_org_id = ${vendor}::uuid)
+    // The vendor arm is separable so the supply-point facet can be counted
+    // WITHOUT it: a dropdown that shrinks to the one option you just chose has
+    // stopped being a filter and become a label.
+    const whereWith = (withVendor: boolean): Prisma.Sql => {
+      const v = withVendor ? vendor : null;
+      return Prisma.sql`(${status}::text IS NULL OR po.status::text = ${status})
+      AND (${v}::uuid IS NULL OR po.vendor_org_id = ${v}::uuid)
+      AND (${late}::text IS NULL
+           OR (${late}::text = 'ack' AND po.status::text = 'RAISED'
+               AND po.created_at < ${ackCutoff}::timestamptz)
+           OR (${late}::text = 'dispatch' AND po.status::text = 'ACKNOWLEDGED'
+               AND po.acknowledged_at < ${dispatchCutoff}::timestamptz))
       AND (${from}::date IS NULL OR po.created_at >= ${from}::date)
       AND (${to}::date IS NULL OR po.created_at < ${to}::date + 1)
       AND (${like}::text IS NULL
@@ -167,6 +232,8 @@ export class OpsPurchaseOrderService {
            OR po.order_id = ANY(${orderIds}::uuid[])
            OR EXISTS (SELECT 1 FROM procurement.purchase_order_line l
                        WHERE l.po_id = po.id AND l.unit_id = ANY(${unitIds}::uuid[])))`;
+    };
+    const where = whereWith(true);
 
     const [counted] = await this.prisma.$queryRaw<
       Array<{ total: number; value: string; tds: string; machines: number }>
@@ -207,10 +274,14 @@ export class OpsPurchaseOrderService {
             unitIds,
           ),
       this.statusFacet(where),
-      this.vendorFacet(where),
+      this.vendorFacet(whereWith(false)),
     ]);
 
-    const now = this.clock.now().getTime();
+    const [summary, stages, attention] = await Promise.all([
+      this.summary(),
+      this.stages(ackCutoff, dispatchCutoff),
+      this.attention(ackCutoff, dispatchCutoff),
+    ]);
 
     // One scan for every badge. Six separate counts would be six round trips and
     // six answers from six different instants, and a badge that disagrees with
@@ -237,6 +308,10 @@ export class OpsPurchaseOrderService {
         { key: 'all', label: 'All', count: n('all_rows') },
       ],
       grandTotal: n('all_rows'),
+      summary,
+      stages,
+      attention,
+      thresholds: { ackDays: ACK_STALE_DAYS, dispatchDays: DISPATCH_STALE_DAYS },
       rows: rows.map((r) => ({
         poId: r.id,
         poNumber: r.po_number,
@@ -283,6 +358,97 @@ export class OpsPurchaseOrderService {
   /* ----------------------------------------------------------------------
    * The parts. One module schema per statement.
    * ------------------------------------------------------------------- */
+
+  /** Every purchase order ever raised, in three numbers. Unfiltered on purpose. */
+  private async summary(): Promise<OpsPoBoardView['summary']> {
+    const [row] = await this.prisma.$queryRaw<
+      Array<{ pos: number; vendors: number; payable: string }>
+    >`
+      SELECT count(*)::int AS pos,
+             count(DISTINCT po.vendor_org_id)::int AS vendors,
+             coalesce(sum(po.total_net), 0)::text AS payable
+        FROM procurement.purchase_order po`;
+    return row ?? { pos: 0, vendors: 0, payable: '0.00' };
+  }
+
+  /**
+   * The pipeline, one scan.
+   *
+   * Every stage's count, value and stuck count come out of the same statement
+   * so the tiles agree with each other and with the attention strip, which is
+   * built from the same two cutoffs.
+   */
+  private async stages(ackCutoff: Date, dispatchCutoff: Date): Promise<OpsPoStage[]> {
+    const stuck = Prisma.sql`(po.status::text = 'RAISED' AND po.created_at < ${ackCutoff}::timestamptz)
+      OR (po.status::text = 'ACKNOWLEDGED' AND po.acknowledged_at < ${dispatchCutoff}::timestamptz)`;
+    const rows = await this.prisma.$queryRaw<
+      Array<{ status: string; count: number; value: string; late: number; late_value: string }>
+    >`
+      SELECT po.status::text AS status,
+             count(*)::int AS count,
+             coalesce(sum(po.total_net), 0)::text AS value,
+             count(*) FILTER (WHERE ${stuck})::int AS late,
+             coalesce(sum(po.total_net) FILTER (WHERE ${stuck}), 0)::text AS late_value
+        FROM procurement.purchase_order po
+       GROUP BY po.status`;
+    return rows.map((r) => ({
+      status: r.status,
+      count: r.count,
+      value: r.value,
+      late: r.late,
+      lateValue: r.late_value,
+    }));
+  }
+
+  private async attention(ackCutoff: Date, dispatchCutoff: Date): Promise<OpsPoAttention> {
+    const [[unack], oldest, [undis], undispatchedVendors] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ count: number; value: string }>>`
+        SELECT count(*)::int AS count, coalesce(sum(po.total_net), 0)::text AS value
+          FROM procurement.purchase_order po
+         WHERE po.status::text = 'RAISED' AND po.created_at < ${ackCutoff}::timestamptz`,
+      this.prisma.$queryRaw<Array<{ po_number: string; vendor_org_id: string; created_at: Date }>>`
+        SELECT po.po_number, po.vendor_org_id, po.created_at
+          FROM procurement.purchase_order po
+         WHERE po.status::text = 'RAISED' AND po.created_at < ${ackCutoff}::timestamptz
+         ORDER BY po.created_at ASC, po.po_number ASC
+         LIMIT 1`,
+      this.prisma.$queryRaw<Array<{ count: number; value: string }>>`
+        SELECT count(*)::int AS count, coalesce(sum(po.total_net), 0)::text AS value
+          FROM procurement.purchase_order po
+         WHERE po.status::text = 'ACKNOWLEDGED' AND po.acknowledged_at < ${dispatchCutoff}::timestamptz`,
+      this.prisma.$queryRaw<Array<{ vendor_org_id: string }>>`
+        SELECT DISTINCT po.vendor_org_id
+          FROM procurement.purchase_order po
+         WHERE po.status::text = 'ACKNOWLEDGED' AND po.acknowledged_at < ${dispatchCutoff}::timestamptz`,
+    ]);
+
+    const first = oldest[0];
+    const names = await this.vendorNames([
+      ...(first ? [first.vendor_org_id] : []),
+      ...undispatchedVendors.map((v) => v.vendor_org_id),
+    ]);
+
+    return {
+      unacknowledged: {
+        count: unack?.count ?? 0,
+        value: unack?.value ?? '0.00',
+        oldest: first
+          ? {
+              poNumber: first.po_number,
+              vendorLegalName: names.get(first.vendor_org_id) ?? null,
+              raisedAt: first.created_at.toISOString(),
+            }
+          : null,
+      },
+      undispatched: {
+        count: undis?.count ?? 0,
+        value: undis?.value ?? '0.00',
+        vendors: undispatchedVendors
+          .map((v) => names.get(v.vendor_org_id) ?? 'A supply point no longer on the platform')
+          .sort((a, b) => a.localeCompare(b)),
+      },
+    };
+  }
 
   /** Our order number → order id. `ordering` only. */
   private async ordersMatching(like: string): Promise<string[]> {

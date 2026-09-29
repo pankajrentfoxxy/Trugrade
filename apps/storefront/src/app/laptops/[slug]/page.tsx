@@ -208,7 +208,7 @@ export default async function ProductPage({
           needsPincode: true,
         }
       : {
-          reason: 'Nothing sealed at this grade right now. The other grades still have stock.',
+          reason: 'Nothing on sale at this grade right now. The other grades still have stock.',
           needsPincode: false,
         };
 
@@ -550,11 +550,10 @@ export default async function ProductPage({
                   </div>
                 ) : board.offers.length === 0 ? (
                   <div className="empty">
-                    <h3>Nothing sealed at this grade right now</h3>
+                    <h3>Nothing on sale at this grade right now</h3>
                     <p>
-                      Every unit at Grade {gradeLabel} has been sold, or its inspection certificate
-                      has expired and it is out of the window until it is re-tested. The other
-                      grades above still have stock.
+                      Every machine at Grade {gradeLabel} has been sold or is reserved for an order
+                      being inspected. The other grades above still have stock.
                     </p>
                   </div>
                 ) : (

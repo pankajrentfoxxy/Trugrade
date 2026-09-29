@@ -518,6 +518,14 @@
   flex: 1 1 auto;
   min-width: 0;
   /**
+   * `width: 100%` — without it, a flex item with an auto left/right margin
+   * shrinks to its own content width instead of stretching, and the margins
+   * centre that narrower box in a sea of empty gutter on a wide screen. See
+   * the matching note in `apps/console/src/shell/vendor-hub.css`, where this
+   * showed up first.
+   */
+  width: 100%;
+  /**
    * `min()`, not `var(--maxw)` alone.
    *
    * Under 900px `.hub-body` turns into a column, and in a column flex container

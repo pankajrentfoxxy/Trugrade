@@ -2,7 +2,6 @@ import * as React from 'react';
 import { Link, useParams } from 'react-router';
 import {
   Breadcrumb,
-  Button,
   cn,
   DataBoard,
   EmptyState,
@@ -36,14 +35,19 @@ import {
   type VendorUnitMovement,
 } from './api';
 import { ListingMachineCard, machineTitle } from './ListingMachine';
-import { AddSerialsDialog } from './listings/AddSerialsDialog';
 import { InspectionRequested, RequestInspection } from './listings/RequestInspection';
 
 /**
- * ARCHETYPE B (the list) and C (one serial). Board, then record.
+ * ARCHETYPE C (the listing) and C (one serial). Record, then record.
  * DENSITY: default (vendor portal), set on the app root by the shell.
  *
- * Every serial under one listing, and the full life of one of them.
+ * One listing — a declared quantity of one machine — and the full life of any
+ * machine that has since been named against it.
+ *
+ * **There is no serial entry on this screen or anywhere in the vendor hub.**
+ * A listing is a quantity; the serials are recorded by our technician at the
+ * vendor's site once a buyer has ordered, and the units appear here from that
+ * moment on, read-only.
  *
  * Both screens read the same endpoint — `GET /vendor/listings/:id/units` — and
  * the detail view finds its unit in that list. One request instead of two, and
@@ -382,7 +386,6 @@ export function ListingUnitsRoute(): React.JSX.Element {
   const { id } = useParams();
   const [reloadToken, setReloadToken] = React.useState(0);
   const [requested, setRequested] = React.useState<SubmitAccepted | null>(null);
-  const [addingSerials, setAddingSerials] = React.useState(false);
   const listing = useResource<VendorListing>(
     id ? API.listing(id) : '',
     'This listing did not load',
@@ -401,84 +404,91 @@ export function ListingUnitsRoute(): React.JSX.Element {
   }
   if (!listing.data || !data) return <Skeleton lines={8} />;
 
+  const l = listing.data;
+  const declared = l.qtyTotal;
+  const named = data.length;
+
   return (
     <div className="tg-stack">
-      <Breadcrumb items={[{ label: 'Your stock', href: '/vendor/listings' }, { label: 'Units' }]} />
+      <Breadcrumb items={[{ label: 'Your stock', href: '/vendor/listings' }, { label: 'Listing' }]} />
 
       <PageHeader
-        title={machineTitle(listing.data)}
+        title={machineTitle(l)}
         action={
-          <>
-            {/*
-              Typing three serials should not mean opening a spreadsheet. The
-              CSV route stays first for the warehouse export it is built for.
-            */}
-            <Button variant="secondary" size="sm" onClick={() => setAddingSerials(true)}>
-              Add serials manually
-            </Button>
-            <Link
-              className="text-acc-ink underline underline-offset-4"
-              to={`/vendor/listings/${id}/bulk-upload`}
-            >
-              Add more from a CSV
-            </Link>
-          </>
+          <StatusPill tone={STATUS_TONE[l.status] ?? 'neutral'} label={humanise(l.status)} />
         }
       >
-        {data.length} {data.length === 1 ? 'machine' : 'machines'} on this listing, and where each
-        one is.
+        <span className="font-mono tnum text-ink">{declared}</span>{' '}
+        {declared === 1 ? 'machine' : 'machines'} declared ·{' '}
+        <span className="font-mono tnum text-ink">{l.qtyAvailable}</span> on sale ·{' '}
+        <span className="font-mono tnum text-ink">{l.qtyReserved}</span> reserved for orders.
+        Serials are not asked for here: our technician records each machine at your site once a
+        buyer has ordered it.
       </PageHeader>
 
-      <ListingMachineCard listing={listing.data} />
+      <ListingMachineCard listing={l} />
+
+      {l.status === 'REJECTED' && l.rejectionReason ? (
+        <p role="status" className="rounded border border-warn bg-sheet-2 p-4 text-body text-ink">
+          Our team sent this listing back: {l.rejectionReason}
+        </p>
+      ) : null}
 
       {requested ? <InspectionRequested accepted={requested} /> : null}
       <RequestInspection
-        listing={listing.data}
-        unitCount={data.length}
+        listing={l}
+        unitCount={declared}
         onSubmitted={(accepted) => {
           setRequested(accepted);
           setReloadToken((n) => n + 1);
         }}
       />
 
-      {data.length === 0 ? (
-        <EmptyState
-          title="No serials on this listing yet"
-          body="A listing with no serials has nothing to inspect and nothing to sell."
-          action={
-            <span className="flex flex-wrap items-center justify-center gap-4">
-              <Button variant="primary" onClick={() => setAddingSerials(true)}>
-                Type the serials
-              </Button>
-              <Link
-                className="text-acc-ink underline underline-offset-4"
-                to={`/vendor/listings/${id}/bulk-upload`}
-              >
-                Upload a CSV of serials
-              </Link>
-            </span>
-          }
-        />
-      ) : (
-        <Board>
-          <DataBoard
-            caption={`${data.length} machines on this listing.`}
-            columns={columns}
-            rows={data}
-            rowKey={(u) => u.id}
+      <Section
+        title="Machines named so far"
+        subtitle={
+          named === 0
+            ? 'None yet. A machine gets its serial when our technician inspects it for a buyer’s order; it appears here at that moment.'
+            : `${named} of ${declared} declared machines have been inspected and named against an order.`
+        }
+      >
+        {named === 0 ? (
+          <EmptyState
+            title="No machine has been named yet"
+            body={
+              l.status === 'DRAFT'
+                ? 'Send the listing for approval. Once it is live and a buyer orders, a technician comes to your site and records each serial.'
+                : l.status === 'PENDING_APPROVAL'
+                  ? 'Our team is reviewing the listing. Once it is live and a buyer orders, a technician comes to your site and records each serial.'
+                  : 'When a buyer orders, a technician comes to your site, inspects each machine and records its serial. Nothing to do until then.'
+            }
           />
-        </Board>
-      )}
-
-      <AddSerialsDialog
-        listingId={id ?? ''}
-        open={addingSerials}
-        onClose={() => setAddingSerials(false)}
-        onAdded={() => setReloadToken((n) => n + 1)}
-      />
+        ) : (
+          <Board>
+            <DataBoard
+              caption={`${named} ${named === 1 ? 'machine' : 'machines'} named on this listing.`}
+              columns={columns}
+              rows={data}
+              rowKey={(u) => u.id}
+            />
+          </Board>
+        )}
+      </Section>
     </div>
   );
 }
+
+/** A listing status as the vendor's record shows it. Amber is reserved for the one live state. */
+const STATUS_TONE: Record<string, 'neutral' | 'info' | 'warn' | 'processing'> = {
+  DRAFT: 'neutral',
+  PENDING_APPROVAL: 'processing',
+  ACTIVE: 'info',
+  PARTIALLY_ACTIVE: 'info',
+  PAUSED: 'neutral',
+  REJECTED: 'warn',
+  AWAITING_QC: 'processing',
+  QC_IN_PROGRESS: 'processing',
+};
 
 export function UnitDetailRoute(): React.JSX.Element {
   const { id, unitId } = useParams();
@@ -528,7 +538,7 @@ export function UnitDetailRoute(): React.JSX.Element {
       <Breadcrumb
         items={[
           { label: 'Your stock', href: '/vendor/listings' },
-          { label: 'Units', href: `/vendor/listings/${id}` },
+          { label: 'Listing', href: `/vendor/listings/${id}` },
           { label: unit.serialNumber },
         ]}
       />

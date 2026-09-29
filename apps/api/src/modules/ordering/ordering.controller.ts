@@ -16,6 +16,7 @@ import type { Response } from 'express';
 import { uuidSchema } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { OrderPdfService } from './internal/order-pdf.service';
+import { OrderVerificationService, type PayResult } from './internal/order-verification.service';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
   addCartItemSchema,
@@ -111,6 +112,7 @@ export class OrderingController {
     private readonly approvals: ApprovalService,
     private readonly requirements: RfqIntakeService,
     private readonly orderPdf: OrderPdfService,
+    private readonly verification: OrderVerificationService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -312,6 +314,23 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
   ): Promise<OrderRecordView> {
     return this.orders.byNumber(orderNumber);
+  }
+
+  /**
+   * Pay for a verified order.
+   *
+   * Only an order at PAYMENT_PENDING inside its 24-hour window takes this;
+   * anything else is refused with the reason. Recorded as a MANUAL capture —
+   * there is no gateway in front of it yet — and idempotent on the order: a
+   * second press meets an order that is already CONFIRMED.
+   */
+  @Post('orders/:orderNumber/pay')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  pay(
+    @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
+  ): Promise<PayResult> {
+    return this.verification.pay(orderNumber);
   }
 
   /**
