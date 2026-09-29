@@ -1,5 +1,5 @@
 import { BRAND } from '@trugrade/config/brand';
-import { getSearch, getStats } from '../lib/api';
+import { getSearch, getStats, type SearchResult } from '../lib/api';
 import { consoleSellRegisterUrlFromRequest } from '../lib/console-url.server';
 import { toApiQueryString } from './search/query';
 import { BrandRail } from './BrandRail';
@@ -9,6 +9,9 @@ import { HomeCarousel } from './HomeCarousel';
 import { HomePills } from './HomePills';
 import { HomeBanners } from './HomeBanners';
 import { SiteHeader } from './SiteHeader';
+import { SuggestedRow, type SuggestedItem } from './SuggestedRow';
+import { brandPhoto } from '../lib/brand-photo';
+import { percentOff, placeholderMrp } from './search/placeholder-market';
 import { WhyTrugrade } from './WhyTrugrade';
 
 /**
@@ -86,6 +89,36 @@ export const dynamic = 'force-dynamic';
  */
 const SHOW_BRAND_RAIL = false;
 
+const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+
+/**
+ * One "Suggested for you" card per result: the spec line is assembled from
+ * the parts that exist — `i5-1135G7 · 16/512 · 14″` — and the "% off" is the search page's placeholder MRP
+ * — see `SuggestedRow.tsx` for what on the card is real and what is not.
+ */
+function toSuggested(r: SearchResult): SuggestedItem {
+  const parts: string[] = [];
+  if (r.cpuLine) parts.push(r.cpuLine);
+  // `16/512`, the way the reference card writes RAM and storage in gigabytes.
+  if (r.ramGb > 0 && r.storageGb > 0) parts.push(`${r.ramGb}/${r.storageGb}`);
+  else if (r.ramGb > 0) parts.push(`${r.ramGb} GB`);
+  else if (r.storageGb > 0) parts.push(`${r.storageGb} GB`);
+  // Only the size from `12.3" QHD (2560x1440)`: the panel detail belongs to
+  // the SKU page, and the card has one line for the spec.
+  const size = /^\s*([\d.]+)\s*["″]/.exec(r.displayLine)?.[1];
+  if (size) parts.push(`${size}″`);
+  return {
+    skuId: r.skuId,
+    grade: r.grade,
+    brand: r.brand,
+    model: r.model,
+    spec: parts.join(' · '),
+    price: RUPEES.format(r.fromPrice),
+    off: percentOff(r.fromPrice, placeholderMrp(r.fromPrice)),
+    photo: brandPhoto(r.brand),
+  };
+}
+
 const PROCESS = [
   [
     'Sourced',
@@ -153,6 +186,11 @@ export default async function HomePage({
         {/* The banner, then the same machines the grid holds, one at a time,
           with their measurements. Both are homepage-only: this is the way in. */}
         <HeroBanner results={results} sellUrl={sellUrl} />
+
+        {/* Suggested for you — real SKUs from the same search, one scrolling
+          row. Rendered only when there is stock to suggest; an empty row with
+          a heading is a sentence about nothing. */}
+        {results.length > 0 && <SuggestedRow items={results.slice(0, 12).map(toSuggested)} />}
 
         {/* Supplied banner artwork in one scrolling row. Not a database read —
           see the file's own header. */}
