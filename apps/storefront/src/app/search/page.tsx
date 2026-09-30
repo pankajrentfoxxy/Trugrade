@@ -45,7 +45,16 @@ export default async function SearchPage({
   const params = await searchParams;
   const query = toQueryString(params);
 
-  const data = await getSearch(toApiQueryString(params));
+  // Two reads of one endpoint: the filtered search, and the same facets with
+  // no filter at all. The second is what lets the rail tick an option that
+  // FOLLOWS from the buyer's choice — "MacBook Air" leaves only Apple — without
+  // also ticking one the catalogue only ever had one of. It is the unfiltered
+  // query, which `getSearch` caches for thirty seconds, so it costs a request
+  // per half-minute and not one per page view.
+  const [data, unfiltered] = await Promise.all([
+    getSearch(toApiQueryString(params)),
+    getSearch(''),
+  ]);
 
   const view = params.view === 'list' ? 'list' : 'grid';
   const pincode = typeof params.pin === 'string' && params.pin !== '' ? params.pin : null;
@@ -54,8 +63,7 @@ export default async function SearchPage({
 
   return (
     <>
-
-      <div className="body">
+      <div className="body srp">
         <div className="wrap">
           {/*
             The error state. A search that cannot reach the API renders this and
@@ -68,8 +76,8 @@ export default async function SearchPage({
               <h3>We could not run that search</h3>
               <p>
                 The catalogue did not answer. Nothing is wrong with your filters — this is our
-                problem, not yours. Reload the page; if it keeps happening, the stock is still
-                there and{' '}
+                problem, not yours. Reload the page; if it keeps happening, the stock is still there
+                and{' '}
                 <Link className="ulink" href="/legal/grievance">
                   our team can pull it for you
                 </Link>
@@ -83,7 +91,12 @@ export default async function SearchPage({
             </div>
           ) : (
             <div className="cols">
-              <FilterRail facets={data.facets} query={query} total={data.total} />
+              <FilterRail
+                facets={data.facets}
+                query={query}
+                total={data.total}
+                baseline={unfiltered?.facets}
+              />
 
               <main>
                 <ResultBar

@@ -15,6 +15,8 @@ export interface SuggestedItem {
   spec: string;
   /** Formatted rupees, `28,000`. */
   price: string;
+  /** Formatted rupees for the struck-through new-machine price — a placeholder, see below. */
+  mrp: string;
   /** Whole-number percentage under the placeholder MRP — see below. */
   off: number;
   /** A brand render under `/home/`, or null — the card then draws the shell. */
@@ -32,10 +34,12 @@ const isGrade = (value: string): value is Grade => (GRADES as readonly string[])
  * ----------------------------
  * Every card is a real SKU from the same search response the hero renders, so
  * the grade, the name, the spec and the price are the ones the SKU page will
- * show. The "% off" is the one exception: the API does not send a new-machine
- * MRP yet, so it comes from `placeholder-market.ts`, hardcoded by direction and
- * already on every card of `/search`. It is derived from our own price and is
- * not a fact about the machine.
+ * show. The struck-through price and the "% off" beside it are the exception:
+ * the API does not send a new-machine MRP yet, so both come from
+ * `placeholder-market.ts`, hardcoded by direction and already on every card of
+ * `/search`. They are derived from our own price and are not facts about the
+ * machine. The two are one claim — the percentage is the gap between the
+ * price and the figure struck out beside it — so they are drawn together.
  *
  * There is no stock count on the card by direction. `unitsAvailable` is still
  * on the result; it is simply not drawn here.
@@ -144,6 +148,9 @@ export function SuggestedRow({ items }: { items: readonly SuggestedItem[] }): Re
               )}
               <p className="sug-price">
                 <span className="sug-price-now mono">₹{it.price}</span>
+                <s className="sug-price-mrp mono">
+                  <span className="sr-only">New price </span>₹{it.mrp}
+                </s>
                 <span className="sug-price-off">
                   <span className="mono">{it.off}%</span> off
                 </span>

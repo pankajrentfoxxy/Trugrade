@@ -513,7 +513,7 @@ export class OrderingController {
     @Param('orderNumber', new ZodValidationPipe(orderNumberSchema)) orderNumber: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const document = await this.orderPdf.render(orderNumber);
+    const document = await this.orderPdf.renderForReader(orderNumber);
     // `inline`, not `attachment`: a buyer checking what they ordered wants to
     // look at it, and a forced download of a one-page confirmation is a file in
     // somebody's Downloads folder they then have to find.

@@ -4,7 +4,7 @@ import * as React from 'react';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 import { normalisePincode } from '@trugrade/contracts';
-import type { FacetGroup, FacetOption } from '../lib/api';
+import type { FacetGroup } from '../lib/api';
 
 /**
  * The fifteen facets — `09_FRONTEND_LOCKED.md` §6.
@@ -38,17 +38,21 @@ export interface FilterRailProps {
   query: string;
   /** Result count, so the sheet's close button can say what it will show. */
   total: number;
+  /**
+   * The same facets with NO filter applied — what the shelf holds before the
+   * buyer narrows it. It is what lets the rail tell "your filters left only
+   * this option" from "there was only ever this option". Absent when that
+   * read failed, in which case nothing is ticked on the buyer's behalf.
+   */
+  baseline?: Record<string, FacetGroup>;
 }
 
 /** Params that are not filters: they must not appear as an applied chip. */
 const NOT_A_FILTER = new Set(['sort', 'page', 'per', 'view']);
 
-const GRADE_NOTE =
-  'Counts read the inspected grade — what the technician found, never what the supplier declared. Nothing below B is listed.';
-
 const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
-export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX.Element {
+export function FilterRail({ facets, query, total, baseline }: FilterRailProps): React.JSX.Element {
   const router = useRouter();
   const params = React.useMemo(() => new URLSearchParams(query), [query]);
   const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -102,6 +106,43 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
     setValue(key, params.get(key) === value ? '' : value);
 
   const applied = [...params.entries()].filter(([k, v]) => !NOT_A_FILTER.has(k) && v !== '');
+
+  /**
+   * The option a group is left with because of filters set in OTHER groups.
+   *
+   * Tick "MacBook Air" under Series and every result is an Apple, an M1, an
+   * 8 GB machine: those follow from the choice, and the rail shows them ticked
+   * so the buyer can see what their one click narrowed the shelf to, instead
+   * of three groups of greyed-out rows with one live row they have to notice.
+   *
+   * Three conditions, all of them needed:
+   *   - **A filter is applied somewhere.** Nothing is ticked on arrival.
+   *   - **The group has no choice of its own and exactly one option with
+   *     stock.** Two live options is a choice still to make, not a consequence.
+   *   - **Unfiltered, the group had at least two.** That is what makes it a
+   *     consequence of the buyer's filters. Every machine we hold might be an
+   *     NVMe SSD; ticking that the moment a brand is picked would credit the
+   *     buyer with a decision the catalogue made.
+   *
+   * It is a readout, not a filter: it is not in the URL, it is not counted in
+   * "applied", and it has no chip. Removing the choice that caused it clears it.
+   */
+  const impliedIn = (key: string): string | null => {
+    if (applied.length === 0) return null;
+    const group = facets[key];
+    const before = baseline?.[key];
+    if (!group || !before || group.unavailable) return null;
+    if (group.options.some((o) => o.selected)) return null;
+    const live = group.options.filter((o) => o.count > 0);
+    const [only] = live;
+    if (live.length !== 1 || !only) return null;
+    if (before.options.filter((o) => o.count > 0).length < 2) return null;
+    return only.value;
+  };
+
+  /** Whether the URL's price bounds are exactly this band's. */
+  const inBand = (b: { min: string; max: string }): boolean =>
+    (params.get('pmin') ?? '') === b.min && (params.get('pmax') ?? '') === b.max;
 
   return (
     <div className="railzone">
@@ -172,39 +213,74 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
 
         {/* 1 */}
         <Facet name="Brand" open>
-          <Options group={facets.brand} onToggle={(v) => toggle('brand', v)} showFirst={5} />
+          <Options
+            group={facets.brand}
+            implied={impliedIn('brand')}
+            onToggle={(v) => toggle('brand', v)}
+          />
         </Facet>
 
         {/* 2 */}
         <Facet name="Series" open>
-          <Options group={facets.series} onToggle={(v) => toggle('series', v)} showFirst={5} />
+          <Options
+            group={facets.series}
+            implied={impliedIn('series')}
+            onToggle={(v) => toggle('series', v)}
+          />
         </Facet>
 
         {/* 3 */}
         <Facet name="Processor" open>
-          <Pills group={facets.cpu} onPick={(v) => toggle('cpu', v)} />
+          <SubHead>Family</SubHead>
+          <Options
+            group={facets.cpu}
+            implied={impliedIn('cpu')}
+            onToggle={(v) => toggle('cpu', v)}
+          />
           <div className="fsub">
-            <Options group={facets.gen} onToggle={(v) => toggle('gen', v)} />
+            <SubHead>Generation</SubHead>
+            <Options
+              group={facets.gen}
+              implied={impliedIn('gen')}
+              onToggle={(v) => toggle('gen', v)}
+            />
           </div>
         </Facet>
 
         {/* 4 */}
         <Facet name="Memory" open>
-          <Options group={facets.ram} onToggle={(v) => toggle('ram', v)} />
+          <Options
+            group={facets.ram}
+            implied={impliedIn('ram')}
+            onToggle={(v) => toggle('ram', v)}
+          />
         </Facet>
 
         {/* 5 */}
         <Facet name="Storage">
-          <Pills group={facets.sgb} onPick={(v) => toggle('sgb', v)} />
+          <SubHead>Capacity</SubHead>
+          <Options
+            group={facets.sgb}
+            implied={impliedIn('sgb')}
+            onToggle={(v) => toggle('sgb', v)}
+          />
           <div className="fsub">
-            <Options group={facets.stype} onToggle={(v) => toggle('stype', v)} />
+            <SubHead>Type</SubHead>
+            <Options
+              group={facets.stype}
+              implied={impliedIn('stype')}
+              onToggle={(v) => toggle('stype', v)}
+            />
           </div>
         </Facet>
 
         {/* 6 — the argument, open and above the fold */}
         <Facet name="Inspected grade" open>
-          <Options group={facets.grade} onToggle={(v) => toggle('grade', v)} />
-          <p className="fnote">{GRADE_NOTE}</p>
+          <Options
+            group={facets.grade}
+            implied={impliedIn('grade')}
+            onToggle={(v) => toggle('grade', v)}
+          />
         </Facet>
 
         {/* 7 — the argument */}
@@ -226,8 +302,6 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
               commit(next);
             }}
           />
-          <p className="fnote">Measured at inspection on a charged battery, never estimated from age.</p>
-          <Unavailable group={facets.cycles} />
         </Facet>
 
         {/* 8 — the argument */}
@@ -241,18 +315,15 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
             toLabel="Maximum inspection score, out of 100"
             onCommit={(lo) => setValue('smin', lo)}
           />
-          <div className="pillrow">
-            {['90', '80', '70'].map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={params.get('smin') === s ? 'fpill on' : 'fpill'}
-                aria-pressed={params.get('smin') === s}
-                onClick={() => pick('smin', s)}
-              >
-                <span className="mono">{s}+</span>
-              </button>
-            ))}
+          <div className="fsub">
+            <Checks
+              items={SCORE_FLOORS.map((floor) => ({
+                key: floor,
+                label: <span className="mono">{floor}+</span>,
+                checked: params.get('smin') === floor,
+              }))}
+              onToggle={(floor) => pick('smin', floor)}
+            />
           </div>
         </Facet>
 
@@ -276,45 +347,57 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
               commit(next);
             }}
           />
-          <div className="pillrow">
-            {PRICE_BANDS.map((b) => {
-              const on = (params.get('pmin') ?? '') === b.min && (params.get('pmax') ?? '') === b.max;
-              return (
-                <button
-                  key={b.label}
-                  type="button"
-                  className={on ? 'fpill on' : 'fpill'}
-                  aria-pressed={on}
-                  onClick={() => {
-                    const next = new URLSearchParams(params);
-                    next.delete('pmin');
-                    next.delete('pmax');
-                    if (!on) {
-                      if (b.min) next.set('pmin', b.min);
-                      if (b.max) next.set('pmax', b.max);
-                    }
-                    commit(next);
-                  }}
-                >
-                  <span className="mono">{b.label}</span>
-                </button>
-              );
-            })}
+          <div className="fsub">
+            <Checks
+              items={PRICE_BANDS.map((b) => ({
+                key: b.label,
+                label: <span className="mono">{b.label}</span>,
+                checked: inBand(b),
+              }))}
+              onToggle={(label) => {
+                const band = PRICE_BANDS.find((b) => b.label === label);
+                if (!band) return;
+                // One band at a time: it is a pair of bounds, not a set, so
+                // ticking the one that is on clears it and ticking another
+                // replaces it.
+                const next = new URLSearchParams(params);
+                next.delete('pmin');
+                next.delete('pmax');
+                if (!inBand(band)) {
+                  if (band.min) next.set('pmin', band.min);
+                  if (band.max) next.set('pmax', band.max);
+                }
+                commit(next);
+              }}
+            />
           </div>
-          <p className="fnote">Includes GST and freight to the delivery pincode below.</p>
         </Facet>
 
         {/* 10 */}
         <Facet name="Screen">
-          <Pills group={facets.screen} onPick={(v) => toggle('screen', v)} />
+          <SubHead>Size</SubHead>
+          <Options
+            group={facets.screen}
+            implied={impliedIn('screen')}
+            onToggle={(v) => toggle('screen', v)}
+          />
           <div className="fsub">
-            <Options group={facets.res} onToggle={(v) => toggle('res', v)} />
+            <SubHead>Resolution</SubHead>
+            <Options
+              group={facets.res}
+              implied={impliedIn('res')}
+              onToggle={(v) => toggle('res', v)}
+            />
           </div>
         </Facet>
 
         {/* 11 */}
         <Facet name="Delivery">
-          <Options group={facets.ship} onToggle={(v) => toggle('ship', v)} />
+          <Options
+            group={facets.ship}
+            implied={impliedIn('ship')}
+            onToggle={(v) => toggle('ship', v)}
+          />
           <div className="range">
             <label className="sr-only" htmlFor="fpin">
               Delivery pincode
@@ -346,40 +429,39 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
               {pincodeError}
             </p>
           )}
-          <p className="fnote">
-            The pincode sets the freight in every landed price on this page. It does not remove
-            anything from the results.
-          </p>
         </Facet>
 
         {/* 12 */}
         <Facet name="Supply point city">
-          <Options group={facets.city} onToggle={(v) => toggle('city', v)} showFirst={5} />
-          <p className="fnote">
-            A supply point is a dispatch city, shown as{' '}
-            <span className="mono">Supply Point A · Gurugram</span>. Who is behind it is not part of
-            the offer.
-          </p>
+          <Options
+            group={facets.city}
+            implied={impliedIn('city')}
+            onToggle={(v) => toggle('city', v)}
+          />
         </Facet>
 
         {/* 13 */}
         <Facet name="Quantity available">
-          <Pills group={facets.qty} onPick={(v) => pick('qty', v)} labelOf={(o) => o.value + '+'} />
-          <p className="fnote">
-            Counts units of one model at one supply point, so a quantity here is one dispatch rather
-            than four part-shipments.
-          </p>
+          {/* One floor at a time, so ticking the one that is on clears it. */}
+          <Options group={facets.qty} implied={impliedIn('qty')} onToggle={(v) => pick('qty', v)} />
         </Facet>
 
         {/* 14 */}
         <Facet name="Features">
-          <Options group={facets.feat} onToggle={(v) => toggle('feat', v)} />
-          <Unavailable group={facets.charger} />
+          <Options
+            group={facets.feat}
+            implied={impliedIn('feat')}
+            onToggle={(v) => toggle('feat', v)}
+          />
         </Facet>
 
         {/* 15 */}
         <Facet name="Warranty">
-          <Options group={facets.warr} onToggle={(v) => toggle('warr', v)} />
+          <Options
+            group={facets.warr}
+            implied={impliedIn('warr')}
+            onToggle={(v) => toggle('warr', v)}
+          />
         </Facet>
 
         <div className="fdone">
@@ -400,6 +482,9 @@ export function FilterRail({ facets, query, total }: FilterRailProps): React.JSX
     </div>
   );
 }
+
+/** The inspection-score floors offered as one-click choices. */
+const SCORE_FLOORS = ['90', '80', '70'] as const;
 
 const PRICE_BANDS: ReadonlyArray<{ label: string; min: string; max: string }> = [
   { label: 'Under ₹25,000', min: '', max: '25000' },
@@ -459,93 +544,148 @@ function Facet({
   );
 }
 
-/**
- * A checkbox list. A zero-count option is DISABLED and dimmed, never removed —
- * §6 is explicit that disappearing options make people think the site is broken.
- *
- * A selected option is never disabled even at zero, or a filter that returns
- * nothing could not be un-ticked.
- */
-function Options({
-  group,
-  onToggle,
-  showFirst,
-}: {
-  group: FacetGroup | undefined;
-  onToggle: (value: string) => void;
-  showFirst?: number;
-}): React.JSX.Element | null {
-  const [expanded, setExpanded] = React.useState(false);
-  if (!group) return null;
-  if (group.unavailable) return <Unavailable group={group} />;
+/** What an implied tick says about itself. */
+const IMPLIED_HINT = 'Follows from your other filters';
 
-  const limit = showFirst ?? group.options.length;
-  const hidden = Math.max(0, group.options.length - limit);
-  const shown = expanded ? group.options : group.options.slice(0, limit);
+/**
+ * How many checkboxes a group shows before "Show more".
+ *
+ * One number for every group in the rail. A rail whose groups each open to a
+ * different length is a rail nobody can scan; four rows is enough to see what
+ * a group is about, and the rest are one click away.
+ */
+const FIRST = 4;
+
+interface Check {
+  key: string;
+  label: React.ReactNode;
+  /** How many results the option would leave. Omitted for a fixed choice. */
+  count?: number;
+  checked: boolean;
+  disabled?: boolean;
+  /** Ticked as a consequence of filters elsewhere, not by the buyer. */
+  implied?: boolean;
+}
+
+/**
+ * The one control the rail offers a choice with: a list of checkboxes, four
+ * showing, the rest behind "Show more".
+ *
+ * Every group is drawn with this — the ones that used to be rows of pill
+ * buttons included. A pill and a checkbox did the same job in two shapes, and
+ * a reader had to work out that a grey lozenge with a number in it was a
+ * filter at all; a checkbox says so by being one.
+ *
+ * A ticked option is never folded away. Collapsed, the list is the first four
+ * plus anything ticked further down — a filter that is on but out of sight is
+ * the one a buyer cannot find to turn off.
+ *
+ * An IMPLIED option is drawn ticked and cannot be un-ticked here: it is ticked
+ * because of a choice in another group, and the way to clear it is to clear
+ * that choice. It says so to a pointer and to a screen reader.
+ */
+function Checks({
+  items,
+  onToggle,
+}: {
+  items: readonly Check[];
+  onToggle: (key: string) => void;
+}): React.JSX.Element {
+  const [expanded, setExpanded] = React.useState(false);
+  const visible = expanded
+    ? items
+    : items.filter((item, i) => i < FIRST || item.checked || item.implied);
+  const hidden = items.length - visible.length;
 
   return (
     <>
-      {shown.map((o) => {
-        const empty = o.count === 0 && !o.selected;
-        return (
-          <label key={o.value} className={empty ? 'fopt off' : 'fopt'}>
-            <input
-              type="checkbox"
-              checked={o.selected}
-              disabled={empty}
-              onChange={() => onToggle(o.value)}
-            />
-            {o.label}
-            <span className="c mono">{o.count}</span>
-          </label>
-        );
-      })}
-      {hidden > 0 && !expanded && (
-        <button type="button" className="fmore" onClick={() => setExpanded(true)}>
-          Show <span className="mono">{hidden}</span> more
+      {visible.map((item) => (
+        <label
+          key={item.key}
+          className={item.implied ? 'fopt implied' : item.disabled ? 'fopt off' : 'fopt'}
+          title={item.implied ? IMPLIED_HINT : undefined}
+        >
+          <input
+            type="checkbox"
+            checked={item.checked || item.implied === true}
+            disabled={item.disabled || item.implied}
+            onChange={() => onToggle(item.key)}
+          />
+          {item.label}
+          {item.implied && <span className="sr-only">, {IMPLIED_HINT}</span>}
+          {item.count !== undefined && <span className="c mono">{item.count}</span>}
+        </label>
+      ))}
+      {(hidden > 0 || (expanded && items.length > FIRST)) && (
+        <button
+          type="button"
+          className="fmore"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {expanded ? (
+            'Show less'
+          ) : (
+            <>
+              Show <span className="mono">{hidden}</span> more
+            </>
+          )}
         </button>
       )}
     </>
   );
 }
 
-/** The same options as pills. Zero is disabled here too, for the same reason. */
-function Pills({
+/**
+ * A facet from the API as a checkbox list. A zero-count option is DISABLED and
+ * dimmed, never removed — §6 is explicit that disappearing options make people
+ * think the site is broken.
+ *
+ * A selected option is never disabled even at zero, or a filter that returns
+ * nothing could not be un-ticked.
+ */
+function Options({
   group,
-  onPick,
-  labelOf,
+  implied,
+  onToggle,
 }: {
   group: FacetGroup | undefined;
-  onPick: (value: string) => void;
-  labelOf?: (o: FacetOption) => string;
+  /** The value ticked as a consequence of filters elsewhere, if any. */
+  implied?: string | null;
+  onToggle: (value: string) => void;
 }): React.JSX.Element | null {
   if (!group) return null;
+  // A dimension nothing measures draws nothing: no sentence, and above all no
+  // row of zeroes, which would read as "we checked and found none".
+  if (group.unavailable) return null;
+
+  // With four rows showing, which four matters. The API sends a group in its
+  // own order — alphabetical, mostly — so the first four of "Processor" were
+  // three families with nothing in stock ahead of the one with the most. The
+  // options a buyer can act on go first: anything ticked or with stock, in the
+  // API's order, then the empty ones, in the API's order. Nothing is dropped;
+  // the empty ones are still there, disabled, under "Show more".
+  const usable = group.options.filter((o) => o.selected || o.count > 0);
+  const empty = group.options.filter((o) => !o.selected && o.count === 0);
+
   return (
-    <div className="pillrow">
-      {group.options.map((o) => {
-        const empty = o.count === 0 && !o.selected;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            className={o.selected ? 'fpill on' : empty ? 'fpill off' : 'fpill'}
-            aria-pressed={o.selected}
-            disabled={empty}
-            onClick={() => onPick(o.value)}
-          >
-            {labelOf ? labelOf(o) : o.label}{' '}
-            <span className="c mono">{o.count}</span>
-          </button>
-        );
-      })}
-    </div>
+    <Checks
+      items={[...usable, ...empty].map((o) => ({
+        key: o.value,
+        label: o.label,
+        count: o.count,
+        checked: o.selected,
+        disabled: o.count === 0 && !o.selected,
+        implied: implied === o.value,
+      }))}
+      onToggle={onToggle}
+    />
   );
 }
 
-/** A dimension nothing measures. Prints why, in `--ink-4`, instead of zeroes. */
-function Unavailable({ group }: { group: FacetGroup | undefined }): React.JSX.Element | null {
-  if (!group?.unavailable) return null;
-  return <p className="fnote off">{group.unavailable}</p>;
+/** Names one of two lists that share a group: "Family" over "Generation". */
+function SubHead({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <p className="fsubh">{children}</p>;
 }
 
 /**

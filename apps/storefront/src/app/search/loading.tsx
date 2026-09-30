@@ -15,7 +15,7 @@ import { Skeleton } from '@trugrade/ui';
 export default function Loading(): React.JSX.Element {
   return (
     <>
-      <div className="body">
+      <div className="body srp">
       <div className="wrap">
         <div className="cols">
           <aside className="filters" aria-hidden="true">

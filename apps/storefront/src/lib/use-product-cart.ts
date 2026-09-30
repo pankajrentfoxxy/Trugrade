@@ -21,7 +21,6 @@ export type ProductCartValue = {
   qtyFor: (listingId: string) => number | null;
   busyListingId: string | null;
   itemCount: number;
-  cartDockDismissed: boolean;
   /**
    * The snapshot is what lets a SIGNED-OUT visitor have a cart: there is no
    * authenticated endpoint that can turn a listing id back into a title and a
@@ -40,7 +39,6 @@ export type ProductCartValue = {
     snapshot: GuestCartSnapshot,
   ) => Promise<string | null>;
   updateListingQty: (listingId: string, qty: number) => Promise<void>;
-  dismissCartDock: () => void;
   /** `null` until the session probe answers. */
   signedIn: boolean | null;
 };
@@ -64,7 +62,6 @@ function useProductCartState(): ProductCartValue {
   const linesRef = React.useRef(lines);
   linesRef.current = lines;
   const [busyListingId, setBusyListingId] = React.useState<string | null>(null);
-  const [cartDockDismissed, setCartDockDismissed] = React.useState(false);
   const [signedIn, setSignedIn] = React.useState<boolean | null>(null);
   const [guestLines, setGuestLines] = React.useState<readonly GuestCartLine[]>([]);
 
@@ -132,7 +129,6 @@ function useProductCartState(): ProductCartValue {
       // between a buyer and a decision they have already made.
       if (signedIn === false) {
         setGuestLines(addGuestLine(snapshot, qty));
-        setCartDockDismissed(false);
         return null;
       }
       setBusyListingId(listingId);
@@ -140,7 +136,6 @@ function useProductCartState(): ProductCartValue {
       setBusyListingId(null);
       if (result.ok) {
         applyView(result.data);
-        setCartDockDismissed(false);
         return result.data.id;
       }
       if (result.status === 401) signInRedirect();
@@ -190,18 +185,12 @@ function useProductCartState(): ProductCartValue {
 
   const guestCount = guestLines.reduce((n, l) => n + l.qty, 0);
 
-  const dismissCartDock = React.useCallback((): void => {
-    setCartDockDismissed(true);
-  }, []);
-
   return {
     qtyFor,
     busyListingId,
     itemCount: signedIn === false ? guestCount : itemCount,
-    cartDockDismissed,
     addListing,
     updateListingQty,
-    dismissCartDock,
     signedIn,
   };
 }

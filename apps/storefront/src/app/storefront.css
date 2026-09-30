@@ -262,9 +262,14 @@ header{position:sticky;top:0;z-index:30}
 .body{padding:18px 0 40px}
 .cols{display:grid;grid-template-columns:262px minmax(0,1fr);gap:18px;align-items:start}
 /* ---- FILTER RAIL ---- */
-.filters{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;overflow:hidden;
+/* No outline. The rail is a white sheet on the grey page, and that change of
+   surface is its edge; the rules between its groups are the only lines in it. */
+.filters{background:var(--sheet);border:0;border-radius:8px;overflow:hidden;
   position:sticky;top:calc(var(--head-h) + 12px);max-height:calc(100vh - var(--head-h) - 24px);overflow-y:auto;
-  transition:opacity .15s ease}
+  scrollbar-width:none;transition:opacity .15s ease}
+/* The rail still scrolls — by wheel, touch and keyboard — it just does not
+   draw a bar down its side. */
+.filters::-webkit-scrollbar{display:none}
 /* Set while `commit()`'s transition is in flight — see FilterRail.tsx. The
    rail stays exactly as the buyer left it (never the `loading.tsx` skeleton
    for a mid-transition tick), just dimmed enough to say a count is coming. */
@@ -303,6 +308,13 @@ header{position:sticky;top:0;z-index:30}
   border-right:2px solid var(--acc-on);border-bottom:2px solid var(--acc-on);transform:rotate(45deg)}
 .fopt .c{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-4)}
 .fmore{font-size:11.5px;color:var(--acc-ink);font-weight:600;padding:5px 0 0;display:inline-block}
+/* A tick that follows from a choice in another group. It is drawn exactly like
+   a tick the buyer made — full ink, filled box — because it is just as true;
+   only the pointer says it cannot be cleared from here. */
+.fopt.implied,.fopt.implied input,.fopt.implied input:disabled{cursor:default}
+/* Names one of two lists sharing a group — "Family" over "Generation". */
+.fsubh{margin:0 0 3px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3)}
 .range{display:flex;gap:6px;align-items:center;margin-top:4px}
 .range input{width:100%;background:var(--sheet-2);border:1px solid var(--rule);border-radius:4px;
   padding:6px 8px;font-size:12px;color:var(--ink);outline:none;font-family:var(--font-mono)}
@@ -414,6 +426,11 @@ header{position:sticky;top:0;z-index:30}
    margin is dropped when the homepage is what sits above it. */
 .home{padding-bottom:var(--home-gap)}
 body:has(.home) > footer{margin-top:0}
+/* The search page runs on white too, edge to edge, for the same reason and
+   with the same consequence at its foot: its own bottom padding is the space
+   above the footer, so the footer's margin would only add a grey band. */
+.srp{background:var(--sheet)}
+body:has(.srp) > footer{margin-top:0}
 
 /* ---- HOMEPAGE FILTER STRIP (attached under the header) ---- */
 /* Painted `--head` like the bar above it, with the header's own rule between
@@ -2485,21 +2502,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   .ck .ck-next:hover,.ck .ck-btn:hover{transform:none}
 }
 
-/* Product page — fixed cart hand-off after an add. */
-.cartdock{position:fixed;right:var(--s5);bottom:var(--s5);z-index:45;display:flex;align-items:stretch;
-  border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--rule)}
-.cartdock-link{display:inline-flex;align-items:center;gap:var(--s3);padding:12px 18px;border-radius:0;
-  text-decoration:none;font-size:13.5px;font-weight:600}
-.cartdock-count{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--acc-on);
-  color:var(--acc);font-size:12px;font-weight:700;line-height:22px;text-align:center}
-.cartdock-close{display:flex;align-items:center;justify-content:center;width:44px;border:0;
-  border-left:1px solid var(--rule);background:var(--sheet-2);color:var(--ink-2);font-size:22px;
-  line-height:1;cursor:pointer}
-.cartdock-close:hover{background:var(--sheet-3);color:var(--ink)}
-@media (max-width:520px){
-  .cartdock{right:var(--s4);bottom:var(--s4);left:var(--s4)}
-  .cartdock-link{flex:1;justify-content:center}
-}
 
 /* ==========================================================================
  * /account/orders/[orderNumber] — the order record and the approval-required state
@@ -3777,8 +3779,11 @@ html[data-t="light"] .hero2{
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* A missing value never renders as a present one. */
 .sug-unpublished{color:var(--ink-4);font-family:inherit}
-.sug-price{margin:auto 0 0;display:flex;align-items:baseline;gap:8px}
+.sug-price{margin:auto 0 0;display:flex;align-items:baseline;gap:7px;white-space:nowrap;overflow:hidden}
 .sug-price-now{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+/* The struck-through new price: smaller and lighter than the price it sits
+   beside, so the eye reads ours first and the comparison second. */
+.sug-price-mrp{font-size:11.5px;font-weight:600;color:var(--ink-3);text-decoration:line-through}
 .sug-price-off{font-size:11.5px;font-weight:800;color:var(--promo-accent-deep)}
 @media(prefers-reduced-motion:reduce){
   .sug-card,.sug-photo{transition:none}
@@ -4031,12 +4036,6 @@ body:has(.pdpbody){background:var(--sheet)}
 .det-cta .pvbtn{padding:10px 0;border-radius:10px;font-size:11.5px}
 .det-cta .pvbtn svg{width:14px;height:14px}
 .det-cta .pv-from{margin-top:7px;font-size:11px}
-/* The cart dock is fixed at the same corner. On this page it sits above the
-   bar rather than on top of it. */
-.pdpbody .cartdock{bottom:calc(var(--s5) + 96px)}
-@media(max-width:960px){
-  .pdpbody .cartdock{bottom:calc(var(--s4) + 96px)}
-}
 
 /* ---- ratings and reviews ---- */
 /* One card, like the board and the specification. The headline is a figure
@@ -4422,13 +4421,6 @@ body:has(.pdpbody){background:var(--sheet)}
   .gcart-remove{grid-column:1 / -1;justify-self:start}
 }
 
-/* The "View cart" dock, in the same amber as the panel's Add to cart and the
-   board's. It is the hand-off from that action, so it is the same action's
-   colour rather than the teal system accent. */
-.cartdock-link.acc{background:var(--promo-accent);color:var(--promo-accent-ink);
-  border-color:transparent}
-.cartdock-link.acc:hover{filter:brightness(1.06)}
-.cartdock-count{background:var(--promo-accent-ink);color:var(--promo-accent)}
 
 /* ---- tracking: the timeline ---------------------------------------------
    One rail per consignment, oldest first, drawn by the shared Timeline. What

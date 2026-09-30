@@ -46,10 +46,7 @@ const VENDOR: VendorIdentity = {
   slug: 'harbourpoint-technologies',
 };
 
-const group = (
-  key: string,
-  options: Array<[string, string, number, boolean?]>,
-): FacetGroup => ({
+const group = (key: string, options: Array<[string, string, number, boolean?]>): FacetGroup => ({
   key,
   options: options.map(([value, label, count, selected]) => ({
     value,
@@ -173,7 +170,11 @@ describe('the search board reproduces its URL', () => {
   it('renders exactly what the query string says, with no state of its own', () => {
     const query = 'brand=acer&ram=16&grade=A&bmin=85&q=aspire';
     render(
-      <FilterRail facets={facets({ brand: ['acer'], ram: ['16'], grade: ['A'] })} query={query} total={8} />,
+      <FilterRail
+        facets={facets({ brand: ['acer'], ram: ['16'], grade: ['A'] })}
+        query={query}
+        total={8}
+      />,
     );
 
     // The boxes the link says are ticked.
@@ -219,17 +220,71 @@ describe('the search board reproduces its URL', () => {
     dell.click();
     expect(push).not.toHaveBeenCalled();
 
-    // The same rule for a pill facet.
-    expect(screen.getByRole('button', { name: /Ryzen 7/ })).toBeDisabled();
+    // The same rule for a facet that used to be drawn as pills and is a
+    // checkbox like the rest now.
+    expect(screen.getByRole('checkbox', { name: /Ryzen 7/ })).toBeDisabled();
 
-    // A dimension nothing MEASURES is a different statement again: a sentence,
-    // never a row of zeroes that would read as "we checked and found none".
+    // A dimension nothing MEASURES is a different statement again. The rail
+    // used to print a sentence saying so; it now prints nothing for it — and
+    // still never a row of zeroes, which would read as "we checked and found
+    // none".
     expect(
-      screen.getByText('Battery cycle count is not recorded at inspection yet.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Battery cycle count is not recorded at inspection yet.'),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText('Whether a charger is included is not recorded at inspection yet.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Whether a charger is included is not recorded at inspection yet.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('ticks the option that follows from a choice in another group', () => {
+    // A series was chosen, and it left one brand with stock. Unfiltered, the
+    // shelf held two brands — so this is a consequence of the choice.
+    const narrowed = {
+      ...facets(),
+      brand: group('brand', [
+        ['acer', 'Acer', 48],
+        ['dell', 'Dell', 0],
+        ['hp', 'HP', 0],
+      ]),
+      series: group('series', [['Aspire', 'Aspire', 48, true]]),
+    };
+    const shelf = {
+      ...facets(),
+      brand: group('brand', [
+        ['acer', 'Acer', 48],
+        ['dell', 'Dell', 30],
+        ['hp', 'HP', 0],
+      ]),
+    };
+    render(<FilterRail facets={narrowed} baseline={shelf} query="series=Aspire" total={48} />);
+
+    const acer = screen.getByRole('checkbox', { name: /^Acer/ });
+    expect(acer).toBeChecked();
+    // It cannot be cleared here: clearing the series is what clears it.
+    expect(acer).toBeDisabled();
+    // A readout, not a filter — the URL and the count are the buyer's own.
+    expect(screen.getByText('1 applied')).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('does not tick an option the shelf only ever had one of', () => {
+    // The same narrowed rail, but unfiltered there was only ever one brand
+    // with stock. Ticking it would credit the buyer with the catalogue's doing.
+    const narrowed = {
+      ...facets(),
+      series: group('series', [['Aspire', 'Aspire', 48, true]]),
+    };
+    render(<FilterRail facets={narrowed} baseline={facets()} query="series=Aspire" total={48} />);
+    expect(screen.getByRole('checkbox', { name: /^Acer/ })).not.toBeChecked();
+  });
+
+  it("ticks nothing on the buyer's behalf when the unfiltered read is missing", () => {
+    const narrowed = {
+      ...facets(),
+      series: group('series', [['Aspire', 'Aspire', 48, true]]),
+    };
+    render(<FilterRail facets={narrowed} query="series=Aspire" total={48} />);
+    expect(screen.getByRole('checkbox', { name: /^Acer/ })).not.toBeChecked();
   });
 
   it('arrives with no box ticked and no filter applied', () => {
@@ -257,7 +312,9 @@ describe('the search board reproduces its URL', () => {
 
 describe('vendor anonymity', () => {
   it('names no supplier anywhere in the rail or the results', () => {
-    const rail = render(<FilterRail facets={facets()} query="brand=acer&city=Gurugram" total={48} />);
+    const rail = render(
+      <FilterRail facets={facets()} query="brand=acer&city=Gurugram" total={48} />,
+    );
     const list = render(<ResultsList results={RESULTS} sortLabel="landed price, low to high" />);
 
     for (const [what, html] of [

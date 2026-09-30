@@ -329,13 +329,13 @@
     --promo-line-soft: rgba(255, 255, 255, 0.05);
     --promo-text: #f7f2e4;
     --promo-muted: #f7f2e4;
-    --promo-accent: #fdb017;
+    --promo-accent: #ffd814;
     --promo-accent-ink: #1c1300;
-    /* The amber as TEXT on a white sheet. #fdb017 itself fails contrast there,
+    /* The amber as TEXT on a white sheet. #ffd814 itself fails contrast there,
        so light themes read this shade instead; dark themes keep the accent. */
     --promo-accent-deep: #b07a00;
-    --promo-accent-soft: rgba(253, 176, 23, 0.12);
-    --promo-accent-mid: rgba(253, 176, 23, 0.5);
+    --promo-accent-soft: rgba(255, 216, 20, 0.12);
+    --promo-accent-mid: rgba(255, 216, 20, 0.5);
     /* Illustration only: the drawn laptop's shell, deck and screen tints. */
     --promo-shell: #242220;
     --promo-deck: #1d1b19;
@@ -365,26 +365,26 @@
     --hero-navy: #06263f;
     --hero-navy-2: #0d3d60;
     --hero-white: #ffffff;
-    --hero-mark: #ffd23f;
+    --hero-mark: #ffd814;
     --hero-mark-ink: #2a1e00;
     --hero-shade: rgba(6, 38, 63, 0.2);
   }
 
   /* ---- Listing card accent ------------------------------------------------
-     The supplied listing-card design's orange, the same #fdb017 as the promo
+     The supplied listing-card design's yellow, the same #ffd814 as the promo
      hero and the cart, for the search-result tile (`.ptile`) only: its rating
      pill, its action and its hover edge. Constant in both themes, like the
      other supplied-design palettes, and nothing outside the tile should reach
      for it. Literal hex is allowed here and nowhere else. */
   :root {
-    --card-accent: #fdb017;
+    --card-accent: #ffd814;
     --card-accent-ink: #1c1300;
-    --card-accent-glow: rgba(253, 176, 23, 0.4);
-    --card-accent-edge: rgba(253, 176, 23, 0.55);
+    --card-accent-glow: rgba(255, 216, 20, 0.4);
+    --card-accent-edge: rgba(255, 216, 20, 0.55);
   }
 
   /* ---- Cream cart palette -------------------------------------------------
-     The supplied cart design, on a white ground, with the same #fdb017 yellow as the
+     The supplied cart design, on a white ground, with the same #ffd814 yellow as the
      promo hero, flat, no gradients. Like the promo palette it is one surface's
      own language, constant in both themes, and nothing outside the cart route
      (the `.cartbody` wrapper) should reach for it. Literal hex is allowed here and
@@ -397,11 +397,11 @@
     --cream-line-hover: rgba(58, 44, 8, 0.06);
     --cream-text: #2a2105;
     --cream-muted: #2a2105;
-    --cream-accent: #fdb017;
+    --cream-accent: #ffd814;
     --cream-accent-ink: #2a2105;
-    --cream-accent-soft: rgba(253, 176, 23, 0.16);
-    --cream-accent-mid: rgba(253, 176, 23, 0.5);
-    --cream-accent-glow: rgba(253, 176, 23, 0.35);
+    --cream-accent-soft: rgba(255, 216, 20, 0.16);
+    --cream-accent-mid: rgba(255, 216, 20, 0.5);
+    --cream-accent-glow: rgba(255, 216, 20, 0.35);
     --cream-accent-deep: #b07a00;
     --cream-shadow: rgba(58, 44, 8, 0.25);
     --cream-on-dark: #ffffff;
@@ -1308,13 +1308,13 @@
   --sl-text-55: #2a2105;
   --sl-text-80: #2a2105;
   --sl-muted: #2a2105;
-  --sl-accent: #fdb017;
+  --sl-accent: #ffd814;
   --sl-accent-ink: #2a2105;
-  --sl-accent-soft: rgba(253, 176, 23, 0.16);
-  --sl-accent-line: rgba(253, 176, 23, 0.55);
-  --sl-accent-glow-40: rgba(253, 176, 23, 0.4);
-  --sl-accent-glow-50: rgba(253, 176, 23, 0.5);
-  --sl-accent-glow-80: rgba(253, 176, 23, 0.8);
+  --sl-accent-soft: rgba(255, 216, 20, 0.16);
+  --sl-accent-line: rgba(255, 216, 20, 0.55);
+  --sl-accent-glow-40: rgba(255, 216, 20, 0.4);
+  --sl-accent-glow-50: rgba(255, 216, 20, 0.5);
+  --sl-accent-glow-80: rgba(255, 216, 20, 0.8);
   --sl-accent-deep: #b07a00;
   --sl-ink: #171204;
   --sl-on-ink: #f7f2e4;
@@ -1343,8 +1343,8 @@
   --sl-on-ink-50: #f7f2e4;
   --sl-line-06: rgba(58, 44, 8, 0.06);
   --sl-line-35: rgba(58, 44, 8, 0.35);
-  --sl-accent-ring: rgba(253, 176, 23, 0.15);
-  --sl-accent-glow-45: rgba(253, 176, 23, 0.45);
+  --sl-accent-ring: rgba(255, 216, 20, 0.15);
+  --sl-accent-glow-45: rgba(255, 216, 20, 0.45);
   --sl-toast-text: #ffffff;
   --sl-skin-1: #f0c49c;
   --sl-skin-2: #a5673f;
@@ -1355,9 +1355,9 @@
   --sl-hair-3: #3b2c08;
   /* Signup only: the laptop in the scan-and-seal scene. */
   --sl-lap-edge: #3b2f0c;
-  --sl-accent-glow-90: rgba(253, 176, 23, 0.9);
+  --sl-accent-glow-90: rgba(255, 216, 20, 0.9);
   --sl-line-32: rgba(58, 44, 8, 0.32);
   /* Password reset only: the dashed path and the lock's shadow. */
-  --sl-accent-50: rgba(253, 176, 23, 0.5);
+  --sl-accent-50: rgba(255, 216, 20, 0.5);
   --sl-black-45: rgba(0, 0, 0, 0.45);
 }

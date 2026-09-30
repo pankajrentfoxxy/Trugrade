@@ -1,7 +1,6 @@
 'use client';
 
 import { ProductCartProvider } from '../../../lib/use-product-cart';
-import { ViewCartDock } from './ViewCartDock';
 import { DefaultPincode } from './DefaultPincode';
 
 /**
@@ -14,7 +13,6 @@ export function ProductCartScope({ children }: { children: React.ReactNode }): R
     <ProductCartProvider>
       {children}
       <DefaultPincode />
-      <ViewCartDock />
     </ProductCartProvider>
   );
 }

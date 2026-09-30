@@ -117,6 +117,7 @@ function toSuggested(r: SearchResult): SuggestedItem {
     model: r.model,
     spec: parts.join(' · '),
     price: RUPEES.format(r.fromPrice),
+    mrp: RUPEES.format(placeholderMrp(r.fromPrice)),
     off: percentOff(r.fromPrice, placeholderMrp(r.fromPrice)),
     photo: brandPhoto(r.brand),
   };

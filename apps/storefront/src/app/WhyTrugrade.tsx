@@ -225,9 +225,9 @@ const CSS = `
   --wt-bad:#c13527;
   /* Amber stays for surfaces only — the ribbon, the badges, the rule beside
      the heading — never for type. */
-  --wt-accent:#fdb017;
+  --wt-accent:#ffd814;
   --wt-accent-ink:#2a2105;
-  --wt-accent-soft:rgba(253,176,23,.16);
+  --wt-accent-soft:rgba(255,216,20,.16);
   --wt-accent-deep:#b07a00;
   --wt-ink:#171204;
   --wt-card-b:#e9d3a2;
@@ -341,7 +341,7 @@ const CSS = `
 .wt-bx .wt-stamp{
   position:absolute;top:-11px;right:-9px;width:30px;height:27px;border-radius:8px;
   background:var(--wt-accent);color:var(--wt-accent-ink);font-weight:800;font-size:.7rem;
-  display:flex;align-items:center;justify-content:center;rotate:7deg;box-shadow:0 5px 12px rgba(253,176,23,.45);
+  display:flex;align-items:center;justify-content:center;rotate:7deg;box-shadow:0 5px 12px rgba(255,216,20,.45);
 }
 .wt-b1{left:6%;bottom:34px;width:86px;height:64px}
 .wt-b2{right:4%;bottom:34px;width:74px;height:88px}
