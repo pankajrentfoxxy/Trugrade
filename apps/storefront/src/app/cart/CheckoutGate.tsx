@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 import { checkoutDestination } from './checkout-entry';
+import type { Route } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * The cart's way into checkout, with the server asked first.
@@ -24,24 +27,26 @@ import { checkoutDestination } from './checkout-entry';
  */
 export function CheckoutGate({
   cartId,
-  navigate = (url) => window.location.assign(url),
+  navigate,
 }: {
   cartId: string;
   /** Where the gate sends the browser. A test hands in a spy; jsdom cannot navigate. */
   navigate?: (url: string) => void;
 }): React.JSX.Element {
+  const router = useRouter();
   const [checking, setChecking] = React.useState(false);
   const href = `/checkout?cart=${cartId}`;
+  const go = navigate ?? ((url: string): void => router.push(url as Route));
 
   const proceed = async (): Promise<void> => {
     setChecking(true);
-    navigate(await checkoutDestination(cartId));
+    go(await checkoutDestination(cartId));
   };
 
   return (
-    <a
+    <Link
       className="pill acc cartgo"
-      href={href}
+      href={href as Route}
       aria-busy={checking || undefined}
       onClick={(event) => {
         event.preventDefault();
@@ -50,6 +55,6 @@ export function CheckoutGate({
       }}
     >
       {checking ? 'Checking your account…' : 'Continue to checkout'}
-    </a>
+    </Link>
   );
 }

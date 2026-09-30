@@ -36,6 +36,7 @@ import {
   type Row,
   type StatusCopy,
 } from '../../register/review-parts';
+import { useRouter } from 'next/navigation';
 
 /**
  * The supplier's review screen and everything after it.
@@ -434,6 +435,7 @@ export function VendorReview({
   onEdit,
   onSubmit,
 }: VendorReviewProps): React.JSX.Element {
+  const router = useRouter();
   const [docs, setDocs] = React.useState<KycDocument[] | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [refusal, setRefusal] = React.useState<string | null>(null);
@@ -475,7 +477,7 @@ export function VendorReview({
             title="List your first machines"
             body="Add stock unit by unit or upload a serial list. We book an inspection, the machines are graded, and they go on the shelf with their own report."
             action={
-              <Button variant="secondary" onClick={() => window.location.assign('/')}>
+              <Button variant="secondary" onClick={() => router.push('/')}>
                 Back to Trugrade
               </Button>
             }

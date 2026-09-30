@@ -355,9 +355,9 @@ const columnsFor = (orderNumber: string): readonly Column<OrderedUnit>[] => [
       <div className="ubid">
         {/* The serial is the link. A buyer checking one machine wants the
             passport for that machine, not the model page. */}
-        <a className="mono ubserial" href={u.passportPath}>
+        <Link className="mono ubserial" href={u.passportPath as Route}>
           {u.serialNumber}
-        </a>
+        </Link>
         <span className="ubtitle">
           {u.title ?? <span className="notmeasured">Model no longer catalogued</span>}
         </span>
@@ -381,17 +381,17 @@ const columnsFor = (orderNumber: string): readonly Column<OrderedUnit>[] => [
           // something is wrong and having to find somebody to tell. The reason
           // is pre-selected from the verdict, and the return form asks them for
           // the detail our own `qc_mismatch` table has never been given.
-          <a
+          <Link
             className="ubflag"
             href={
-              `/returns/new?order=${encodeURIComponent(orderNumber)}` +
+              (`/returns/new?order=${encodeURIComponent(orderNumber)}` +
               `&units=${encodeURIComponent(u.serialNumber)}` +
-              (u.verdict === 'MISMATCH' ? '&reason=SPEC_MISMATCH' : '&reason=DOA')
+              (u.verdict === 'MISMATCH' ? '&reason=SPEC_MISMATCH' : '&reason=DOA')) as Route
             }
           >
             Flag a mismatch
             <span className="sr-only"> on {u.serialNumber}</span>
-          </a>
+          </Link>
         )}
       </div>
     ),
@@ -476,10 +476,10 @@ const columnsFor = (orderNumber: string): readonly Column<OrderedUnit>[] => [
     header: 'Passport',
     headerHidden: true,
     cell: (u) => (
-      <a className="ubpassport" href={u.passportPath}>
+      <Link className="ubpassport" href={u.passportPath as Route}>
         Passport
         <span className="sr-only"> for {u.serialNumber}</span>
-      </a>
+      </Link>
     ),
   },
 ];
@@ -694,12 +694,12 @@ function SignedOut({ orderNumber }: { orderNumber: string }): React.JSX.Element 
         title="Sign in to see these machines"
         body="An order belongs to the organisation that placed it, so we need to know who is asking. Signing in brings you straight back to this list."
         action={
-          <a
+          <Link
             className="pill acc"
             href={`/sign-in?next=${encodeURIComponent(`/orders/${orderNumber}/units`)}`}
           >
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>
@@ -728,9 +728,9 @@ function Missing({ orderNumber }: { orderNumber: string }): React.JSX.Element {
           </>
         }
         action={
-          <a className="pill acc" href="/orders">
+          <Link className="pill acc" href="/orders">
             Your orders
-          </a>
+          </Link>
         }
       />
     </div>

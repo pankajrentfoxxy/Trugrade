@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Carousel } from '@trugrade/ui';
 import type { FacetGroup } from '../lib/api';
+import Link from 'next/link';
 
 /**
  * The brand rail under the header, on the homepage only.
@@ -77,7 +78,7 @@ export function BrandRail({
           {ordered.map((b) => {
             const file = LOGO_FILES.get(slug(b.label));
             return (
-              <a
+              <Link
                 key={b.value}
                 className="brandtile"
                 href={`/search?brand=${encodeURIComponent(b.value)}`}
@@ -104,7 +105,7 @@ export function BrandRail({
                     <span className="brandtile-fallback">{b.label}</span>
                   )}
                 </span>
-              </a>
+              </Link>
             );
           })}
         </Carousel>

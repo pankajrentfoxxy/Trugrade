@@ -15,6 +15,7 @@ import {
   validateFullName,
   validateMobile,
 } from './validation';
+import Link from 'next/link';
 
 /**
  * Step 1 — Account, for both flows.
@@ -347,9 +348,9 @@ export function StepAccount({
         </Button>
         <p className="text-body-sm text-ink-3">
           Already registered?{' '}
-          <a className="text-acc-ink underline underline-offset-4" href="/sign-in">
+          <Link className="text-acc-ink underline underline-offset-4" href="/sign-in">
             Sign in
-          </a>{' '}
+          </Link>{' '}
           and pick up where you left off.
         </p>
       </div>

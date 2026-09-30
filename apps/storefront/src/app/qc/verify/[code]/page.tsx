@@ -51,6 +51,7 @@ import { getVerification, type PassportResult, type UnitPassport } from '../../.
 import { AuthShell } from '../../../AuthShell';
 import { Qr } from './Qr';
 import { Shots, Waiting } from './Shots';
+import Link from 'next/link';
 
 /** The photograph links carry a 900-second signature. Nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
@@ -342,15 +343,15 @@ function Certificate({
         <div className="vbtns">
           {/* The one amber control on this screen. Everything else amber here is
               a measured value, which is the other thing the accent may mean. */}
-          <a className="sel" href={`/unit/${encodeURIComponent(p.serialNumber)}`}>
+          <Link className="sel" href={`/unit/${encodeURIComponent(p.serialNumber)}`}>
             Open the full inspection
-          </a>
-          <a
+          </Link>
+          <Link
             className="sel gh"
             href={`/api/unit/${encodeURIComponent(p.serialNumber)}/report.pdf`}
           >
             Printed report (PDF)
-          </a>
+          </Link>
         </div>
         <p className="fnote">
           The full record carries all {p.areas.length} inspected areas including the ones nobody
@@ -474,9 +475,9 @@ function Advice({
           We could not reach our own records just now, so we have not checked this code at all
           &mdash; this is neither a yes nor a no about it. It is our problem and it is not a
           statement about the machine. Reload the page &mdash; if it keeps happening,{' '}
-          <a className="ulink" href="/help">
+          <Link className="ulink" href="/legal/grievance">
             our team can read the report to you
-          </a>
+          </Link>
           .
         </p>
       )}

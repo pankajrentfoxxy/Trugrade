@@ -1,11 +1,12 @@
 import { BRAND } from '@trugrade/config/brand';
 import { getSearch, getStats, type SearchResult } from '../lib/api';
-import { consoleSellRegisterUrlFromRequest } from '../lib/console-url.server';
 import { toApiQueryString } from './search/query';
+import { BrandMarquee } from './BrandMarquee';
 import { BrandRail } from './BrandRail';
 import { BuyerReviews } from './BuyerReviews';
-import { HeroBanner } from './HeroBanner';
+import { DealOfDay, dealOfDaySlot } from './DealOfDay';
 import { HomeCarousel } from './HomeCarousel';
+import { HomeHero } from './HomeHero';
 import { HomePills } from './HomePills';
 import { HomeBanners } from './HomeBanners';
 import { SiteHeader } from './SiteHeader';
@@ -31,17 +32,19 @@ import { WhyTrugrade } from './WhyTrugrade';
  * not a shortfall: a motif must carry information, and a product card promising
  * 91 units that do not exist is a scarcity device.
  *
- * A banner was added back at the top after the original blocks came out. It is
- * homepage-only and fed from the API: it drops any figure `getStats()` did not
- * return rather than printing a zero. The spec showcase that used to follow it
- * ("What we measured") is gone at the homepage's request; the SKU page still
- * carries every measurement it showed.
+ * The promo hero that was added back at the top (the deal-card carousel, the
+ * rotating laptop stage and the four-step chain) is gone again at the
+ * homepage's request, and so is the spec showcase that followed it ("What we
+ * measured"). The photo hero carries the claim now, the deal strip and the
+ * suggested row carry the real machines, and the SKU page still carries every
+ * measurement the showcase showed.
  *
  * **Blocks 3, 4a, 4b, 5 and 8 are gone**, and so is the filter rail — the
  * category strip (removed across the whole storefront, not just here), the hero
  * (claim, two calls to action, live inspection feed), the result bar (result
  * count, sort control), the supply board and the supplier band. The page runs
- * header → filter strip → promo carousel → hero → why Trugrade → buyer
+ * header → filter strip → deal of the day → photo hero → suggested for you →
+ * promo carousel → brands we deal with → banner row → why Trugrade → buyer
  * reviews → utility strip → process → footer.
  *
  * `WhyTrugrade` is new: a five-row comparison against buying new and a
@@ -152,14 +155,19 @@ export default async function HomePage({
   // beside each option on the homepage are the counts the results page will
   // honour. Two sources for one rail is how a facet starts promising stock that
   // the search behind it does not return.
-  const [stats, search, sellUrl] = await Promise.all([
-    getStats(),
-    getSearch(apiQuery.toString()),
-    consoleSellRegisterUrlFromRequest(),
-  ]);
+  const [stats, search] = await Promise.all([getStats(), getSearch(apiQuery.toString())]);
 
   const inspected = stats?.unitsInspected ?? 0;
   const results = search?.results ?? [];
+
+  // Today's machine for the deal strip, and the midnight it changes at. Read
+  // once per request: the page is dynamic, so the clock the browser counts
+  // down to is the one this render picked the machine by. The rule itself
+  // takes the time as an argument, so it is tested against fixed instants;
+  // this is only the request's wall clock being handed to it.
+  const dealSlot =
+    results.length > 0 ? dealOfDaySlot(new Date().getTime(), results.length) : null;
+  const deal = dealSlot ? results[dealSlot.index] : undefined;
 
   return (
     <>
@@ -179,18 +187,32 @@ export default async function HomePage({
         {/* The filter strip, attached under the header as its second row. */}
         <HomePills />
 
+        {/* Deal of the day — one real SKU from the same search, changed at
+          midnight IST. First thing under the filter strip, above the hero: it
+          is the one block on the page with a clock on it. Rendered only when
+          there is stock to feature; a deal strip with no machine in it is a
+          clock counting to nothing. */}
+        {deal && dealSlot && <DealOfDay item={toSuggested(deal)} endsAt={dealSlot.endsAt} />}
+
+        {/* The photo hero: the claim and the two ways in, straight after the
+          day's deal. Marketing copy, not a database read — see the file's own
+          header. */}
+        <HomeHero />
+
+        {/* Suggested for you — real SKUs from the same search, one scrolling
+          row, straight under the hero: the claim, then machines to act on it.
+          Rendered only when there is stock to suggest; an empty row with a
+          heading is a sentence about nothing. */}
+        {results.length > 0 && <SuggestedRow items={results.slice(0, 12).map(toSuggested)} />}
+
         {/* Supplied promotional creatives, one centred with its neighbours
           peeking in. Not a database read — see the file's own header. */}
         <HomeCarousel />
 
-        {/* The banner, then the same machines the grid holds, one at a time,
-          with their measurements. Both are homepage-only: this is the way in. */}
-        <HeroBanner results={results} sellUrl={sellUrl} />
-
-        {/* Suggested for you — real SKUs from the same search, one scrolling
-          row. Rendered only when there is stock to suggest; an empty row with
-          a heading is a sentence about nothing. */}
-        {results.length > 0 && <SuggestedRow items={results.slice(0, 12).map(toSuggested)} />}
+        {/* Brands we deal with — supplied logos in a row that runs left to
+          right without stopping. A statement of which makers we trade in, not
+          a read of today's stock; see the file's own header. */}
+        <BrandMarquee />
 
         {/* Supplied banner artwork in one scrolling row. Not a database read —
           see the file's own header. */}
@@ -221,8 +243,8 @@ export default async function HomePage({
         `/search` owns the catalogue and carries the rail, the result bar and
         the sort control that make a grid of it usable; repeating the cards here
         was a second, unfilterable copy of that page. The search call stays —
-        the banner and the shop tiles are fed from the same `results`, so this
-        page still renders real stock, just not as a grid of cards.
+        the deal strip and the suggested row are fed from the same `results`, so
+        this page still renders real stock, just not as a grid of cards.
 
         The "No inspected stock yet" empty state went with it. It belonged to
         the grid, and an empty state for a block that no longer exists is a

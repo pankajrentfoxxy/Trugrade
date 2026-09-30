@@ -11,6 +11,7 @@ import { setSessionLostHandler, type ApiFailure } from '../register/api';
 import { getCart, removeCartLine, setCartLine, type CartLine, type CartView } from './api';
 import { publishCartUpdate } from '../../lib/cart-state';
 import { BoxIcon, ClockIcon, formatDispatch } from '../../lib/product-line-details';
+import Link from 'next/link';
 
 /**
  * The cart, client side. See `page.tsx` for the archetype and the rules.
@@ -334,9 +335,9 @@ function CartRecord(): React.JSX.Element {
                 Nothing has been added yet. Open a model, choose the supply point you want it
                 from, and it lands here.
               </p>
-              <a className="pill acc mini" href="/search">
+              <Link className="pill acc mini" href="/search">
                 Browse laptops
-              </a>
+              </Link>
             </div>
           )}
 
@@ -438,9 +439,9 @@ function CartOrderPanel({
           </p>
         </>
       )}
-      <a className="pill wire cartmore" href="/search">
+      <Link className="pill wire cartmore" href="/search">
         Browse more laptops
-      </a>
+      </Link>
 
       <p className="avail-line">
         {checkedAt ? (

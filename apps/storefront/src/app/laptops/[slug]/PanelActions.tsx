@@ -5,6 +5,8 @@ import { useProductCart } from '../../../lib/use-product-cart';
 import type { GuestCartSnapshot } from '../../../lib/guest-cart';
 import { demandPincode } from './pincode-demand';
 import { checkoutDestination } from '../../cart/checkout-entry';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 
 /**
  * The sticky panel's two buttons.
@@ -43,6 +45,7 @@ export function PanelActions({
    */
   blocked: { reason: string; needsPincode: boolean } | null;
 }): React.JSX.Element | null {
+  const router = useRouter();
   const { qtyFor, busyListingId, addListing, signedIn } = useProductCart();
   const [goingToCart, setGoingToCart] = React.useState(false);
 
@@ -101,7 +104,7 @@ export function PanelActions({
     void addListing(listingId, 1, snapshot).then(async (cartId) => {
       if (cartId === null) {
         if (signedIn === false) {
-          window.location.href = `/sign-in?next=${encodeURIComponent('/cart')}`;
+          router.push(`/sign-in?next=${encodeURIComponent('/cart')}` as Route);
         } else {
           // The add did not land and the hook has already said why (a lost
           // session redirects; anything else leaves the panel to try again).
@@ -109,7 +112,7 @@ export function PanelActions({
         }
         return;
       }
-      window.location.href = await checkoutDestination(cartId);
+      router.push((await checkoutDestination(cartId)) as Route);
     });
   };
 

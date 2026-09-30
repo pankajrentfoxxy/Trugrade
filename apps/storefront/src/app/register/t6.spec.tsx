@@ -15,6 +15,11 @@
 import * as React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
+
+// The screen navigates through the App Router, which jsdom does not mount.
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+}));
 import { UPLOAD_ALLOWED_MIME, UPLOAD_MAX_BYTES, UPLOAD_RULES } from '@trugrade/contracts';
 import { Review } from './Review';
 import { StepDocuments } from './StepDocuments';

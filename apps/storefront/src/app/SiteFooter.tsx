@@ -146,9 +146,9 @@ export function SiteFooter({ sellUrl }: { sellUrl: string }): React.JSX.Element 
               <br />
               {LEGAL_DISCLOSURE.grievanceOfficer.designation}:{' '}
               <Pending what="Officer not yet appointed" /> &middot;{' '}
-              <a href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}>
+              <Link href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}>
                 {LEGAL_DISCLOSURE.grievanceOfficer.email}
-              </a>
+              </Link>
               <br />
               Customer care: {LEGAL_DISCLOSURE.customerCare.email}
               {LEGAL_DISCLOSURE.customerCare.phone ? (

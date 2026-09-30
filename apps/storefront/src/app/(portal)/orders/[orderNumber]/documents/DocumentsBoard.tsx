@@ -6,6 +6,7 @@ import { Money } from '@trugrade/contracts';
 import { DataBoard, EmptyState, StatusPill, type Column } from '@trugrade/ui';
 import type { ApiFailure } from '../../../../register/api';
 import { getOrderDocuments, type OrderDocument, type OrderDocuments } from './api';
+import Link from 'next/link';
 
 /**
  * The documents board. See `page.tsx` for the archetype and the rules.
@@ -339,12 +340,12 @@ function SignedOut({ orderNumber }: { orderNumber: string }): React.JSX.Element 
         title="Sign in to see these documents"
         body="An order's tax documents belong to the organisation that placed it, so we need to know who is asking. Signing in brings you straight back to this list."
         action={
-          <a
+          <Link
             className="pill acc"
             href={`/sign-in?next=${encodeURIComponent(`/orders/${orderNumber}/documents`)}`}
           >
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>
@@ -371,13 +372,13 @@ function NoPermission({ message }: { message: string }): React.JSX.Element {
             <span className="docperm">{message}</span> Tax invoices are finance documents, so they
             are open to the account owner, an administrator and anyone with the finance role. Ask
             one of them to open it, or to add the role to your account — an administrator can do it
-            from <a href="/team">your team settings</a>.
+            from <Link href="/team">your team settings</Link>.
           </>
         }
         action={
-          <a className="pill wire" href="/orders">
+          <Link className="pill wire" href="/orders">
             Your orders
-          </a>
+          </Link>
         }
       />
     </div>
@@ -406,9 +407,9 @@ function Missing({ orderNumber }: { orderNumber: string }): React.JSX.Element {
           </>
         }
         action={
-          <a className="pill acc" href="/orders">
+          <Link className="pill acc" href="/orders">
             Your orders
-          </a>
+          </Link>
         }
       />
     </div>

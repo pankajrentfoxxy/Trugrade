@@ -4,6 +4,7 @@ import type { SearchResult } from '../../lib/api';
 import { brandPhoto } from '../../lib/brand-photo';
 import { storageShortLabel } from './storage-label';
 import { PLACEHOLDER_RATING, percentOff, placeholderMrp } from './placeholder-market';
+import Link from 'next/link';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
@@ -79,7 +80,7 @@ export function SearchResultCard({ r }: { r: SearchResult }): React.JSX.Element 
   if (r.displayLine) specParts.push(<span key="disp">{r.displayLine}</span>);
 
   return (
-    <a className="ptile" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
+    <Link className="ptile" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
       <div className="ptile-media">
         {isGrade(r.grade) && <GradeBadge grade={r.grade} className="ptile-ribbon" />}
         <span className="ptile-sealed">
@@ -143,6 +144,6 @@ export function SearchResultCard({ r }: { r: SearchResult }): React.JSX.Element 
         */}
         <span className="ptile-cta">View details</span>
       </div>
-    </a>
+    </Link>
   );
 }

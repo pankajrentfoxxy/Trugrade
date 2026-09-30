@@ -30,6 +30,8 @@ import {
 import { MfaGate } from './MfaGate';
 import type { AccountValues } from './StepAccount';
 import { constitutionFromVerifiedGst } from './gst-company-prefill';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 
 /**
  * Registration — **archetype D, flow**: the step rail on the left, one step in
@@ -253,6 +255,7 @@ export function RegisterFlow({
   review,
   onSessionEstablished,
 }: RegisterFlowProps): React.JSX.Element {
+  const router = useRouter();
   const [phase, setPhase] = React.useState<Phase>(definitions ? 'checking' : 'unreachable');
   const [steps, setSteps] = React.useState<StepProgress[]>(() =>
     (definitions ?? []).map(asProgress).map((s) =>
@@ -781,7 +784,7 @@ export function RegisterFlow({
         action={
           <Button
             variant="secondary"
-            onClick={() => window.location.assign(wrongAccountAction.href)}
+            onClick={() => router.push(wrongAccountAction.href as Route)}
           >
             {wrongAccountAction.label}
           </Button>
@@ -911,7 +914,7 @@ export function RegisterFlow({
                 title={`${current?.title ?? 'This step'} is not built yet`}
                 body="Your answers so far are saved and this application is waiting for you. This step opens shortly; nothing you have entered is lost in the meantime."
                 action={
-                  <Button variant="secondary" onClick={() => window.location.assign('/')}>
+                  <Button variant="secondary" onClick={() => router.push('/')}>
                     Back to the shop
                   </Button>
                 }

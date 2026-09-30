@@ -9,6 +9,8 @@ import {
   clearGuestCart,
   type GuestCartLine,
 } from '../../lib/guest-cart';
+import type { Route } from 'next';
+import Link from 'next/link';
 
 /**
  * The cart a signed-out visitor is looking at.
@@ -49,9 +51,9 @@ export function GuestCart({ onEmptied }: { onEmptied?: () => void }): React.JSX.
         title="Sign in to keep a cart"
         body="A cart belongs to your account, so it is on every device you use and your colleagues each keep their own. Signing in brings you straight back here with what you picked."
         action={
-          <a className="pill acc" href={signInHref}>
+          <Link className="pill acc" href={signInHref as Route}>
             Sign in
-          </a>
+          </Link>
         }
       />
     );
@@ -127,9 +129,9 @@ export function GuestCart({ onEmptied }: { onEmptied?: () => void }): React.JSX.
           here is reserved.
         </p>
         <div className="gcart-actions">
-          <a className="pvbtn pvbtn-cart" href={signInHref}>
+          <Link className="pvbtn pvbtn-cart" href={signInHref as Route}>
             Sign in to check out
-          </a>
+          </Link>
           <button
             type="button"
             className="gcart-clear"

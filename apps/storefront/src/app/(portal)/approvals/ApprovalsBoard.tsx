@@ -15,6 +15,7 @@ import { Money } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { Deadline, inIst } from '../../../lib/deadline';
 import { getApprovals, type ApprovalInbox, type ApprovalRow } from '../api';
+import Link from 'next/link';
 
 /**
  * The approval inbox. See `page.tsx` for the archetype and the rules.
@@ -269,9 +270,9 @@ const COLUMNS: ReadonlyArray<Column<ApprovalRow>> = [
     header: 'Order',
     cell: (a) => (
       <span className="obord">
-        <a className="mono" href={`/approvals/${a.id}`}>
+        <Link className="mono" href={`/approvals/${a.id}`}>
           {a.orderNumber}
-        </a>
+        </Link>
         <span className="obwhen">sent {inIst(a.requestedAt)}</span>
       </span>
     ),
@@ -329,17 +330,17 @@ const COLUMNS: ReadonlyArray<Column<ApprovalRow>> = [
     header: 'Action',
     cell: (a) =>
       a.decidable ? (
-        <a className="sel gh" href={`/approvals/${a.id}`}>
+        <Link className="sel gh" href={`/approvals/${a.id}`}>
           Review
-        </a>
+        </Link>
       ) : a.status === 'PENDING' ? (
         // A pending one you may not decide. The reason is stated rather than
         // left as a greyed-out control with no explanation.
         <span className="ablocked">{a.blockedReason ?? 'Not yours to decide.'}</span>
       ) : (
-        <a className="sel gh" href={`/approvals/${a.id}`}>
+        <Link className="sel gh" href={`/approvals/${a.id}`}>
           Open
-        </a>
+        </Link>
       ),
   },
 ];
@@ -545,9 +546,9 @@ function SignedOut(): React.JSX.Element {
         title="Sign in to see what is waiting on you"
         body="An approval is addressed to one person at one organisation, so we need to know who is asking. Signing in brings you straight back here."
         action={
-          <a className="pill acc" href="/sign-in?next=%2Fapprovals">
+          <Link className="pill acc" href="/sign-in?next=%2Fapprovals">
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

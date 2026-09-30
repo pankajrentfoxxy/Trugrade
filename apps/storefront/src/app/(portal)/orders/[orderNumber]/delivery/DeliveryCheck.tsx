@@ -23,6 +23,8 @@ import {
   type QcVerdict,
   type SealOutcome,
 } from './api';
+import type { Route } from 'next';
+import Link from 'next/link';
 
 /**
  * The seal check. See `page.tsx` for the archetype and the rules.
@@ -336,18 +338,18 @@ export function DeliveryCheck({ orderNumber }: { orderNumber: string }): React.J
               ),
             )}
 
-            <a
+            <Link
               className="pill wire dvside-a"
               href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}
             >
               Report a discrepancy
-            </a>
-            <a
+            </Link>
+            <Link
               className="pill wire dvside-a"
               href={`/returns?order=${encodeURIComponent(orderNumber)}`}
             >
               Returns on this order
-            </a>
+            </Link>
             {/* Tier 3: the consequence of finding a broken seal, in twelve words. */}
             <p className="od-why">A broken seal is our problem. We collect and settle it.</p>
           </section>
@@ -414,9 +416,9 @@ function Consignment({
             You signed for this delivery on{' '}
             <span className="mono">{when(c.receiptConfirmedAt)}</span>. If something turns up now,
             it is still inside the inspection window —{' '}
-            <a href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}>
+            <Link href={`/returns/new?order=${encodeURIComponent(orderNumber)}`}>
               report a discrepancy
-            </a>{' '}
+            </Link>{' '}
             and we will collect the machine.
           </p>
         ) : !canRecord ? (
@@ -439,7 +441,7 @@ function Consignment({
               under warranty and a fault found today still costs nothing. */}
             The inspection window on this delivery has closed, so the seal check at the door is
             over. The machines are still under warranty: if one of them has a fault, raise a{' '}
-            <a href="/warranty">warranty claim</a> and we handle it at our cost.
+            <Link href="/warranty">warranty claim</Link> and we handle it at our cost.
           </p>
         )}
 
@@ -626,9 +628,9 @@ function Machine({
     <li className={compromised ? 'dvmach bad' : checked ? 'dvmach ok' : 'dvmach'}>
       <div className="dvid">
         {m.passportPath !== null && m.serialNumber !== null ? (
-          <a className="mono dvserial" href={m.passportPath}>
+          <Link className="mono dvserial" href={m.passportPath as Route}>
             {m.serialNumber}
-          </a>
+          </Link>
         ) : (
           // A slot nobody has put a machine in. It used to link to `/unit/null`.
           <span className="notmeasured">Serial not assigned yet</span>
@@ -664,9 +666,9 @@ function Machine({
         {flagHref !== null && (m.verdict === 'MISMATCH' || m.verdict === 'FAIL') && (
           // T21 could state the verdict and go no further. This is the action it
           // was missing: the buyer can act on it here, at the door, in one link.
-          <a className="dvflag" href={flagHref}>
+          <Link className="dvflag" href={flagHref as Route}>
             Flag this machine
-          </a>
+          </Link>
         )}
       </div>
 
@@ -735,7 +737,7 @@ function Recorded({
       {returnNumber && (
         <p className="dvret">
           We have opened return <span className="mono">{returnNumber}</span> for you —{' '}
-          <a href={`/returns/${encodeURIComponent(returnNumber)}`}>track it here</a>. You do not
+          <Link href={`/returns/${encodeURIComponent(returnNumber)}`}>track it here</Link>. You do not
           need to call anybody.
         </p>
       )}
@@ -768,12 +770,12 @@ function SignedOut({ orderNumber }: { orderNumber: string }): React.JSX.Element 
         title="Sign in to check these seals"
         body="A delivery belongs to the organisation that ordered it, so we need to know who is asking. Signing in brings you straight back here."
         action={
-          <a
+          <Link
             className="pill acc"
             href={`/sign-in?next=${encodeURIComponent(`/orders/${orderNumber}/delivery`)}`}
           >
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>
@@ -801,9 +803,9 @@ function Missing({ orderNumber }: { orderNumber: string }): React.JSX.Element {
           </>
         }
         action={
-          <a className="pill acc" href="/orders">
+          <Link className="pill acc" href="/orders">
             Your orders
-          </a>
+          </Link>
         }
       />
     </div>

@@ -275,15 +275,15 @@ function whoYouContractWith(): React.JSX.Element {
           [
             'Customer care',
             <>
-              <a
+              <Link
                 href={`mailto:${LEGAL_DISCLOSURE.customerCare.email}`}
               >
                 {LEGAL_DISCLOSURE.customerCare.email}
-              </a>
+              </Link>
               {LEGAL_DISCLOSURE.customerCare.phone ? (
-                <a className="tnum lg-gap" href={`tel:${LEGAL_DISCLOSURE.customerCare.phone}`}>
+                <Link className="tnum lg-gap" href={`tel:${LEGAL_DISCLOSURE.customerCare.phone}`}>
                   {formatMobile(LEGAL_DISCLOSURE.customerCare.phone)}
-                </a>
+                </Link>
               ) : (
                 <span className="lg-gap">
                   <Unset what="Telephone" />
@@ -517,11 +517,11 @@ function privacy(): LegalDocument {
                 ['Data Fiduciary', LEGAL_DISCLOSURE.legalName],
                 [
                   'Contact for data questions',
-                  <a
+                  <Link
                         href={`mailto:${LEGAL_DISCLOSURE.grievanceOfficer.email}`}
                   >
                     {LEGAL_DISCLOSURE.grievanceOfficer.email}
-                  </a>,
+                  </Link>,
                 ],
                 ['Consent Manager', <Unset what="DPDP Consent Manager registration" />],
               ]}
@@ -720,14 +720,14 @@ function grievance(ackHours: number | null, redressDays: number | null): LegalDo
               <div>
                 <dt>Email</dt>
                 <dd className="tnum">
-                  <a href={`mailto:${officer.email}`}>{officer.email}</a>
+                  <Link href={`mailto:${officer.email}`}>{officer.email}</Link>
                 </dd>
               </div>
               <div>
                 <dt>Telephone</dt>
                 <dd className="tnum">
                   {officer.phone ? (
-                    <a href={`tel:${officer.phone}`}>{formatMobile(officer.phone)}</a>
+                    <Link href={`tel:${officer.phone}`}>{formatMobile(officer.phone)}</Link>
                   ) : (
                     <span className="lg-pending">Telephone &mdash; not yet published</span>
                   )}

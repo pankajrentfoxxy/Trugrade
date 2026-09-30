@@ -1,6 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import type { Route } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * Search with grouped suggestions — `09_FRONTEND_LOCKED.md` §5.
@@ -38,6 +41,7 @@ interface Suggestion {
 }
 
 export function SearchBar(): React.JSX.Element {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
   const [active, setActive] = React.useState(-1);
@@ -106,10 +110,10 @@ export function SearchBar(): React.JSX.Element {
     // matches no unit should land on a search result rather than a 404 — goes
     // to the board, which the suggestion list lets the reader override.
     if (CERT_PATTERN.test(term)) {
-      window.location.href = `/verify?q=${encodeURIComponent(term)}`;
+      router.push(`/verify?q=${encodeURIComponent(term)}` as Route);
       return;
     }
-    window.location.href = `/search?q=${encodeURIComponent(term)}`;
+    router.push(`/search?q=${encodeURIComponent(term)}` as Route);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -122,7 +126,7 @@ export function SearchBar(): React.JSX.Element {
       setActive((i) => Math.max(i - 1, -1));
     } else if (e.key === 'Enter' && active >= 0) {
       e.preventDefault();
-      window.location.href = suggestions[active]!.href;
+      router.push(suggestions[active]!.href as Route);
     }
   };
 
@@ -177,18 +181,18 @@ export function SearchBar(): React.JSX.Element {
                 index += 1;
                 const i = index;
                 return (
-                  <a
+                  <Link
                     key={s.href + s.badge}
                     id={`sugg-${i}`}
                     role="option"
                     aria-selected={i === active}
                     className={i === active ? 'srow on' : 'srow'}
-                    href={s.href}
+                    href={s.href as Route}
                   >
                     <span className="sb mono">{s.badge}</span>
                     <span className="sl">{s.label}</span>
                     {s.count !== undefined && <span className="sc mono">{s.count}</span>}
-                  </a>
+                  </Link>
                 );
               })}
             </div>

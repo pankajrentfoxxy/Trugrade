@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import type * as NextNavigation from 'next/navigation';
 
 /**
  * jsdom has no `ResizeObserver`, and the shared `Carousel` (reviews, related
@@ -33,3 +34,24 @@ if (!window.matchMedia) {
     }),
   });
 }
+
+/**
+ * The App Router, for every screen that navigates through it.
+ *
+ * Screens push, replace and refresh through `useRouter` rather than
+ * assigning `window.location`, so that a navigation in the browser keeps the
+ * page alive. jsdom mounts no router, and a call to `useRouter` outside one
+ * throws — so a spy router is mounted here for every spec. A spec that needs
+ * to assert on a push mocks `next/navigation` itself, and its mock wins.
+ */
+jest.mock('next/navigation', () => ({
+  ...jest.requireActual<typeof NextNavigation>('next/navigation'),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    refresh: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+  }),
+}));

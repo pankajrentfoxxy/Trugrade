@@ -228,9 +228,9 @@ export function WarrantyBoard({ query }: { query: string }): React.JSX.Element {
 
         {/* POST /buyer/warranty/claims checks `platform.ticket.write`. */}
         {canRaise ? (
-          <a className="pill acc wtclaim" href="/warranty/claims/new">
+          <Link className="pill acc wtclaim" href="/warranty/claims/new">
             Start a claim
-          </a>
+          </Link>
         ) : (
           <span className="fnote off">Your seat cannot start a claim.</span>
         )}
@@ -258,9 +258,9 @@ export function WarrantyBoard({ query }: { query: string }): React.JSX.Element {
                 title="You have not bought any machines yet"
                 body="Warranty cover appears here the moment your first order is delivered — one line per serial, with the exact date it ends."
                 action={
-                  <a className="pill acc" href="/search">
+                  <Link className="pill acc" href="/search">
                     Browse laptops
-                  </a>
+                  </Link>
                 }
               />
             ) : (
@@ -300,9 +300,9 @@ const COLUMNS: readonly Column<CoveredMachine>[] = [
     sortable: true,
     cell: (m) => (
       <div className="ubid">
-        <a className="mono ubserial" href={m.passportPath}>
+        <Link className="mono ubserial" href={m.passportPath as Route}>
           {m.serialNumber}
-        </a>
+        </Link>
         <span className="ubtitle">
           {m.title ?? <span className="notmeasured">Model no longer catalogued</span>}
         </span>
@@ -315,9 +315,9 @@ const COLUMNS: readonly Column<CoveredMachine>[] = [
     header: 'Order',
     cell: (m) => (
       <div className="wtorder">
-        <a className="mono" href={`/orders/${encodeURIComponent(m.orderNumber)}`}>
+        <Link className="mono" href={`/orders/${encodeURIComponent(m.orderNumber)}`}>
           {m.orderNumber}
-        </a>
+        </Link>
         <span className="ubspec">
           ordered <span className="mono">{m.orderedOn}</span>
         </span>
@@ -386,13 +386,13 @@ const COLUMNS: readonly Column<CoveredMachine>[] = [
           tone: 'neutral' as const,
         };
         return (
-          <a
+          <Link
             className="wtclaimlink"
             href={`/warranty/claims/${encodeURIComponent(m.openClaim.claimNumber)}`}
           >
             <span className="mono">{m.openClaim.claimNumber}</span>
             <StatusPill tone={status.tone} label={status.label} />
-          </a>
+          </Link>
         );
       }
       if (m.cover === null) {
@@ -401,19 +401,19 @@ const COLUMNS: readonly Column<CoveredMachine>[] = [
       if (!m.cover.inWarranty) {
         // Not a dead end. §4.6 requires the expiry to come with a way forward.
         return (
-          <a className="wtpaid" href="/legal/grievance">
+          <Link className="wtpaid" href="/legal/grievance">
             Ask for a paid repair
-          </a>
+          </Link>
         );
       }
       return (
-        <a
+        <Link
           className="wtstart"
           href={`/warranty/claims/new?serial=${encodeURIComponent(m.serialNumber)}`}
         >
           Start a claim
           <span className="sr-only"> for {m.serialNumber}</span>
-        </a>
+        </Link>
       );
     },
   },
@@ -557,9 +557,9 @@ function SignedOut(): React.JSX.Element {
         title="Sign in to see your warranty cover"
         body="Cover belongs to the organisation that bought the machines, so we need to know who is asking. Signing in brings you straight back here."
         action={
-          <a className="pill acc" href={`/sign-in?next=${encodeURIComponent('/warranty')}`}>
+          <Link className="pill acc" href={`/sign-in?next=${encodeURIComponent('/warranty')}`}>
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

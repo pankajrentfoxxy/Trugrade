@@ -46,6 +46,7 @@ import { getUnitPassport, type PassportResult, type UnitPassport } from '../../.
 import { Areas } from './Areas';
 import { Hardware, NotMeasured, WipeCertificate } from './panels';
 import { UnitIdentityCard } from './UnitIdentityCard';
+import Link from 'next/link';
 
 /** The photograph links carry a 900-second signature. Nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
@@ -469,9 +470,9 @@ function Refusal({
               The machine and its report exist; we could not reach our own record of them just now.
               This is our problem, not a statement about the unit. Reload the page &mdash; if it
               keeps happening,{' '}
-              <a className="ulink" href="/help">
+              <Link className="ulink" href="/legal/grievance">
                 our team can pull the report for you
-              </a>
+              </Link>
               .
             </p>
           ),
@@ -487,9 +488,9 @@ function Refusal({
             <h3>{panel.title}</h3>
             {panel.body}
             <p className="retry">
-              <a className="ulink" href="/search">
+              <Link className="ulink" href="/search">
                 Browse inspected stock
-              </a>
+              </Link>
             </p>
           </div>
         </div>

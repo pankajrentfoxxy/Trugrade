@@ -4,6 +4,9 @@ import * as React from 'react';
 import { Button, Input, MfaChallenge, RateLimitNotice, StatusPill } from '@trugrade/ui';
 import { resetPassword, sendPasswordResetCode, type ApiFailure } from '../register/api';
 import { StrengthMeter } from '../register/StepAccount';
+import type { Route } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * **ARCHETYPE F — Focus.** One task, centred, no navigation.
@@ -39,6 +42,7 @@ export function ForgotPassword({
 }: {
   signInPath?: string;
 }): React.JSX.Element {
+  const router = useRouter();
   const [stage, setStage] = React.useState<Stage>({ k: 'ask' });
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -124,7 +128,7 @@ export function ForgotPassword({
           <Button
             type="button"
             variant="primary"
-            onClick={() => window.location.assign(signInPath)}
+            onClick={() => router.push(signInPath as Route)}
           >
             Sign in
           </Button>
@@ -178,9 +182,9 @@ export function ForgotPassword({
           >
             Use a different code
           </Button>
-          <a className="text-body-sm text-acc-ink underline underline-offset-4" href={signInPath}>
+          <Link className="text-body-sm text-acc-ink underline underline-offset-4" href={signInPath as Route}>
             Back to sign in
-          </a>
+          </Link>
         </div>
       </form>
     );
@@ -219,12 +223,12 @@ export function ForgotPassword({
           >
             Use a different address
           </Button>
-          <a
+          <Link
             className="ml-3 text-body-sm text-acc-ink underline underline-offset-4"
-            href={signInPath}
+            href={signInPath as Route}
           >
             Back to sign in
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -263,9 +267,9 @@ export function ForgotPassword({
       <p className="text-body-sm text-ink-3">
         We say the same thing whether or not that address has an account — telling you would tell
         anybody else who asked.{' '}
-        <a className="text-acc-ink underline underline-offset-4" href={signInPath}>
+        <Link className="text-acc-ink underline underline-offset-4" href={signInPath as Route}>
           Back to sign in
-        </a>
+        </Link>
       </p>
     </form>
   );

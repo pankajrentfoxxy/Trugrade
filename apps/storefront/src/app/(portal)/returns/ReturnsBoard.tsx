@@ -15,6 +15,7 @@ import {
 import type { ApiFailure } from '../../register/api';
 import { usePortal } from '../shell/PortalContext';
 import { getReturns, RETURN_STATUS, type ReturnView } from './api';
+import Link from 'next/link';
 
 /**
  * The returns board. See `page.tsx` for the archetype and the rules.
@@ -182,12 +183,12 @@ export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
             approver and a viewer hold no `platform.ticket.write`, and used to
             get this far and be refused on submit. */}
         {canRaise ? (
-          <a
+          <Link
             className="pill acc rtnew"
             href={order ? `/returns/new?order=${encodeURIComponent(order)}` : '/returns/new'}
           >
             Send a machine back
-          </a>
+          </Link>
         ) : (
           <span className="fnote off">Your seat cannot start a return.</span>
         )}
@@ -241,9 +242,9 @@ export function ReturnsBoard({ query }: { query: string }): React.JSX.Element {
                 title="You have never sent a machine back"
                 body="Send one back within the inspection window on its delivery tab."
                 action={
-                  <a className="pill wire" href="/orders">
+                  <Link className="pill wire" href="/orders">
                     Your orders
-                  </a>
+                  </Link>
                 }
               />
             )
@@ -274,9 +275,9 @@ const COLUMNS: readonly Column<ReturnView>[] = [
     header: 'Return',
     cell: (r) => (
       <div className="rtid">
-        <a className="mono rtnum" href={`/returns/${encodeURIComponent(r.returnNumber)}`}>
+        <Link className="mono rtnum" href={`/returns/${encodeURIComponent(r.returnNumber)}`}>
           {r.returnNumber}
-        </a>
+        </Link>
         <span className="rtreason">{r.reasonLabel}</span>
       </div>
     ),
@@ -288,9 +289,9 @@ const COLUMNS: readonly Column<ReturnView>[] = [
     cell: (r) => (
       <div className="rtid">
         {r.passportPath ? (
-          <a className="mono rtserial" href={r.passportPath}>
+          <Link className="mono rtserial" href={r.passportPath as Route}>
             {r.serialNumber}
-          </a>
+          </Link>
         ) : (
           <span className="notmeasured">{r.serialNumber}</span>
         )}
@@ -306,9 +307,9 @@ const COLUMNS: readonly Column<ReturnView>[] = [
     sortable: true,
     cell: (r) =>
       r.orderNumber ? (
-        <a className="mono" href={`/orders/${encodeURIComponent(r.orderNumber)}`}>
+        <Link className="mono" href={`/orders/${encodeURIComponent(r.orderNumber)}`}>
           {r.orderNumber}
-        </a>
+        </Link>
       ) : (
         <span className="notmeasured">Not on your account</span>
       ),
@@ -368,9 +369,9 @@ function SignedOut(): React.JSX.Element {
         title="Sign in to see your returns"
         body="A return belongs to the organisation that raised it, so we need to know who is asking. Signing in brings you straight back here."
         action={
-          <a className="pill acc" href={`/sign-in?next=${encodeURIComponent('/returns')}`}>
+          <Link className="pill acc" href={`/sign-in?next=${encodeURIComponent('/returns')}`}>
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

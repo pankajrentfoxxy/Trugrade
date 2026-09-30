@@ -22,6 +22,7 @@ import {
   type ApprovalRow,
 } from '../../api';
 import type { OrderAddress } from '../../orders/[orderNumber]/api';
+import Link from 'next/link';
 
 /**
  * One approval and the decision on it. See `page.tsx` for the archetype.
@@ -163,9 +164,9 @@ function Record({
                     {group.machines.map((m) => (
                       <li key={m.serialNumber}>
                         <div className="omid">
-                          <a className="mono omserial" href={`/unit/${m.serialNumber}`}>
+                          <Link className="mono omserial" href={`/unit/${m.serialNumber}`}>
                             {m.serialNumber}
-                          </a>
+                          </Link>
                           <span className="omtitle">
                             {m.title ?? (
                               <span className="notmeasured">Model no longer catalogued</span>
@@ -553,9 +554,9 @@ function Settled({ approval }: { approval: ApprovalRow }): React.JSX.Element {
           no order to cancel. {approval.requestedByName} can place it again.
         </p>
         <p className="retry">
-          <a className="sel gh" href={`/orders/${approval.orderNumber}`}>
+          <Link className="sel gh" href={`/orders/${approval.orderNumber}`}>
             Open the order
-          </a>
+          </Link>
         </p>
       </SidePanel>
     );
@@ -588,9 +589,9 @@ function Settled({ approval }: { approval: ApprovalRow }): React.JSX.Element {
         </div>
       </dl>
       <p className="retry">
-        <a className="sel gh" href={`/orders/${approval.orderNumber}`}>
+        <Link className="sel gh" href={`/orders/${approval.orderNumber}`}>
           Open the order
-        </a>
+        </Link>
       </p>
     </SidePanel>
   );
@@ -638,9 +639,9 @@ function Missing(): React.JSX.Element {
           are not deleted when they are decided, so a settled one is still here — check the inbox.
         </p>
         <p className="retry">
-          <a className="pill acc" href="/approvals?status=all">
+          <Link className="pill acc" href="/approvals?status=all">
             Every approval sent to you
-          </a>
+          </Link>
         </p>
       </div>
     </div>
@@ -654,12 +655,12 @@ function SignedOut({ approvalId }: { approvalId: string }): React.JSX.Element {
         title="Sign in to answer this"
         body="An approval is addressed to one person, so we need to know who is asking. Signing in brings you straight back to it."
         action={
-          <a
+          <Link
             className="pill acc"
             href={`/sign-in?next=${encodeURIComponent(`/approvals/${approvalId}`)}`}
           >
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

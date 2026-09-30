@@ -1,4 +1,6 @@
 import type { SearchResult } from '../lib/api';
+import type { Route } from 'next';
+import Link from 'next/link';
 
 /**
  * The four ways into the catalogue, under the hero.
@@ -56,13 +58,13 @@ export function ShopTiles({
         </h2>
         <div className="shoptiles-grid">
           {tiles.map((t) => (
-            <a key={t.href} className="shoptile" href={t.href}>
+            <Link key={t.href} className="shoptile" href={t.href as Route}>
               <h3>{t.title}</h3>
               <p>{t.body}</p>
               <span className="shoptile-n">
                 <b className="mono">{t.n}</b> {t.n === 1 ? 'model' : 'models'} &rarr;
               </span>
-            </a>
+            </Link>
           ))}
         </div>
       </div>

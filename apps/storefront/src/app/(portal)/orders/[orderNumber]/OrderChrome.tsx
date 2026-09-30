@@ -138,10 +138,10 @@ function Head({
             </p>
           </div>
           <div className="od-actions">
-            <a className="od-btn" href={pdf}>
+            <Link className="od-btn" href={pdf as Route}>
               <DownloadIcon />
               Order confirmation
-            </a>
+            </Link>
             {at.payable && !onRecord && (
               <PayButton orderNumber={order.orderNumber} amount={order.grandTotal} onPaid={onPaid} />
             )}

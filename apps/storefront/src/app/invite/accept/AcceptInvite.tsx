@@ -4,6 +4,8 @@ import * as React from 'react';
 import { Button, Skeleton, StatusPill } from '@trugrade/ui';
 import { acceptInvite, previewInvite, type InvitePreview } from '../../(portal)/api';
 import { AuthShell } from '../../AuthShell';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * **ARCHETYPE F — Focus.** Taking up a team invite.
@@ -21,6 +23,7 @@ type Phase =
   | { k: 'ready'; invite: InvitePreview };
 
 export function AcceptInvite(): React.JSX.Element {
+  const router = useRouter();
   const [token, setToken] = React.useState<string | null>(null);
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [busy, setBusy] = React.useState(false);
@@ -49,7 +52,10 @@ export function AcceptInvite(): React.JSX.Element {
       setError(result.message);
       return;
     }
-    window.location.replace('/home');
+    // Replace, so back does not return to an invite already accepted; refresh,
+    // so the server-rendered header looks at the new cookie.
+    router.replace('/home');
+    router.refresh();
   };
 
   if (phase.k === 'no-token') {
@@ -88,9 +94,9 @@ export function AcceptInvite(): React.JSX.Element {
         }
         wide
       >
-        <a className="hub-link" href="/sign-in">
+        <Link className="hub-link" href="/sign-in">
           Already joined? Sign in.
-        </a>
+        </Link>
       </AuthShell>
     );
   }

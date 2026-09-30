@@ -44,7 +44,10 @@ export function AuthModal({
 
   const onSignedIn = (url: string, outcome: { created: boolean }): void => {
     if (outcome.created) {
-      window.location.replace('/home');
+      // Replace, so back does not return to a sign-in that is already done;
+      // refresh, so the server-rendered header looks at the cookie again.
+      router.replace('/home');
+      router.refresh();
       return;
     }
     onClose();

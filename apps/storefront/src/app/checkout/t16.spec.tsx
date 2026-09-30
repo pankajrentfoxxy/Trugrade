@@ -21,6 +21,11 @@
 import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+
+// The screen navigates through the App Router, which jsdom does not mount.
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), refresh: jest.fn() }),
+}));
 import { findVendorIdentityLeaks, type VendorIdentity } from '@trugrade/contracts';
 import { CheckoutFlow } from './CheckoutFlow';
 import type { CheckoutSession, TaxSplit } from './api';

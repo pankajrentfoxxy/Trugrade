@@ -6,6 +6,7 @@ import { MARGIN_ITC_LABEL, Money, supplyPointLabel, type Grade } from '@trugrade
 import type { SupplyPointOfferRow } from '../../../lib/api';
 import { useProductCart } from '../../../lib/use-product-cart';
 import { demandPincode } from './pincode-demand';
+import Link from 'next/link';
 
 /**
  * The supply-point comparison board — `OfferGrid` from `packages/ui`, fed.
@@ -124,9 +125,9 @@ export function Board({
           rows above. The price is real; the after-tax cost is not the same. These rows are ranked
           among themselves, so &ldquo;lowest landed&rdquo; above means lowest in this pool — the
           cheapest row on the page is in the table above.{' '}
-          <a className="ulink" href="/gst#margin">
+          <Link className="ulink" href="/legal/pricing-and-taxes">
             What this means for your costs
-          </a>
+          </Link>
         </p>
       )}
     </div>

@@ -8,6 +8,7 @@ import type { ApiFailure } from '../../../../register/api';
 import { Deadline, inIst } from '../../../../../lib/deadline';
 import { PayButton, useReloadOrder } from '../OrderChrome';
 import { getSalesOrder, type SalesOrder as SalesOrderView, type SalesOrderLine } from './api';
+import Link from 'next/link';
 
 /**
  * The sales order: what we verified, and what it comes to.
@@ -107,12 +108,12 @@ export function SalesOrder({ orderNumber }: { orderNumber: string }): React.JSX.
           title="Sign in to see this sales order"
           body="An order belongs to the organisation that placed it, so we need to know who is asking."
           action={
-            <a
+            <Link
               className="pill acc"
               href={`/sign-in?next=${encodeURIComponent(`/orders/${orderNumber}/sales-order`)}`}
             >
               Sign in
-            </a>
+            </Link>
           }
         />
       </div>

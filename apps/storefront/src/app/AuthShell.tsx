@@ -1,4 +1,5 @@
 import { AuthBrandPanel } from './auth/AuthBrandPanel';
+import Link from 'next/link';
 
 /**
  * **ARCHETYPE F — Focus.** The frame every credential screen sits in.
@@ -42,14 +43,14 @@ export function AuthShell({
         {/* A <main>, not a <div> — these routes have no other main landmark. */}
         <main className="authmain">
           <div className="authtop">
-            <a className="brand" href="/">
+            <Link className="brand" href="/">
               <span className="wm">
                 tru<span className="g">grade</span>
               </span>
-            </a>
-            <a className="authback" href="/">
+            </Link>
+            <Link className="authback" href="/">
               &larr; Back to the shop
-            </a>
+            </Link>
           </div>
           <h1>{title}</h1>
           <p className="authlede">{lede}</p>

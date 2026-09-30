@@ -13,6 +13,9 @@ import {
   type ReturnableMachine,
   type ReturnReason,
 } from '../api';
+import Link from 'next/link';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 
 /**
  * The return form. See `page.tsx` for the archetype and the rules.
@@ -82,6 +85,7 @@ export function ReturnForm({
   initialSerials: readonly string[];
   initialReason: string;
 }): React.JSX.Element {
+  const router = useRouter();
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [chosen, setChosen] = React.useState<ReadonlySet<string>>(new Set(initialSerials));
   const [reason, setReason] = React.useState<ReturnReason | ''>(
@@ -153,10 +157,10 @@ export function ReturnForm({
       description: trimmed,
     });
     if (result.ok && result.data.returns[0]) {
-      // A full navigation rather than a router push: the return record reads the
-      // return back from the server, and arriving with a stale client cache is
-      // how somebody sees "not found" for a return they just raised.
-      window.location.href = `/returns/${encodeURIComponent(result.data.returns[0].returnNumber)}`;
+      // A router push, not a full load. The record is a dynamic page, and on
+      // Next 15 the client router keeps no copy of a dynamic page, so it is
+      // read fresh from the server on arrival — the return just raised is there.
+      router.push(`/returns/${encodeURIComponent(result.data.returns[0].returnNumber)}` as Route);
       return;
     }
     setSubmitting(false);
@@ -231,15 +235,15 @@ export function ReturnForm({
                   {m.openReturn && (
                     <>
                       {' · '}
-                      <a href={`/returns/${encodeURIComponent(m.openReturn.returnNumber)}`}>
+                      <Link href={`/returns/${encodeURIComponent(m.openReturn.returnNumber)}`}>
                         open it
-                      </a>
+                      </Link>
                     </>
                   )}
                   {m.openReturn === null && m.window !== null && !m.window.open && (
                     <>
                       {' · '}
-                      <a href="/warranty">raise a warranty claim instead</a>
+                      <Link href="/warranty">raise a warranty claim instead</Link>
                     </>
                   )}
                 </li>
@@ -311,12 +315,12 @@ export function ReturnForm({
               ? `Send back ${selected.length} machines`
               : 'Send this machine back'}
         </button>
-        <a
+        <Link
           className="pill wire"
           href={initialOrder ? `/orders/${encodeURIComponent(initialOrder)}/units` : '/returns'}
         >
           {initialOrder ? 'Back to the order' : 'Your returns'}
-        </a>
+        </Link>
       </div>
       <p className="fnote off">
         Rule 7(4) take-back is ours and cannot be passed on. Nothing on this form goes to whoever
@@ -377,9 +381,9 @@ function SignedOut({ order }: { order: string }): React.JSX.Element {
         title="Sign in to send a machine back"
         body="A return belongs to the organisation that bought the machine. Signing in brings you straight back to this form."
         action={
-          <a className="pill acc" href={`/sign-in?next=${encodeURIComponent(next)}`}>
+          <Link className="pill acc" href={`/sign-in?next=${encodeURIComponent(next)}`}>
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>
@@ -399,9 +403,9 @@ function Missing({ order }: { order: string }): React.JSX.Element {
           </>
         }
         action={
-          <a className="pill acc" href="/orders">
+          <Link className="pill acc" href="/orders">
             Your orders
-          </a>
+          </Link>
         }
       />
     </div>

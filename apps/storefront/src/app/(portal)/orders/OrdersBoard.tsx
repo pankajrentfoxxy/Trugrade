@@ -15,6 +15,7 @@ import { Money, buyerOrderStatusLabel, hasReached } from '@trugrade/contracts';
 import type { ApiFailure } from '../../register/api';
 import { inIst } from '../../../lib/deadline';
 import { getOrders, type OrderList, type OrderSummary } from '../api';
+import Link from 'next/link';
 
 /**
  * The order board. See `page.tsx` for the archetype and the rules.
@@ -273,7 +274,7 @@ export function OrdersBoard({ query }: { query: string }): React.JSX.Element {
             </strong>{' '}
             Machines are held for you, but will not ship until you pay.
           </p>
-          <a href={href('status', 'PAYMENT_PENDING')}>Show these orders →</a>
+          <Link href={href('status', 'PAYMENT_PENDING')}>Show these orders →</Link>
         </div>
       )}
 
@@ -483,9 +484,9 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     sortable: true,
     cell: (o) => (
       <span className="ol-order">
-        <a className="ol-id mono" href={`/orders/${o.orderNumber}`}>
+        <Link className="ol-id mono" href={`/orders/${o.orderNumber}`}>
           {o.orderNumber}
-        </a>
+        </Link>
         <span className="ol-date">{boardDate(o.placedAt)}</span>
         {/* Why this row is in a serial search. A result with no visible reason
             reads as a mistake. */}
@@ -570,13 +571,13 @@ const COLUMNS: ReadonlyArray<Column<OrderSummary>> = [
     // the payment lives. Filled, as the reference draws it.
     cell: (o) =>
       o.status === 'PAYMENT_PENDING' && o.paymentStatus !== 'PAID' ? (
-        <a className="ol-btn ol-btn--primary" href={`/orders/${o.orderNumber}/sales-order`}>
+        <Link className="ol-btn ol-btn--primary" href={`/orders/${o.orderNumber}/sales-order`}>
           Pay now
-        </a>
+        </Link>
       ) : (
-        <a className="ol-btn" href={`/orders/${o.orderNumber}`}>
+        <Link className="ol-btn" href={`/orders/${o.orderNumber}`}>
           View
-        </a>
+        </Link>
       ),
   },
 ];
@@ -630,9 +631,9 @@ function Nothing({
           appears here with its machines, its value and its delivery site.
         </p>
         <p className="retry">
-          <a className="pill acc" href="/search">
+          <Link className="pill acc" href="/search">
             Browse inspected laptops
-          </a>
+          </Link>
         </p>
       </div>
     );
@@ -662,9 +663,9 @@ function SignedOut(): React.JSX.Element {
         title="Sign in to see your orders"
         body="An order belongs to the organisation that placed it, so we need to know who is asking. Signing in brings you straight back to this board."
         action={
-          <a className="pill acc" href="/sign-in?next=%2Forders">
+          <Link className="pill acc" href="/sign-in?next=%2Forders">
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

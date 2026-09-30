@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import type { Route } from 'next';
 import Link from 'next/link';
 import { EmptyState, GradeBadge, InfoPopover, Skeleton, StatusPill } from '@trugrade/ui';
 import { BRAND, LEGAL_DISCLOSURE } from '@trugrade/config/brand';
@@ -150,9 +151,9 @@ function Body({ order, onPaid }: { order: Order; onPaid: () => void }): React.JS
         <Billing order={order} />
         <p className="od-help">
           Questions about this order?{' '}
-          <a className="hub-link" href={`mailto:${BRAND.support}`}>
+          <Link className="hub-link" href={`mailto:${BRAND.support}`}>
             Contact support
-          </a>
+          </Link>
         </p>
       </aside>
     </div>
@@ -577,9 +578,9 @@ function DeliveryCard({ address }: { address: OrderAddress }): React.JSX.Element
           <div className="od-block">
             <div className="od-label">Receiver</div>
             <div className="od-addr">{address.contactName}</div>
-            <a className="mono od-tel" href={`tel:${address.contactMobile}`}>
+            <Link className="mono od-tel" href={`tel:${address.contactMobile}`}>
               {address.contactMobile}
-            </a>
+            </Link>
           </div>
         </div>
         <div>
@@ -655,9 +656,9 @@ function Documents({ order, pdf }: { order: Order; pdf: string }): React.JSX.Ele
           order itself, so it cannot go stale. This used to read, as the value
           of a named document, the literal words "This page".
         */}
-        <a className="od-doc__action hub-link" href={pdf}>
+        <Link className="od-doc__action hub-link" href={pdf as Route}>
           Open the PDF
-        </a>
+        </Link>
       </div>
       <div className="od-doc">
         <div className="od-doc__icon" aria-hidden="true">
@@ -829,12 +830,12 @@ function SignedOut({ orderNumber }: { orderNumber: string }): React.JSX.Element 
         title="Sign in to see this order"
         body="An order belongs to the organisation that placed it, so we need to know who is asking. Signing in brings you straight back to this order."
         action={
-          <a
+          <Link
             className="pill acc"
             href={`/sign-in?next=${encodeURIComponent(`/orders/${orderNumber}`)}`}
           >
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>
@@ -866,9 +867,9 @@ function Missing({ orderNumber }: { orderNumber: string }): React.JSX.Element {
           from their account.
         </p>
         <p className="retry">
-          <a className="pill acc" href="/search">
+          <Link className="pill acc" href="/search">
             Browse laptops
-          </a>
+          </Link>
         </p>
       </div>
     </div>

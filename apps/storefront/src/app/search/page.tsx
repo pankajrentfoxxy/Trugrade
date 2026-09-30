@@ -25,6 +25,8 @@ import { toApiQueryString, toQueryString } from './query';
 import { SORTS } from './sorts';
 import { ResultsList } from './ResultsList';
 import { SearchResultCard } from './SearchResultCard';
+import type { Route } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Search inspected laptops',
@@ -68,15 +70,15 @@ export default async function SearchPage({
                 The catalogue did not answer. Nothing is wrong with your filters — this is our
                 problem, not yours. Reload the page; if it keeps happening, the stock is still
                 there and{' '}
-                <a className="ulink" href="/help">
+                <Link className="ulink" href="/legal/grievance">
                   our team can pull it for you
-                </a>
+                </Link>
                 .
               </p>
               <p className="retry">
-                <a className="pill acc" href={`/search${query ? `?${query}` : ''}`}>
+                <Link className="pill acc" href={`/search${query ? `?${query}` : ''}` as Route}>
                   Try again
-                </a>
+                </Link>
               </p>
             </div>
           ) : (
@@ -103,9 +105,9 @@ export default async function SearchPage({
                       again.
                     </p>
                     <p className="retry">
-                      <a className="pill acc" href="/search">
+                      <Link className="pill acc" href="/search">
                         Clear all filters
-                      </a>
+                      </Link>
                     </p>
                   </div>
                 ) : view === 'list' ? (

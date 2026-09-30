@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { DataBoard, type Column } from '@trugrade/ui';
 import type { OfferUnit } from '../../../lib/api';
+import Link from 'next/link';
 
 /**
  * The serials behind one supply point, each linking to its unit passport.
@@ -36,9 +37,9 @@ export function UnitList({
       key: 'serial',
       header: 'Serial',
       cell: (u) => (
-        <a className="ulink mono" href={`/unit/${encodeURIComponent(u.serialNumber)}`}>
+        <Link className="ulink mono" href={`/unit/${encodeURIComponent(u.serialNumber)}`}>
           {u.serialNumber}
-        </a>
+        </Link>
       ),
     },
     {
@@ -109,9 +110,9 @@ export function UnitList({
       header: 'Passport',
       headerHidden: true,
       cell: (u) => (
-        <a className="sel gh" href={`/unit/${encodeURIComponent(u.serialNumber)}`}>
+        <Link className="sel gh" href={`/unit/${encodeURIComponent(u.serialNumber)}`}>
           Read the report
-        </a>
+        </Link>
       ),
     },
   ];

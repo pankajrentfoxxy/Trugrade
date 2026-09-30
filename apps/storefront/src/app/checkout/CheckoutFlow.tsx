@@ -32,6 +32,8 @@ import {
   type OrderConfirmation,
   type PaymentMode,
 } from './api';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * Checkout, client side. See `page.tsx` for the archetype and the rules.
@@ -124,6 +126,7 @@ export function CheckoutFlow(): React.JSX.Element {
 }
 
 function Flow(): React.JSX.Element {
+  const router = useRouter();
   const toast = useToast();
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [session, setSession] = React.useState<CheckoutSession | null>(null);
@@ -359,7 +362,7 @@ function Flow(): React.JSX.Element {
   const leave = async (): Promise<void> => {
     const id = cartId.current;
     if (id) await abandonCheckout(id);
-    window.location.href = '/cart';
+    router.push('/cart');
   };
 
   /* --------------------------------------------------------------- render */
@@ -641,9 +644,9 @@ function BillingStep({
         title="No GSTIN on your account yet"
         body="We invoice a registered business, so we need the GSTIN this order should be billed to. Add one in Account → Tax details and come straight back — the hold is still running."
         action={
-          <a className="ck-btn" href="/profile">
+          <Link className="ck-btn" href="/profile">
             Add a GSTIN
-          </a>
+          </Link>
         }
       />
     );
@@ -728,9 +731,9 @@ function DeliveryStep({
         title="No delivery site on your account yet"
         body="Add the site these machines should be delivered to, with the person who will receive them. A B2B delivery that arrives at a closed loading dock is a failed delivery, so the contact and the gate note matter."
         action={
-          <a className="ck-btn" href="/addresses">
+          <Link className="ck-btn" href="/addresses">
             Add a delivery site
-          </a>
+          </Link>
         }
       />
     );
@@ -1188,9 +1191,9 @@ function SignedOut(): React.JSX.Element {
       title="Sign in to check out"
       body="An order belongs to your organisation, so we need to know who is placing it. Signing in brings you straight back here with your cart intact — nothing has been held yet."
       action={
-        <a className="ck-btn" href={`/sign-in?next=${encodeURIComponent(next)}`}>
+        <Link className="ck-btn" href={`/sign-in?next=${encodeURIComponent(next)}`}>
           Sign in
-        </a>
+        </Link>
       }
     />
   );
@@ -1204,9 +1207,9 @@ function Refused({ message }: { message: string }): React.JSX.Element {
       title="Checkout cannot start yet"
       body={message}
       action={
-        <a className="ck-btn" href="/cart">
+        <Link className="ck-btn" href="/cart">
           Back to your cart
-        </a>
+        </Link>
       }
     />
   );
@@ -1219,9 +1222,9 @@ function Expired({ cartId }: { cartId: string | null }): React.JSX.Element {
       title="The hold ran out"
       body="Those machines have gone back on sale, and nothing has been ordered or charged. Your cart is untouched — start checkout again and we will hold whatever is still there."
       action={
-        <a className="ck-btn" href={`/checkout?cart=${cartId ?? ''}`}>
+        <Link className="ck-btn" href={`/checkout?cart=${cartId ?? ''}`}>
           Start checkout again
-        </a>
+        </Link>
       }
     />
   );
@@ -1319,12 +1322,12 @@ function Placed({
           )}
         </p>
         <div className="ck-nav">
-          <a className="ck-btn" href={`/orders/${order.orderNumber}`}>
+          <Link className="ck-btn" href={`/orders/${order.orderNumber}`}>
             View your order
-          </a>
-          <a className="ck-leave" href="/">
+          </Link>
+          <Link className="ck-leave" href="/">
             Back to marketplace
-          </a>
+          </Link>
         </div>
       </div>
 

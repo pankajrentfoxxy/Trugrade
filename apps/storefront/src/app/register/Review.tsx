@@ -43,6 +43,7 @@ import {
 } from './review-parts';
 import type { BillingAddress, DeliveryAddress, Person } from './StepContacts';
 import { receivingHoursLabel } from './validation';
+import { useRouter } from 'next/navigation';
 
 /**
  * The review screen, the submission, and everything after it.
@@ -351,6 +352,7 @@ export function Review({
   onEdit,
   onSubmit,
 }: ReviewProps): React.JSX.Element {
+  const router = useRouter();
   const [docs, setDocs] = React.useState<KycDocument[] | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [refusal, setRefusal] = React.useState<string | null>(null);
@@ -391,7 +393,7 @@ export function Review({
             title="Start with what has been inspected today"
             body="Every laptop on the shop has been opened, graded and photographed. Filters for battery health and inspection score are the ones nobody else can offer."
             action={
-              <Button variant="secondary" onClick={() => window.location.assign('/')}>
+              <Button variant="secondary" onClick={() => router.push('/')}>
                 Browse laptops
               </Button>
             }

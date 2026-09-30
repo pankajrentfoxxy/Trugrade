@@ -12,6 +12,9 @@ import {
 } from '../register/api';
 import { mobileSubscriberDigits, validateEmail, validateMobile } from '../register/validation';
 import { AuthShell } from '../AuthShell';
+import type { Route } from 'next';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * **ARCHETYPE F — Focus.** One task, centred, no navigation.
@@ -105,10 +108,19 @@ function safeNext(): string | null {
  */
 const CONFIRMATION_MS = 800;
 
-/** Leave without leaving this screen in history — back must not return here. */
-const leave = (url: string): void => {
-  window.setTimeout(() => window.location.replace(url), CONFIRMATION_MS);
-};
+/**
+ * Leave without leaving this screen in history — back must not return here.
+ * Through the router, not a document load; the refresh is what makes the
+ * server-rendered header look at the cookie the code just set.
+ */
+const leaveWith =
+  (router: ReturnType<typeof useRouter>) =>
+  (url: string): void => {
+    window.setTimeout(() => {
+      router.replace(url as Route);
+      router.refresh();
+    }, CONFIRMATION_MS);
+  };
 
 /* ==========================================================================
  * State
@@ -146,10 +158,12 @@ function classify(raw: string): { kind: 'mobile' | 'email'; value: string } {
 export function OtpSignIn({
   mode,
   sellerRegisterUrl,
-  onSignedIn = leave,
+  onSignedIn,
   frame = 'page',
   onModeChange,
 }: OtpSignInProps): React.JSX.Element {
+  const router = useRouter();
+  const go = onSignedIn ?? leaveWith(router);
   const [stage, setStage] = React.useState<Stage>({ k: 'identifier' });
   const [mobileDigits, setMobileDigits] = React.useState('');
   const [identifier, setIdentifier] = React.useState('');
@@ -256,7 +270,7 @@ export function OtpSignIn({
       sentTo: stage.k === 'code' ? stage.sentTo : target,
       created: result.data.created,
     });
-    onSignedIn(safeNext() ?? '/home', { created: result.data.created });
+    go(safeNext() ?? '/home', { created: result.data.created });
   };
 
   /** A flip between the two forms, in place when a dialog asks for it. */
@@ -276,9 +290,9 @@ export function OtpSignIn({
         {label}
       </button>
     ) : (
-      <a className="hub-link" href={next === 'register' ? '/register' : '/sign-in'}>
+      <Link className="hub-link" href={next === 'register' ? '/register' : '/sign-in'}>
         {label}
-      </a>
+      </Link>
     );
 
   const title = mode === 'register' ? 'Create a buyer account' : 'Sign in';
@@ -381,9 +395,9 @@ export function OtpSignIn({
             </span>
             <span>
               Selling refurbished laptops?{' '}
-              <a className="hub-link" href={sellerRegisterUrl}>
+              <Link className="hub-link" href={sellerRegisterUrl as Route}>
                 Apply to supply
-              </a>
+              </Link>
             </span>
           </div>
         </form>
@@ -468,7 +482,7 @@ export function OtpSignIn({
                 <PasswordSignIn
                   onSignedIn={(who) => {
                     setStage({ k: 'done', sentTo: who, created: false });
-                    onSignedIn(safeNext() ?? '/home', { created: false });
+                    go(safeNext() ?? '/home', { created: false });
                   }}
                   register={switchTo('register', 'Create a buyer account')}
                 />
@@ -593,9 +607,9 @@ function PasswordSignIn({
         >
           Sign in
         </Button>
-        <a className="hub-link" href="/forgot-password">
+        <Link className="hub-link" href="/forgot-password">
           Forgotten your password?
-        </a>
+        </Link>
       </div>
       <div className="authfoot">
         <span>New to Trugrade? {register}</span>
@@ -636,9 +650,9 @@ function SignedIn({
           ? 'your company profile picks up from your account.'
           : 'your carts, holds and order rooms are waiting.'}
       </p>
-      <a className="authgo" href={continueTo}>
+      <Link className="authgo" href={continueTo as Route}>
         {created ? 'Continue to your account' : 'Continue to marketplace'}
-      </a>
+      </Link>
     </div>
   );
 }

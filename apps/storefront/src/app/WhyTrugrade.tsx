@@ -11,6 +11,12 @@
  * as it was; nothing here reaches outside this one section.
  *
  * The five rows and the poster's copy are the supplied content, unchanged.
+ *
+ * Three departures from the supplied design, made on request: the marks are
+ * plain tick and cross icons, dark green and red, rather than ringed amber
+ * and grey ones; and no text is set in the amber or the warm brown — it is
+ * the storefront's ink throughout. Amber survives on surfaces
+ * (the ribbon, the badges, the rule beside the heading), where it is not type.
  */
 
 const ROWS: ReadonlyArray<{
@@ -44,9 +50,8 @@ const ROWS: ReadonlyArray<{
 function NoMark(): React.JSX.Element {
   return (
     <span className="wt-mark wt-no">
-      <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.1} strokeLinecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" />
-        <path d="m9 9 6 6M15 9l-6 6" />
+      <svg viewBox="0 0 24 24" fill="none" strokeWidth={2.8} strokeLinecap="round" aria-hidden="true">
+        <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
       </svg>
       <span className="wt-sr-only">Not included</span>
     </span>
@@ -59,13 +64,12 @@ function YesMark(): React.JSX.Element {
       <svg
         viewBox="0 0 24 24"
         fill="none"
-        strokeWidth={2.1}
+        strokeWidth={2.8}
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <circle cx="12" cy="12" r="9" />
-        <path d="m8.5 12 2.4 2.4 4.6-4.8" />
+        <path d="m5 12.5 4.5 4.5L19 7.5" />
       </svg>
       <span className="wt-sr-only">Included</span>
     </span>
@@ -79,7 +83,7 @@ function StrongYesMark(): React.JSX.Element {
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          strokeWidth={3}
+          strokeWidth={3.4}
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
@@ -206,8 +210,21 @@ const CSS = `
   --wt-surface:#ffffff;
   --wt-line:rgba(58,44,8,.14);
   --wt-line-soft:rgba(58,44,8,.08);
-  --wt-text:#2a2105;
-  --wt-muted:#86754c;
+  /* Text is the storefront's ink at full strength, headings and notes alike.
+     The supplied design set body text in a warm brown and emphasis in a dark
+     amber; both read as orange on white, and neither is used for text now.
+     Hierarchy is carried by size and weight. */
+  --wt-text:var(--ink);
+  --wt-muted:var(--ink);
+  /* Ticks are dark green and crosses are red: "included" is a pass and "not
+     included" is a fail, and those are the two colours the rest of the product
+     reserves for exactly that (the same green and red as its pass and fail
+     tokens). Plain tick and cross icons, no ring or disc around them; the
+     Trugrade column's tick is the same icon drawn larger and heavier. */
+  --wt-ok:#0f7048;
+  --wt-bad:#c13527;
+  /* Amber stays for surfaces only — the ribbon, the badges, the rule beside
+     the heading — never for type. */
   --wt-accent:#fdb017;
   --wt-accent-ink:#2a2105;
   --wt-accent-soft:rgba(253,176,23,.16);
@@ -247,12 +264,12 @@ const CSS = `
   display:flex;align-items:center;flex-wrap:wrap;gap:14px;
   margin:0;
 }
-.wt-h2 span{color:var(--wt-accent-deep)}
+.wt-h2 span{color:var(--wt-text)}
 .wt-h2 i{font-style:normal;flex:none;width:64px;height:4px;border-radius:999px;background:var(--wt-accent)}
 .wt-cmp{position:relative;margin-top:34px}
 .wt-cmp::before{
   content:"";position:absolute;top:-16px;bottom:-16px;right:0;width:var(--wt-colw);
-  background:var(--wt-surface);border:1.5px solid rgba(253,176,23,.55);border-radius:16px;
+  background:var(--wt-surface);border:1.5px solid var(--rule);border-radius:16px;
   box-shadow:0 18px 44px rgba(58,44,8,.14);
 }
 .wt-crow{
@@ -266,7 +283,7 @@ const CSS = `
 
 .wt-crow.wt-head .wt-col-h{text-align:center;font-size:.86rem;font-weight:800;color:var(--wt-muted);padding-bottom:12px}
 .wt-crow.wt-head .wt-col-h.wt-tg{color:var(--wt-text);font-size:1rem;font-weight:800}
-.wt-crow.wt-head .wt-col-h.wt-tg b{color:var(--wt-accent-deep)}
+.wt-crow.wt-head .wt-col-h.wt-tg b{color:var(--wt-text)}
 .wt-crow.wt-head .wt-col-h.wt-tg small{
   display:block;font-family:var(--wt-mono);font-size:.54rem;font-weight:700;letter-spacing:.14em;
   color:var(--wt-muted);margin-top:2px;
@@ -276,15 +293,11 @@ const CSS = `
 .wt-feat small{display:block;font-weight:600;color:var(--wt-muted);font-size:.78rem}
 
 .wt-mark{display:flex;align-items:center;justify-content:center}
-.wt-mark svg{width:24px;height:24px}
-.wt-no svg{stroke:rgba(58,44,8,.35)}
-.wt-yes svg{stroke:var(--wt-accent-deep)}
-.wt-yes.wt-strong svg{stroke:var(--wt-ink)}
-.wt-yes.wt-strong i{
-  display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;
-  background:var(--wt-accent);box-shadow:0 5px 14px rgba(253,176,23,.4);
-}
-.wt-yes.wt-strong i svg{width:16px;height:16px}
+.wt-mark svg{width:22px;height:22px}
+.wt-no svg{stroke:var(--wt-bad)}
+.wt-yes svg{stroke:var(--wt-ok)}
+.wt-yes.wt-strong i{display:flex;align-items:center;justify-content:center;width:30px;height:30px}
+.wt-yes.wt-strong i svg{width:100%;height:100%}
 
 .wt-foot-line{margin-top:26px;font-size:.82rem;color:var(--wt-muted);line-height:1.6;max-width:56ch}
 .wt-foot-line b{color:var(--wt-text)}
@@ -310,7 +323,7 @@ const CSS = `
 .wt-poster h3{position:relative;font-size:1.35rem;font-weight:600;text-align:center;color:var(--wt-muted);margin:0}
 .wt-poster h3 b{display:block;font-size:2.1rem;font-weight:800;letter-spacing:-.015em;color:var(--wt-text)}
 .wt-sub{position:relative;text-align:center;font-size:.78rem;color:var(--wt-muted);margin-top:8px}
-.wt-sub b{color:var(--wt-accent-deep)}
+.wt-sub b{color:var(--wt-text)}
 .wt-ribbon{
   position:relative;align-self:center;margin-top:18px;background:var(--wt-accent);color:var(--wt-accent-ink);
   font-weight:800;font-size:1.05rem;letter-spacing:.04em;padding:12px 30px;
@@ -351,7 +364,7 @@ const CSS = `
 .wt-hero-lap .wt-scr i{display:block;width:100%;height:100%;background:var(--wt-accent-soft);border-radius:3px;position:relative;overflow:hidden;font-style:normal}
 .wt-hero-lap .wt-scr i::after{
   content:"A+";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:1.15rem;color:var(--wt-accent-deep);
+  font-weight:800;font-size:1.15rem;color:#fffdf6;
 }
 .wt-hero-lap .wt-base{height:8px;background:#3b2f0c;border-radius:1px 1px 6px 6px;margin:0 -8px}
 .wt-hero-bx .wt-lbl{
@@ -369,7 +382,7 @@ const CSS = `
   position:relative;text-align:center;font-family:var(--wt-mono);font-size:.6rem;font-weight:700;
   letter-spacing:.12em;color:var(--wt-muted);padding:12px 0 14px;margin:0;
 }
-.wt-p-foot b{color:var(--wt-accent-deep)}
+.wt-p-foot b{color:var(--wt-text)}
 
 @media (max-width:1060px){
   .wt-scope{--wt-colw:88px}

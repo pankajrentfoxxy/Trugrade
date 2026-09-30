@@ -12,6 +12,9 @@ import {
   type CoveredMachine,
   type FaultArea,
 } from '../../api';
+import Link from 'next/link';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 
 /**
  * The claim form. See `page.tsx` for the archetype and the rules.
@@ -61,6 +64,7 @@ const blockedReason = (m: CoveredMachine): string | null => {
 };
 
 export function ClaimForm({ initialSerial }: { initialSerial: string }): React.JSX.Element {
+  const router = useRouter();
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [serial, setSerial] = React.useState(initialSerial.toUpperCase());
   const [area, setArea] = React.useState<FaultArea | ''>('');
@@ -90,12 +94,12 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
           title="Sign in to raise a claim"
           body="A claim belongs to the organisation that bought the machine. Signing in brings you straight back to this form."
           action={
-            <a
+            <Link
               className="pill acc"
               href={`/sign-in?next=${encodeURIComponent('/warranty/claims/new')}`}
             >
               Sign in
-            </a>
+            </Link>
           }
         />
       </div>
@@ -139,10 +143,10 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
       description: trimmed,
     });
     if (result.ok) {
-      // A full navigation rather than a router push: the claim record reads the
-      // claim back from the server, and arriving there with a stale client cache
-      // is how a buyer sees "not found" for a claim they just raised.
-      window.location.href = `/warranty/claims/${encodeURIComponent(result.data.claimNumber)}`;
+      // A router push, not a full load. The record is a dynamic page, and on
+      // Next 15 the client router keeps no copy of a dynamic page, so it is
+      // read fresh from the server on arrival — the claim just raised is there.
+      router.push(`/warranty/claims/${encodeURIComponent(result.data.claimNumber)}` as Route);
       return;
     }
     setSubmitting(false);
@@ -209,15 +213,15 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
                   {m.openClaim && (
                     <>
                       {' · '}
-                      <a href={`/warranty/claims/${encodeURIComponent(m.openClaim.claimNumber)}`}>
+                      <Link href={`/warranty/claims/${encodeURIComponent(m.openClaim.claimNumber)}`}>
                         open it
-                      </a>
+                      </Link>
                     </>
                   )}
                   {m.cover !== null && !m.cover.inWarranty && (
                     <>
                       {' · '}
-                      <a href="/legal/grievance">ask for a paid repair</a>
+                      <Link href="/legal/grievance">ask for a paid repair</Link>
                     </>
                   )}
                 </li>
@@ -280,9 +284,9 @@ export function ClaimForm({ initialSerial }: { initialSerial: string }): React.J
         <button type="submit" className="pill acc" disabled={!canSubmit}>
           {submitting ? 'Raising the claim…' : 'Raise the claim'}
         </button>
-        <a className="pill wire" href="/warranty">
+        <Link className="pill wire" href="/warranty">
           Back to warranty
-        </a>
+        </Link>
       </div>
       <p className="fnote off">
         We answer every claim ourselves. Nothing on this form goes to whoever supplied the machine,

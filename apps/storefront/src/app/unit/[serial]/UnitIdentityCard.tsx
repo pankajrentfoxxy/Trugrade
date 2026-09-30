@@ -2,6 +2,7 @@ import { GradeBadge, ScoreRing, StatusPill } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import type { UnitPassport } from '../../../lib/api';
 import { NotMeasured } from './panels';
+import Link from 'next/link';
 
 const VERDICT_LABEL: Record<NonNullable<UnitPassport['verdict']>, string> = {
   PASS: 'PASS',
@@ -101,12 +102,12 @@ export function UnitIdentityCard({
                 : `${measured} of ${passport.areas.length} areas measured.`}
             </span>
           </div>
-          <a
+          <Link
             className="sel"
             href={`/api/unit/${encodeURIComponent(passport.serialNumber)}/report.pdf`}
           >
             Printed report (PDF)
-          </a>
+          </Link>
         </div>
       </div>
     </header>

@@ -11,6 +11,8 @@ import {
   type TimelineEvent,
 } from '@trugrade/ui';
 import type { ApiResult } from '../../register/api';
+import type { Route } from 'next';
+import Link from 'next/link';
 
 /**
  * ARCHETYPE C — Record. One case: a return, or a warranty claim.
@@ -188,18 +190,18 @@ export function CaseRecord<T>({
             link it always should have been.
           */}
           {kind.settled(record) && (
-            <a className="pill wire crside-a" href="/legal/grievance">
+            <Link className="pill wire crside-a" href="/legal/grievance">
               Dispute this outcome
-            </a>
+            </Link>
           )}
           {id.passportPath && (
-            <a className="pill wire crside-a" href={id.passportPath}>
+            <Link className="pill wire crside-a" href={id.passportPath as Route}>
               Open the machine&rsquo;s passport
-            </a>
+            </Link>
           )}
-          <a className="pill wire crside-a" href={kind.list.href}>
+          <Link className="pill wire crside-a" href={kind.list.href as Route}>
             {kind.list.label}
-          </a>
+          </Link>
         </SidePanel>
       </div>
     </>
@@ -238,12 +240,12 @@ function SignedOut<T>({
         title={`Sign in to see this ${kind.noun}`}
         body={`A ${kind.noun} belongs to the organisation that raised it, so we need to know who is asking.`}
         action={
-          <a
+          <Link
             className="pill acc"
             href={`/sign-in?next=${encodeURIComponent(`${kind.list.href}/${caseNumber}`)}`}
           >
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>
@@ -277,9 +279,9 @@ function Missing<T>({
           </>
         }
         action={
-          <a className="pill acc" href={kind.list.href}>
+          <Link className="pill acc" href={kind.list.href as Route}>
             {kind.list.label}
-          </a>
+          </Link>
         }
       />
     </div>

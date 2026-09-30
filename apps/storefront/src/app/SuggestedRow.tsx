@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { GradeBadge } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
+import Link from 'next/link';
 
 export interface SuggestedItem {
   skuId: string;
@@ -108,7 +109,7 @@ export function SuggestedRow({ items }: { items: readonly SuggestedItem[] }): Re
 
       <div className="sug-track" ref={track}>
         {items.map((it) => (
-          <a
+          <Link
             className="sug-card"
             key={`${it.skuId}-${it.grade}`}
             href={`/laptops/${it.skuId}?grade=${it.grade}`}
@@ -148,7 +149,7 @@ export function SuggestedRow({ items }: { items: readonly SuggestedItem[] }): Re
                 </span>
               </p>
             </div>
-          </a>
+          </Link>
         ))}
       </div>
     </section>

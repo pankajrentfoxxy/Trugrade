@@ -4,6 +4,7 @@ import * as React from 'react';
 import { DataBoard, GradeBadge, type Column } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import type { SearchResult } from '../../lib/api';
+import Link from 'next/link';
 
 /**
  * List view — the same results as the grid, in the one table component.
@@ -131,9 +132,9 @@ export function ResultsList({
       // one forward link on the screen, and it points where the model will live
       // rather than at an invented substitute.
       cell: (r) => (
-        <a className="sel gh" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
+        <Link className="sel gh" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
           Compare
-        </a>
+        </Link>
       ),
     },
   ];

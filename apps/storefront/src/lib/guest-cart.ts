@@ -23,6 +23,13 @@
 
 const KEY = 'tg-guest-cart';
 
+/**
+ * Fired on `window` after every write to the guest cart. The header's cart
+ * count listens for it, so an add on a product page shows in the top bar
+ * without a reload.
+ */
+export const GUEST_CART_CHANGED = 'tg-guest-cart-change';
+
 /** What was on screen when the line was added. Display only — never a total. */
 export interface GuestCartLine {
   /** The offer. A listing id identifies an offer, never its source. */
@@ -75,7 +82,7 @@ function safeWrite(lines: readonly GuestCartLine[]): void {
     // for this page, and the screen reflects that.
   }
   // The header count and the dock listen for this rather than polling.
-  window.dispatchEvent(new CustomEvent('tg-guest-cart-change'));
+  window.dispatchEvent(new CustomEvent(GUEST_CART_CHANGED));
 }
 
 export function readGuestCart(): GuestCartLine[] {

@@ -23,6 +23,11 @@ import * as React from 'react';
  * content asked for, but a real testimonial should be a real buyer's words,
  * not a stand-in with a full name.
  *
+ * Departures from the supplied design, made on request: there is no avatar
+ * beside a reviewer's name; no text and no border is amber or warm brown —
+ * text is the storefront's ink and borders are its grey rule; and the stars
+ * are the one specified colour, flat.
+ *
  * A masonry wall rather than the rail the product page uses: pure CSS
  * multi-column (`columns:`), no JS layout library, matching the supplied
  * file exactly. The "View all" pill and its toast are the one piece of
@@ -141,15 +146,6 @@ const REVIEWS: readonly Review[] = [
 const TOTAL_RATED = '1,284';
 const AVERAGE = '4.8';
 
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-}
-
 function Star({ full }: { full: boolean }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={full ? 'rv-full' : 'rv-dim'}>
@@ -225,9 +221,6 @@ export function BuyerReviews(): React.JSX.Element {
             {REVIEWS.map((r) => (
               <article className="rv-card" key={r.name}>
                 <div className="rv-card-top">
-                  <span className="rv-avx" aria-hidden="true">
-                    {initials(r.name)}
-                  </span>
                   <span>
                     <b>{r.name}</b>
                     {r.role ? <small>{r.role}</small> : null}
@@ -264,14 +257,19 @@ const CSS = `
 .rv-scope{
   --rv-bg:#ffffff;
   --rv-surface:#ffffff;
-  --rv-line:rgba(58,44,8,.14);
-  --rv-line-soft:rgba(58,44,8,.08);
-  --rv-text:#2a2105;
-  --rv-muted:#86754c;
-  --rv-accent:#fdb017;
-  --rv-accent-ink:#2a2105;
-  --rv-accent-soft:rgba(253,176,23,.16);
-  --rv-accent-deep:#b07a00;
+  /* Borders are the storefront's grey rule, and text is its ink at full
+     strength. The supplied design drew both in warm browns and ambers, which
+     read as orange on white; neither is used for type or for a border now.
+     The one colour left in the section is the stars. */
+  --rv-line:var(--rule);
+  --rv-line-soft:var(--rule-2);
+  --rv-text:var(--ink);
+  --rv-muted:var(--ink);
+  --rv-chip:var(--sheet-2);
+  --rv-shade:rgba(16,19,25,.12);
+  /* The star colour, as specified. Fill and outline are the same, so a star
+     is one flat shape rather than a lighter fill inside a darker rim. */
+  --rv-star:#f4b53b;
   --rv-mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
   background:var(--rv-bg);
   color:var(--rv-text);
@@ -292,16 +290,16 @@ const CSS = `
      Tailwind's base layer sets its own colour on every h1-h6. */
   color:var(--rv-text);
 }
-.rv-head h2 span{color:var(--rv-accent-deep)}
+.rv-head h2 span{color:var(--rv-text)}
 .rv-agg{margin-left:auto;display:flex;align-items:center;gap:12px}
-.rv-n{font-family:var(--rv-mono);font-size:1.7rem;font-weight:700;color:var(--rv-accent-deep)}
+.rv-n{font-family:var(--rv-mono);font-size:1.7rem;font-weight:700;color:var(--rv-text)}
 .rv-agg small{font-size:.78rem;color:var(--rv-muted);font-weight:600;line-height:1.45}
 .rv-agg small b{color:var(--rv-text)}
 
 .rv-stars{display:inline-flex;gap:2px}
 .rv-stars svg{width:16px;height:16px}
-.rv-full{fill:var(--rv-accent);stroke:var(--rv-accent-deep);stroke-width:1}
-.rv-dim{fill:rgba(58,44,8,.12);stroke:rgba(58,44,8,.25);stroke-width:1}
+.rv-full{fill:var(--rv-star);stroke:var(--rv-star);stroke-width:1}
+.rv-dim{fill:var(--rv-line-soft);stroke:var(--rv-line);stroke-width:1}
 
 .rv-wall-clip{position:relative;margin-top:28px;max-height:640px;overflow:hidden}
 .rv-wall{columns:3 300px;column-gap:18px}
@@ -310,13 +308,8 @@ const CSS = `
   padding:18px 19px;margin-bottom:18px;
   transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;
 }
-.rv-card:hover{transform:translateY(-3px);border-color:rgba(253,176,23,.55);box-shadow:0 14px 32px rgba(58,44,8,.12)}
+.rv-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px var(--rv-shade)}
 .rv-card-top{display:flex;align-items:center;gap:11px}
-.rv-avx{
-  flex:none;width:38px;height:38px;border-radius:50%;background:var(--rv-accent-soft);
-  border:1.5px solid var(--rv-accent);color:var(--rv-accent-deep);font-size:.76rem;font-weight:800;
-  display:flex;align-items:center;justify-content:center;
-}
 .rv-card-top b{display:block;font-size:.94rem;font-weight:800}
 .rv-card-top small{display:block;font-size:.72rem;color:var(--rv-muted);font-weight:600;margin-top:1px}
 .rv-card-rate{display:flex;align-items:center;gap:8px;margin-top:11px}
@@ -326,10 +319,10 @@ const CSS = `
 .rv-card p b{color:var(--rv-text);font-weight:700}
 .rv-vchip{
   display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-family:var(--rv-mono);
-  font-size:.58rem;font-weight:700;letter-spacing:.1em;color:var(--rv-accent-deep);
-  background:var(--rv-accent-soft);border-radius:6px;padding:4px 8px;
+  font-size:.58rem;font-weight:700;letter-spacing:.1em;color:var(--rv-text);
+  background:var(--rv-chip);border-radius:6px;padding:4px 8px;
 }
-.rv-vchip svg{width:11px;height:11px;stroke:var(--rv-accent-deep)}
+.rv-vchip svg{width:11px;height:11px;stroke:var(--rv-text)}
 
 .rv-wall-clip::after{
   content:"";position:absolute;left:0;right:0;bottom:0;height:170px;
@@ -339,24 +332,24 @@ const CSS = `
 .rv-view-all{
   position:absolute;left:50%;bottom:26px;translate:-50% 0;z-index:2;
   display:inline-flex;align-items:center;gap:9px;background:var(--rv-surface);
-  border:1.5px solid var(--rv-accent);color:var(--rv-accent-deep);font-weight:800;font-size:.92rem;
-  border-radius:999px;padding:14px 28px;box-shadow:0 12px 30px rgba(58,44,8,.14);
+  border:1.5px solid var(--rv-line);color:var(--rv-text);font-weight:800;font-size:.92rem;
+  border-radius:999px;padding:14px 28px;box-shadow:0 12px 30px var(--rv-shade);
   transition:transform .2s ease,box-shadow .2s ease,background-color .2s ease;
 }
 .rv-view-all:hover{
   transform:translate(-50%,-2px) scale(1.02);translate:none;
-  background:var(--rv-accent);color:var(--rv-accent-ink);box-shadow:0 14px 34px rgba(253,176,23,.4);
+  background:var(--rv-text);color:var(--rv-surface);border-color:var(--rv-text);box-shadow:0 14px 34px var(--rv-shade);
 }
 .rv-view-all svg{width:15px;height:15px;stroke:currentColor}
 
 .rv-toast{
   position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
-  background:var(--rv-accent-ink);color:#fff;font-size:.85rem;font-weight:600;
+  background:var(--rv-text);color:#fff;font-size:.85rem;font-weight:600;
   padding:12px 20px;border-radius:12px;opacity:0;pointer-events:none;
   transition:opacity .3s ease,transform .3s ease;z-index:60;
 }
 .rv-toast[data-show='true']{opacity:1;transform:translateX(-50%) translateY(0)}
-.rv-toast b{color:var(--rv-accent)}
+.rv-toast b{color:#fff}
 
 @media (max-width:640px){
   .rv-agg{margin-left:0}

@@ -172,13 +172,13 @@ export default async function LegalDocumentPage({
                   </span>
                   {section.heading}
                   {/* The anchor. A clause somebody needs to cite must have a URL. */}
-                  <a
+                  <Link
                     href={`#${section.id}`}
                     aria-label={`Link to “${section.heading}”`}
                     className="lg-anchor"
                   >
                     #
-                  </a>
+                  </Link>
                 </h2>
                 {section.body}
               </section>

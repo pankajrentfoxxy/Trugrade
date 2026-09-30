@@ -17,6 +17,7 @@ import {
   type NewAddress,
   type OrgAddress,
 } from '../api';
+import Link from 'next/link';
 
 /**
  * The address book. See `page.tsx` for the archetype and the rules.
@@ -438,9 +439,9 @@ function ContactLine({ address }: { address: OrgAddress }): React.JSX.Element {
       <PersonIcon />
       <span>
         {address.contactName} ·{' '}
-        <a href={`tel:${address.contactMobile}`} className="mono">
+        <Link href={`tel:${address.contactMobile}`} className="mono">
           {formatMobile(address.contactMobile)}
-        </a>
+        </Link>
       </span>
     </div>
   );
@@ -477,12 +478,12 @@ function ChangeAside({ reason }: { reason?: string | null }): React.JSX.Element 
         {reason ??
           'We cannot edit it here, because it must match your GST registration. Send us your updated GST certificate and we will update it for you.'}
       </p>
-      <a
+      <Link
         className="ad-btn"
         href={`mailto:${LEGAL_DISCLOSURE.customerCare.email}?subject=${encodeURIComponent('Billing address change')}`}
       >
         Email customer care
-      </a>
+      </Link>
     </div>
   );
 }
@@ -994,9 +995,9 @@ function SignedOut(): React.JSX.Element {
         title="Sign in to see your addresses"
         body="Addresses belong to the organisation that holds them, so we need to know who is asking. Signing in brings you straight back here."
         action={
-          <a className="pill acc" href="/sign-in?next=%2Faddresses">
+          <Link className="pill acc" href="/sign-in?next=%2Faddresses">
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

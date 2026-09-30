@@ -349,6 +349,27 @@
     --promo-screen-6: #2b2b2b;
   }
 
+  /* ---- Photo hero palette -------------------------------------------------
+     The storefront's photo hero is a studio shot on flat sky blue, and these
+     are the colours read off it and chosen against it. Like the promo palette
+     above they are constants for one marketing surface: the photograph does
+     not flip with the theme, so neither do they, and nothing outside `.hhero`
+     should reach for them.
+
+     `--hero-sky` is the photograph's own background, sampled, so the banner
+     is the right colour before the file arrives. `--hero-navy` is the ink:
+     about 6.6:1 on the sky, where white is 2.3:1 and fails. `--hero-mark` is
+     the blue's complement, used as a block behind navy text, never as text. */
+  :root {
+    --hero-sky: #12b9e8;
+    --hero-navy: #06263f;
+    --hero-navy-2: #0d3d60;
+    --hero-white: #ffffff;
+    --hero-mark: #ffd23f;
+    --hero-mark-ink: #2a1e00;
+    --hero-shade: rgba(6, 38, 63, 0.2);
+  }
+
   /* ---- Listing card accent ------------------------------------------------
      The supplied listing-card design's orange, the same #fdb017 as the promo
      hero and the cart, for the search-result tile (`.ptile`) only: its rating

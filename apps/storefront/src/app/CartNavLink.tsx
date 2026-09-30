@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { getCart } from './cart/api';
 import { CART_UPDATED, type CartUpdateDetail } from '../lib/cart-state';
+import { GUEST_CART_CHANGED, readGuestCart } from '../lib/guest-cart';
 
 /**
  * The header's cart control, with a live line count.
@@ -15,12 +16,55 @@ import { CART_UPDATED, type CartUpdateDetail } from '../lib/cart-state';
  * It renders signed out as well as signed in. A cart that appears only after
  * you have an account tells a first-time visitor there is nowhere to put the
  * machine they are looking at, which is the wrong answer — `/cart` handles the
- * signed-out case itself. What it does NOT do signed out is ask the API for a
- * count: there is no session, the answer would be a guaranteed 401 on every
- * page load, and a count nobody can have is not worth a request.
+ * signed-out case itself.
+ *
+ * THE COUNT HAS TWO SOURCES, ONE PER SESSION STATE
+ * ------------------------------------------------
+ * **Signed in**, it is the server cart's line count, read once and then kept
+ * current by `CART_UPDATED`.
+ *
+ * **Signed out**, it is the guest cart in this browser (`lib/guest-cart.ts`).
+ * A visitor's picks live in `localStorage` until they sign in, and the badge
+ * used to ignore them: the control skipped counting altogether when there was
+ * no session, so an add on a product page left the top bar saying nothing.
+ *
+ * The guest count is read through `useSyncExternalStore` rather than an
+ * effect. The header is rendered afresh by every page, so this control mounts
+ * again on every navigation; an effect would set the count one paint after
+ * that, and the badge would blink off and on with each page change. The store
+ * hook reads the cart as part of the first client render, and hands the server
+ * `null` so the hydrated markup still matches what the server drew. It
+ * re-reads on every guest-cart write, and on a `storage` event, which is how
+ * an add in another tab arrives.
+ *
+ * What it still does NOT do signed out is ask the API: there is no session,
+ * the answer would be a guaranteed 401 on every page load, and the lines it
+ * needs are already on the machine.
+ *
+ * Both counts are LINES, not units — three of one machine is one line — which
+ * is what the accessible name says and what the signed-in badge always showed.
  */
+
+function subscribeToGuestCart(onChange: () => void): () => void {
+  window.addEventListener(GUEST_CART_CHANGED, onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    window.removeEventListener(GUEST_CART_CHANGED, onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+const guestLineCount = (): number => readGuestCart().length;
+/** The server has no `localStorage`; it draws the control with no badge. */
+const noCountOnServer = (): null => null;
+
 export function CartNavLink({ signedIn }: { signedIn: boolean }): React.JSX.Element {
-  const [count, setCount] = React.useState<number | null>(null);
+  const [serverCount, setServerCount] = React.useState<number | null>(null);
+  const guestCount = React.useSyncExternalStore(
+    subscribeToGuestCart,
+    guestLineCount,
+    noCountOnServer,
+  );
 
   React.useEffect(() => {
     if (!signedIn) return undefined;
@@ -29,12 +73,12 @@ export function CartNavLink({ signedIn }: { signedIn: boolean }): React.JSX.Elem
     void (async () => {
       const result = await getCart();
       if (!live) return;
-      setCount(result.ok ? result.data.itemCount : 0);
+      setServerCount(result.ok ? result.data.itemCount : 0);
     })();
 
     const onUpdate = (event: Event): void => {
       const detail = (event as CustomEvent<CartUpdateDetail>).detail;
-      if (detail) setCount(detail.lineCount);
+      if (detail) setServerCount(detail.lineCount);
     };
     window.addEventListener(CART_UPDATED, onUpdate);
 
@@ -44,6 +88,7 @@ export function CartNavLink({ signedIn }: { signedIn: boolean }): React.JSX.Elem
     };
   }, [signedIn]);
 
+  const count = signedIn ? serverCount : guestCount;
   const href = '/cart';
 
   // Glyph AND word. The icon alone reads for most people, but the label is

@@ -152,15 +152,15 @@ export default async function ProductPage({
                 The catalogue answered and the stock did not. Nothing is wrong with what you asked
                 for — this is our problem, not yours. Reload the page; if it keeps happening the
                 stock is still there and{' '}
-                <a className="ulink" href="/help">
+                <Link className="ulink" href="/legal/grievance">
                   our team can pull it for you
-                </a>
+                </Link>
                 .
               </p>
               <p className="retry">
-                <a className="pill acc" href={href(slug, query)}>
+                <Link className="pill acc" href={href(slug, query) as Route}>
                   Try again
-                </a>
+                </Link>
               </p>
             </div>
           </div>
@@ -542,9 +542,9 @@ export default async function ProductPage({
                     <h3>We cannot deliver to {board.pincode} yet</h3>
                     <p className="retry">
                       <PincodeFocusLink>Try another pincode</PincodeFocusLink> or{' '}
-                      <a className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
+                      <Link className="ulink" href={`/bulk?pin=${board.pincode ?? ''}`}>
                         ask us to quote this lane
-                      </a>
+                      </Link>
                       .
                     </p>
                   </div>

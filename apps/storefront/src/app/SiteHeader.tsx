@@ -47,6 +47,7 @@ import { SearchBar } from './SearchBar';
 import { AccountMenu } from './AccountMenu';
 import { AuthButtons } from './auth/AuthButtons';
 import { CartNavLink } from './CartNavLink';
+import { LocationPicker } from './LocationPicker';
 
 /**
  * Parked chrome, not deleted chrome.
@@ -127,23 +128,23 @@ export async function SiteHeader({
               Each now points at the document or board that actually answers the
               claim beside it, rather than at a route nobody built.
             */}
-              <a href="/legal/shipping" className="hide-sm">
+              <Link href="/legal/shipping" className="hide-sm">
                 Pan-India delivery
-              </a>
-              <a href="/legal/pricing-and-taxes" className="hide-sm">
+              </Link>
+              <Link href="/legal/pricing-and-taxes" className="hide-sm">
                 GST invoice on every order
-              </a>
+              </Link>
             </div>
             <div className="r">
-              <a href="/#verify" className="hide-md">
+              <Link href="/#verify" className="hide-md">
                 Verify a certificate
-              </a>
-              <a href="/orders" className="hide-md">
+              </Link>
+              <Link href="/orders" className="hide-md">
                 Track order
-              </a>
-              <a href="/legal/grievance" className="hide-md">
+              </Link>
+              <Link href="/legal/grievance" className="hide-md">
                 Help
-              </a>
+              </Link>
               <a
                 href={sellUrl}
                 className="util-promo"
@@ -159,7 +160,7 @@ export async function SiteHeader({
 
       <nav className="head" aria-label="Trugrade">
         <div className="wrap">
-          <a className="brand" href="/">
+          <Link className="brand" href="/">
             <svg className="mk" width="28" height="28" viewBox="0 0 46 46" aria-label={BRAND.name}>
               <line className="b" x1="6" y1="23" x2="40" y2="23" />
               <line className="b" x1="6" y1="15" x2="6" y2="31" />
@@ -170,7 +171,12 @@ export async function SiteHeader({
             <span className="wm">
               tru<span className="g">grade</span>
             </span>
-          </a>
+          </Link>
+
+          {/* Where to deliver, right after who we are: the pincode every
+              product page lands its price to. Kept on the visitor's machine —
+              see `lib/location.ts`. */}
+          <LocationPicker />
 
           <SearchBar />
 
@@ -187,15 +193,22 @@ export async function SiteHeader({
                 </span>
               </Link>
             )}
+            {/* The order flips with the session. Signed out, the cart is the
+                rightmost control, after Sign in. Signed in, the avatar takes
+                that corner and the cart sits to its left — the account menu
+                is the thing a signed-in buyer reaches for at the end of the
+                bar, and the cart moves inboard to make room for it. */}
             {user ? (
-              <AccountMenu fullName={user.fullName} sellUrl={sellUrl} />
+              <>
+                <CartNavLink signedIn />
+                <AccountMenu fullName={user.fullName} sellUrl={sellUrl} />
+              </>
             ) : (
-              <AuthButtons sellUrl={sellUrl} />
+              <>
+                <AuthButtons sellUrl={sellUrl} />
+                <CartNavLink signedIn={false} />
+              </>
             )}
-            {/* Last, so the cart is the rightmost control in both states —
-                the place every storefront puts it and the place a buyer's
-                hand goes without reading the row. */}
-            <CartNavLink signedIn={user !== null} />
           </div>
         </div>
       </nav>

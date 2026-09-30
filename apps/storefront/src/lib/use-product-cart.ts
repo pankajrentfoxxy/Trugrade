@@ -12,6 +12,8 @@ import {
 } from './guest-cart';
 import { mergeGuestCart } from './merge-guest-cart';
 import { publishCartUpdate } from './cart-state';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 
 type CartLineRef = { qty: number; itemId: string };
 
@@ -56,6 +58,7 @@ function linesFromView(view: CartView): Map<string, CartLineRef> {
 }
 
 function useProductCartState(): ProductCartValue {
+  const router = useRouter();
   const [itemCount, setItemCount] = React.useState(0);
   const [lines, setLines] = React.useState<Map<string, CartLineRef>>(() => new Map());
   const linesRef = React.useRef(lines);
@@ -119,8 +122,8 @@ function useProductCartState(): ProductCartValue {
 
   const signInRedirect = React.useCallback((): void => {
     const next = `${window.location.pathname}${window.location.search}`;
-    window.location.href = `/sign-in?next=${encodeURIComponent(next)}`;
-  }, []);
+    router.push(`/sign-in?next=${encodeURIComponent(next)}` as Route);
+  }, [router]);
 
   const addListing = React.useCallback(
     async (listingId: string, qty: number, snapshot: GuestCartSnapshot): Promise<string | null> => {

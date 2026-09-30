@@ -1,3 +1,5 @@
+import type { Route } from 'next';
+import Link from 'next/link';
 /**
  * Block 3 of `09_FRONTEND_LOCKED.md` §7 — the category strip, lifted out of the
  * homepage so `/` and `/search` carry one strip rather than two near-copies.
@@ -34,9 +36,9 @@ export function CategoryStrip({
                 ? query === ''
                 : query.includes(e.match);
           return (
-            <a key={e.label} href={e.href} className={on ? 'on' : undefined}>
+            <Link key={e.label} href={e.href as Route} className={on ? 'on' : undefined}>
               {e.label}
-            </a>
+            </Link>
           );
         })}
         {/* Non-interactive on purpose: the ambition reads without promising

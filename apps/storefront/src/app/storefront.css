@@ -120,6 +120,48 @@ header{position:sticky;top:0;z-index:30}
 .head .wrap{display:flex;align-items:center;justify-content:space-between;max-width:none;gap:14px;min-height:72px;
   padding-top:14px;padding-bottom:14px;padding-left:var(--gutter);padding-right:var(--gutter);min-width:0}
 .brand{display:flex;align-items:center;gap:9px;flex:0 0 auto;color:var(--on-head)}
+/* location picker, after the brand */
+.hloc{position:relative;flex:0 0 auto}
+.hloc-btn{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:8px;
+  border:0;background:transparent;color:var(--on-head);cursor:pointer;text-align:left;white-space:nowrap}
+.hloc-btn:hover,.hloc.open .hloc-btn{background:var(--head-2)}
+.hloc-btn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.hloc-btn svg{flex:0 0 auto}
+.hloc-text{display:flex;flex-direction:column;line-height:1.15}
+.hloc-text small{font-size:10.5px;font-weight:500;color:var(--on-head-3)}
+.hloc-text strong{font-size:13px;font-weight:700;color:var(--on-head);max-width:180px;
+  overflow:hidden;text-overflow:ellipsis}
+.hloc-pop{position:absolute;top:100%;left:0;padding-top:6px;z-index:60;width:300px}
+.hloc-panel{background:var(--head);border:1px solid var(--head-line-2);border-radius:8px;
+  box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
+.hloc-now{margin:0;font-size:12.5px;line-height:1.5;color:var(--on-head-2)}
+.hloc-now b{color:var(--on-head);font-weight:700}
+/* The one amber thing in the panel: the action that does the work. */
+.hloc-geo{display:flex;align-items:center;justify-content:center;gap:8px;height:38px;border-radius:7px;
+  border:0;background:var(--promo-accent);color:var(--promo-accent-ink);font-size:13px;font-weight:700;
+  cursor:pointer}
+.hloc-geo:hover:not(:disabled){filter:brightness(1.06)}
+.hloc-geo:disabled{opacity:.7;cursor:progress}
+.hloc-geo:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.hloc-form{display:flex;flex-direction:column;gap:6px}
+.hloc-form label{font-size:11px;font-weight:600;color:var(--on-head-3)}
+.hloc-row{display:flex;gap:8px}
+.hloc-row input{flex:1;min-width:0;height:36px;padding:0 12px;border-radius:7px;
+  background:var(--sheet-2);border:1px solid var(--rule);color:var(--ink);font-size:13.5px;letter-spacing:.04em}
+.hloc-row input::placeholder{color:var(--ink-4);letter-spacing:.04em}
+.hloc-row input:focus{outline:none;border-color:var(--acc)}
+.hloc-row input[aria-invalid="true"]{border-color:var(--fail)}
+.hloc-row button{flex:0 0 auto;height:36px;padding:0 14px;border-radius:7px;
+  border:1px solid var(--head-line-2);background:var(--head);color:var(--on-head);font-size:13px;font-weight:600;
+  cursor:pointer}
+.hloc-row button:hover{background:var(--head-2)}
+.hloc-row button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+/* Says what happened and what to do; never a red border with no words. */
+.hloc-msg{margin:0;font-size:12px;line-height:1.5;color:var(--on-head)}
+.hloc-clear{align-self:flex-start;background:none;border:0;padding:0;font-size:12px;font-weight:600;
+  color:var(--on-head-2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.hloc-clear:hover{color:var(--on-head)}
+.hloc-clear:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 /* search */
 /* The field is held off the brand and the account controls rather than run
    flush between them: at 1440px it is the widest thing in the header and
@@ -356,27 +398,58 @@ header{position:sticky;top:0;z-index:30}
    repainted section by section: `.hbn`, `.hcarousel` and `.shoptiles` all
    paint `var(--ground)`, so they follow this one line, and nothing outside the
    homepage changes. */
-.home{--ground:var(--sheet);background:var(--ground)}
+.home{--ground:var(--sheet);background:var(--ground);--home-gap:28px}
+/* One gap between every section that follows the photo hero, on top of each
+   section's own padding. Set here rather than on each block so the rhythm down
+   the page is one number, and a block added later inherits it by being a
+   sibling. Top margin only: the side margins that inset a block to the gutter
+   are that block's own. */
+.home > .hhero ~ *{margin-top:var(--home-gap)}
+@media(max-width:760px){.home{--home-gap:20px}}
+/* The space under the last block belongs to the homepage, not to the footer.
+   The footer carries a 40px top margin for every other page, and a margin is
+   outside the box: on those pages it shows the page's own grey, which is
+   right, but here it showed that same grey as a band between a white page and
+   the footer. So the homepage pads its own foot in white and the footer's
+   margin is dropped when the homepage is what sits above it. */
+.home{padding-bottom:var(--home-gap)}
+body:has(.home) > footer{margin-top:0}
 
 /* ---- HOMEPAGE FILTER STRIP (attached under the header) ---- */
 /* Painted `--head` like the bar above it, with the header's own rule between
    the two, so the strip reads as the second row of the header rather than as a
    band of pills floating on the page. The bottom edge takes the same rule, and
    the ground starts under it. */
-.hpills{background:var(--head);border-bottom:1px solid var(--head-line-2);padding:0 var(--gutter)}
+/* One step off the masthead's own surface, so the strip reads as a second
+   row of the chrome rather than as more of the first. */
+.hpills{background:var(--head-2);border-bottom:1px solid var(--head-line-2);padding:0 var(--gutter)}
+/* Sticky under the masthead, one z-index beneath it, so the slide-away on a
+   downward scroll really does pass behind the header rather than over it. The
+   transform lives on `data-hidden`; the JS only decides direction. Desktop
+   only: below 900px the header wraps to two rows and is taller than
+   `--head-h`, so a strip pinned at that offset would sit behind it. */
+@media(min-width:901px){
+  .hpills{position:sticky;top:var(--head-h);z-index:29;
+    transition:transform .22s ease,opacity .18s ease}
+  .hpills[data-hidden]{transform:translateY(-100%);opacity:0;pointer-events:none}
+}
+/* Twelve tabs share the whole line, first at the left edge and last at the
+   right, with the slack split evenly between them. Even gaps rather than
+   equal shares: labels run from "SSD" to "Backlit keyboard", and an equal
+   share crowds the long ones against their neighbours. */
 .hpills ul{list-style:none;margin:0 auto;padding:0;max-width:1240px;
-  display:flex;justify-content:center;align-items:stretch;gap:clamp(6px,2.4vw,40px)}
-.hpills li{display:flex}
+  display:flex;justify-content:space-between;align-items:stretch;gap:2px}
+.hpills li{display:flex;flex:0 0 auto}
 /* Plain tabs, not pills: text on the header's surface, one height, with the
    underline drawn by `::after` as the hover and focus state. The number in
-   each one stays the bold part, so "48 hr" is still what the eye lands on. */
+   each one stays the bold part, so "24 hr" is still what the eye lands on. */
 .hpill{box-sizing:border-box;position:relative;display:inline-flex;align-items:center;justify-content:center;
-  gap:6px;height:46px;padding:0 6px;background:transparent;border:0;border-radius:0;
-  font-size:13.5px;font-weight:600;color:var(--on-head);white-space:nowrap;text-decoration:none}
+  gap:4px;height:32px;padding:0 4px;background:transparent;border:0;border-radius:0;
+  font-size:12px;font-weight:600;color:var(--on-head);white-space:nowrap;text-decoration:none}
 .hpill b{font-weight:700;color:var(--on-head)}
 .hpill-promo{cursor:pointer}
-.hpill-promo::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;
-  background:var(--promo-accent);border-radius:3px 3px 0 0;transform:scaleX(0);
+.hpill-promo::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+  background:var(--promo-accent);border-radius:2px 2px 0 0;transform:scaleX(0);
   transition:transform .18s ease}
 .hpill-promo:hover::after,.hpill-promo:focus-within::after{transform:scaleX(1)}
 .hpill-promo:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
@@ -384,36 +457,245 @@ header{position:sticky;top:0;z-index:30}
 /* Grades opens into A+ / A / B. The tab grows because the clipped group
    inside it does — animating max-width rather than width, since the natural
    width of three links is not a number this rule can know. */
-.hpill-out{display:inline-flex;align-items:center;gap:6px;
+.hpill-out{display:inline-flex;align-items:center;gap:4px;
   max-width:0;margin-left:0;opacity:0;overflow:hidden;
   transition:max-width .28s ease,margin-left .28s ease,opacity .18s ease}
 .hpill-grades:hover .hpill-out,.hpill-grades:focus-within .hpill-out{
-  max-width:190px;margin-left:8px;opacity:1}
+  max-width:150px;margin-left:6px;opacity:1}
 .hpill-grade{display:inline-flex;align-items:center;justify-content:center;
-  min-width:30px;height:24px;padding:0 9px;border-radius:999px;
+  min-width:26px;height:20px;padding:0 7px;border-radius:999px;
   background:var(--head);border:1px solid var(--promo-accent-mid);
-  font-size:12px;font-weight:700;color:var(--on-head);text-decoration:none;
+  font-size:11px;font-weight:700;color:var(--on-head);text-decoration:none;
   transition:background-color .15s ease,border-color .15s ease}
 .hpill-grade:hover,.hpill-grade:focus-visible{background:var(--promo-accent);
   border-color:var(--promo-accent);color:var(--promo-accent-ink)}
 /* No hover to open it with, so it stays open. */
 @media(hover:none){
-  .hpill-out{max-width:190px;margin-left:8px;opacity:1}
+  .hpill-out{max-width:150px;margin-left:6px;opacity:1}
 }
 @media(prefers-reduced-motion:reduce){
-  .hpill-out,.hpill-promo::after{transition:none}
+  .hpills,.hpill-out,.hpill-promo::after{transition:none}
 }
-/* One scrolling row on a phone, the way every storefront's category strip
-   behaves there: nothing wraps, nothing stacks, and the row reaches the edge. */
-@media(max-width:720px){
+/* Under 1100px twelve labels no longer share one line without clipping, so
+   the row becomes the scroller it is on a phone: nothing wraps, nothing
+   stacks, and the row reaches the edge. */
+@media(max-width:1100px){
   .hpills{padding:0}
   .hpills ul{justify-content:flex-start;gap:4px;padding:0 var(--gutter);
     overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .hpills ul::-webkit-scrollbar{display:none}
-  .hpill{height:42px;padding:0 8px;font-size:13px}
+  .hpill{padding:0 8px}
 }
 
-/* ---- HOMEPAGE PROMO CAROUSEL (under the filter strip) ---- */
+/* ---- DEAL OF THE DAY (its own card, under the filter strip) ---- */
+/* A card, not a second row of chrome: set off from the filter strip by a gap
+   and inset to the page gutter like the carousel below it. It wears the promo
+   palette's warm black and amber in BOTH themes — the root constants, which
+   do not follow the theme — so it reads as an
+   offer apart from the product surfaces around it, and never borrows `--acc`,
+   which on this page still means the one primary action. */
+.dotd{padding:16px var(--gutter) 0;background:var(--ground)}
+.dotd-card{position:relative;display:flex;align-items:center;gap:24px;min-height:76px;
+  padding:0 22px 0 0;border-radius:14px;overflow:hidden;isolation:isolate;
+  background:
+    radial-gradient(520px 200px at 22% 0%,var(--promo-accent-soft),transparent 72%),
+    linear-gradient(100deg,var(--promo-bg),var(--promo-surface));
+  border:1px solid var(--promo-line);box-shadow:var(--shadow);
+  color:var(--promo-text);text-decoration:none;transition:border-color .18s ease}
+.dotd-card:hover{border-color:var(--promo-accent-mid)}
+.dotd-card:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
+
+/* The flag: a solid amber panel on the card's leading edge, cut on a slant so
+   it reads as a label laid over the card rather than a column of it. */
+.dotd-flag{align-self:stretch;flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:0 34px 0 20px;background:var(--promo-accent);color:var(--promo-accent-ink);
+  clip-path:polygon(0 0,100% 0,calc(100% - 20px) 100%,0 100%)}
+.dotd-flag svg{flex:0 0 auto;width:22px;height:22px;fill:currentColor}
+.dotd-flag-text{display:flex;flex-direction:column;font-size:13px;font-weight:900;
+  letter-spacing:.08em;line-height:1.2;text-transform:uppercase;white-space:nowrap}
+
+.dotd-media{flex:0 0 76px;height:54px;display:flex;align-items:center;justify-content:center;
+  color:var(--promo-text)}
+.dotd-photo{max-width:100%;max-height:100%;width:auto;
+  filter:drop-shadow(0 8px 10px rgb(0 0 0 / .5));transition:transform .3s ease}
+.dotd-card:hover .dotd-photo{transform:scale(1.06) translateY(-1px)}
+.dotd-shell{width:72%;height:auto}
+
+.dotd-item{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:5px}
+/* Two lines before it truncates: a model name cut to "Dell Latitu…" names
+   nothing, and the card has the height for a second line. */
+.dotd-name{font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.2;color:var(--promo-text);
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.dotd-meta{display:flex;align-items:center;gap:8px;min-width:0}
+/* Two classes deep so it outranks the badge's own surface utilities: the
+   shared `GradeBadge` paints a theme sheet, and on this card it has to sit on
+   warm black in the light theme too. Neutral, like every grade. */
+.dotd-card .dotd-grade{flex:0 0 auto;border-radius:6px;padding:1px 8px;font-size:11px;
+  background:var(--promo-line-soft);border-color:var(--promo-line);color:var(--promo-text)}
+.dotd-spec{min-width:0;font-size:12px;font-weight:600;color:var(--promo-text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.dotd-price{flex:0 0 auto;display:flex;flex-direction:column;gap:3px;white-space:nowrap}
+.dotd-price-row{display:flex;align-items:center;gap:9px}
+.dotd-now{font-size:21px;font-weight:900;letter-spacing:-.02em;line-height:1.1;color:var(--promo-text)}
+.dotd-off{padding:2px 8px;border-radius:999px;background:var(--promo-accent-soft);
+  border:1px solid var(--promo-accent-mid);font-size:11.5px;font-weight:800;color:var(--promo-accent)}
+.dotd-price small{font-size:11px;font-weight:600;color:var(--promo-text)}
+
+/* The clock: three boxes, a unit under each. Fixed-width boxes in tabular
+   figures, because the digits change every second and nothing beside them
+   may move when they do. */
+.dotd-timer{flex:0 0 auto;display:flex;flex-direction:column;gap:4px;
+  padding-left:24px;border-left:1px solid var(--promo-line)}
+.dotd-timer-label{font-size:10px;line-height:1.2;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--promo-accent);white-space:nowrap}
+.dotd-clock{display:flex;align-items:flex-start;gap:6px}
+.dotd-seg{display:flex;flex-direction:column;align-items:center;gap:2px}
+.dotd-seg b{display:flex;align-items:center;justify-content:center;width:38px;height:28px;
+  border-radius:7px;background:var(--promo-line-soft);border:1px solid var(--promo-line);
+  font-size:16px;font-weight:800;color:var(--promo-text);font-variant-numeric:tabular-nums}
+.dotd-seg i{font-style:normal;font-size:9px;line-height:1.2;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--promo-text)}
+.dotd-colon{font-style:normal;font-size:16px;font-weight:800;line-height:28px;color:var(--promo-accent)}
+
+.dotd-cta{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:9px 16px;border-radius:9px;background:var(--promo-accent);color:var(--promo-accent-ink);
+  font-size:13px;font-weight:800;white-space:nowrap}
+.dotd-cta svg{transition:transform .18s ease}
+.dotd-card:hover .dotd-cta svg{transform:translateX(3px)}
+@media(prefers-reduced-motion:reduce){
+  .dotd-card,.dotd-photo,.dotd-cta svg{transition:none}
+  .dotd-card:hover .dotd-photo,.dotd-card:hover .dotd-cta svg{transform:none}
+}
+
+/* Narrower desktops give up the illustration first, then the spec line and
+   the price footnote: the name, price and clock are the card. */
+@media(max-width:1180px){
+  .dotd-media{display:none}
+}
+@media(max-width:1000px){
+  .dotd-card{gap:18px}
+  .dotd-spec,.dotd-price small{display:none}
+  .dotd-timer{padding-left:18px}
+}
+/* Between a phone and a small laptop the button keeps its arrow and drops its
+   words, which hands the width back to the machine's name. The card is the
+   link either way, and its accessible name comes from the whole card. */
+@media(min-width:721px) and (max-width:900px){
+  .dotd-card{gap:14px;padding-right:16px}
+  .dotd-flag{padding:0 28px 0 14px}
+  .dotd-cta-text{display:none}
+  .dotd-cta{width:36px;height:36px;padding:0}
+  .dotd-timer{padding-left:14px}
+}
+/* Three rows on a phone: the flag and the clock, the machine and its price,
+   then the button across the full width. A grid rather than a wrapping flex
+   row, because wrapping decides the rows by what happens to fit. The flag
+   becomes a pill — a slanted panel needs the card's full height to read. */
+@media(max-width:720px){
+  .dotd{padding-top:12px}
+  .dotd-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
+    gap:9px 12px;min-height:0;padding:10px 12px}
+  .dotd-flag{order:1;align-self:center;justify-self:start;gap:6px;padding:6px 11px;
+    border-radius:999px;clip-path:none}
+  .dotd-flag svg{width:14px;height:14px}
+  .dotd-flag-text{flex-direction:row;gap:.4em;font-size:11px}
+  .dotd-timer{order:2;gap:4px;padding-left:0;border-left:0;align-items:flex-end}
+  .dotd-timer-label{font-size:9.5px}
+  .dotd-seg b{width:30px;height:26px;border-radius:6px;font-size:13.5px}
+  .dotd-seg i{display:none}
+  .dotd-colon{font-size:13.5px;line-height:26px}
+  .dotd-item{order:3}
+  .dotd-name{font-size:15px}
+  .dotd-price{order:4;align-items:flex-end}
+  .dotd-now{font-size:18px}
+  .dotd-cta{order:5;grid-column:1 / -1}
+}
+
+/* ---- HOMEPAGE PHOTO HERO (under the filter strip, above the carousel) ---- */
+/* A studio photograph on flat sky blue with the subject on the right, so the
+   copy takes the left. Inset by the page gutter like every other block. The
+   section paints `--hero-sky` itself, so the banner is the right colour before
+   the picture arrives and wherever the picture does not reach. */
+.hhero{position:relative;margin:14px var(--gutter) 0;border-radius:18px;overflow:hidden;
+  background:var(--hero-sky);color:var(--hero-navy);
+  aspect-ratio:2400 / 961;min-height:440px;display:flex;align-items:center;isolation:isolate}
+/* Anchored right: a banner narrower than the picture crops sky, never the man. */
+.hhero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:right center;z-index:-1}
+.hhero-copy{width:min(60%,780px);padding:clamp(20px,2.6vw,40px) clamp(22px,4vw,64px);
+  display:flex;flex-direction:column;align-items:flex-start;gap:clamp(10px,1.2vw,16px)}
+/* Every line rises in, staggered by its `--i`. */
+.hhero-copy > *,.hhero-line{animation:rise .6s cubic-bezier(.2,.7,.3,1) both;
+  animation-delay:calc(var(--i) * 95ms + 80ms)}
+.hhero-title{animation:none}
+.hhero-eyebrow{margin:0;padding:6px 12px;border-radius:999px;background:var(--hero-white);
+  color:var(--hero-navy);font-size:11.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.hhero-title{margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:.12em;
+  font-size:clamp(2rem,4.5vw,4.1rem);font-weight:900;line-height:1.02;letter-spacing:-.025em;
+  color:var(--hero-navy)}
+.hhero-line{display:block}
+/* White never sits on the sky bare — it fails contrast there — so the second
+   line is white on a navy block, the inverse of the first. */
+.hhero-inv{display:inline-block;padding:.06em .28em .12em;border-radius:.22em;
+  background:var(--hero-navy);color:var(--hero-white);transform:rotate(-1.2deg);
+  transform-origin:left center}
+/* The cycling promise: a one-line window over a column that slides up a line
+   at a time. The fourth row repeats the first, so the loop has no jump. */
+.hhero-rot{margin:4px 0 0;height:1.5em;overflow:hidden;
+  font-size:clamp(1.25rem,2.5vw,2.15rem);font-weight:900;letter-spacing:-.015em;line-height:1.5}
+.hhero-rot-col{display:flex;flex-direction:column;animation:hheroCycle 9s cubic-bezier(.7,0,.2,1) 1.4s infinite}
+.hhero-rot-row{display:flex;align-items:center;height:1.5em;flex:0 0 auto}
+.hhero-mark{display:inline-block;padding:0 .32em;border-radius:.2em;line-height:1.28;
+  background:var(--hero-mark);color:var(--hero-mark-ink);white-space:nowrap}
+@keyframes hheroCycle{
+  0%,27%{transform:translateY(0)}
+  33%,60%{transform:translateY(-1.5em)}
+  66%,93%{transform:translateY(-3em)}
+  100%{transform:translateY(-4.5em)}
+}
+.hhero-sub{margin:0;max-width:46ch;font-size:clamp(.92rem,1.15vw,1.08rem);font-weight:600;
+  line-height:1.5;color:var(--hero-navy)}
+.hhero-perks{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.hhero-perks li{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;
+  border-radius:999px;background:var(--hero-white);color:var(--hero-navy);
+  font-size:12.5px;font-weight:800;white-space:nowrap;box-shadow:0 6px 16px var(--hero-shade)}
+.hhero-perks svg{width:16px;height:16px;flex:0 0 auto}
+.hhero-cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.hhero-btn{display:inline-flex;align-items:center;gap:9px;height:48px;padding:0 24px;border-radius:12px;
+  font-size:14.5px;font-weight:800;text-decoration:none;white-space:nowrap;
+  transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+.hhero-btn.is-primary{background:var(--hero-navy);color:var(--hero-white);
+  box-shadow:0 10px 24px var(--hero-shade)}
+.hhero-btn.is-primary:hover{background:var(--hero-navy-2);transform:translateY(-2px)}
+.hhero-btn.is-ghost{background:var(--hero-white);color:var(--hero-navy)}
+.hhero-btn.is-ghost:hover{transform:translateY(-2px);box-shadow:0 10px 24px var(--hero-shade)}
+.hhero-btn:focus-visible{outline:3px solid var(--hero-navy);outline-offset:3px}
+.hhero-arrow{transition:transform .2s ease}
+.hhero-btn:hover .hhero-arrow{transform:translateX(5px)}
+@media(prefers-reduced-motion:reduce){
+  .hhero-copy > *,.hhero-line,.hhero-rot-col{animation:none}
+  .hhero-btn,.hhero-arrow{transition:none}
+  .hhero-btn:hover{transform:none}
+}
+@media(max-width:1100px){
+  .hhero{aspect-ratio:auto}
+  .hhero-copy{width:min(62%,640px)}
+}
+/* A phone has no room for copy beside the man, so the copy goes on top and
+   the picture below, cropped to him. The picture's top edge is faded out so
+   its blue meets the section's blue without a seam. */
+@media(max-width:760px){
+  .hhero{flex-direction:column;align-items:stretch;min-height:0;border-radius:14px;margin-top:10px}
+  .hhero-copy{width:auto;padding:22px 18px 4px}
+  .hhero-img{position:relative;inset:auto;order:2;height:250px;z-index:0;object-position:83% center;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,black 26%);
+    mask-image:linear-gradient(to bottom,transparent,black 26%)}
+  .hhero-btn{height:44px;padding:0 18px;font-size:14px}
+  .hhero-perks li{height:32px;font-size:12px;padding:0 11px}
+}
+
+/* ---- HOMEPAGE PROMO CAROUSEL (under the photo hero) ---- */
 /* A row of 460 x 224 banner cards, the active one at the left edge and the
    next peeking in on the right, that scrolls by snapping. The card is sized as a width and
    an aspect ratio rather than two lengths, so on a phone narrower than the
@@ -424,11 +706,11 @@ header{position:sticky;top:0;z-index:30}
    query read one pair of numbers. */
 /* Inset by the page gutter and clipped there, so the peeking neighbour stops
    where every other block does rather than running to the viewport edge. The
-   right padding on the track is what lets the last slide reach the left edge. */
+   track has no end padding: the row loops, so after the last banner comes a
+   copy of the first, and there is never blank space to pad out. */
 .hcarousel{position:relative;padding:18px 0 10px;margin:0 var(--gutter);background:var(--ground);
   overflow:hidden;--hc-w:min(460px,calc(100vw - 2 * var(--gutter)));--hc-gap:20px}
 .hcarousel-track{display:flex;align-items:stretch;gap:var(--hc-gap);
-  padding:0 calc(100% - var(--hc-w)) 0 0;
   overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;
   -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
 .hcarousel-track::-webkit-scrollbar{display:none}
@@ -926,6 +1208,14 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   .hbtn:not(.solid) small{display:none}
   .hbtn:not(.solid) strong{font-size:13px;line-height:1.2}
   .hbtn:not(.solid){padding:0 12px;height:38px}
+  .hloc-btn{height:38px;padding:0 8px;gap:6px}
+  .hloc-text small{display:none}
+  .hloc-text strong{font-size:12.5px;max-width:110px}
+  /* The panel hangs off the whole header bar (`.head` is the positioned
+     ancestor once `.hloc` stops being one), so it spans the screen instead of
+     running off the right edge from under a pill that sits mid-row. */
+  .hloc{position:static}
+  .hloc-pop{left:var(--gutter);right:var(--gutter);width:auto}
   .hbtn.solid{padding:0 11px}
   .hact{gap:6px}}
 
@@ -3406,6 +3696,45 @@ html[data-t="light"] .hero2{
 .la-pad{fill:var(--h-ink);opacity:.12}
 .la-sweep{fill:var(--acc);opacity:0;animation:sweepdown 5s linear 1.3s infinite}
 
+/* ---- BRANDS WE DEAL WITH (a running row under the promo carousel) ---- */
+/* Logos on the white plate, the same surface the brand rail gives third-party
+   marks: every one of these is dark ink on a clear or white canvas, and a
+   plate that does not follow the theme is what stops one vanishing into it. */
+.bmq{background:var(--ground);padding:26px 0 8px}
+.bmq-title{margin:0 0 14px;padding:0 var(--gutter);font-size:22px;font-weight:800;
+  letter-spacing:-.015em;color:var(--ink)}
+/* The window is inset to the gutter and fades the row out at both edges, so a
+   logo arrives and leaves instead of being cut by a hard line. */
+.bmq-window{margin:0 var(--gutter);overflow:hidden;border-radius:16px;
+  background:var(--plate);border:1px solid var(--rule);padding:22px 0;
+  -webkit-mask-image:linear-gradient(to right,transparent,black 7%,black 93%,transparent);
+  mask-image:linear-gradient(to right,transparent,black 7%,black 93%,transparent)}
+/* Four copies of the list; the track slides from -50% to 0, so what leaves on
+   the right is exactly what enters on the left. Left to right, never pausing. */
+.bmq-track{display:flex;width:max-content;animation:bmqRun 44s linear infinite;will-change:transform}
+@keyframes bmqRun{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+.bmq-set{display:flex;align-items:center;flex:0 0 auto;margin:0;padding:0;list-style:none}
+/* Spacing is padding on the cell, not a gap on the list, so every copy is
+   exactly the same width and the half-way point is a whole number of cells. */
+.bmq-cell{flex:0 0 auto;width:150px;height:64px;padding:0 44px;box-sizing:content-box;
+  display:flex;align-items:center;justify-content:center}
+.bmq-cell img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;
+  transform:scale(var(--s,1))}
+@media(max-width:760px){
+  .bmq{padding:20px 0 6px}
+  .bmq-title{font-size:19px;margin-bottom:10px}
+  .bmq-window{padding:16px 0;border-radius:12px}
+  .bmq-cell{width:104px;height:46px;padding:0 24px}
+  .bmq-track{animation-duration:30s}
+}
+/* No motion: one copy, standing still, wrapped and centred. */
+@media(prefers-reduced-motion:reduce){
+  .bmq-window{-webkit-mask-image:none;mask-image:none}
+  .bmq-track{animation:none;width:auto;justify-content:center}
+  .bmq-set{flex-wrap:wrap;justify-content:center;row-gap:18px}
+  .bmq-set[aria-hidden="true"]{display:none}
+}
+
 /* ---- suggested for you: product row above the banners --------------------- */
 .sug{background:var(--ground);padding:30px 0 6px}
 .sug-head{display:flex;align-items:baseline;gap:14px;padding:0 var(--gutter);margin-bottom:16px}
@@ -3540,302 +3869,6 @@ html[data-t="light"] .hero2{
   .la-sweep{animation:none;opacity:0}
   .shoptile{transition:none}
   .shoptile:hover{transform:none}
-}
-
-/* ============ PROMO HERO (supplied design, ported) ============
-   Its own warm-black / amber language — see the --promo-* note in globals.css.
-   Dark in both themes and deliberately not theme-reactive. Every animation in
-   this block is switched off at its foot under prefers-reduced-motion. */
-/*
-  The hero runs light, on a flat surface.
-
-  Two overrides do the whole job. `--promo-*` is redefined here so every rule
-  below — cards, rails, chips, the drawn laptop — follows without being touched
-  individually. `--po-ink` is the second: every overlay in this block was
-  written as white at some alpha over black, and on a light ground the same
-  lift is ink at that same alpha, so those became `rgb(var(--po-ink) / a)`.
-
-  No gradients. The dot-grid `::before` and the two blurred glow washes are
-  gone rather than recoloured — both existed to give a black panel depth, and
-  neither has anything to do on a white one.
-*/
-.phero{position:relative;width:100%;display:flex;flex-direction:column;justify-content:center;
-  padding:clamp(18px,3vh,32px) var(--gutter) clamp(16px,2.4vh,28px);
-  --promo-bg:var(--sheet);
-  --promo-text:var(--ink);
-  --promo-muted:var(--ink-2);
-  --promo-line:var(--rule);
-  --promo-line-soft:var(--rule-2);
-  --promo-surface:var(--sheet-2);
-  --po-ink:16 19 25;
-  background:var(--promo-bg);color:var(--promo-text);
-  border-bottom:1px solid var(--rule);
-  font-family:var(--font-sans);overflow:hidden;isolation:isolate}
-.phero-speck{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--promo-accent);
-  opacity:.4;z-index:-1;pointer-events:none;animation:pheroDrift 14s ease-in-out infinite}
-.phero-speck:nth-of-type(1){left:12%;top:22%}
-.phero-speck:nth-of-type(2){left:46%;top:12%;animation-delay:-4s;width:4px;height:4px;opacity:.25}
-.phero-speck:nth-of-type(3){left:82%;top:64%;animation-delay:-8s}
-.phero-speck:nth-of-type(4){left:64%;top:18%;animation-delay:-11s;width:4px;height:4px;opacity:.15}
-@keyframes pheroDrift{0%,100%{transform:translate(0,0)}50%{transform:translate(14px,-22px)}}
-
-.phero-top{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
-  gap:clamp(32px,5vw,72px);align-items:center;width:100%;margin:0 auto}
-.phero-tagline{display:inline-flex;align-items:center;gap:10px;font-size:.78rem;font-weight:600;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--promo-muted);
-  border:1px solid var(--promo-line);border-radius:999px;padding:7px 14px;margin:0 0 18px;
-  background:rgb(var(--po-ink) / .03)}
-.phero-dot{width:7px;height:7px;border-radius:50%;background:var(--promo-accent);
-  box-shadow:0 0 10px var(--promo-accent-mid);animation:pheroBlink 2.4s ease-in-out infinite}
-@keyframes pheroBlink{0%,100%{opacity:1}50%{opacity:.35}}
-.phero-headline{margin:0;font-size:clamp(2rem,3.5vw,3.25rem);font-weight:800;line-height:1.06;
-  letter-spacing:-.015em;text-transform:uppercase;color:var(--promo-text)}
-.phero-alt{color:var(--promo-accent)}
-.phero-sub{margin:14px 0 0;max-width:46ch;font-size:clamp(.94rem,1.1vw,1.04rem);line-height:1.55;
-  color:var(--promo-muted)}
-.phero-cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
-.phero-btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:.8rem;
-  letter-spacing:.04em;text-transform:uppercase;padding:9px 18px;border-radius:999px;
-  transition:transform .25s ease,box-shadow .25s ease,background-color .25s ease,border-color .25s ease}
-.phero-btn-primary{background:var(--promo-accent);color:var(--promo-accent-ink);
-  box-shadow:0 8px 28px rgba(253,176,23,.28)}
-.phero-arrow{transition:transform .25s ease}
-.phero-btn-primary:hover,.phero-btn-primary:focus-visible{transform:translateY(-2px);
-  box-shadow:0 12px 38px rgba(253,176,23,.42)}
-.phero-btn-primary:hover .phero-arrow{transform:translateX(5px)}
-.phero-btn-ghost{border:1px solid rgb(var(--po-ink) / .24);color:var(--promo-text)}
-.phero-btn-ghost:hover,.phero-btn-ghost:focus-visible{background:rgb(var(--po-ink) / .06);
-  border-color:var(--promo-accent);transform:translateY(-2px)}
-.phero-btn:focus-visible{outline:2px solid var(--promo-accent);outline-offset:3px}
-.phero-brands{margin:14px 0 0;font-size:.74rem;font-weight:500;letter-spacing:.05em;
-  color:rgb(var(--po-ink))}
-.phero-brands b{color:rgb(var(--po-ink));font-weight:600}
-
-/* ---- 9:16 deal cards: one active, a neighbour scaled back either side ----
-   Same height as the stage beside it so the two columns sit level. The card
-   width follows from the 9:16 ratio. Everything on a card is a real SKU. */
-.phero-copy.has-deals{display:flex;flex-direction:column;align-items:center;text-align:center}
-.phero-copy.has-deals .phero-cta{justify-content:center}
-.phero-deals{position:relative;width:100%;height:clamp(360px,min(40vw,58vh),470px)}
-.phero-deal{position:absolute;left:50%;top:0;height:100%;aspect-ratio:9/16;
-  transform:translateX(-50%) scale(.7);opacity:0;z-index:1;pointer-events:none;
-  background:var(--promo-surface);border:1px solid var(--promo-line);border-radius:20px;
-  display:flex;flex-direction:column;overflow:hidden;text-align:left;
-  transition:transform .65s cubic-bezier(.35,.1,.25,1),opacity .65s ease,border-color .3s ease,
-    box-shadow .3s ease}
-.phero-deal.is-active{transform:translateX(-50%) scale(1);opacity:1;z-index:3;pointer-events:auto;
-  border-color:var(--promo-accent-mid);box-shadow:0 22px 50px rgb(var(--po-ink) / .16)}
-.phero-deal.is-prev{transform:translateX(calc(-50% - 74%)) scale(.84);opacity:.32;z-index:2}
-.phero-deal.is-next{transform:translateX(calc(-50% + 74%)) scale(.84);opacity:.32;z-index:2}
-.phero-deal-photo{position:relative;height:42%;flex:none;background:var(--promo-bg);
-  border-bottom:1px solid var(--promo-line-soft);display:flex;align-items:center;
-  justify-content:center;overflow:hidden}
-.phero-deal-img{width:84%;height:auto;object-fit:contain;
-  filter:drop-shadow(0 8px 10px rgb(var(--po-ink) / .18));animation:pheroFloat 6s ease-in-out infinite}
-.phero-deal-shell{width:70%}
-.phero-deal-shell .phero-wordmark{font-size:.7rem;letter-spacing:.14em}
-.phero-dgrade{position:absolute;top:11px;left:11px;z-index:2;font-weight:800;font-size:.78rem;
-  min-width:32px;height:27px;padding:0 8px;display:inline-flex;align-items:center;
-  justify-content:center;border-radius:8px}
-.phero-dgrade.phero-grade-aplus{box-shadow:0 0 14px rgba(253,176,23,.4)}
-.phero-dgrade.phero-grade-b{background:rgb(var(--po-ink) / .04);
-  border-color:rgb(var(--po-ink) / .28)}
-.phero-deal-ship{position:absolute;top:11px;right:11px;z-index:2;display:inline-flex;
-  align-items:center;gap:4px;font-size:.66rem;font-weight:700;color:var(--promo-accent);
-  background:var(--sheet);border:1px solid var(--promo-accent-mid);padding:5px 8px;
-  border-radius:999px}
-.phero-deal-ship svg{width:10px;height:10px;fill:var(--promo-accent)}
-.phero-deal-body{flex:1;display:flex;flex-direction:column;padding:13px 15px 15px;min-height:0}
-/* Nothing on the card may shrink away: a squeezed card drops its name first. */
-.phero-deal-body>*{flex:none}
-.phero-deal-name{margin:0;font-size:.95rem;font-weight:700;line-height:1.25;
-  color:var(--promo-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.phero-deal-sub{margin:3px 0 0;font-size:.71rem;color:var(--promo-muted);font-weight:500;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.phero-deal-qc{margin-top:11px}
-.phero-deal-qc-label{display:flex;justify-content:space-between;align-items:baseline;
-  font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--promo-muted);margin-bottom:5px}
-.phero-deal-qc-label b{font-size:.82rem;color:var(--promo-text);letter-spacing:0}
-.phero-deal-qc-label b i{font-style:normal;color:var(--promo-muted);font-weight:600;
-  font-size:.64rem}
-.phero-deal-missing{font-style:normal;letter-spacing:0;text-transform:none;font-weight:500;
-  color:rgb(var(--po-ink))}
-.phero-deal-track{display:block;height:5px;border-radius:999px;background:rgb(var(--po-ink) / .1);
-  overflow:hidden}
-.phero-deal-fill{display:block;height:100%;border-radius:999px;background:var(--promo-accent)}
-.phero-deal-price{margin-top:auto;padding-top:10px;display:flex;align-items:baseline;gap:6px}
-.phero-deal-price .mono{font-size:1.22rem;font-weight:800;color:var(--promo-accent);
-  letter-spacing:-.01em}
-.phero-deal-price small{font-size:.62rem;font-weight:500;color:var(--promo-muted);
-  white-space:nowrap}
-.phero-deal-buy{display:block;margin-top:9px;width:100%;padding:11px 0;border-radius:11px;
-  text-align:center;background:var(--promo-accent);color:var(--promo-accent-ink);
-  font-weight:800;font-size:.76rem;letter-spacing:.05em;text-transform:uppercase;
-  text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}
-.phero-deal-buy:hover{transform:translateY(-1px);box-shadow:0 7px 18px rgba(253,176,23,.35)}
-.phero-deal-buy:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
-
-.phero-showcase{perspective:1200px}
-.phero-stage{position:relative;height:clamp(360px,min(40vw,58vh),470px);border-radius:22px;
-  background:var(--promo-surface);border:1px solid var(--promo-line);
-  box-shadow:0 34px 80px rgba(0,0,0,.6);
-  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .35s ease;
-  transform-style:preserve-3d;overflow:hidden}
-.phero-stage::after{content:"";position:absolute;left:22%;right:22%;bottom:38px;height:30px;
-  border-radius:50%;background:rgba(253,176,23,.22);filter:blur(18px)}
-.phero-slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:12px;padding:18px 22px 26px;margin:0;opacity:0;
-  transform:translateY(22px) scale(.96);
-  transition:opacity .7s ease,transform .7s ease;pointer-events:none;z-index:1}
-.phero-slide.is-on{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
-.phero-plate{display:flex;align-items:center;gap:12px;opacity:0;transform:translateY(-10px);
-  transition:opacity .6s ease .25s,transform .6s ease .25s}
-.phero-slide.is-on .phero-plate{opacity:1;transform:translateY(0)}
-.phero-grade{min-width:52px;height:44px;padding:0 12px;display:inline-flex;align-items:center;
-  justify-content:center;font-weight:800;font-size:1.25rem;border-radius:9px}
-.phero-grade-aplus{background:var(--promo-accent);color:var(--promo-accent-ink);
-  box-shadow:0 0 26px rgba(253,176,23,.4)}
-.phero-grade-a{color:var(--promo-accent);border:1.5px solid var(--promo-accent);
-  background:var(--promo-accent-soft)}
-.phero-grade-b{color:var(--promo-muted);border:1.5px solid rgb(var(--po-ink) / .26)}
-.phero-condition{font-size:.95rem;font-weight:600;color:var(--promo-text)}
-.phero-condition small{display:block;font-size:.78rem;font-weight:500;color:var(--promo-muted);
-  margin-top:2px}
-.phero-media{width:min(60%,280px);display:flex;align-items:flex-end;justify-content:center;
-  animation:pheroFloat 6s ease-in-out infinite}
-@keyframes pheroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-.phero-photo{width:100%;height:auto;object-fit:contain;
-  filter:drop-shadow(0 16px 22px rgba(0,0,0,.5))}
-.phero-laptop{width:100%;filter:drop-shadow(0 16px 22px rgba(0,0,0,.5))}
-.phero-lid{aspect-ratio:16/9.6;border-radius:12px 12px 3px 3px;padding:7px 7px 9px;
-  background:var(--promo-shell);border:1px solid rgb(var(--po-ink) / .14)}
-.phero-screen{width:100%;height:100%;border-radius:7px;display:flex;align-items:center;
-  justify-content:center;overflow:hidden;position:relative;background:var(--promo-screen-1)}
-.phero-screen[data-tint="1"]{background:var(--promo-screen-2)}
-.phero-screen[data-tint="2"]{background:var(--promo-screen-3)}
-.phero-screen[data-tint="3"]{background:var(--promo-screen-4)}
-.phero-screen[data-tint="4"]{background:var(--promo-screen-5)}
-.phero-screen[data-tint="5"]{background:var(--promo-screen-6)}
-.phero-wordmark{font-weight:800;letter-spacing:.2em;font-size:1.05rem;color:rgb(var(--po-ink));
-  text-transform:uppercase;white-space:nowrap}
-.phero-deck{height:13px;margin:0 -4.5%;border-radius:2px 2px 9px 9px;background:var(--promo-deck);
-  border:1px solid rgb(var(--po-ink) / .12);border-top:none;position:relative}
-.phero-deck::after{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);
-  width:16%;height:4px;border-radius:0 0 5px 5px;background:rgb(var(--po-ink) / .16)}
-.phero-laptop.is-silver .phero-lid{background:var(--promo-shell-alt);
-  border-color:rgb(var(--po-ink) / .45)}
-.phero-laptop.is-silver .phero-deck{background:var(--promo-deck-alt);
-  border-color:rgb(var(--po-ink) / .4)}
-.phero-laptop.is-silver .phero-deck::after{background:rgba(0,0,0,.24)}
-.phero-meta{display:flex;align-items:center;gap:12px;opacity:0;transform:translateY(10px);
-  transition:opacity .6s ease .35s,transform .6s ease .35s}
-.phero-slide.is-on .phero-meta{opacity:1;transform:translateY(0)}
-.phero-model{font-weight:700;font-size:1.02rem;color:var(--promo-text)}
-.phero-chip{font-size:.78rem;font-weight:600;letter-spacing:.05em;color:var(--promo-muted);
-  border:1px solid var(--promo-line);background:rgb(var(--po-ink) / .04);border-radius:999px;
-  padding:6px 12px}
-.phero-nav{display:flex;gap:8px;justify-content:center;margin-top:18px}
-.phero-nav button{width:34px;height:5px;border-radius:999px;background:rgb(var(--po-ink) / .15);
-  overflow:hidden;position:relative;padding:0;border:0}
-.phero-nav button::after{content:"";position:absolute;inset:0;background:var(--promo-accent);
-  transform:scaleX(0);transform-origin:left center}
-.phero-nav button.is-on::after{animation:pheroBar 2.6s linear forwards}
-@keyframes pheroBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-.phero-nav button:focus-visible{outline:2px solid var(--promo-accent);outline-offset:3px}
-
-.phero-process{max-width:1280px;width:100%;margin:clamp(14px,2vh,24px) auto 0}
-.phero-chain{list-style:none;display:flex;align-items:stretch;margin:0;padding:0}
-.phero-step{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;
-  padding:9px 10px 10px;border-radius:12px;border:1px solid var(--promo-line-soft);
-  background:rgb(var(--po-ink) / .02);color:rgb(var(--po-ink));
-  animation:pheroNode 8s ease-in-out infinite}
-.phero-step:nth-of-type(1){animation-delay:0s}
-.phero-step:nth-of-type(3){animation-delay:2s}
-.phero-step:nth-of-type(5){animation-delay:4s}
-.phero-step:nth-of-type(7){animation-delay:6s}
-.phero-step-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;
-  border-radius:10px;border:1px solid var(--promo-line);background:var(--promo-surface);
-  animation:pheroIcon 8s ease-in-out infinite}
-.phero-step:nth-of-type(1) .phero-step-icon{animation-delay:0s}
-.phero-step:nth-of-type(3) .phero-step-icon{animation-delay:2s}
-.phero-step:nth-of-type(5) .phero-step-icon{animation-delay:4s}
-.phero-step:nth-of-type(7) .phero-step-icon{animation-delay:6s}
-.phero-step-icon svg{width:17px;height:17px;stroke:currentColor}
-.phero-step-copy{display:flex;flex-direction:column;align-items:center;gap:4px}
-.phero-step-num{font-size:.72rem;font-weight:700;letter-spacing:.16em;color:rgb(var(--po-ink))}
-.phero-step-title{font-size:.82rem;font-weight:700;color:var(--promo-text)}
-.phero-step-desc{font-size:.82rem;color:var(--promo-muted);line-height:1.4}
-.phero-link{flex:0 0 clamp(28px,4.5vw,72px);display:flex;align-items:flex-start;padding:0 2px;
-  margin-top:24.5px}
-.phero-track{width:100%;height:3px;border-radius:999px;background:rgb(var(--po-ink) / .12);
-  position:relative;display:block}
-.phero-fill{position:absolute;inset:0;border-radius:999px;background:var(--promo-accent);
-  box-shadow:0 0 14px rgba(253,176,23,.6);transform:scaleX(0);transform-origin:left center;
-  animation:pheroFill 8s ease-in-out infinite}
-.phero-link:nth-of-type(2) .phero-fill{animation-delay:.55s}
-.phero-link:nth-of-type(4) .phero-fill{animation-delay:2.55s}
-.phero-link:nth-of-type(6) .phero-fill{animation-delay:4.55s}
-@keyframes pheroNode{
-  0%{border-color:var(--promo-line-soft);background:rgb(var(--po-ink) / .02);
-    color:rgb(var(--po-ink))}
-  4%,20%{border-color:var(--promo-accent);background:var(--promo-accent-soft);
-    color:var(--promo-accent)}
-  34%,86%{border-color:rgba(253,176,23,.3);background:rgba(253,176,23,.05);
-    color:rgba(253,176,23,.65)}
-  100%{border-color:var(--promo-line-soft);background:rgb(var(--po-ink) / .02);
-    color:rgb(var(--po-ink))}}
-@keyframes pheroIcon{
-  0%{transform:scale(1);border-color:var(--promo-line)}
-  6%{transform:scale(1.1);border-color:var(--promo-accent)}
-  24%{transform:scale(1);border-color:var(--promo-accent)}
-  40%,100%{transform:scale(1);border-color:var(--promo-line)}}
-@keyframes pheroFill{
-  0%{transform:scaleX(0);opacity:1}17%{transform:scaleX(1);opacity:1}
-  88%{transform:scaleX(1);opacity:.45}97%,100%{transform:scaleX(1);opacity:0}}
-
-@media(max-width:1024px){.phero-top{gap:36px}.phero-link{flex-basis:clamp(18px,3vw,40px)}}
-@media(max-width:860px){
-  .phero-top{grid-template-columns:1fr}
-  .phero-copy{text-align:center;display:flex;flex-direction:column;align-items:center}
-  .phero-sub{margin-inline:auto}
-  .phero-cta{justify-content:center}
-  .phero-stage{height:clamp(320px,56vw,400px)}
-  /* Stacked, the 9:16 card needs height to earn width: 420px tall is 236px wide. */
-  .phero-deals{height:clamp(380px,100vw,420px)}}
-@media(max-width:720px){
-  .phero-chain{flex-direction:column;align-items:stretch;max-width:420px;margin:0 auto}
-  .phero-step{flex-direction:row;text-align:left;align-items:center;gap:12px;padding:9px 12px}
-  .phero-step-icon{flex:none}
-  .phero-step-copy{align-items:flex-start;gap:3px}
-  .phero-link{flex:none;margin:0 0 0 27.5px;padding:0;align-self:flex-start;height:22px;width:3px;
-    align-items:stretch}
-  .phero-track{width:3px;height:100%}
-  .phero-fill{transform:scaleY(0);transform-origin:center top;animation-name:pheroFillY}
-  @keyframes pheroFillY{
-    0%{transform:scaleY(0);opacity:1}17%{transform:scaleY(1);opacity:1}
-    88%{transform:scaleY(1);opacity:.45}97%,100%{transform:scaleY(1);opacity:0}}}
-@media(max-width:420px){
-  .phero-headline{font-size:1.95rem}
-  .phero-btn{width:100%;justify-content:center}
-  .phero-stage{height:320px}
-  .phero-deals{height:400px}
-  .phero-media{width:66%}}
-
-/* Static, fully "completed" state — nothing on this banner moves. */
-@media (prefers-reduced-motion: reduce){
-  .phero *,.phero *::before,.phero *::after{animation:none !important;transition:none !important}
-  .phero-slide{display:none}
-  .phero-slide:first-of-type{display:flex;opacity:1;transform:none}
-  .phero-slide:first-of-type .phero-plate,
-  .phero-slide:first-of-type .phero-meta{opacity:1;transform:none}
-  .phero-nav{display:none}
-  .phero-deal:not(:first-of-type){display:none}
-  .phero-deal:first-of-type{position:relative;left:auto;transform:none;opacity:1;margin:0 auto;
-    pointer-events:auto}
-  .phero-step{border-color:var(--promo-accent);background:var(--promo-accent-soft);
-    color:var(--promo-accent)}
-  .phero-fill{transform:none;opacity:1}
 }
 
 /* ---- PRODUCT DETAIL — ARCHETYPE C (Record) ----

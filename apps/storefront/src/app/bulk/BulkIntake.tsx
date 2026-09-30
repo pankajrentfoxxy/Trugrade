@@ -34,6 +34,7 @@ import {
   type Draft,
   type RowErrors,
 } from './ManualRows';
+import Link from 'next/link';
 
 /**
  * Bulk requirement intake. See `page.tsx` for the archetype and the rules.
@@ -502,12 +503,12 @@ function Answer({ result }: { result: RequirementIntakeResult }): React.JSX.Elem
       <RejectedPanel rejected={rejected} />
 
       <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-5">
-        <a className="sel gh" href="/bulk">
+        <Link className="sel gh" href="/bulk">
           Send another list
-        </a>
-        <a className="sel gh" href="/search">
+        </Link>
+        <Link className="sel gh" href="/search">
           Browse what is in stock
-        </a>
+        </Link>
       </div>
     </>
   );
@@ -527,12 +528,12 @@ const MATCHED_COLUMNS: ReadonlyArray<Column<MatchedRequirement>> = [
     header: 'Machine we matched it to',
     cell: (r) => (
       <span className="flex flex-col gap-1">
-        <a
+        <Link
           className="text-body-sm text-ink underline decoration-rule underline-offset-4 hover:decoration-acc"
           href={`/laptops/${encodeURIComponent(r.skuId)}${r.grade ? `?grade=${r.grade}` : ''}`}
         >
           {r.title}
-        </a>
+        </Link>
         <span className="tnum text-body-sm text-ink-4">{r.specSummary}</span>
         {/* The reference belongs to this line, so it sits with it rather than
             in a column of its own — it is what the sourcing desk quotes back. */}
@@ -828,9 +829,9 @@ function SignedOut(): React.JSX.Element {
         title="Sign in to send a requirement list"
         body="A requirement list belongs to the organisation that sent it, and the answer is priced and delivered to that account. Signing in brings you straight back here."
         action={
-          <a className="pill acc" href="/sign-in?next=%2Fbulk">
+          <Link className="pill acc" href="/sign-in?next=%2Fbulk">
             Sign in
-          </a>
+          </Link>
         }
       />
     </div>

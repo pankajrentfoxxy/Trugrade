@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 /**
  * The "On this page" rail, with the current section marked.
@@ -39,13 +40,13 @@ export function Toc({
     <ul className="lg-toc">
       {sections.map((s) => (
         <li key={s.id}>
-          <a
+          <Link
             href={`#${s.id}`}
             className={s.id === current ? 'on' : undefined}
             aria-current={s.id === current ? 'location' : undefined}
           >
             {s.heading}
-          </a>
+          </Link>
         </li>
       ))}
     </ul>
