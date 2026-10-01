@@ -1,5 +1,6 @@
 import { Carousel } from '@trugrade/ui';
 import { getSearch, type SearchResult } from '../../../lib/api';
+import { deliveryByLabel } from '../../../lib/delivery-date';
 import { SearchResultCard } from '../../search/SearchResultCard';
 
 /**
@@ -54,7 +55,11 @@ export async function RelatedProducts({
       </h2>
       <Carousel label="Other laptops" className="rel-rail" trackClassName="rel-track">
         {picks.map((r) => (
-          <SearchResultCard key={`${r.skuId}-${r.grade}`} r={r} />
+          <SearchResultCard
+            key={`${r.skuId}-${r.grade}`}
+            r={r}
+            deliveryBy={deliveryByLabel(r.shipHours, page.transitDaysMax)}
+          />
         ))}
       </Carousel>
     </section>

@@ -61,6 +61,13 @@ export interface ILogisticsService {
   isServiceable(pincode: string): Promise<boolean>;
 
   /**
+   * The longest outbound transit to anywhere we serve, in days, or null when
+   * nothing is serviceable. What a "Delivery by" date rests on before a
+   * pincode is known: dispatch time plus this is a date that holds anywhere.
+   */
+  slowestTransitDays(): Promise<number | null>;
+
+  /**
    * The dispatch label for the offers grid — "Ships in 24 h" / "Ships in 48 h".
    *
    * Anonymised by construction: the string carries a duration and nothing else,
@@ -111,6 +118,10 @@ export class LogisticsService implements ILogisticsService {
 
   async isServiceable(pincode: string): Promise<boolean> {
     return this.serviceability.isServiceable(parsePincode.transform(pincode) as string);
+  }
+
+  async slowestTransitDays(): Promise<number | null> {
+    return this.serviceability.slowestOutboundTransitDays();
   }
 
   async dispatchEstimate(input: {

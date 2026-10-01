@@ -8,8 +8,10 @@ import { isPortalPath } from './(portal)/shell/nav';
 /**
  * Focus auth screens fill the viewport, and the buyer portal draws a footer of
  * its own inside its frame; the legal footer stays on every other route.
+ * `/sign-in` and `/register` are not among them: they carry the site's header
+ * and footer.
  */
-const FOOTER_HIDDEN = new Set(['/sign-in', '/register', '/invite/accept']);
+const FOOTER_HIDDEN = new Set(['/invite/accept']);
 
 export function FooterGate({ sellUrl }: { sellUrl: string }): React.JSX.Element | null {
   const pathname = usePathname();

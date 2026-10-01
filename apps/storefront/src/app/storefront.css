@@ -169,8 +169,10 @@ header{position:sticky;top:0;z-index:30}
 .sbox{flex:1;position:relative;min-width:0;max-width:none}
 .srch{display:flex;align-items:center;background:var(--sheet);border:1px solid var(--rule);
   border-radius:8px;overflow:hidden}
-/* Focus is an active state, which is one of the three things --acc is for. */
-.srch:focus-within{border-color:var(--acc)}
+/* Focus wears the brand yellow, drawn 2px by border plus ring. The field's own
+   ring is dropped only because this one, on its box, replaces it. */
+.srch:focus-within{border-color:var(--card-accent);box-shadow:0 0 0 1px var(--card-accent)}
+.srch input:focus-visible{outline:none}
 .srch input{flex:1;border:0;outline:none;padding:11px 18px;font-size:13.5px;color:var(--ink);
   min-width:0;background:transparent}
 .srch input::placeholder{color:var(--ink-4)}
@@ -185,7 +187,8 @@ header{position:sticky;top:0;z-index:30}
 .sbox.open .sugg{display:block}
 .sugg h6{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
   color:var(--ink-4);margin:0;padding:9px 14px 5px;font-weight:500}
-.sugg a{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:13px;color:var(--ink-2)}
+/* The same size and weight as the header's own labels and menus. */
+.sugg a{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:13.5px;font-weight:600;color:var(--ink)}
 .sugg a:hover{background:var(--sheet-2);color:var(--ink)}
 .sugg a b{color:var(--ink);font-weight:600}
 .sugg a .r{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--ink-4)}
@@ -210,13 +213,15 @@ header{position:sticky;top:0;z-index:30}
 .hcart{padding:0 16px;gap:8px}
 .hcart-ic{position:relative;display:flex;align-items:center;flex:0 0 auto}
 .hcart-badge{position:absolute;top:-8px;right:-9px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
-  background:var(--acc);color:var(--acc-on);font-size:10px;font-weight:700;line-height:18px;text-align:center;
+  background:var(--card-accent);color:var(--card-accent-ink);font-size:10px;font-weight:700;line-height:18px;text-align:center;
   pointer-events:none}
 .usermenu{position:relative;flex:0 0 auto}
-.uavatar{width:32px;height:32px;border-radius:999px;border:1px solid var(--head-line-2);
-  background:var(--head-2);color:var(--on-head);display:flex;align-items:center;
-  justify-content:center;font-size:12px;font-weight:700;cursor:pointer}
-.uavatar:hover,.usermenu:focus-within .uavatar{background:var(--head-3);color:var(--acc-ink)}
+/* Signed in: the person icon, the first name, a chevron for the menu. */
+.uacct{gap:8px;padding:0 12px;background:none;cursor:pointer;font:inherit}
+.usermenu:focus-within .uacct{background:var(--head-2)}
+.uacct-name{max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.uacct-chev{transition:transform .15s ease}
+.usermenu:hover .uacct-chev,.usermenu:focus-within .uacct-chev{transform:rotate(180deg)}
 .usermenu-pop{position:absolute;top:100%;right:0;padding-top:6px;min-width:148px;opacity:0;
   visibility:hidden;pointer-events:none;transition:opacity .12s ease,visibility .12s ease;z-index:60}
 .usermenu:hover .usermenu-pop,.usermenu:focus-within .usermenu-pop{opacity:1;visibility:visible;
@@ -224,7 +229,7 @@ header{position:sticky;top:0;z-index:30}
 .usermenu-panel{background:var(--head);border:1px solid var(--head-line-2);border-radius:6px;
   overflow:hidden;box-shadow:var(--shadow)}
 .usermenu-item{display:flex;align-items:center;width:100%;min-height:38px;padding:0 14px;
-  font-size:13px;font-weight:500;color:var(--on-head);text-align:left;background:none;border:0;
+  font-size:13.5px;font-weight:600;color:var(--on-head);text-align:left;background:none;border:0;
   cursor:pointer;text-decoration:none}
 .usermenu-item:hover{background:var(--head-2);color:var(--on-head)}
 .usermenu-item:disabled{opacity:.6;cursor:default}
@@ -236,7 +241,7 @@ header{position:sticky;top:0;z-index:30}
 .authpop-trigger:hover,.authpop:focus-within .authpop-trigger{background:var(--head-2)}
 .authpop-top{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:9px 12px 9px 14px;border-bottom:1px solid var(--head-line)}
-.authpop-top span{font-size:12px;color:var(--on-head-3);white-space:nowrap}
+.authpop-top span{font-size:13.5px;font-weight:600;color:var(--on-head);white-space:nowrap}
 /* The one amber thing in the panel, because it is the one action in it. */
 .authpop-cta{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:5px;
   background:var(--acc);color:var(--acc-on);font-size:11.5px;font-weight:700;white-space:nowrap}
@@ -276,21 +281,30 @@ header{position:sticky;top:0;z-index:30}
 .filters[aria-busy="true"]{opacity:.6}
 .fhead{padding:12px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:8px;
   background:var(--sheet-2);position:sticky;top:0;z-index:2}
-.fhead b{font-size:13.5px;color:var(--ink)}
-.fhead .n{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-4)}
-.fhead .clr{margin-left:auto;font-size:11.5px;color:var(--acc-ink);font-weight:600}
+.fhead b{font-size:16px;font-weight:800;color:var(--ink)}
+.fhead .n{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--ink-4)}
+.fhead .clr{margin-left:auto;font-size:13px;color:var(--acc-ink);font-weight:600}
 .fsearch{padding:10px 14px;border-bottom:1px solid var(--rule-2)}
 .fsearch input{width:100%;background:var(--sheet-2);border:1px solid var(--rule);border-radius:5px;
-  padding:7px 10px;font-size:12.5px;color:var(--ink);outline:none}
+  padding:9px 12px;font-size:14px;font-weight:600;color:var(--ink);outline:none}
 .fsearch input::placeholder{color:var(--ink-4)}
 .fsearch input:focus{border-color:var(--acc)}
+/* The suggestions under the search-within box. */
+.fsuggest{position:relative}
+.fsuggest-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;margin:0;padding:4px 0;
+  list-style:none;background:var(--sheet);border:1px solid var(--rule);border-radius:6px;box-shadow:var(--shadow);
+  max-height:300px;overflow-y:auto}
+.fsuggest-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;
+  font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
+.fsuggest-list li.on{background:var(--sheet-2)}
+.fsuggest-list .c{font-size:12px;color:var(--ink-4)}
 .applied{padding:10px 14px;border-bottom:1px solid var(--rule-2);display:flex;flex-wrap:wrap;gap:5px}
-.ftag{display:inline-flex;align-items:center;gap:5px;font-size:11px;background:var(--acc-wash);
+.ftag{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;background:var(--acc-wash);
   border:1px solid var(--acc);color:var(--acc-ink);border-radius:4px;padding:3px 7px;font-weight:600}
 .ftag i{font-style:normal;opacity:.7}
 .filters details{border-bottom:1px solid var(--rule-2)}
 .filters details:last-child{border-bottom:0}
-.filters summary{padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;
+.filters summary{padding:12px 14px;font-size:14.5px;font-weight:800;color:var(--ink);cursor:pointer;
   display:flex;align-items:center;list-style:none;user-select:none}
 .filters summary::-webkit-details-marker{display:none}
 .filters summary::after{content:"";flex-shrink:0;margin-left:auto;width:6px;height:6px;
@@ -299,26 +313,26 @@ header{position:sticky;top:0;z-index:30}
 .filters details[open] summary::after{transform:rotate(-135deg)}
 .filters summary:hover{background:var(--sheet-2)}
 .fbody{padding:2px 14px 12px}
-.fopt{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+.fopt{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:14px;font-weight:600;color:var(--ink-2);cursor:pointer}
 .fopt:hover{color:var(--ink)}
-.fopt input{appearance:none;width:14px;height:14px;border:1.5px solid var(--rule);border-radius:3px;
+.fopt input{appearance:none;width:16px;height:16px;border:1.5px solid var(--rule);border-radius:3px;
   background:var(--sheet-2);flex:0 0 auto;cursor:pointer;position:relative}
 .fopt input:checked{background:var(--acc);border-color:var(--acc)}
-.fopt input:checked::after{content:"";position:absolute;left:3.5px;top:.5px;width:4px;height:8px;
+.fopt input:checked::after{content:"";position:absolute;left:4.5px;top:1px;width:4.5px;height:9px;
   border-right:2px solid var(--acc-on);border-bottom:2px solid var(--acc-on);transform:rotate(45deg)}
-.fopt .c{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--ink-4)}
-.fmore{font-size:11.5px;color:var(--acc-ink);font-weight:600;padding:5px 0 0;display:inline-block}
+.fopt .c{margin-left:auto;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--ink-4)}
+.fmore{font-size:13px;color:var(--acc-ink);font-weight:600;padding:5px 0 0;display:inline-block}
 /* A tick that follows from a choice in another group. It is drawn exactly like
    a tick the buyer made — full ink, filled box — because it is just as true;
    only the pointer says it cannot be cleared from here. */
 .fopt.implied,.fopt.implied input,.fopt.implied input:disabled{cursor:default}
 /* Names one of two lists sharing a group — "Family" over "Generation". */
-.fsubh{margin:0 0 3px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+.fsubh{margin:0 0 4px;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
   color:var(--ink-3)}
 .range{display:flex;gap:6px;align-items:center;margin-top:4px}
 .range input{width:100%;background:var(--sheet-2);border:1px solid var(--rule);border-radius:4px;
-  padding:6px 8px;font-size:12px;color:var(--ink);outline:none;font-family:var(--font-mono)}
-.range span{color:var(--ink-4);font-size:11px}
+  padding:8px 10px;font-size:13.5px;color:var(--ink);outline:none;font-family:var(--font-mono)}
+.range span{color:var(--ink-4);font-size:12.5px}
 .slider{height:4px;background:var(--rule);border-radius:2px;position:relative;margin:14px 2px 8px}
 .slider i{position:absolute;height:100%;background:var(--acc);border-radius:2px}
 .slider b{position:absolute;top:-5px;width:14px;height:14px;border-radius:50%;background:var(--sheet);
@@ -366,17 +380,36 @@ header{position:sticky;top:0;z-index:30}
 .gfoot .barcode{flex:1}
 .gfoot small{font-family:var(--font-mono);font-size:9px;color:var(--on-chrome-3);letter-spacing:.1em}
 /* ---- RESULT BAR ---- */
-.rbar{display:flex;align-items:center;gap:12px;background:var(--sheet);border:1px solid var(--rule);
-  border-radius:7px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap}
-.rbar .cnt{font-size:13px;color:var(--ink-2)}
-.rbar .cnt b{color:var(--ink);font-weight:700}
-.rbar .r{margin-left:auto;display:flex;align-items:center;gap:8px}
-.rbar label{font-size:12px;color:var(--ink-3)}
-.rbar select{background:var(--sheet-2);border:1px solid var(--rule);border-radius:5px;padding:6px 9px;
-  font-size:12.5px;color:var(--ink);outline:none}
-.vtog{display:flex;border:1px solid var(--rule);border-radius:5px;overflow:hidden}
-.vtog button{padding:6px 10px;font-size:11.5px;color:var(--ink-3);background:var(--sheet-2)}
-.vtog button.on{background:var(--acc);color:var(--acc-on);font-weight:700}
+/* The results head, to the supplied design: a title and what is showing, then
+   a row of sort tabs between two rules with the grid / list switch at its end. */
+.rbar{margin-bottom:16px}
+.rbar-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 16px;padding-bottom:12px}
+.rbar-head h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.015em;color:var(--ink)}
+.rbar .cnt{margin:0;font-size:14px;font-weight:600;color:var(--ink)}
+.rbar-row{display:flex;align-items:center;gap:10px;padding:10px 0;
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.rbar-label{flex:0 0 auto;font-size:14px;font-weight:800;color:var(--ink);margin-right:6px}
+.rbar-sorts{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:none}
+.rbar-sorts::-webkit-scrollbar{display:none}
+.rbar-sorts button{flex:0 0 auto;padding:8px 14px;border:0;border-radius:8px;background:none;
+  font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
+.rbar-sorts button:hover{background:var(--sheet-2)}
+/* The active sort and view: neutral grey, the words in full ink. */
+.rbar-sorts button.on{background:var(--sheet-3);color:var(--ink);font-weight:700}
+/* Inside the tab, not around it: the row scrolls sideways, and a ring drawn
+   outside its box would be cropped by that row's edges. */
+.rbar-sorts button:focus-visible{outline:2px solid var(--ink-4);outline-offset:-2px}
+.vtog button:focus-visible{outline:2px solid var(--ink-4);outline-offset:2px}
+.vtog{flex:0 0 auto;margin-left:auto;display:flex;gap:8px}
+.vtog button{display:flex;align-items:center;justify-content:center;width:42px;height:38px;
+  border:1px solid var(--rule);border-radius:8px;background:var(--sheet);color:var(--ink);cursor:pointer}
+.vtog button:hover{background:var(--sheet-2)}
+.vtog button.on{background:var(--sheet-3);border-color:var(--rule);color:var(--ink)}
+@media(max-width:640px){
+  .rbar-head h1{font-size:20px}
+  .rbar .cnt{font-size:13px}
+  .rbar-label{display:none}
+}
 /* ---- PRODUCT GRID ---- */
 .pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .pc{background:var(--sheet);border:1px solid var(--rule);border-radius:7px;overflow:hidden;display:flex;flex-direction:column}
@@ -431,6 +464,26 @@ body:has(.home) > footer{margin-top:0}
    above the footer, so the footer's margin would only add a grey band. */
 .srp{background:var(--sheet)}
 body:has(.srp) > footer{margin-top:0}
+/* Both stop growing at 1400px, as the product page does: on a wide screen the
+   page centres and the slack goes to the sides rather than to ever-wider cards
+   and banners. The body goes white so the sides are the same surface. */
+.home{max-width:1400px;margin-inline:auto}
+/* The pills strip is the header's second row, not page content, so it keeps
+   running edge to edge: its surface and bottom rule are painted out past the
+   capped column by an outset border image, which draws without widening the
+   page. */
+.home>.hpills{border-image:linear-gradient(to top,var(--head-line-2) 1px,var(--head-2) 1px) fill 0/0/0 100vmax}
+.srp>.wrap{max-width:1400px}
+body:has(.home),body:has(.srp){background:var(--sheet)}
+/* The offer line under the header on the search page: the hero's navy with
+   white type, the code in a yellow chip so it reads as the thing to copy. Full width, like
+   the header row it sits under. */
+.promo-strip{background:var(--hero-navy);color:var(--hero-white);padding:6px var(--gutter);text-align:center}
+.promo-strip p{margin:0;font-size:12.5px;font-weight:600;line-height:1.6}
+.promo-strip b{font-weight:800;letter-spacing:.02em}
+.promo-code{display:inline-block;margin:0 2px;padding:0 8px;border-radius:5px;background:var(--hero-mark);
+  color:var(--hero-mark-ink);font-family:var(--font-mono);font-size:11.5px;font-weight:700;letter-spacing:.06em}
+@media(max-width:640px){.promo-strip p{font-size:11.5px}}
 
 /* ---- HOMEPAGE FILTER STRIP (attached under the header) ---- */
 /* Painted `--head` like the bar above it, with the header's own rule between
@@ -536,6 +589,9 @@ body:has(.srp) > footer{margin-top:0}
 .dotd-photo{max-width:100%;max-height:100%;width:auto;
   filter:drop-shadow(0 8px 10px rgb(0 0 0 / .5));transition:transform .3s ease}
 .dotd-card:hover .dotd-photo{transform:scale(1.06) translateY(-1px)}
+/* On the dark strip a white-backed JPG cannot be blended away, so it reads
+   as a small rounded plate instead, without a shadow around its box. */
+.dotd-photo[src$=".jpg"]{filter:none;border-radius:6px;background:var(--plate)}
 .dotd-shell{width:72%;height:auto}
 
 .dotd-item{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:5px}
@@ -915,14 +971,20 @@ body:has(.srp) > footer{margin-top:0}
 .ptile{display:flex;flex-direction:column;background:var(--sheet);border:1px solid var(--rule);
   border-radius:18px;overflow:hidden;color:inherit;text-decoration:none;
   transition:border-color .25s ease,box-shadow .25s ease,transform .25s ease}
-.ptile:hover{transform:translateY(-5px);box-shadow:0 18px 40px rgb(0 0 0 / .16);
-  border-color:var(--card-accent-edge)}
+/* The card and its heart lift together, so the lift is on the wrapper. */
+.ptile-wrap{position:relative;display:flex;transition:transform .25s ease}
+.ptile-wrap>.ptile{flex:1;min-width:0}
+.ptile-wrap:hover{transform:translateY(-5px)}
+.ptile-wrap:hover .ptile{box-shadow:0 18px 40px rgb(0 0 0 / .16);border-color:var(--card-accent-edge)}
 /* The stage. A soft halo sits behind the machine so a render with a
    transparent background reads as lit rather than pasted on. */
 .ptile-media{position:relative;height:230px;display:flex;align-items:center;justify-content:center;
   padding:26px 22px 18px;background:var(--sheet-2);overflow:hidden;color:var(--ink-4)}
-.ptile-media::before{content:"";position:absolute;left:50%;top:58%;translate:-50% -50%;
-  width:78%;aspect-ratio:1;border-radius:50%;background:var(--sheet)}
+/* A product shot supplied as a JPG sits on solid white. Multiplied into the
+   light stage, the white takes the stage's own tone and only the laptop
+   shows; the drop shadow is dropped because it would outline the white box.
+   A transparent PNG render keeps its shadow. */
+.ptile-photo[src$=".jpg"],.sug-photo[src$=".jpg"]{mix-blend-mode:multiply;filter:none}
 .ptile-photo{position:relative;max-height:100%;width:auto;max-width:92%;
   filter:drop-shadow(0 16px 18px rgb(0 0 0 / .28));transition:transform .35s ease}
 .ptile:hover .ptile-photo{transform:scale(1.06) translateY(-3px)}
@@ -930,9 +992,7 @@ body:has(.srp) > footer{margin-top:0}
 .ptile-shell{position:relative;width:60%;height:auto;max-height:70%}
 .ptile-ribbon{position:absolute;top:12px;left:12px;z-index:2;border-radius:9px;
   font-weight:800;font-size:12.5px;padding:5px 10px}
-.ptile-sealed{position:absolute;top:12px;right:12px;z-index:2;font-size:10.5px;font-weight:700;
-  letter-spacing:.06em;font-variant-numeric:tabular-nums;
-  background:var(--ink);color:var(--sheet);padding:6px 11px;border-radius:999px}
+
 /* The body. Brand label, then the name, then the rating pill, then the spec
    line, then the price and the action. No battery line, by direction. */
 .ptile-body{display:flex;flex-direction:column;flex:1;padding:15px 17px 17px}
@@ -943,33 +1003,36 @@ body:has(.srp) > footer{margin-top:0}
   text-overflow:ellipsis;white-space:nowrap}
 .ptile-brandline .mono{font-weight:700;color:var(--ink)}
 .ptile-name{font-size:14.5px;font-weight:800;letter-spacing:-.01em;line-height:1.25;
-  color:var(--ink);margin-top:5px}
+  color:var(--ink);margin-top:7px}
 /* The buyer rating, as the supplied design draws it: an amber pill with the
    score and a star, then the count. PLACEHOLDER values, see
    `placeholder-market.ts`. */
-.ptile-rate{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;
+.ptile-rate{display:flex;align-items:center;gap:9px;margin-top:22px;font-size:12px;margin-bottom: -5px;
   font-weight:600;color:var(--ink-3)}
 .ptile-rate .mono{font-variant-numeric:tabular-nums}
-.ptile-rate-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;
+.ptile-rate-pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:800;
   background:var(--card-accent);color:var(--card-accent-ink);border-radius:6px;padding:2px 7px}
 .ptile-rate-pill svg{width:9px;height:9px;fill:currentColor}
-.ptile-spec{font-size:11.5px;font-weight:600;line-height:1.5;color:var(--ink-3);margin-top:6px;
+.ptile-spec{font-size:11.5px;font-weight:600;line-height:1.6;color:var(--ink-3);margin-top:9px;
   display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ptile-spec b{color:var(--ink);font-weight:700}
 .ptile-unmeasured{font-size:12px;color:var(--ink-4);font-weight:500}
-/* Directly under the spec line, a fixed 12px down: the slack that keeps the
+/* Spacing follows the supplied card, scaled to this width: brand and name
+   tight, a wider break before the rating, the price 18px under the spec,
+   the tax note 4px under the price and the delivery line 12px under that.
+   Directly under the spec line, a fixed distance down: the slack that keeps the
    actions level across a row sits below the price, above the button, never
    between the spec and the price. */
-.ptile-price-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin-top:12px;margin-bottom:12px}
-.ptile-price-now{font-size:18px;font-weight:800;color:var(--ink);letter-spacing:-.01em;
+.ptile-price-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:10px}
+.ptile-price-now{font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-.01em;
   font-variant-numeric:tabular-nums}
 /* The struck MRP and the saving, PLACEHOLDER values (see
    `placeholder-market.ts`). The saving is a plain bold, not the accent: the
    accent is already spent on the rating and the action. */
-.ptile-price-mrp{font-size:11px;font-weight:600;color:var(--ink-3);text-decoration:line-through;
+.ptile-price-mrp{font-size:12px;font-weight:600;color:var(--ink-3);text-decoration:line-through;
   font-variant-numeric:tabular-nums}
-.ptile-price-off{font-size:11px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
-.ptile-price-sub{width:100%;font-size:10.5px;font-weight:600;color:var(--ink-4);margin-top:-3px}
+.ptile-price-off{font-size:12px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.ptile-price-sub{width:100%;font-size:10.5px;font-weight:700;margin-top: -10px; color:var(--ink)}
 /* The supplied design's orange, `--card-accent`, constant in both themes.
    Full width, pinned to the foot of the tile by the auto margin so a row of
    tiles keeps its buttons level: one primary action, sized for a thumb. */
@@ -1256,6 +1319,7 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
   font-size: 10.5px;
   letter-spacing: .13em;
   text-transform: uppercase;
+  font-weight: 700;
   color: var(--ink-4);
 }
 .srow.on { background: var(--sheet-2); }
@@ -1292,6 +1356,13 @@ footer{background:var(--chrome);color:var(--on-chrome);margin-top:40px;padding:4
 .authcard{width:min(880px,100%);display:grid;grid-template-columns:340px minmax(0,1fr);
   background:var(--au-bg);border-radius:22px;overflow:hidden;box-shadow:0 40px 100px var(--cream-shadow)}
 .authwrap.solo .authcard{grid-template-columns:1fr;width:min(760px,100%)}
+/* Sign-in and register, under the site header: a white page, the card sized to its content
+   rather than to the window, edged with a rule instead of a deep shadow, and
+   without its own brand line and back link — the header carries both. */
+body:has(.auth-chrome){background:var(--sheet)}
+.auth-chrome .authwrap{min-height:0;background:var(--sheet);padding:40px var(--gutter) 56px}
+.auth-chrome .authcard{border:1px solid var(--rule);box-shadow:0 18px 48px rgb(0 0 0 / .08)}
+.auth-chrome .authtop{display:none}
 .authmain{position:relative;padding:30px 34px 26px;min-width:0;display:flex;flex-direction:column}
 .authtop{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);margin-bottom:16px}
 .authmain .brand{color:var(--au-text)}
@@ -1454,7 +1525,6 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 
 /* ---- result bar ---- */
 .rbar .cnt b{font-weight:700}
-.vtog button[aria-pressed="true"]{background:var(--acc);color:var(--acc-on);font-weight:700}
 
 /* ---- list view ---- */
 /* The reference's `min-width:940px` and its `.scroll` wrapper, kept: a table
@@ -2087,6 +2157,11 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
   background:var(--cream-accent);color:var(--cream-accent-ink)}
 .cartbody .sum .cartgo[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
 .cartbody .sum .cartgo>span{color:inherit}
+/* Every other primary on the cart page — "Sign in" and "Browse laptops" on an
+   empty cart, "Try again" on a failed read — wears the same yellow as the
+   checkout button, not the theme accent the shared pill carries elsewhere. */
+.cartbody .pill.acc{background:var(--cream-accent);color:var(--cream-accent-ink);font-weight:700}
+.cartbody .pill.acc:hover{background:var(--cream-accent);color:var(--cream-accent-ink);filter:brightness(1.05)}
 .cartbody .sum .cartmore{display:flex;align-items:center;justify-content:center;width:100%;margin-top:10px;padding:13px 0;
   border-radius:12px;border:1px solid var(--cream-line);background:transparent;color:var(--cream-text);font-weight:700;
   font-size:.84rem;text-decoration:none;transition:border-color .2s ease,color .2s ease}
@@ -3766,12 +3841,15 @@ html[data-t="light"] .hero2{
 .sug-track::-webkit-scrollbar{display:none}
 /* 240 x 217.33, the size the card was specified at: the stage takes a fixed
    share and the body fills the rest, with the price pinned to its foot. */
+/* The wrapper carries the size and the lift, so the heart moves with it. */
+.sug-wrap{position:relative;flex:0 0 240px;scroll-snap-align:start;transition:transform .16s ease}
+.sug-wrap:hover{transform:translateY(-3px)}
 .sug-card{flex:0 0 240px;box-sizing:border-box;height:217.33px;scroll-snap-align:start;
   display:flex;flex-direction:column;
   background:var(--sheet);border:1px solid var(--rule);border-radius:18px;overflow:hidden;
   color:var(--ink);text-decoration:none;
   transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease}
-.sug-card:hover{border-color:var(--acc);transform:translateY(-3px);box-shadow:var(--shadow)}
+.sug-wrap:hover .sug-card{border-color:var(--acc);box-shadow:var(--shadow)}
 .sug-card:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 /* The stage: a shallow tinted field with the render sitting on it, the same
    treatment `.ptile-media` gives the search tiles. */
@@ -3795,7 +3873,13 @@ html[data-t="light"] .hero2{
 /* The struck-through new price: smaller and lighter than the price it sits
    beside, so the eye reads ours first and the comparison second. */
 .sug-price-mrp{font-size:11.5px;font-weight:600;color:var(--ink-3);text-decoration:line-through}
-.sug-price-off{font-size:11.5px;font-weight:800;color:var(--promo-accent-deep)}
+.sug-price-off{font-size:11.5px;font-weight:800;color:var(--ink)}
+/* "Delivery by" under a card's price: a truck, the words, and the date in bold. */
+.sug-delivery,.ptile-delivery{display:flex;align-items:center;gap:6px;margin:0;color:var(--ink);white-space:nowrap}
+.sug-delivery{margin-top:3px;font-size:11.5px}
+.ptile-delivery{margin:5px 0 14px;font-size:12.5px}
+.sug-delivery svg,.ptile-delivery svg{flex:0 0 auto;color:var(--pass)}
+.sug-delivery b,.ptile-delivery b{font-weight:800}
 @media(prefers-reduced-motion:reduce){
   .sug-card,.sug-photo{transition:none}
   .sug-card:hover{transform:none}
@@ -3951,36 +4035,36 @@ body:has(.pdpbody){background:var(--sheet)}
 /* The frame. The badge, the seal, the arrows and the counter sit on the
    photograph. 4:3 at the column's full width, so the panel does not change
    height as frames of different sizes step through it — but never taller
-   than the window can show with the strip beneath it: on a short or zoomed
-   window the frame gives up height rather than running under the fold. A
+   than the window below the header: the strip is beside it now, so the frame
+   takes all of that, and on a short or zoomed window it gives up height
+   rather than running under the fold. A
    photograph in a capped frame letterboxes on the frame's own sheet instead
    of being cropped; it is inspection evidence, and cutting its edges off
    would show less of the machine than the inspector saw. */
-.pv-img{position:relative;background:var(--sheet-2);border:1px solid var(--rule-2);
+.pv-img{position:relative;background:var(--sheet);border:0;
   border-radius:10px;overflow:hidden;color:var(--ink-3)}
 .pv-img .gal-photo{display:block;gap:0}
 .pv-img .gal-photo img{display:block;width:100%;aspect-ratio:4/3;height:auto;
-  max-height:calc(100vh - 230px);object-fit:contain;
-  border:0;border-radius:0;background:var(--sheet-2)}
+  max-height:calc(100vh - var(--head-h) - 24px);object-fit:contain;
+  border:0;border-radius:0;background:var(--sheet)}
 /* Nothing catalogued at this grade: the placeholder says so in its own words,
    inside the frame, with room around it. */
 .pv-img[data-empty="true"]{padding:44px 14px 14px}
-.ph-big [role="img"]{aspect-ratio:4/3;max-height:calc(100vh - 230px)}
+.ph-big [role="img"]{aspect-ratio:4/3;max-height:calc(100vh - var(--head-h) - 24px)}
 .pv-grade{position:absolute;top:12px;left:12px;z-index:2;font-weight:800;font-size:13px;
   padding:6px 12px;border-radius:9px;background:var(--promo-accent);color:var(--promo-accent-ink)}
 .pv-seal{position:absolute;top:12px;right:12px;z-index:2;font-size:11px;font-weight:700;
   padding:6px 10px;border-radius:999px;background:var(--sheet);border:1px solid var(--rule);
   color:var(--ink-2)}
-/* The arrows. Never shut: the set wraps, so a press past the last frame shows
-   the first and the counter beside them says where in the loop the buyer is. */
-.gal-ar{position:absolute;top:50%;z-index:2;translate:0 -50%;width:32px;height:32px;
-  border-radius:999px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);
-  font-size:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center;
-  padding:0 0 3px;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
-.gal-ar.l{left:10px}
-.gal-ar.r{right:10px}
-.gal-ar:hover{border-color:var(--promo-accent)}
-.gal-ar:focus-visible{outline:2px solid var(--promo-accent);outline-offset:2px}
+/* The strip runs down the frame's left edge and the frame takes the rest.
+   The strip is laid out at no height of its own and stretched to the frame's,
+   so a long set scrolls inside the column rather than making the panel taller. */
+.pv-gal{display:grid;grid-template-columns:58px minmax(0,1fr);grid-template-areas:"thumbs frame";gap:10px}
+.pv-gal>.pv-img{grid-area:frame}
+.pv-gal>.gal-thumbs{grid-area:thumbs;margin:0;display:flex;flex-direction:column;gap:8px;
+  height:0;min-height:100%;overflow-y:auto;scrollbar-width:none;padding:2px}
+.pv-gal>.gal-thumbs::-webkit-scrollbar{display:none}
+.pv-gal>.gal-thumbs>li{flex:0 0 auto}
 /* Which view, and where in the set. The count is a count, so it is mono. */
 .gal-count{position:absolute;right:10px;bottom:10px;z-index:2;font-size:11px;font-weight:600;
   padding:4px 9px;border-radius:999px;background:var(--sheet);border:1px solid var(--rule);
@@ -3994,7 +4078,7 @@ body:has(.pdpbody){background:var(--sheet)}
 .gal-thumbs{list-style:none;margin:10px 0 0;padding:0;display:grid;
   grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 .th{display:block;width:100%;aspect-ratio:4/3;padding:0;overflow:hidden;cursor:pointer;
-  border:1px solid var(--rule);border-radius:8px;background:var(--sheet-2);opacity:.7;
+  border:1px solid var(--rule);border-radius:8px;background:var(--sheet);opacity:.7;
   transition:opacity .15s ease,border-color .15s ease}
 .th img{display:block;width:100%;height:100%;object-fit:cover}
 .th:hover{opacity:1;border-color:var(--promo-accent-mid)}
@@ -4123,9 +4207,10 @@ body:has(.pdpbody){background:var(--sheet)}
 .rel-rail .tg-carousel-nav{background:var(--sheet);border-color:var(--rule);color:var(--ink)}
 .rel-rail .tg-carousel-nav:hover:not(:disabled){background:var(--sheet);border-color:var(--promo-accent);color:var(--ink)}
 .rel-track{gap:12px;padding:4px 2px 8px;scroll-snap-type:x mandatory}
-.rel-track>.ptile{flex:0 0 272px;scroll-snap-align:start}
+/* The card arrives in its wishlist wrapper, so the wrapper takes the width. */
+.rel-track>.ptile-wrap{flex:0 0 272px;scroll-snap-align:start}
 @media(max-width:520px){
-  .rel-track>.ptile{flex-basis:78vw}
+  .rel-track>.ptile-wrap{flex-basis:78vw}
 }
 /* Title and rating share a row where there is room, and wrap to their own
    lines on a narrow record column rather than crowding the title. */
@@ -4202,6 +4287,50 @@ body:has(.pdpbody){background:var(--sheet)}
 .pin-line .field.shake{animation:pinshake .5s cubic-bezier(.36,.07,.19,.97) both}
 
 .sec-t{margin:18px 0 8px;font-size:14px;font-weight:800;color:var(--ink)}
+
+/* ---- the record's right column, top to bottom ----
+   Brand line, title, configuration, rating and stock; the price with its tax
+   note and the offers; the switches; delivery; highlights; the three promises.
+   Sections are divided by a rule. Our inks only: navy for the chosen and the
+   secondary action, yellow for the rating and the code, black for the saving. */
+.det-kicker{margin:0 0 4px;font-size:11.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.det .det-title{font-size:clamp(1.5rem,2.4vw,1.9rem)}
+.det-spec{margin:6px 0 0;font-size:14px;font-weight:600;color:var(--ink-soft)}
+.det-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:10px 0 0;font-size:13px;font-weight:600;color:var(--ink)}
+.det-rate{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:6px;
+  background:var(--card-accent);color:var(--card-accent-ink);font-weight:800;text-decoration:none}
+.det-dot{width:4px;height:4px;border-radius:999px;background:var(--rule)}
+.det-price{margin-top:16px}
+.det-price .price-off{letter-spacing:0;text-transform:none;font-size:1.1rem;color:var(--ink)}
+.det-price .price-note{font-weight:600;color:var(--ink)}
+.det-offers{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
+.det-offers li{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink)}
+.det-offers svg{flex:0 0 auto;color:var(--pass)}
+.det-code{padding:1px 8px;border-radius:5px;background:var(--hero-mark);color:var(--hero-mark-ink);
+  font-family:var(--font-mono);font-size:11.5px;font-weight:700;letter-spacing:.06em}
+.det-sec{margin-top:18px;padding-top:4px;border-top:1px solid var(--rule)}
+.sec-val{font-weight:600}
+.det .gpill{padding:8px 14px;border-radius:10px;min-width:96px}
+.det .gpill b{font-size:13.5px}
+.cfg-only{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:0;font-size:13px;color:var(--ink)}
+.cfg-chip{padding:5px 10px;border-radius:7px;background:var(--sheet-2);border:1px solid var(--rule);font-weight:700}
+/* The pincode button, in the brand yellow. */
+.det .pin-blk .mini{background:var(--card-accent);color:var(--card-accent-ink);text-transform:none;letter-spacing:0;
+  font-size:13.5px;padding:0 22px}
+.det .pin-blk .mini:hover{box-shadow:0 6px 16px var(--card-accent-glow)}
+.det-deliver{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+.det-deliver svg{flex:0 0 auto;color:var(--pass)}
+.det-hl{list-style:disc;margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink)}
+.det-hl li::marker{color:var(--card-accent);font-size:1.25em}
+.det-trust{list-style:none;margin:14px 0 0;padding:0;display:flex;gap:10px}
+.det-trust li{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:14px 8px;text-align:center;
+  border:1px solid var(--rule);border-radius:12px;font-size:12px;color:var(--ink-soft)}
+.det-trust svg{margin-bottom:5px;color:var(--pass)}
+.det-trust b{font-size:13px;font-weight:800}
+.det-sold{margin:12px 0 0;font-size:13px;color:var(--ink)}
+@media(max-width:520px){
+  .det-trust{flex-direction:column}
+}
 .sec-sub{margin-left:8px;font-size:12.5px;font-weight:600;color:var(--ink-3)}
 
 /* Four rows of these sit between the price and the board, so they are kept
@@ -4213,8 +4342,11 @@ body:has(.pdpbody){background:var(--sheet)}
   transition:border-color .2s ease,background-color .2s ease}
 .gpill b{display:block;font-size:12px;font-weight:700;color:var(--ink)}
 .gpill:hover{border-color:var(--promo-accent-mid)}
-.gpill.on{border-color:var(--promo-accent);background:var(--promo-accent-soft)}
-.gpill.on b{color:var(--warn)}
+/* The chosen pill is solid navy with white type, so it stands apart from the
+   yellow buttons on the same panel and reads as chosen at a glance. */
+.gpill.on{border-color:var(--hero-navy);background:var(--hero-navy)}
+.gpill.on b{color:var(--hero-white)}
+.gpill.on:hover{border-color:var(--hero-navy)}
 /* Catalogued, but nothing sealed at it right now. Drawn rather than dropped so
    the buyer learns the configuration exists and is out, not that it never was.
    Not a link: there is no board to open. Shut at half strength, the way the
@@ -4319,9 +4451,10 @@ body:has(.pdpbody){background:var(--sheet)}
 }
 @media(max-width:520px){
   .gal-thumbs{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .pv-gal{grid-template-columns:48px minmax(0,1fr);gap:8px}
 }
 @media(prefers-reduced-motion:reduce){
-  .pvbtn,.mini,.det .acc>summary svg,.pdp-evidence .acc>summary svg,.alldetails-toggle svg,.adl-more>summary svg,.dchip-more,.filters,.pin-line,.gal-ar,.th{transition:none}
+  .pvbtn,.mini,.det .acc>summary svg,.pdp-evidence .acc>summary svg,.alldetails-toggle svg,.adl-more>summary svg,.dchip-more,.filters,.pin-line,.th{transition:none}
   .pin-line .field.shake{animation:none}
 }
 
@@ -4370,6 +4503,22 @@ body:has(.pdpbody){background:var(--sheet)}
    where the pill belongs — it qualifies the supply point, not the row below. */
 .tbl-wrap tbody th[scope='row']{min-width:212px}
 
+/* The board on its side: facts down the left, one column per supply point.
+   The table is only as wide as its columns, so one supply point is not one
+   stretched column, and the 1040px floor of the row table does not apply —
+   it is the number of supply points that makes this one wide, not its facts. */
+.tbl-wrap .offer-cmp table{min-width:0;width:auto}
+.tbl-wrap .offer-cmp th{font-family:inherit;font-size:13.5px;font-weight:700;letter-spacing:normal;
+  text-transform:none;color:var(--ink)}
+.tbl-wrap .offer-cmp th .text-body-sm{font-size:12px;font-weight:500;color:var(--ink-2)}
+.tbl-wrap .offer-cmp .offer-cmp-fact{width:190px;min-width:150px}
+.tbl-wrap .offer-cmp thead th:not(:first-child),.tbl-wrap .offer-cmp td{min-width:240px}
+.tbl-wrap .offer-cmp td{box-shadow:inset 1px 0 0 var(--rule-2)}
+@media(max-width:520px){
+  .tbl-wrap .offer-cmp .offer-cmp-fact{width:118px;min-width:118px}
+  .tbl-wrap .offer-cmp thead th:not(:first-child),.tbl-wrap .offer-cmp td{min-width:200px}
+}
+
 /* Every cell starts at the top of its row, not floating in the middle of it.
    The global `td { vertical-align: middle }` is written for short one-line
    rows; a board row is three lines tall in the supply point and the inspection
@@ -4394,7 +4543,7 @@ body:has(.pdpbody){background:var(--sheet)}
 .gcart-head p{margin:6px 0 0;font-size:13px;color:var(--ink-2)}
 .gcart-head b{color:var(--ink)}
 .gcart-lines{list-style:none;margin:18px 0 0;padding:0;background:var(--sheet);
-  border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+  border:1px solid var(--rule);border-radius:14px;overflow:hidden}
 .gcart-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;
   align-items:start;gap:16px;padding:16px 20px;border-bottom:1px solid var(--rule-2)}
 .gcart-line:last-child{border-bottom:none}
@@ -5097,3 +5246,106 @@ html[data-t] .hub-rail{background:var(--sheet)}
 .od-pay{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .od-pay__err{font-size:12.5px;color:var(--fail)}
 .ulist-none{padding:14px 4px;font-size:13.5px;max-width:60ch}
+
+/* ---- SEARCH LIST VIEW: one wide card per model -------------------------- */
+/* Picture, details, then a price column split off by a rule. Yellow, not
+   green: the action is the card yellow, the saving and the truck its deep
+   companion shade, which reads as text on white where the yellow itself does
+   not. */
+.lrows{display:flex;flex-direction:column;gap:12px}
+.lrow{position:relative;display:grid;grid-template-columns:230px minmax(0,1fr) 270px;background:var(--sheet);
+  border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+.lrow-media{position:relative;display:flex;align-items:center;justify-content:center;
+  padding:16px;background:var(--sheet-2);color:var(--ink-4);border-right:1px solid var(--rule-2)}
+.lrow-grade{position:absolute;top:10px;left:10px;z-index:1;border-radius:9px}
+.lrow-photo{max-width:100%;max-height:140px;width:auto;height:auto;mix-blend-mode:multiply}
+.lrow-shell{width:62%;height:auto}
+.lrow-body{padding:14px 20px;min-width:0}
+.lrow-brand{margin:0;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink)}
+.lrow-name{margin:3px 0 0;font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.3}
+.lrow-name a{color:var(--ink);text-decoration:none}
+.lrow-name a:hover{text-decoration:underline;text-underline-offset:3px}
+.lrow-rate{display:flex;align-items:center;gap:8px;margin:6px 0 0;font-size:12px;font-weight:600;color:var(--ink)}
+.lrow-rate-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;
+  background:var(--card-accent);color:var(--card-accent-ink);font-size:12px;font-weight:800}
+.lrow-rate-pill svg{width:10px;height:10px;fill:currentColor}
+.lrow-facts{margin:8px 0 0;padding:0 0 0 16px;display:flex;flex-direction:column;gap:2px;
+  font-size:12.5px;line-height:1.45;color:var(--ink)}
+.lrow-facts{list-style:disc}
+.lrow-facts li{display:list-item;padding-left:2px}
+.lrow-facts li::marker{color:var(--ink-4)}
+.lrow-den{font-size:11.5px}
+.lrow-side{display:flex;flex-direction:column;padding:14px 18px;border-left:1px solid var(--rule-2)}
+.lrow-price{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:0}
+.lrow-now{font-size:21px;font-weight:800;letter-spacing:-.015em;color:var(--ink)}
+.lrow-mrp{font-size:12px;font-weight:600;color:var(--ink-3)}
+.lrow-off{font-size:12.5px;font-weight:800;color:var(--ink)}
+.lrow-sub{margin:2px 0 0;font-size:11px;font-weight:700;color:var(--ink)}
+.lrow-delivery{display:flex;align-items:center;gap:6px;margin:8px 0 0;font-size:12.5px;color:var(--ink)}
+.lrow-delivery svg{flex:0 0 auto;color:var(--pass)}
+.lrow-delivery b{font-weight:800}
+.lrow-stock{margin:6px 0 0;font-size:12px;font-weight:600;line-height:1.5;color:var(--ink)}
+.lrow-cta{display:block;margin-top:auto;padding:9px 14px;border-radius:10px;text-align:center;
+  background:var(--card-accent);color:var(--card-accent-ink);font-size:13px;font-weight:800;
+  text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}
+.lrow-cta:hover{transform:translateY(-1px);box-shadow:0 8px 20px var(--card-accent-glow)}
+.lrow-cta:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media(max-width:1180px){
+  .lrow{grid-template-columns:200px minmax(0,1fr)}
+  .lrow-side{grid-column:1 / -1;border-left:0;border-top:1px solid var(--rule-2)}
+  .lrow-cta{margin-top:14px}
+}
+@media(max-width:640px){
+  .lrow{grid-template-columns:1fr}
+  .lrow-media{border-right:0;border-bottom:1px solid var(--rule-2);height:160px}
+  .lrow-body{padding:18px}
+  .lrow-name{font-size:15px}
+}
+
+/* ---- WISHLIST ------------------------------------------------------------ */
+/* The heart on a card: a white disc in the image's top-right corner. Filled
+   red when saved — a saved heart is the one convention everyone reads. */
+.wl-heart{position:absolute;z-index:3;display:flex;align-items:center;justify-content:center;
+  width:36px;height:36px;border-radius:999px;border:1px solid var(--rule);background:var(--sheet);
+  color:var(--ink);cursor:pointer;box-shadow:0 2px 8px rgb(0 0 0 / .08);transition:transform .15s ease}
+.wl-heart:hover{transform:scale(1.08)}
+.wl-heart:focus-visible{outline:2px solid var(--ink-4);outline-offset:2px}
+.wl-heart.on{color:var(--wishlist-on)}
+.ptile-heart{top:12px;right:12px}
+.sug-heart{top:8px;right:8px;width:30px;height:30px}
+.sug-heart svg{width:15px;height:15px}
+.lrow-heart{top:12px;left:184px}
+/* The header control, like the cart beside it. */
+/* The wishlist count wears the saved-heart red, so it reads apart from the cart's. */
+.hwish .hcart-badge{background:var(--wishlist-on);color:var(--wishlist-on-ink)}
+.hwish{padding:0 16px;gap:8px;background:none;border:0;cursor:pointer;font:inherit}
+.hwish-note{position:fixed;right:24px;top:84px;z-index:80;max-width:340px;margin:0;padding:12px 14px;
+  border-radius:10px;background:var(--ink);color:var(--sheet);font-size:13px;line-height:1.45;
+  box-shadow:var(--shadow)}
+/* The list, in its dialog. */
+.wl-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;max-height:60vh;overflow-y:auto}
+.wl-row{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--rule-2)}
+.wl-row:last-child{border-bottom:0}
+.wl-media{flex:0 0 76px;height:58px;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;background:var(--sheet-2);color:var(--ink-4);overflow:hidden}
+.wl-media img{max-width:100%;max-height:100%;mix-blend-mode:multiply}
+.wl-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.wl-name{font-size:14.5px;font-weight:800;color:var(--ink);text-decoration:none}
+a.wl-name:hover{text-decoration:underline;text-underline-offset:3px}
+.wl-spec{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wl-price{font-size:12.5px;font-weight:600;color:var(--ink)}
+.wl-price b{font-size:14px;font-weight:800}
+.wl-gone{font-size:12.5px;font-weight:700;color:var(--ink-4)}
+.wl-remove{flex:0 0 auto;padding:7px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet);
+  font:inherit;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer}
+.wl-remove:hover{background:var(--sheet-2)}
+.wl-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 0;text-align:center;
+  font-size:14px;font-weight:600;color:var(--ink)}
+.wl-empty svg{width:30px;height:30px;color:var(--ink-4)}
+.wl-empty p{margin:0}
+.wl-browse{padding:9px 18px;border-radius:10px;background:var(--card-accent);color:var(--card-accent-ink);
+  font-weight:800;text-decoration:none}
+.wl-note{margin:0 0 8px;font-size:13px;line-height:1.5;color:var(--ink)}
+@media(max-width:1180px){.lrow-heart{left:154px}}
+@media(max-width:640px){.lrow-heart{left:auto;right:12px}}

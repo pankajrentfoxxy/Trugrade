@@ -368,6 +368,15 @@
     --hero-mark: #ffd814;
     --hero-mark-ink: #2a1e00;
     --hero-shade: rgba(6, 38, 63, 0.2);
+    /* A saved wishlist heart. Red because a filled red heart is the one
+       reading of "saved" everyone shares; it is a heart, never a verdict, so
+       it does not borrow --fail. */
+    --wishlist-on: #e0245e;
+    --wishlist-on-ink: #ffffff;
+    /* A softened ink, by direction, for the product record's supporting lines
+       only (brand line, spec line, the promise boxes). Dark enough to read as
+       text, not as disabled. */
+    --ink-soft: #4b5563;
   }
 
   /* ---- Listing card accent ------------------------------------------------

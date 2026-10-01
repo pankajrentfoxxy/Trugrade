@@ -34,7 +34,7 @@ export function Board({
   sku: string;
   /** "i5-1135G7 · 16 GB · 512 GB NVMe SSD · 14"" */
   spec: string;
-  layout?: 'responsive' | 'cards' | 'table';
+  layout?: 'responsive' | 'cards' | 'table' | 'compare';
 }): React.JSX.Element {
   const { qtyFor, busyListingId, addListing, updateListingQty } = useProductCart();
 

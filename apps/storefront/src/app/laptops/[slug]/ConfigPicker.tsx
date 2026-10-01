@@ -20,11 +20,12 @@ import { storageShortLabel } from '../../search/storage-label';
  * quietly moved them to Grade A would be a switch they did not throw. A
  * configuration nobody has sealed anywhere is not drawn either.
  *
- * **Every row is drawn, even with one pill.** A grade with a single sealed
- * build still gets its processor, memory and storage rows, each holding the
- * one pill, lit: that is the honest answer to "what can I have at this
- * grade" — this, only this — and three rows that vanished on switching to
- * A+ read as the page breaking, not as the stock narrowing.
+ * **Every row is drawn, even with one option.** A grade with a single sealed
+ * build still gets its memory, storage and processor rows: that is the honest
+ * answer to "what can I have at this grade" — this, only this — and rows that
+ * vanished on switching to A+ read as the page breaking, not as the stock
+ * narrowing. A row of one is drawn as a plain chip with a note saying so,
+ * not as a lit switch that goes nowhere.
  */
 
 interface Dimension {
@@ -39,22 +40,15 @@ const numeric = (a: string, b: string): number => Number(a) - Number(b);
 
 const DIMENSIONS: readonly Dimension[] = [
   {
-    key: 'cpu',
-    label: 'Choose processor',
-    of: (r) => r.cpuLine,
-    text: (v) => v,
-    sort: (a, b) => a.localeCompare(b),
-  },
-  {
     key: 'ram',
-    label: 'Choose memory',
+    label: 'Memory',
     of: (r) => String(r.ramGb),
     text: (v) => `${v} GB RAM`,
     sort: numeric,
   },
   {
     key: 'storage',
-    label: 'Choose storage',
+    label: 'Storage',
     of: (r) => `${r.storageGb}|${r.storageType}`,
     text: (v) => {
       const [gb, type] = v.split('|');
@@ -62,6 +56,13 @@ const DIMENSIONS: readonly Dimension[] = [
       return short ? `${gb} GB ${short}` : `${gb} GB`;
     },
     sort: (a, b) => numeric(a.split('|')[0]!, b.split('|')[0]!),
+  },
+  {
+    key: 'cpu',
+    label: 'Processor',
+    of: (r) => r.cpuLine,
+    text: (v) => v,
+    sort: (a, b) => a.localeCompare(b),
   },
 ];
 
@@ -80,6 +81,8 @@ export interface ConfigChoice {
   key: Dimension['key'];
   label: string;
   options: ConfigOption[];
+  /** True when no grade of this model offers another value either. */
+  onlyForModel: boolean;
 }
 
 /**
@@ -130,17 +133,21 @@ export function configChoices(
       };
     });
 
-    return [{ key: d.key, label: d.label, options }];
+    const onlyForModel = new Set(variants.map(d.of)).size <= 1;
+    return [{ key: d.key, label: d.label, options, onlyForModel }];
   });
 }
 
 export function ConfigPicker({
   variants,
   current,
+  gradeLabel,
   hrefFor,
 }: {
   variants: readonly SearchResult[];
   current: { skuId: string; grade: string };
+  /** "A+", for the note on a row that holds one option at this grade only. */
+  gradeLabel?: string;
   /** The page's own URL builder, so the pincode and the rest carry over. */
   hrefFor: (skuId: string, grade: string) => string;
 }): React.JSX.Element | null {
@@ -149,23 +156,43 @@ export function ConfigPicker({
 
   return (
     <>
-      {choices.map((choice) => (
-        <div key={choice.key} data-testid={`config-${choice.key}`}>
-          <h2 className="sec-t">{choice.label}</h2>
-          <div className="grades" role="group" aria-label={choice.label.replace('Choose ', '')}>
-            {choice.options.map((o) => (
-              <Link
-                key={o.value}
-                className={o.current ? 'gpill on' : 'gpill'}
-                aria-current={o.current ? 'true' : undefined}
-                href={hrefFor(o.skuId, o.grade) as Route}
-              >
-                <b>{o.text}</b>
-              </Link>
-            ))}
+      {choices.map((choice) => {
+        const chosen = choice.options.find((o) => o.current);
+        const only = choice.options.length === 1 ? choice.options[0]! : null;
+        return (
+          <div key={choice.key} className="cfg-row" data-testid={`config-${choice.key}`}>
+            <h2 className="sec-t">
+              {choice.label}
+              {chosen && !only ? <span className="sec-val">: {chosen.text}</span> : null}
+            </h2>
+            {only ? (
+              // One option is not a choice: it is said as a fact, not drawn
+              // as a switch that goes nowhere.
+              <p className="cfg-only">
+                <span className="cfg-chip">{only.text}</span>
+                <span>
+                  {choice.onlyForModel
+                    ? 'Only option for this model'
+                    : `Only option at Grade ${gradeLabel ?? current.grade}`}
+                </span>
+              </p>
+            ) : (
+              <div className="grades" role="group" aria-label={choice.label}>
+                {choice.options.map((o) => (
+                  <Link
+                    key={o.value}
+                    className={o.current ? 'gpill on' : 'gpill'}
+                    aria-current={o.current ? 'true' : undefined}
+                    href={hrefFor(o.skuId, o.grade) as Route}
+                  >
+                    <b>{o.text}</b>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }

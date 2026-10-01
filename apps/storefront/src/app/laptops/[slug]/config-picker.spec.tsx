@@ -1,6 +1,6 @@
 /**
- * Processor, memory and storage as pills beside grade — only where the model
- * differs, each pill leading to the sibling that changes just that one thing.
+ * Memory, storage and processor as pills beside grade, each pill leading to
+ * the sibling that changes just that one thing; a row with one option is said as a fact rather than drawn as a switch.
  */
 import * as React from 'react';
 import { render, screen, within } from '@testing-library/react';
@@ -60,19 +60,19 @@ describe('configChoices', () => {
   it('draws every row from the rows sealed AT THIS GRADE only', () => {
     // At grade B the index holds the i5 in two memory/storage builds and no
     // i7 — so memory and storage offer two pills and the processor row holds
-    // the one processor sealed at B.
+    // the one processor sealed at B. Rows run memory, storage, processor.
     const choices = configChoices(VARIANTS, here);
     expect(choices.map((c) => [c.key, c.options.length])).toEqual([
-      ['cpu', 1],
       ['ram', 2],
       ['storage', 2],
+      ['cpu', 1],
     ]);
     // At grade A the i5 and the i7 are both sealed, in one build each.
     const atA = configChoices(VARIANTS, { skuId: 'i5-16-512', grade: 'A' });
     expect(atA.map((c) => [c.key, c.options.length])).toEqual([
-      ['cpu', 2],
       ['ram', 1],
       ['storage', 1],
+      ['cpu', 2],
     ]);
     // A grade with nothing sealed at all gets no rows, not rows of nothing.
     expect(configChoices(VARIANTS, { skuId: 'i5-16-512', grade: 'A_PLUS' })).toEqual([]);
@@ -105,10 +105,13 @@ describe('configChoices', () => {
       />,
     );
     expect(screen.queryByText(/Core i7-1185G7/)).toBeNull();
-    // The processor row still stands, holding the one processor sealed at B.
+    // The processor row still stands, holding the one processor sealed at B —
+    // said as a fact, not drawn as a switch. The i7 is sealed at A, so the
+    // note names the grade rather than claiming the model has no other.
     const cpu = within(screen.getByTestId('config-cpu'));
-    expect(cpu.getAllByRole('link')).toHaveLength(1);
-    expect(cpu.getByRole('link', { name: /Core i5-1135G7/ })).toHaveAttribute('aria-current', 'true');
+    expect(cpu.queryAllByRole('link')).toHaveLength(0);
+    expect(cpu.getByText('Core i5-1135G7')).toBeInTheDocument();
+    expect(cpu.getByText('Only option at Grade B')).toBeInTheDocument();
   });
 
   it('on the grade where it is sealed, opens it at that same grade', () => {
@@ -124,16 +127,15 @@ describe('configChoices', () => {
     expect(link).not.toHaveAttribute('title');
   });
 
-  it('draws each row with its one lit pill for a model with one configuration', () => {
-    // One build sealed: three rows, one pill each, all current. The rows say
-    // "this, only this" rather than disappearing.
+  it('says "only option for this model" on every row of a one-configuration model', () => {
+    // One build sealed: three rows, one option each, all current. The rows say
+    // "this, only this" rather than disappearing, and offer no dead switch.
     const choices = configChoices([row({})], here);
     expect(choices.map((c) => c.options.length)).toEqual([1, 1, 1]);
-    expect(choices.every((c) => c.options[0]!.current)).toBe(true);
+    expect(choices.every((c) => c.options[0]!.current && c.onlyForModel)).toBe(true);
     render(<ConfigPicker variants={[row({})]} current={here} hrefFor={() => '/x'} />);
-    const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(3);
-    for (const link of links) expect(link).toHaveAttribute('aria-current', 'true');
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getAllByText('Only option for this model')).toHaveLength(3);
   });
 
   it('does not draw a configuration nothing is sealed at, at any grade', () => {
@@ -169,5 +171,7 @@ describe('configChoices', () => {
     const eight = memory.getByRole('link', { name: /8 GB RAM/ });
     expect(eight).toHaveAttribute('href', '/laptops/i5-8-256?grade=B');
     expect(eight).not.toHaveTextContent(/units?/);
+    // Nor a price: the panel's one price is the figure above the switches.
+    expect(eight).not.toHaveTextContent(/₹/);
   });
 });

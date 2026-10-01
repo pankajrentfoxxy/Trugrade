@@ -16,6 +16,14 @@ import type { Response } from 'express';
 import { uuidSchema } from '@trugrade/contracts';
 import { RequirePermissions } from '../../shared/auth/guards';
 import { OrderPdfService } from './internal/order-pdf.service';
+import {
+  WishlistService,
+  wishlistItemSchema,
+  wishlistMergeSchema,
+  type WishlistItemDto,
+  type WishlistMergeDto,
+  type WishlistView,
+} from './internal/wishlist.service';
 import { OrderVerificationService, type PayResult } from './internal/order-verification.service';
 import { ZodValidationPipe } from '../../shared/http/http';
 import {
@@ -113,6 +121,7 @@ export class OrderingController {
     private readonly requirements: RfqIntakeService,
     private readonly orderPdf: OrderPdfService,
     private readonly verification: OrderVerificationService,
+    private readonly wishlist: WishlistService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -157,6 +166,50 @@ export class OrderingController {
     @Param('itemId', new ZodValidationPipe(uuidSchema)) itemId: string,
   ): Promise<CartView> {
     return this.carts.removeFromCart(itemId);
+  }
+
+  // -------------------------------------------------------------------------
+  // The wishlist
+  // -------------------------------------------------------------------------
+
+  /**
+   * One wishlist per buyer, like the cart: the session identifies it, so there
+   * is no id in the path. Each write answers with the whole list, so the page
+   * re-renders from one response.
+   */
+  @Get('wishlist')
+  @RequirePermissions('ordering.own.read')
+  wishlistView(): Promise<WishlistView> {
+    return this.wishlist.view();
+  }
+
+  @Post('wishlist/items')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  wishlistAdd(
+    @Body(new ZodValidationPipe(wishlistItemSchema)) body: WishlistItemDto,
+  ): Promise<WishlistView> {
+    return this.wishlist.add(body);
+  }
+
+  /** The model and grade in the body, as they are on the add. */
+  @Post('wishlist/items/remove')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  wishlistRemove(
+    @Body(new ZodValidationPipe(wishlistItemSchema)) body: WishlistItemDto,
+  ): Promise<WishlistView> {
+    return this.wishlist.remove(body);
+  }
+
+  /** A signed-out browser's saves, brought into the account on sign-in. */
+  @Post('wishlist/merge')
+  @HttpCode(200)
+  @RequirePermissions('ordering.cart.write')
+  wishlistMerge(
+    @Body(new ZodValidationPipe(wishlistMergeSchema)) body: WishlistMergeDto,
+  ): Promise<WishlistView> {
+    return this.wishlist.merge(body);
   }
 
   // -------------------------------------------------------------------------

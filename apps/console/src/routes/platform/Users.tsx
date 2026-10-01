@@ -2,7 +2,6 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 import {
   Button,
-  Chip,
   cn,
   DataBoard,
   EmptyState,
@@ -11,9 +10,10 @@ import {
   Skeleton,
   type Column,
 } from '@trugrade/ui';
-import { Board, NotMeasured, PageHeader, Select } from '../../lib/controls';
+import { Board } from '../../lib/controls';
 import { useAuth } from '../../lib/auth';
 import { roleLabel } from '../../lib/roles';
+import { daysSince } from '../../lib/clock';
 import {
   MOBILE_PREFIX,
   addUserFormValid,
@@ -24,7 +24,6 @@ import {
 } from '../../lib/indian-contact';
 import { Field } from '../../lib/controls';
 import { useUrlState } from '../../lib/urlState';
-import { Num } from './types';
 import {
   createMember,
   getTeam,
@@ -44,58 +43,95 @@ import {
 /**
  * ARCHETYPE B — Board. Platform staff in the signed-in organisation.
  * DENSITY: compact (admin), set on the app root by the shell.
+ *
+ * DRAWN TO A SUPPLIED DESIGN, its markup and colours verbatim
+ * (`.people-board`/`.pp-*` in `index.css`, `--admin-*` in `globals.css`) —
+ * same arrangement as the catalog, orders and review-queue boards. `DataBoard`
+ * stays the table, inside `Board` (`.pp-card`/`.pp-table`); the row kebab menu
+ * keeps the existing `RowActionsMenu` below unchanged.
+ *
+ * Two things in the mock have no field behind them on `TeamMember`/
+ * `TeamRole`, so each gets an honest substitute rather than an invented one:
+ *
+ * - **No "system account" flag exists.** The mock's example data (a seed
+ *   account with an `@…internal` address) happens to look like one, but
+ *   nothing in the API says so, and guessing from the email domain would be
+ *   exactly the kind of invented fact `CLAUDE.md` rules out. The badge and
+ *   its dedicated avatar shape are dropped; that row renders like any other.
+ * - **No bulk "require MFA for everyone" action exists.** Every
+ *   money-moving or KYC role already forces a second factor at sign-in
+ *   (`MFA_REQUIRED_ROLES` on the server) — what the banner below reports is
+ *   that nobody in those roles has actually enrolled one yet. There is no
+ *   endpoint that flips a switch for the whole org, so the mock's danger
+ *   button is not reproduced; the banner states the fact and nothing else,
+ *   the same "nearest honest destination" call `CatalogTree.tsx` already
+ *   documents for its own two unreachable mock controls.
+ *
+ * Two things in the mock that DO have a field, computed rather than copied
+ * from its one example org:
+ *
+ * - **Which empty roles get the red "nobody yet" treatment** is a judgement
+ *   call, not something a permission diff can produce — the superadmin role
+ *   already holds every permission in the system by definition, so "is this
+ *   capability covered by someone" is true for every role and would flag
+ *   nothing. `MONEY_CRITICAL_ROLES` below names the same two roles the mock
+ *   does, as an explicit, commented product decision rather than a derived one.
+ * - **The "includes the only X" line** under a stat tile IS derived — a
+ *   member counts as a single point of failure when a role they hold has
+ *   exactly one holder. `singlePointNote` below is the same rule applied to
+ *   both qualifying tiles; the mock used it for one and a different
+ *   (unreproducible) fact for the other.
  */
 
-const stamp = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+/** Below this, "last signed in" stops being routine and starts being a gap. */
+const STALE_DAYS = 14;
+
+/** The roles this product cannot route around if nobody holds them — see the
+ * file-top comment for why this can't be derived from a permission diff. */
+const MONEY_CRITICAL_ROLES = new Set(['TREASURY', 'AP_CLERK']);
 
 type Phase =
   | { k: 'loading' }
   | { k: 'error'; message: string }
   | { k: 'ready'; team: Team };
 
+const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+}
+
 function PersonCell({ member }: { member: TeamMember }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-body-sm text-ink">
-        {member.fullName}
-        {member.isYou && <span className="ml-2 text-body-sm text-ink-4">you</span>}
+    <div className="pp-person">
+      <span className="pp-avatar" aria-hidden="true">
+        {initials(member.fullName)}
       </span>
-      <span className="font-mono text-body-sm text-ink-3">
-        {member.email ?? member.mobile ?? (
-          <NotMeasured why="No email or mobile on this account." label="No contact recorded" />
-        )}
-      </span>
-      {member.jobTitle !== null && (
-        <span className="text-body-sm text-ink-3">{member.jobTitle}</span>
-      )}
+      <div>
+        <div className="pp-name">
+          {member.fullName}
+          {member.isYou && <span className="pp-you">You</span>}
+        </div>
+        <div className="pp-email">
+          {member.email ?? member.mobile ?? 'No contact recorded'}
+        </div>
+        {member.jobTitle !== null && <div className="pp-email">{member.jobTitle}</div>}
+      </div>
     </div>
   );
 }
 
 function RolesCell({ member }: { member: TeamMember }): React.JSX.Element {
   if (member.roles.length === 0) {
-    return (
-      <NotMeasured
-        why="This account has no role assigned."
-        label="No role assigned"
-      />
-    );
+    return <span className="pp-rolechip" style={{ color: 'var(--admin-faint)' }}>No role assigned</span>;
   }
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="pp-rolechips">
       {member.roles.map((r) => (
-        <span
-          key={r}
-          className="rounded border border-rule bg-sheet-2 px-2 py-1 text-body-sm text-ink-2"
-          title={r}
-        >
+        <span key={r} className="pp-rolechip" title={r}>
           {roleLabel(r)}
         </span>
       ))}
@@ -110,56 +146,95 @@ function accountStatusLabel(status: string): string {
   return status;
 }
 
-/** Same shape for every state — only the ink colour changes. StatusPill mixes filled pass with outlined warn. */
-function AccountStatusBadge({ status }: { status: string }): React.JSX.Element {
-  const label = accountStatusLabel(status);
-  const tone =
-    status === 'ACTIVE'
-      ? 'text-pass'
-      : status === 'SUSPENDED'
-        ? 'text-warn'
-        : status === 'DEACTIVATED'
-          ? 'text-fail'
-          : 'text-ink-2';
+function AccountCell({ member }: { member: TeamMember }): React.JSX.Element {
+  const variant = member.status === 'ACTIVE' ? 'ok' : member.status === 'DEACTIVATED' ? 'bad' : 'off';
+  return <span className={cn('pp-pill', `pp-pill--${variant}`)}>{accountStatusLabel(member.status)}</span>;
+}
 
+/** "27 days ago" read the way a person says it, not a day-count. */
+function relativeSeen(days: number): string {
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return `${days} days ago`;
+}
+
+function SeenCell({ member }: { member: TeamMember }): React.JSX.Element {
+  if (member.lastLoginAt === null) {
+    return (
+      <div className="pp-seen pp-seen--never">
+        <div className="pp-seen__rel">Never signed in</div>
+      </div>
+    );
+  }
+  const days = daysSince(member.lastLoginAt);
+  const stale = days >= STALE_DAYS;
   return (
-    <span
-      className={cn(
-        'inline-flex w-fit items-center gap-2 rounded-sm border border-rule bg-sheet-2 px-3 py-1',
-        'font-mono text-label uppercase tracking-[0.13em]',
-        tone,
-      )}
-    >
-      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
-      {label}
+    <div className={cn('pp-seen', stale && 'pp-seen--stale')}>
+      <div className="pp-seen__rel">{relativeSeen(days)}</div>
+      <div className="pp-seen__abs">
+        {new Date(member.lastLoginAt).toLocaleString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TwoFaCell({ member }: { member: TeamMember }): React.JSX.Element {
+  if (member.mfaEnabled) {
+    return (
+      <span className="pp-2fa pp-2fa--on">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+          <path d="M5 13l4 4L19 7" />
+        </svg>
+        On
+      </span>
+    );
+  }
+  return (
+    <span className="pp-2fa">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+      Off
     </span>
   );
 }
 
-function AccountCell({ member }: { member: TeamMember }): React.JSX.Element {
-  return (
-    <div className="flex flex-col items-start gap-1">
-      <AccountStatusBadge status={member.status} />
-      {member.lastLoginAt === null ? (
-        <NotMeasured why="This person has never signed in." label="Never signed in" />
-      ) : (
-        <span className="font-mono text-body-sm tnum text-ink-3">
-          Last in {stamp(member.lastLoginAt)}
-        </span>
-      )}
-      {member.mfaEnabled ? (
-        <span className="text-body-sm text-ink-3">Second factor on</span>
-      ) : (
-        <NotMeasured why="No second factor enrolled." label="No second factor" />
-      )}
-    </div>
+/** A role code this member holds that no other active account also holds —
+ * losing them would leave that role empty. `undefined` when none of their
+ * roles are that scarce. */
+function singlePointRole(member: TeamMember, roleCounts: ReadonlyMap<string, number>): string | undefined {
+  return member.roles.find((r) => roleCounts.get(r) === 1);
+}
+
+/** "Includes the only KYC reviewer" — or the plural shape when more than one
+ * qualifies, or nothing when none of this subset is a sole role-holder. */
+function singlePointNote(
+  members: readonly TeamMember[],
+  roleCounts: ReadonlyMap<string, number>,
+): string | undefined {
+  const codes = new Set(
+    members.flatMap((m) => {
+      const r = singlePointRole(m, roleCounts);
+      return r ? [r] : [];
+    }),
   );
+  if (codes.size === 0) return undefined;
+  if (codes.size === 1) return `Includes the only ${roleLabel([...codes][0]!)}`;
+  return `Includes the only holder of ${codes.size} roles`;
 }
 
 export function UsersRoute(): React.JSX.Element {
   const { principal } = useAuth();
   const [role, setRole] = useUrlState('role');
   const [status, setStatus] = useUrlState('status');
+  const [quick, setQuick] = useUrlState('quick');
+  const [q, setQ] = useUrlState('q');
   const [phase, setPhase] = React.useState<Phase>({ k: 'loading' });
   const [addOpen, setAddOpen] = React.useState(false);
   const [editingRoles, setEditingRoles] = React.useState<TeamMember | null>(null);
@@ -189,23 +264,68 @@ export function UsersRoute(): React.JSX.Element {
     );
   }
 
-  if (phase.k === 'loading') return <Skeleton lines={10} />;
+  if (phase.k === 'loading') {
+    return (
+      <div className="people-board">
+        <div className="pp-head">
+          <div>
+            <h1 className="pp-title">People</h1>
+            <p className="pp-sub">Loading the team.</p>
+          </div>
+        </div>
+        <Skeleton lines={10} />
+      </div>
+    );
+  }
 
   const { team } = phase;
-  const filtered = team.members.filter(
-    (m) => (!role || m.roles.includes(role)) && (!status || m.status === status),
+  const members = team.members;
+  const total = members.length;
+  const activeMembers = members.filter((m) => m.status === 'ACTIVE');
+  const inactiveCount = members.filter((m) => m.status === 'SUSPENDED').length;
+  const mfaOnCount = members.filter((m) => m.mfaEnabled).length;
+  const neverSignedIn = activeMembers.filter((m) => m.lastLoginAt === null);
+  const stale = activeMembers.filter(
+    (m) => m.lastLoginAt !== null && daysSince(m.lastLoginAt) >= STALE_DAYS,
   );
-  const hasFilter = role !== '' || status !== '';
+  const highStakesNoMfa = members.filter((m) => m.mfaRequired && !m.mfaEnabled);
+  const ownerNoMfa = members.some((m) => m.isOrgOwner && !m.mfaEnabled);
+
+  const roleCounts = new Map<string, number>(
+    team.roles.map((r) => [r.code, members.filter((m) => m.roles.includes(r.code)).length]),
+  );
+  const filledRoles = team.roles.filter((r) => (roleCounts.get(r.code) ?? 0) > 0);
+  const emptyRoles = team.roles.filter((r) => (roleCounts.get(r.code) ?? 0) === 0);
+
+  const needle = q.trim().toLowerCase();
+  const quickFilter = (m: TeamMember): boolean => {
+    if (quick === 'active') return m.status === 'ACTIVE';
+    if (quick === 'mfa-off') return !m.mfaEnabled;
+    if (quick === 'never') return m.status === 'ACTIVE' && m.lastLoginAt === null;
+    if (quick === 'stale') return m.status === 'ACTIVE' && m.lastLoginAt !== null && daysSince(m.lastLoginAt) >= STALE_DAYS;
+    return true;
+  };
+  const filtered = members
+    .filter((m) => (!role || m.roles.includes(role)) && (!status || m.status === status))
+    .filter(quickFilter)
+    .filter((m) => (needle ? m.fullName.toLowerCase().includes(needle) || (m.email ?? '').toLowerCase().includes(needle) : true))
+    .slice()
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  const hasFilter = role !== '' || status !== '' || quick !== '' || needle !== '';
 
   const columns: ReadonlyArray<Column<TeamMember>> = [
     { key: 'person', header: 'Person', cell: (m) => <PersonCell member={m} /> },
-    { key: 'roles', header: 'Roles', cell: (m) => <RolesCell member={m} /> },
+    { key: 'roles', header: 'Role', cell: (m) => <RolesCell member={m} /> },
     { key: 'account', header: 'Account', cell: (m) => <AccountCell member={m} /> },
+    { key: 'seen', header: 'Last signed in', cell: (m) => <SeenCell member={m} /> },
+    { key: 'mfa', header: 'Two-step sign-in', cell: (m) => <TwoFaCell member={m} /> },
     ...(canWrite || canAssign
       ? [
           {
             key: 'actions',
-            header: 'Actions',
+            header: '',
+            headerHidden: true,
+            className: 'num',
             cell: (m: TeamMember) => (
               <RowActions
                 member={m}
@@ -223,87 +343,219 @@ export function UsersRoute(): React.JSX.Element {
   ];
 
   return (
-    <div className="tg-stack">
-      <PageHeader title="Users">
-        Everybody who can sign in on your organisation&apos;s account.{' '}
-        <Num>{team.members.length}</Num> {team.members.length === 1 ? 'person' : 'people'},{' '}
-        <Num>{team.owners}</Num> {team.owners === 1 ? 'owner' : 'owners'}.
+    <div className="people-board">
+      <div className="pp-head">
+        <div>
+          <h1 className="pp-title">People</h1>
+          <p className="pp-sub">
+            {total} {total === 1 ? 'account' : 'accounts'} · {activeMembers.length} active · who can
+            sign in to the console, and what they can do
+          </p>
+        </div>
         {canWrite && (
-          <span className="mt-4 block">
-            <Button variant="primary" onClick={() => setAddOpen(true)}>
-              Add user
-            </Button>
-          </span>
+          <button type="button" className="pp-btn pp-btn--primary" onClick={() => setAddOpen(true)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add user
+          </button>
         )}
-      </PageHeader>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Select
-          label="Role"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          options={[
-            { value: '', label: `Every role (${team.members.length})` },
-            ...team.roles.map((r) => ({
-              value: r.code,
-              label: `${roleLabel(r.code)} (${team.members.filter((m) => m.roles.includes(r.code)).length})`,
-            })),
-          ]}
-        />
-        <Select
-          label="Account status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          options={[
-            { value: '', label: 'Every status' },
-            {
-              value: 'ACTIVE',
-              label: `Active (${team.members.filter((m) => m.status === 'ACTIVE').length})`,
-            },
-            {
-              value: 'SUSPENDED',
-              label: `Inactive (${team.members.filter((m) => m.status === 'SUSPENDED').length})`,
-            },
-            {
-              value: 'DEACTIVATED',
-              label: `Removed (${team.members.filter((m) => m.status === 'DEACTIVATED').length})`,
-            },
-          ]}
-        />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {team.roles.map((r) => {
-          const count = team.members.filter((m) => m.roles.includes(r.code)).length;
-          return (
-            <Chip
-              key={r.code}
-              label={roleLabel(r.code)}
-              count={count}
-              selected={role === r.code}
-              onToggle={() => setRole(role === r.code ? '' : r.code)}
-            />
-          );
-        })}
+      {highStakesNoMfa.length > 0 && (
+        <div className="pp-alert" role="alert">
+          <span className="pp-alert__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+              <path d="M12 9v4M12 16.5v.01" />
+            </svg>
+          </span>
+          <p className="pp-alert__txt">
+            {mfaOnCount === 0 ? (
+              <>
+                <strong>No one has two-step sign-in{ownerNoMfa ? ', including the super admin' : ''}.</strong>{' '}
+                One leaked password is enough to approve KYC, change prices or move money.
+              </>
+            ) : (
+              <>
+                <strong>
+                  {highStakesNoMfa.length} {plural(highStakesNoMfa.length, 'account', 'accounts')} that can
+                  move money or approve KYC {plural(highStakesNoMfa.length, 'has', 'have')} no two-step
+                  sign-in.
+                </strong>{' '}
+                Each one is a single leaked password away from the same risk.
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      <div className="pp-stats" role="group" aria-label="Quick filters">
+        <button
+          type="button"
+          className="pp-stat"
+          aria-pressed={quick === 'active'}
+          onClick={() => setQuick(quick === 'active' ? '' : 'active')}
+        >
+          <span className="pp-stat__label">Active accounts</span>
+          <span className="pp-stat__n">
+            {activeMembers.length}
+            <small>of {total}</small>
+          </span>
+          {inactiveCount > 0 && <span className="pp-stat__meta">{inactiveCount} inactive</span>}
+        </button>
+        <button
+          type="button"
+          className={cn('pp-stat', mfaOnCount === 0 && 'pp-stat--bad')}
+          aria-pressed={quick === 'mfa-off'}
+          onClick={() => setQuick(quick === 'mfa-off' ? '' : 'mfa-off')}
+        >
+          <span className="pp-stat__label">Two-step sign-in on</span>
+          <span className="pp-stat__n">
+            {mfaOnCount}
+            <small>of {total}</small>
+          </span>
+          <span className="pp-stat__meta">
+            {mfaOnCount === 0 ? 'Nobody is protected' : `${total - mfaOnCount} without it`}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={cn('pp-stat', neverSignedIn.length > 0 && 'pp-stat--warn')}
+          aria-pressed={quick === 'never'}
+          onClick={() => setQuick(quick === 'never' ? '' : 'never')}
+        >
+          <span className="pp-stat__label">Active, never signed in</span>
+          <span className="pp-stat__n">{neverSignedIn.length}</span>
+          {singlePointNote(neverSignedIn, roleCounts) && (
+            <span className="pp-stat__meta">{singlePointNote(neverSignedIn, roleCounts)}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={cn('pp-stat', stale.length > 0 && 'pp-stat--warn')}
+          aria-pressed={quick === 'stale'}
+          onClick={() => setQuick(quick === 'stale' ? '' : 'stale')}
+        >
+          <span className="pp-stat__label">Not seen in {STALE_DAYS}+ days</span>
+          <span className="pp-stat__n">{stale.length}</span>
+          {singlePointNote(stale, roleCounts) && (
+            <span className="pp-stat__meta">{singlePointNote(stale, roleCounts)}</span>
+          )}
+        </button>
       </div>
 
-      <Board>
+      <section className="pp-roles" aria-labelledby="pp-r-h">
+        <div className="pp-roles__head">
+          <h2 id="pp-r-h">Roles</h2>
+          <p>
+            Click a role to filter the list. {emptyRoles.length}{' '}
+            {plural(emptyRoles.length, 'role has', 'roles have')} nobody in{' '}
+            {emptyRoles.length === 1 ? 'it' : 'them'}.
+          </p>
+        </div>
+        {filledRoles.length > 0 && (
+          <div className="pp-roles__group">
+            <span className="pp-roles__label">Filled</span>
+            <div className="pp-roles__chips">
+              {filledRoles.map((r) => (
+                <button
+                  key={r.code}
+                  type="button"
+                  className="pp-role"
+                  aria-pressed={role === r.code}
+                  onClick={() => setRole(role === r.code ? '' : r.code)}
+                >
+                  {roleLabel(r.code)} <span className="n">{roleCounts.get(r.code)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {emptyRoles.length > 0 && (
+          <div className="pp-roles__group">
+            <span className="pp-roles__label">Nobody yet</span>
+            <div className="pp-roles__chips">
+              {emptyRoles.map((r) => {
+                const crit = MONEY_CRITICAL_ROLES.has(r.code);
+                return (
+                  <button
+                    key={r.code}
+                    type="button"
+                    className={cn('pp-role', crit ? 'pp-role--crit' : 'pp-role--empty')}
+                    aria-pressed={role === r.code}
+                    title={crit ? 'No one is assigned this role, and it is one of this team’s money-moving roles.' : undefined}
+                    onClick={() => setRole(role === r.code ? '' : r.code)}
+                  >
+                    {roleLabel(r.code)} <span className="n">0</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <div className="pp-toolbar">
+        <label className="pp-search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search name or email"
+            aria-label="Search people"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+        <label className="pp-select">
+          Role
+          <select value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">Every role</option>
+            {team.roles.map((r) => (
+              <option key={r.code} value={r.code}>
+                {roleLabel(r.code)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="pp-select">
+          Status
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">Any</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Inactive</option>
+            <option value="DEACTIVATED">Removed</option>
+          </select>
+        </label>
+      </div>
+
+      <Board className="pp-card">
         <DataBoard
-          caption={`${filtered.length} ${filtered.length === 1 ? 'person' : 'people'} in your organisation.`}
+          className="pp-table"
+          caption={`${filtered.length} of ${total} people, sorted A to Z.`}
           columns={columns}
           rows={filtered}
           rowKey={(m) => m.id}
+          rowClassName={(m) => cn(m.status !== 'ACTIVE' && 'is-muted')}
           empty={
             <EmptyState
               title={hasFilter ? 'Nobody matches these filters' : 'No users yet'}
               body={
                 hasFilter
-                  ? 'Clear the filters to see everyone in your organisation.'
+                  ? 'Clear a filter to see the rest of your organisation.'
                   : 'Add the first person who should be able to sign in on this account.'
               }
             />
           }
         />
+        {filtered.length > 0 && (
+          <div className="pp-foot">
+            Showing <strong>{filtered.length}</strong> of <strong>{total}</strong> people · A–Z
+          </div>
+        )}
       </Board>
 
       {canWrite && addOpen && (

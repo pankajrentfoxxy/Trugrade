@@ -8,12 +8,9 @@ import type { ConditionImage, ResolvedImages } from '../../../lib/api';
 /**
  * The condition photographs for the selected grade, in the sticky panel.
  *
- * One frame at a time with the others as thumbnails, because the panel is
- * 380px wide and six frames in a grid there are six postage stamps. The
- * arrows and the strip are the same control twice — a buyer who has the mouse
- * on the frame steps through it, one who wants a particular view goes straight
- * to it — and the arrows stop at the ends rather than wrapping, so a press
- * always does what the arrow says.
+ * One frame at a time, with the others as a column of thumbnails down its
+ * left edge. Pointing at a thumbnail opens it — no click, and no arrows on the
+ * frame, by direction: the strip is the one way through the set.
  *
  * Every frame still goes through `RepresentativeImage`, which is what stops
  * any of them being presented as the machine the buyer will receive; the
@@ -84,18 +81,17 @@ export function PanelGallery({
   const count = frames.length;
   const current = frames[Math.min(index, Math.max(count - 1, 0))];
 
-  // Wraps: a press past the last frame goes back to the first and a press
-  // before the first goes to the last, so the arrows are never shut and the
-  // set reads as a loop the buyer can keep turning through.
+  // The keys wrap, so the set reads as a loop the buyer can keep turning through.
   const step = (by: number): void => {
     setIndex((i) => (count === 0 ? 0 : (i + by + count) % count));
   };
 
+  // Up and down follow the strip's own direction; left and right still work.
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'ArrowLeft') {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
       event.preventDefault();
       step(-1);
-    } else if (event.key === 'ArrowRight') {
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
       event.preventDefault();
       step(1);
     }
@@ -107,8 +103,6 @@ export function PanelGallery({
     // frame does not read as broken.
     return (
       <div className="pv-img" data-empty="true">
-        <span className="pv-grade mono">{gradeLabel}</span>
-        <span className="pv-seal">Tamper-sealed &middot; photographed</span>
         <div className="ph-big">
           <RepresentativeImage
             grade={grade}
@@ -135,8 +129,6 @@ export function PanelGallery({
       onKeyDown={onKey}
     >
       <div className="pv-img">
-        <span className="pv-grade mono">{gradeLabel}</span>
-        <span className="pv-seal">Tamper-sealed &middot; photographed</span>
         <RepresentativeImage
           key={current.id}
           src={current.url}
@@ -147,26 +139,6 @@ export function PanelGallery({
           captionedBy={disclosureId}
           className="gal-photo"
         />
-        {count > 1 ? (
-          <>
-            <button
-              type="button"
-              className="gal-ar l"
-              aria-label="Previous frame"
-              onClick={() => step(-1)}
-            >
-              &lsaquo;
-            </button>
-            <button
-              type="button"
-              className="gal-ar r"
-              aria-label="Next frame"
-              onClick={() => step(1)}
-            >
-              &rsaquo;
-            </button>
-          </>
-        ) : null}
         {/* Which view this is and where it sits in the set. Mono: it is a count. */}
         <span className="gal-count" aria-live="polite">
           {viewLabel(current.viewCode)}
@@ -194,6 +166,10 @@ export function PanelGallery({
                   aria-label={`${viewLabel(frame.viewCode)}, frame ${i + 1} of ${count}`}
                   aria-current={on ? 'true' : undefined}
                   aria-describedby={disclosureId}
+                  // Pointing at a frame is enough to open it; focus and tap
+                  // do the same for a keyboard or a touch screen.
+                  onMouseEnter={() => setIndex(i)}
+                  onFocus={() => setIndex(i)}
                   onClick={() => setIndex(i)}
                 >
                   {/*

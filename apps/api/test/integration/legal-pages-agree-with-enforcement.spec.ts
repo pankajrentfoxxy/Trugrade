@@ -194,13 +194,19 @@ describe('/public/grades equals catalog.grade_definition — the r.7(5) exposure
 
   /**
    * `grades()` reads Prisma and nothing else — the listing, QC and ordering
-   * services on the constructor belong to `stats`, `offers` and `search`. So the
+   * and logistics services on the constructor belong to `stats`, `offers` and `search`. So the
    * controller is built directly with the three it does not touch left absent,
    * rather than standing up half the application to exercise one SELECT. If the
    * endpoint ever grows a second dependency, this throws rather than passing.
    */
   function catalogController(): CatalogPublicController {
-    return new CatalogPublicController(moduleRef.get(PrismaService), undefined!, undefined!, undefined!);
+    return new CatalogPublicController(
+      moduleRef.get(PrismaService),
+      undefined!,
+      undefined!,
+      undefined!,
+      undefined!,
+    );
   }
 
   async function rows(): Promise<Row[]> {

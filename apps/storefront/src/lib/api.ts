@@ -223,12 +223,20 @@ function normalizeSearchResponse(data: SearchResponse): SearchResponse {
 
 export interface SearchResponse {
   total: number;
+  /** Sellable units across every match, not just this page. Absent from an older API. */
+  units?: number;
   models: number;
   page: number;
   pages: number;
   per: number;
   results: SearchResult[];
   facets: Record<string, FacetGroup>;
+  /**
+   * The longest outbound transit to anywhere we serve, in days; null when
+   * nothing is serviceable. A card adds its own dispatch time to this for
+   * "Delivery by" — see `lib/delivery-date.ts`.
+   */
+  transitDaysMax?: number | null;
 }
 
 /**

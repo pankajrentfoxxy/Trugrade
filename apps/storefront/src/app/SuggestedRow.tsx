@@ -4,6 +4,8 @@ import * as React from 'react';
 import { GradeBadge } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import Link from 'next/link';
+import { DeliveryBy } from './DeliveryBy';
+import { WishlistHeart } from './WishlistHeart';
 
 export interface SuggestedItem {
   skuId: string;
@@ -21,6 +23,8 @@ export interface SuggestedItem {
   off: number;
   /** A brand render under `/home/`, or null — the card then draws the shell. */
   photo: string | null;
+  /** "Sat, 3 Oct", or null when there is no date to promise. */
+  deliveryBy: string | null;
 }
 
 const GRADES: readonly Grade[] = ['A_PLUS', 'A', 'B'];
@@ -113,50 +117,61 @@ export function SuggestedRow({ items }: { items: readonly SuggestedItem[] }): Re
 
       <div className="sug-track" ref={track}>
         {items.map((it) => (
-          <Link
-            className="sug-card"
-            key={`${it.skuId}-${it.grade}`}
-            href={`/laptops/${it.skuId}?grade=${it.grade}`}
-          >
-            <div className="sug-media">
-              {isGrade(it.grade) && <GradeBadge grade={it.grade} className="sug-grade" />}
-              {it.photo ? (
-                <img className="sug-photo" src={it.photo} alt="" loading="lazy" decoding="async" />
-              ) : (
-                <svg className="sug-shell" viewBox="0 0 150 80" fill="none" aria-hidden="true">
-                  <rect
-                    x="27"
-                    y="10"
-                    width="96"
-                    height="56"
-                    rx="3"
-                    stroke="currentColor"
-                    strokeWidth="2"
+          <div className="sug-wrap" key={`${it.skuId}-${it.grade}`}>
+            <WishlistHeart
+              skuId={it.skuId}
+              grade={it.grade}
+              name={`${it.brand} ${it.model}`}
+              className="wl-heart sug-heart"
+            />
+            <Link className="sug-card" href={`/laptops/${it.skuId}?grade=${it.grade}`}>
+              <div className="sug-media">
+                {isGrade(it.grade) && <GradeBadge grade={it.grade} className="sug-grade" />}
+                {it.photo ? (
+                  <img
+                    className="sug-photo"
+                    src={it.photo}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
                   />
-                  <path d="M12 70 h126 l-8 -4 H20 z" stroke="currentColor" strokeWidth="2" />
-                </svg>
-              )}
-            </div>
-            <div className="sug-body">
-              <h3 className="sug-name">
-                {it.brand} {it.model}
-              </h3>
-              {it.spec ? (
-                <p className="sug-spec mono">{it.spec}</p>
-              ) : (
-                <p className="sug-spec sug-unpublished">Specification not published</p>
-              )}
-              <p className="sug-price">
-                <span className="sug-price-now mono">₹{it.price}</span>
-                <s className="sug-price-mrp mono">
-                  <span className="sr-only">New price </span>₹{it.mrp}
-                </s>
-                <span className="sug-price-off">
-                  <span className="mono">{it.off}%</span> off
-                </span>
-              </p>
-            </div>
-          </Link>
+                ) : (
+                  <svg className="sug-shell" viewBox="0 0 150 80" fill="none" aria-hidden="true">
+                    <rect
+                      x="27"
+                      y="10"
+                      width="96"
+                      height="56"
+                      rx="3"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path d="M12 70 h126 l-8 -4 H20 z" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                )}
+              </div>
+              <div className="sug-body">
+                <h3 className="sug-name">
+                  {it.brand} {it.model}
+                </h3>
+                {it.spec ? (
+                  <p className="sug-spec mono">{it.spec}</p>
+                ) : (
+                  <p className="sug-spec sug-unpublished">Specification not published</p>
+                )}
+                <p className="sug-price">
+                  <span className="sug-price-now mono">₹{it.price}</span>
+                  <s className="sug-price-mrp mono">
+                    <span className="sr-only">New price </span>₹{it.mrp}
+                  </s>
+                  <span className="sug-price-off">
+                    <span className="mono">{it.off}%</span> off
+                  </span>
+                </p>
+                <DeliveryBy date={it.deliveryBy} className="sug-delivery" />
+              </div>
+            </Link>
+          </div>
         ))}
       </div>
     </section>

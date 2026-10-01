@@ -22,16 +22,18 @@ export default function Loading(): React.JSX.Element {
           <div className="pdp-top">
             <aside className="rail" aria-hidden="true">
               <div className="pv">
-                <div className="pv-img pv-img-skel">
-                  <Skeleton className="h-full" />
+                <div className="pv-gal">
+                  <div className="pv-img pv-img-skel">
+                    <Skeleton className="h-full" />
+                  </div>
+                  <ul className="gal-thumbs">
+                    {Array.from({ length: 4 }, (_, i) => (
+                      <li key={i}>
+                        <span className="th th-skel" />
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="gal-thumbs">
-                  {Array.from({ length: 4 }, (_, i) => (
-                    <li key={i}>
-                      <span className="th th-skel" />
-                    </li>
-                  ))}
-                </ul>
               </div>
             </aside>
             <div className="det" aria-hidden="true">

@@ -3,6 +3,7 @@ import { PrismaModule } from '../../shared/db/prisma.service';
 import { ClockModule } from '../../shared/clock';
 import { IdentityModule } from '../identity';
 import { ListingModule } from '../listing';
+import { LogisticsModule } from '../logistics';
 import { OrderingModule } from '../ordering';
 import { QcModule } from '../qc';
 import { CatalogService } from './catalog.service';
@@ -30,7 +31,15 @@ import { CatalogBoardRepository } from './internal/catalog-board.repository';
  * schemas. None of the three imports catalog, so the graph stays acyclic.
  */
 @Module({
-  imports: [PrismaModule, ClockModule, IdentityModule, ListingModule, QcModule, OrderingModule],
+  imports: [
+    PrismaModule,
+    ClockModule,
+    IdentityModule,
+    ListingModule,
+    QcModule,
+    OrderingModule,
+    LogisticsModule,
+  ],
   controllers: [CatalogController, CatalogPublicController],
   providers: [
     CatalogService,

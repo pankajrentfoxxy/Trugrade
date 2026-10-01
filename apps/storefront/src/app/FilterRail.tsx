@@ -133,6 +133,15 @@ export function FilterRail({ facets, query, total, baseline }: FilterRailProps):
     commit(next);
   };
 
+  /** Tick several options at once — a suggestion is a set of filters. */
+  const applyPairs = (pairs: ReadonlyArray<readonly [string, string]>): void => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of pairs) {
+      if (!next.getAll(key).includes(value)) next.append(key, value);
+    }
+    commit(next);
+  };
+
   /** A radio-style pill group: picking the active one clears it. */
   const pick = (key: string, value: string): void =>
     setValue(key, params.get(key) === value ? '' : value);
@@ -218,7 +227,13 @@ export function FilterRail({ facets, query, total, baseline }: FilterRailProps):
           <label className="sr-only" htmlFor="fwithin">
             Search within results
           </label>
-          <TermInput id="fwithin" placeholder="Search within results" onAdd={addTerm} />
+          <TermInput
+            id="fwithin"
+            placeholder="Search within results"
+            onAdd={addTerm}
+            suggestions={suggestionsFor(facets, params)}
+            onPick={applyPairs}
+          />
         </div>
 
         {applied.length > 0 && (
@@ -834,37 +849,182 @@ function Band({
  * all filters, following a shared link — replaces what is in the box, while
  * typing is never interrupted mid-word by a round trip.
  */
+interface Suggestion {
+  id: string;
+  label: string;
+  /** What it narrows to, when the facets can say. Omitted rather than guessed. */
+  count?: number;
+  /** The filters it ticks, as URL key and value. */
+  pairs: ReadonlyArray<readonly [string, string]>;
+}
+
+/**
+ * The two processor combinations the box offers first, by direction. Each is
+ * a family and a generation, ticked together. There is no joint count for a
+ * pair of groups, so these carry none rather than one made up from the two.
+ */
+const PINNED: ReadonlyArray<{ label: string; cpu: string; gen: string }> = [
+  { label: 'i5 · 11th gen', cpu: 'Core i5', gen: '11th' },
+  { label: 'i7 · 11th gen', cpu: 'Core i7', gen: '11th' },
+];
+
+/**
+ * What the box suggests: the pinned processor pairs, then every brand and
+ * series with stock, in that order. A suggestion appears only if every option
+ * it ticks exists on this shelf, and drops out once all of them are applied —
+ * offering a filter that is already on is offering nothing.
+ */
+function suggestionsFor(facets: Record<string, FacetGroup>, params: URLSearchParams): Suggestion[] {
+  const has = (key: string, value: string): boolean =>
+    facets[key]?.options.some((o) => o.value === value) ?? false;
+  const on = (key: string, value: string): boolean => params.getAll(key).includes(value);
+  const out: Suggestion[] = [];
+  for (const p of PINNED) {
+    if (!has('cpu', p.cpu) || !has('gen', p.gen)) continue;
+    if (on('cpu', p.cpu) && on('gen', p.gen)) continue;
+    out.push({
+      id: `pin-${p.cpu}-${p.gen}`,
+      label: p.label,
+      pairs: [
+        ['cpu', p.cpu],
+        ['gen', p.gen],
+      ],
+    });
+  }
+  for (const key of ['brand', 'series'] as const) {
+    for (const o of facets[key]?.options ?? []) {
+      if (o.count === 0 || o.selected || on(key, o.value)) continue;
+      out.push({
+        id: `${key}-${o.value}`,
+        label: o.label,
+        count: o.count,
+        pairs: [[key, o.value]],
+      });
+    }
+  }
+  return out;
+}
+
+/** How many suggestions show at once. */
+const SUGGEST_MAX = 8;
+
 /**
  * The search-within box. It applies on Enter and empties, so the next word can
  * be typed straight away; what was applied is the chip above the groups, which
  * is also where it is taken back. It used to apply as you typed and keep the
  * text, which left the box and the chip saying the same thing twice and no
  * way to add a second word without losing the first.
+ *
+ * On focus it opens a list of suggestions — see `suggestionsFor` — that
+ * narrows as the buyer types. Arrow keys move through it, Enter takes the
+ * highlighted one (or, with none highlighted, the typed word), Escape and a
+ * click elsewhere close it. Picking one ticks its filters and empties the box.
  */
 function TermInput({
+  id,
   onAdd,
+  suggestions,
+  onPick,
   ...rest
 }: {
+  id: string;
   onAdd: (term: string) => void;
+  suggestions: readonly Suggestion[];
+  onPick: (pairs: Suggestion['pairs']) => void;
 } & Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
-  'value' | 'onChange' | 'onKeyDown'
+  'id' | 'value' | 'onChange' | 'onKeyDown'
 >): React.JSX.Element {
   const [local, setLocal] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const [active, setActive] = React.useState(-1);
+
+  const typed = local.trim().toLowerCase();
+  const shown = (
+    typed ? suggestions.filter((s) => s.label.toLowerCase().includes(typed)) : suggestions
+  ).slice(0, SUGGEST_MAX);
+  const listId = `${id}-suggestions`;
+  const expanded = open && shown.length > 0;
+
+  const pick = (s: Suggestion): void => {
+    onPick(s.pairs);
+    setLocal('');
+    setActive(-1);
+    setOpen(false);
+  };
+
   return (
-    <input
-      {...rest}
-      type="text"
-      value={local}
-      enterKeyHint="search"
-      onChange={(e) => setLocal(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        onAdd(local);
-        setLocal('');
-      }}
-    />
+    <div className="fsuggest">
+      <input
+        {...rest}
+        id={id}
+        type="text"
+        value={local}
+        enterKeyHint="search"
+        role="combobox"
+        aria-expanded={expanded}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={expanded && active >= 0 ? `${listId}-${active}` : undefined}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          setLocal(e.target.value);
+          setActive(-1);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && shown.length > 0) {
+            e.preventDefault();
+            setOpen(true);
+            setActive((i) => Math.min(i + 1, shown.length - 1));
+          } else if (e.key === 'ArrowUp' && shown.length > 0) {
+            e.preventDefault();
+            setActive((i) => Math.max(i - 1, -1));
+          } else if (e.key === 'Escape') {
+            setOpen(false);
+            setActive(-1);
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const chosen = expanded && active >= 0 ? shown[active] : undefined;
+            if (chosen) {
+              pick(chosen);
+              return;
+            }
+            onAdd(local);
+            setLocal('');
+            setActive(-1);
+            // Applied: the list closes, as it does after a pick. It opens
+            // again on the next keystroke or click.
+            setOpen(false);
+          }
+        }}
+      />
+      {expanded ? (
+        <ul className="fsuggest-list" id={listId} role="listbox" aria-label="Suggestions">
+          {shown.map((s, i) => (
+            <li
+              key={s.id}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={i === active}
+              className={i === active ? 'on' : undefined}
+              // mousedown, not click: a click would blur the input first and
+              // close the list before the pick landed.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(s);
+              }}
+              onMouseEnter={() => setActive(i)}
+            >
+              <span>{s.label}</span>
+              {s.count !== undefined ? <span className="c mono">{s.count}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

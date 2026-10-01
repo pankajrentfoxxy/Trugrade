@@ -44,6 +44,7 @@ function controller(rows: BrandSkuRow[], sellable: Record<string, number>) {
     listings,
     undefined as never,
     undefined as never,
+    undefined as never,
   );
 }
 

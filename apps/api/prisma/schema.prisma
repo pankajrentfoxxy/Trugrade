@@ -137,6 +137,7 @@ model sku {
   purchase_order_line             purchase_order_line[]
   vendor_sku_quality              vendor_sku_quality[]
 
+  wishlist_item wishlist_item[]
   @@index([cpu_generation, ram_gb, storage_gb], map: "ix_sku_filter")
   @@index([ports_json], map: "ix_sku_ports", type: Gin)
   @@index([search_tsv], map: "ix_sku_search", type: Gin)
@@ -528,6 +529,7 @@ model organization {
   vendor_profile                                                       vendor_profile?
   vendor_sourcing_declaration                                          vendor_sourcing_declaration[]
 
+  wishlist_item wishlist_item[]
   @@index([legal_name(ops: raw("gin_trgm_ops"))], map: "ix_org_name_trgm", type: Gin)
   @@index([org_type, status], map: "ix_org_type_status")
   @@schema("identity")
@@ -714,6 +716,7 @@ model user_account {
   vendor_profile                                                             vendor_profile[]
   vendor_sourcing_declaration                                                vendor_sourcing_declaration[]
 
+  wishlist_item wishlist_item[]
   @@index([org_id, status], map: "ix_user_org")
   @@schema("identity")
 }
@@ -1697,6 +1700,23 @@ model cart_item {
   listing             listing  @relation(fields: [listing_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([cart_id, listing_id])
+  @@schema("ordering")
+}
+
+/// A buyer's saved models — one row per person, model and grade. See the 20261001000000_wishlist migration.
+model wishlist_item {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  buyer_org_id String       @db.Uuid
+  user_id      String       @db.Uuid
+  sku_id       String       @db.Uuid
+  grade        grade_type
+  added_at     DateTime     @default(now()) @db.Timestamptz(6)
+  organization organization @relation(fields: [buyer_org_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_account user_account @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sku          sku          @relation(fields: [sku_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([buyer_org_id, user_id, sku_id, grade], map: "uq_wishlist_item")
+  @@index([buyer_org_id, user_id, added_at(sort: Desc)], map: "ix_wishlist_item_owner")
   @@schema("ordering")
 }
 

@@ -11,6 +11,10 @@ export interface TeamMember {
   isOrgOwner: boolean;
   roles: string[];
   mfaEnabled: boolean;
+  /** Whether this seat's role is in the server's `MFA_REQUIRED_ROLES` — the
+   * roles that can move money or approve KYC, and so must verify a second
+   * factor on every sign-in regardless of `mfaEnabled`. */
+  mfaRequired: boolean;
   lastLoginAt: string | null;
   isYou: boolean;
   lockedReason: string | null;

@@ -12,6 +12,7 @@ import { OrderingOpsController } from './ordering-ops.controller';
 import { OrderingService } from './ordering.service';
 import { ApprovalService } from './internal/approval.service';
 import { CartService } from './internal/cart.service';
+import { WishlistService } from './internal/wishlist.service';
 import { CheckoutService } from './internal/checkout.service';
 import { HoldService } from './internal/hold.service';
 import { OrderListService } from './internal/order-list.service';
@@ -94,6 +95,7 @@ import { AutomationModule } from '../../shared/automation/automation.service';
     OrderPdfService,
     OrderingService,
     CartService,
+    WishlistService,
     CheckoutService,
     HoldService,
     OrderTransactionService,

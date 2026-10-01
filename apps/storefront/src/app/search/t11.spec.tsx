@@ -296,8 +296,11 @@ describe('the search board reproduces its URL', () => {
     expect(box).toHaveValue('');
     expect(screen.getByRole('button', { name: /“acer”/ })).toBeInTheDocument();
 
+    fireEvent.focus(box);
     fireEvent.change(box, { target: { value: '  i5 ' } });
     fireEvent.keyDown(box, { key: 'Enter' });
+    // The suggestion list closes once the word is applied.
+    expect(screen.queryByRole('listbox')).toBeNull();
 
     // Appended, trimmed, beside the first — never in place of it.
     expect(push).toHaveBeenCalledTimes(1);
@@ -330,6 +333,36 @@ describe('the search board reproduces its URL', () => {
     target = new URLSearchParams(String(push.mock.calls[2]![0]).split('?')[1]);
     expect(target.getAll('q')).toEqual(['i5']);
     expect(box).toHaveValue('');
+  });
+
+  it('suggests the two processor pairs first on focus, and picking one ticks both filters', () => {
+    const shelf = {
+      ...facets(),
+      cpu: group('cpu', [
+        ['Core i5', 'Core i5', 24],
+        ['Core i7', 'Core i7', 4],
+      ]),
+    };
+    render(<FilterRail facets={shelf} query="" total={48} />);
+    const box = screen.getByPlaceholderText('Search within results');
+    fireEvent.focus(box);
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(options.slice(0, 2)).toEqual(['i5 · 11th gen', 'i7 · 11th gen']);
+
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'i7 · 11th gen' }));
+    const target = new URLSearchParams(String(push.mock.calls[0]![0]).split('?')[1]);
+    expect(target.getAll('cpu')).toEqual(['Core i7']);
+    expect(target.getAll('gen')).toEqual(['11th']);
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('narrows the suggestions as the buyer types, and leaves out what is already applied', () => {
+    render(<FilterRail facets={facets()} query="cpu=Core+i5&gen=11th" total={48} />);
+    const box = screen.getByPlaceholderText('Search within results');
+    fireEvent.focus(box);
+    expect(screen.queryByRole('option', { name: 'i5 · 11th gen' })).toBeNull();
+    fireEvent.change(box, { target: { value: 'asp' } });
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Aspire48']);
   });
 
   it('does not apply an empty or repeated word, and nothing applies without Enter', () => {

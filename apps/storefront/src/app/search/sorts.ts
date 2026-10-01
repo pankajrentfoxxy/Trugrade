@@ -7,8 +7,8 @@
  * build time. Shared data crosses the boundary through a shared module.
  */
 export const SORTS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'price', label: 'Landed price, low to high' },
-  { value: 'price_desc', label: 'Landed price, high to low' },
+  { value: 'price', label: 'Price — Low to High' },
+  { value: 'price_desc', label: 'Price — High to Low' },
   { value: 'score', label: 'Inspection score' },
   { value: 'battery', label: 'Battery health' },
   { value: 'ships', label: 'Fastest dispatch' },

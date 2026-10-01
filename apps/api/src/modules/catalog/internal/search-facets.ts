@@ -259,8 +259,7 @@ function predicates(q: SearchQuery): Record<Group, (r: SearchRow) => boolean> {
         (q.bmin === null || r.battery >= q.bmin) &&
         (q.bmax === null || r.battery <= q.bmax)),
     score: (r) => q.smin === null || (r.score !== null && r.score >= q.smin),
-    price: (r) =>
-      (q.pmin === null || r.price >= q.pmin) && (q.pmax === null || r.price <= q.pmax),
+    price: (r) => (q.pmin === null || r.price >= q.pmin) && (q.pmax === null || r.price <= q.pmax),
     screen: (r) => inList(q.screen, screenBucket(r.screenInch)),
     res: (r) =>
       q.res.length === 0 ||
@@ -269,7 +268,8 @@ function predicates(q: SearchQuery): Record<Group, (r: SearchRow) => boolean> {
       ),
     ship: (r) =>
       q.ship.length === 0 ||
-      (r.shipHours !== null && q.ship.some((limit) => r.shipHours !== null && r.shipHours <= limit)),
+      (r.shipHours !== null &&
+        q.ship.some((limit) => r.shipHours !== null && r.shipHours <= limit)),
     city: (r) => q.city.length === 0 || (r.city !== null && q.city.includes(r.city)),
     // Quantity is a property of the (model, grade, supply point) group, not of a
     // row, so it is applied after grouping — see `applyQuantity`.
@@ -295,11 +295,7 @@ function applyQuantity(rows: readonly SearchRow[], min: number | null): SearchRo
 }
 
 /** Rows passing every group except `except` — the basis of a live facet count. */
-function rowsExcept(
-  rows: readonly SearchRow[],
-  q: SearchQuery,
-  except: Group | null,
-): SearchRow[] {
+function rowsExcept(rows: readonly SearchRow[], q: SearchQuery, except: Group | null): SearchRow[] {
   const p = predicates(q);
   const keys = (Object.keys(p) as Group[]).filter((k) => k !== except);
   const kept = rows.filter((r) => keys.every((k) => p[k](r)));
@@ -514,7 +510,11 @@ export function buildFacets(
       // Not `optionsFrom`: one row can satisfy both options at once (a touch
       // FHD panel), so each is counted over the same rows independently.
       options: [
-        { value: 'fhd', label: 'Full HD or better', test: (r: SearchRow) => FHD_OR_BETTER.has(r.resolution) },
+        {
+          value: 'fhd',
+          label: 'Full HD or better',
+          test: (r: SearchRow) => FHD_OR_BETTER.has(r.resolution),
+        },
         { value: 'touch', label: 'Touchscreen', test: (r: SearchRow) => r.isTouch },
       ].map(({ value, label, test }) => ({
         value,
@@ -539,7 +539,9 @@ export function buildFacets(
       // at all is not a dimension a buyer has ever seen.
       options: (() => {
         const counted = forGroup('city');
-        const cities = [...new Set(rows.map((r) => r.city).filter((c): c is string => c !== null))].sort();
+        const cities = [
+          ...new Set(rows.map((r) => r.city).filter((c): c is string => c !== null)),
+        ].sort();
         return cities.map((c) => ({
           value: c,
           label: c,
@@ -618,7 +620,8 @@ function aggregate(rows: readonly SearchRow[]): SearchResult[] {
       supplyPoints: new Set(g.map((r) => `${r.city}|${r.supplyPointCode}`)).size,
       // No score on any unit means no chip, not a zero. A QC chip reading 0 says
       // "we inspected it and it failed"; the truth is that we have no number.
-      avgQcScore: scores.length === 0 ? null : Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+      avgQcScore:
+        scores.length === 0 ? null : Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
       batteryMin: batteries.length === 0 ? null : Math.round(Math.min(...batteries)),
       batteryMax: batteries.length === 0 ? null : Math.round(Math.max(...batteries)),
       batteryMeasured: batteries.length,
@@ -649,7 +652,8 @@ function sortResults(results: SearchResult[], sort: SortKey): SearchResult[] {
     // unmeasured machine can never lead a list ranked by measurement.
     score: (a, b) => (b.avgQcScore ?? -1) - (a.avgQcScore ?? -1),
     battery: (a, b) => (b.batteryMax ?? -1) - (a.batteryMax ?? -1),
-    ships: (a, b) => (a.shipHours ?? Number.MAX_SAFE_INTEGER) - (b.shipHours ?? Number.MAX_SAFE_INTEGER),
+    ships: (a, b) =>
+      (a.shipHours ?? Number.MAX_SAFE_INTEGER) - (b.shipHours ?? Number.MAX_SAFE_INTEGER),
     stock: (a, b) => b.unitsAvailable - a.unitsAvailable,
   };
   // Price is the tiebreak everywhere, so the order is total and a page boundary
@@ -659,12 +663,20 @@ function sortResults(results: SearchResult[], sort: SortKey): SearchResult[] {
 
 export interface SearchResponse {
   total: number;
+  /** Sellable units across every match, not just this page — the sum of each row's quantity. */
+  units: number;
   models: number;
   page: number;
   pages: number;
   per: number;
   results: SearchResult[];
   facets: Facets;
+  /**
+   * The longest outbound transit to anywhere we serve, in days; null when
+   * nothing is serviceable. Set by the controller from logistics, so a card
+   * can promise "Delivery by" a date that holds before a pincode is given.
+   */
+  transitDaysMax?: number | null;
 }
 
 export function runSearch(
@@ -679,6 +691,7 @@ export function runSearch(
 
   return {
     total: matched.length,
+    units: matched.reduce((n, r) => n + r.qty, 0),
     models: all.length,
     page,
     pages,

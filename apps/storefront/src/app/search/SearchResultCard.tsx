@@ -1,6 +1,8 @@
 import { GradeBadge } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
 import type { SearchResult } from '../../lib/api';
+import { DeliveryBy } from '../DeliveryBy';
+import { WishlistHeart } from '../WishlistHeart';
 import { brandPhoto } from '../../lib/brand-photo';
 import { storageShortLabel } from './storage-label';
 import { PLACEHOLDER_RATING, percentOff, placeholderMrp } from './placeholder-market';
@@ -52,7 +54,14 @@ function StarIcon(): React.JSX.Element {
  * The image is the brand-representative render the home page already uses,
  * never a unit photograph — those carry captions and live on the SKU page.
  */
-export function SearchResultCard({ r }: { r: SearchResult }): React.JSX.Element {
+export function SearchResultCard({
+  r,
+  deliveryBy,
+}: {
+  r: SearchResult;
+  /** "Sat, 3 Oct", or null/absent to draw no delivery line. */
+  deliveryBy?: string | null;
+}): React.JSX.Element {
   const storageShort = storageShortLabel(r.storageType);
   const cities = r.cities.join(', ');
   const photo = brandPhoto(r.brand);
@@ -80,70 +89,82 @@ export function SearchResultCard({ r }: { r: SearchResult }): React.JSX.Element 
   if (r.displayLine) specParts.push(<span key="disp">{r.displayLine}</span>);
 
   return (
-    <Link className="ptile" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
-      <div className="ptile-media">
-        {isGrade(r.grade) && <GradeBadge grade={r.grade} className="ptile-ribbon" />}
-        <span className="ptile-sealed">
-          <b className="mono">{r.unitsAvailable}</b> on sale
-        </span>
-        {photo ? <img className="ptile-photo" src={photo} alt="" loading="lazy" /> : <LaptopShell />}
-      </div>
-
-      <div className="ptile-body">
-        <p className="ptile-brandline">
-          <b>{r.brand}</b>
-          <span>
-            <span className="mono">{r.supplyPoints}</span> supply point
-            {r.supplyPoints === 1 ? '' : 's'}
-            {cities ? ` · ${cities}` : ''}
-          </span>
-        </p>
-        <h3 className="ptile-name">
-          {r.brand} {r.model}
-        </h3>
-
-        <p className="ptile-rate">
-          <span className="ptile-rate-pill">
-            <span className="mono">{PLACEHOLDER_RATING.value.toFixed(1)}</span>
-            <StarIcon />
-          </span>
-          <span>
-            <span className="mono">{PLACEHOLDER_RATING.count.toLocaleString('en-IN')}</span> buyer
-            ratings
-          </span>
-        </p>
-
-        {specParts.length > 0 ? (
-          <p className="ptile-spec">
-            {specParts.map((part, i) => (
-              <span key={i}>
-                {i > 0 && ' · '}
-                {part}
-              </span>
-            ))}
-          </p>
-        ) : (
-          <p className="ptile-spec">
-            <span className="ptile-unmeasured">Specification not published</span>
-          </p>
-        )}
-
-        <div className="ptile-price-row">
-          <span className="ptile-price-now mono">₹{RUPEES.format(r.fromPrice)}</span>
-          <s className="ptile-price-mrp mono">₹{RUPEES.format(mrp)} new</s>
-          <span className="ptile-price-off">
-            <span className="mono">{off}%</span> off
-          </span>
-          <span className="ptile-price-sub">from · incl. GST</span>
+    // The heart sits beside the link, not inside it: a button inside an
+    // anchor is invalid, and its click would follow the link.
+    <div className="ptile-wrap">
+      <WishlistHeart
+        skuId={r.skuId}
+        grade={r.grade}
+        name={`${r.brand} ${r.model}`}
+        className="wl-heart ptile-heart"
+      />
+      <Link className="ptile" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
+        <div className="ptile-media">
+          {isGrade(r.grade) && <GradeBadge grade={r.grade} className="ptile-ribbon" />}
+          {photo ? (
+            <img className="ptile-photo" src={photo} alt="" loading="lazy" />
+          ) : (
+            <LaptopShell />
+          )}
         </div>
-        {/*
+
+        <div className="ptile-body">
+          <p className="ptile-brandline">
+            <b>{r.brand}</b>
+            <span>
+              <span className="mono">{r.supplyPoints}</span> supply point
+              {r.supplyPoints === 1 ? '' : 's'}
+              {cities ? ` · ${cities}` : ''}
+            </span>
+          </p>
+          <h3 className="ptile-name">
+            {r.brand} {r.model}
+          </h3>
+
+          <p className="ptile-rate">
+            <span className="ptile-rate-pill">
+              <span className="mono">{PLACEHOLDER_RATING.value.toFixed(1)}</span>
+              <StarIcon />
+            </span>
+            <span>
+              <span className="mono">{PLACEHOLDER_RATING.count.toLocaleString('en-IN')}</span> buyer
+              ratings
+            </span>
+          </p>
+
+          {specParts.length > 0 ? (
+            <p className="ptile-spec">
+              {specParts.map((part, i) => (
+                <span key={i}>
+                  {i > 0 && ' · '}
+                  {part}
+                </span>
+              ))}
+            </p>
+          ) : (
+            <p className="ptile-spec">
+              <span className="ptile-unmeasured">Specification not published</span>
+            </p>
+          )}
+
+          <div className="ptile-price-row">
+            <span className="ptile-price-now mono">₹{RUPEES.format(r.fromPrice)}</span>
+            <s className="ptile-price-mrp mono">₹{RUPEES.format(mrp)} new</s>
+            <span className="ptile-price-off">
+              <span className="mono">{off}%</span> off
+            </span>
+            <span className="ptile-price-sub">incl. GST · from price</span>
+          </div>
+          <DeliveryBy date={deliveryBy} className="ptile-delivery" />
+          {/*
           Styled as a button, rendered as a span: the whole tile is already
           the link, and an interactive element nested inside an anchor is both
           invalid and unreachable. Full width, one per tile — the primary
           action for exactly the one product this card is about.
         */}
-        <span className="ptile-cta">View details</span>
-      </div>
-    </Link>
+          <span className="ptile-cta">View details</span>
+        </div>
+      </Link>
+    </div>
   );
 }

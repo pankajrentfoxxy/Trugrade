@@ -1,14 +1,6 @@
 import * as React from 'react';
-import {
-  EmptyState,
-  KpiRow,
-  QueueList,
-  Skeleton,
-  type Kpi,
-  type QueueItem,
-} from '@trugrade/ui';
-import { Navigate, useLocation } from 'react-router';
-import { PageHeader, Section } from '../lib/controls';
+import { EmptyState, Skeleton } from '@trugrade/ui';
+import { Link, Navigate, useLocation } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { useResource } from '../lib/useResource';
 
@@ -16,32 +8,40 @@ import { useResource } from '../lib/useResource';
  * ARCHETYPE E — Workspace. A KPI row, then queues ordered by SLA breach.
  * DENSITY: compact (admin), set on the app root by the shell.
  *
- * The day's exceptions, and nothing else (03_UX_SPEC.md §3C.1).
+ * DRAWN TO A SUPPLIED DESIGN, its markup and colours verbatim
+ * (`.overview-board`/`.ov-*` in `index.css`, `--admin-*` in `globals.css`) —
+ * same arrangement as `CatalogTree.tsx` and `OrderBoard.tsx`. The mock's three
+ * risk cards and six-row table were one account's example data, not a fixed
+ * shape; what is kept from the codebase rather than the mock:
  *
- * **Every number on this screen came out of a row.** That is the whole risk of
- * this archetype: a KPI row has slots, slots want filling, and this build has
- * already had to strip `98% of 412 units inspected` off a homepage with zero
- * units on it. So the server sends exactly the metrics it can source, this file
- * renders exactly what it is sent, and there is no placeholder, no target and no
- * "—" anywhere. Four tiles §3C.1 asks for have no source in this product at all;
- * they are printed at the bottom **by name, with the reason**, because a
- * dashboard that silently omits a risk is worse than one that admits it.
+ * - **"Fix these first" holds queues only, never metrics.** A `OpsMetric` has
+ *   no SLA, no oldest-wait and no breach count to put in a card footer, and a
+ *   metric's "good" direction is not inferrable from its shape — zero open
+ *   tickets is healthy, zero payout runs is not. Guessing would be exactly the
+ *   kind of invented number `03_UX_SPEC.md §3C.1` already ruled out for the
+ *   tiles below. The three worst-breached queues (same `byBreach` order
+ *   `QueueList` used) fill the slot instead, and the section disappears on a
+ *   day nothing is breached.
+ * - **"Work that's waiting" holds every queue, not the mock's extra PO and
+ *   approval rows.** Those two are metrics here (no board exists for either
+ *   yet, per the note below), so they render in "System health" with every
+ *   other metric instead of being forced into a row shape they don't have the
+ *   fields for.
+ * - **Every figure is read, not typed.** The mock's "36 payables", its "212
+ *   days" of partition runway, its four blind spots are the shape; the
+ *   numbers come from `/api/ops/dashboard`, scoped to whatever the signed-in
+ *   seat can see.
  *
- * **The queues are the screen, not the tiles.** `QueueList` does the worst-first
- * ordering itself, so this file never sorts. And a queue is here only if a board
- * answers it — purchase orders, order approvals, payables and tickets are counts
- * on the KPI row instead, because T26's ledger entry settled that a number with
- * no board beats a link to the wrong one, and their boards are T39's.
- *
- * **You see your slice.** The server assembles the payload from the permissions
- * the caller actually holds — a KYC_REVIEWER gets the two application queues and
- * no purchase orders — so an empty section here means "not yours", not "none".
+ * **You see your slice.** The server assembles the payload from the
+ * permissions the caller actually holds — a KYC_REVIEWER gets the two
+ * application queues and no purchase orders — so an empty section here means
+ * "not yours", not "none".
  */
 
 interface OpsMetric {
   key: string;
   label: string;
-  /** Null means we could not measure it. `KpiRow` prints "Not measured". */
+  /** Null means we could not measure it. */
   value: number | null;
   unit: string;
   hint: string;
@@ -72,43 +72,172 @@ interface OpsDashboard {
 }
 
 /**
- * A count is a count, never a percentage.
- *
- * `KpiPercentage` would demand a denominator, which is exactly why none of these
- * is typed as one: "15 of 18 applications" is a count with its own denominator
- * written into the unit, and turning it into "83%" would be a claim the ops
- * manager cannot act on.
+ * Worst first: most breached, then oldest, then largest — the same order
+ * `QueueList`'s `byBreach` uses, kept local rather than imported because that
+ * one takes `QueueItem`'s `breachedCount?: number` and this screen's own
+ * `OpsQueue` is typed `number | null` throughout, to match every other
+ * "not measured, never zero" field `/api/ops/dashboard` sends.
  */
-const toKpi = (m: OpsMetric): Kpi => ({
-  key: m.key,
-  label: m.label,
-  value: m.value,
-  unit: m.unit,
-  hint: m.hint,
-  // Dropped rather than defaulted: `exactOptionalPropertyTypes` forbids
-  // assigning undefined, and a `href: ''` would render a link to this page.
-  ...(m.href === null ? {} : { href: m.href }),
-});
+function byBreach(a: OpsQueue, b: OpsQueue): number {
+  const known = (q: OpsQueue): number => (q.breachedCount === null ? 1 : 0);
+  if (known(a) !== known(b)) return known(a) - known(b);
+  const breach = (b.breachedCount ?? 0) - (a.breachedCount ?? 0);
+  if (breach !== 0) return breach;
+  const wait = (b.oldestWaitHours ?? 0) - (a.oldestWaitHours ?? 0);
+  if (wait !== 0) return wait;
+  return b.count - a.count;
+}
+
+const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+
+/** "1 Oct 2026, 11:27 am" — the render instant, not a server timestamp. */
+function formatAsOf(d: Date): string {
+  const date = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const time = d
+    .toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .replace(/\s?(AM|PM)/i, (m) => m.toLowerCase());
+  return `${date}, ${time}`;
+}
 
 /**
- * The server's queue numbers, as `QueueItem` wants them.
- *
- * Every one of `oldestWaitHours`, `breachedCount` and `slaHours` is **dropped
- * rather than defaulted** when the API sends null. `QueueItem` treats an absent
- * field as "not measured" and renders it as such; supplying `0` instead would
- * print "Within SLA" under a queue nobody has ever timed, and "0 past SLA"
- * against a promise nobody made.
+ * The table's short link text, for the four queues this product currently
+ * raises. Falls back to the queue's own label so a new queue the server starts
+ * sending is never a dead button.
  */
-const toQueue = (q: OpsQueue): QueueItem => ({
-  key: q.key,
-  label: q.label,
-  href: q.href,
-  description: q.description,
-  count: q.count,
-  ...(q.oldestWaitHours === null ? {} : { oldestWaitHours: q.oldestWaitHours }),
-  ...(q.breachedCount === null ? {} : { breachedCount: q.breachedCount }),
-  ...(q.slaHours === null ? {} : { slaHours: q.slaHours }),
-});
+const OPEN_LABEL: Readonly<Record<string, string>> = {
+  'onboarding-vendor': 'Open KYC queue',
+  'onboarding-buyer': 'Open KYC queue',
+  'grade-corrections': 'Open corrections',
+};
+const openLabel = (q: OpsQueue): string => OPEN_LABEL[q.key] ?? `Open ${q.label}`;
+
+/** One sentence, built from the numbers rather than written per queue. */
+function headline(q: OpsQueue): string {
+  if (q.breachedCount === null || q.breachedCount === 0) {
+    return `${q.count} ${plural(q.count, 'item is', 'items are')} waiting, with no promise to measure ${q.count === 1 ? 'it' : 'them'} against.`;
+  }
+  if (q.breachedCount === q.count) {
+    return 'Every waiting item is past our promise.';
+  }
+  return `${q.breachedCount} of ${q.count} waiting items are past our promise.`;
+}
+
+/**
+ * The table's "how late" bar, normalised against the worst queue in the set —
+ * not against an absolute scale, which would make one chronically slow queue
+ * fill every bar and say nothing. A queue with no promise gets no multiple at
+ * all, never a borrowed one.
+ */
+function multipleOf(q: OpsQueue): number | null {
+  if (q.oldestWaitHours === null || q.slaHours === null || q.slaHours <= 0) return null;
+  return q.oldestWaitHours / q.slaHours;
+}
+
+function RiskCard({ queue }: { queue: OpsQueue }): React.JSX.Element {
+  const big = queue.breachedCount ?? queue.count;
+  const unit =
+    queue.breachedCount === null
+      ? plural(queue.count, 'item waiting', 'items waiting')
+      : `of ${queue.count} past promise`;
+  return (
+    <article className="ov-risk">
+      <span className="ov-risk__label">{queue.label}</span>
+      <div className="ov-risk__big">
+        <span className="ov-risk__n font-mono tnum">{big}</span>
+        <span className="ov-risk__unit">{unit}</span>
+      </div>
+      <h3 className="ov-risk__title">{headline(queue)}</h3>
+      <p className="ov-risk__body">{queue.description}</p>
+      <div className="ov-risk__foot">
+        <span>
+          {queue.oldestWaitHours === null ? 'Oldest not measured' : `Oldest: ${queue.oldestWaitHours} h`}
+        </span>
+        <Link to={queue.href}>{openLabel(queue)} →</Link>
+      </div>
+    </article>
+  );
+}
+
+function QueueRow({ queue, maxMultiple }: { queue: OpsQueue; maxMultiple: number }): React.JSX.Element {
+  const multiple = multipleOf(queue);
+  const days = queue.oldestWaitHours === null ? null : Math.floor(queue.oldestWaitHours / 24);
+  return (
+    <tr>
+      <td>
+        <div className="ov-q__name">{queue.label}</div>
+        <div className="ov-q__desc">{queue.description}</div>
+      </td>
+      <td className="num">
+        <div className="ov-count">{queue.count}</div>
+        {queue.breachedCount !== null && queue.breachedCount > 0 ? (
+          <div className="ov-late">{queue.breachedCount} past promise</div>
+        ) : null}
+      </td>
+      <td>
+        {queue.oldestWaitHours === null ? (
+          <span className="ov-oldest" style={{ color: 'var(--admin-faint)' }}>
+            Not measured
+          </span>
+        ) : (
+          <>
+            <span className="ov-oldest">
+              {days} {plural(days ?? 0, 'day', 'days')}
+            </span>
+            <div className="ov-oldest-h">{queue.oldestWaitHours} h</div>
+          </>
+        )}
+      </td>
+      <td>
+        {queue.slaHours === null ? (
+          <span className="ov-none">No deadline set</span>
+        ) : (
+          <span className="ov-promise">{queue.slaHours} h</span>
+        )}
+      </td>
+      <td>
+        {multiple === null ? (
+          <div className="ov-over">
+            <span className="ov-over__txt ov-over__txt--na">Can&rsquo;t tell without a deadline</span>
+          </div>
+        ) : (
+          <div className="ov-over">
+            <span className="ov-over__bar">
+              <span style={{ width: `${Math.max(4, Math.min(100, (multiple / maxMultiple) * 100))}%` }} />
+            </span>
+            <span className="ov-over__txt">about {Math.round(multiple)}× our promise</span>
+          </div>
+        )}
+      </td>
+      <td className="num">
+        <Link to={queue.href} className="ov-go">
+          {openLabel(queue)} →
+        </Link>
+      </td>
+    </tr>
+  );
+}
+
+function SysItem({ metric }: { metric: OpsMetric }): React.JSX.Element {
+  const name = metric.href ? <Link to={metric.href}>{metric.label}</Link> : metric.label;
+  return (
+    <div className="ov-sys__item">
+      <div className="ov-sys__top">
+        <span className="ov-sys__name">{name}</span>
+        {metric.value === null ? (
+          <span className="ov-sys__val" style={{ color: 'var(--admin-faint)' }}>
+            Not measured
+          </span>
+        ) : (
+          <span className="ov-sys__val">
+            {metric.value}
+            <small>{metric.unit}</small>
+          </span>
+        )}
+      </div>
+      <p className="ov-sys__note">{metric.hint}</p>
+    </div>
+  );
+}
 
 /**
  * The one guard in this console that is not a permission.
@@ -165,84 +294,150 @@ export function OpsOverviewRoute(): React.JSX.Element {
 
   if (!data) {
     return (
-      <div className="tg-stack">
-        <PageHeader title="Today">Loading what needs somebody today.</PageHeader>
-        {/* Skeletons that keep the box, so nothing jumps when the numbers land. */}
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="tg-card rounded-lg border border-rule bg-sheet">
-              <Skeleton lines={3} />
+      <div className="overview-board">
+        <div className="ov-head">
+          <div>
+            <h1 className="ov-title">Operations overview</h1>
+            <p className="ov-sub">Loading what needs somebody today.</p>
+          </div>
+        </div>
+        <div className="ov-risks">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="ov-risk">
+              <Skeleton lines={4} />
             </div>
           ))}
         </div>
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="tg-card rounded-lg border border-rule bg-sheet">
-              <Skeleton lines={2} />
-            </div>
-          ))}
+        <div className="ov-card">
+          <div style={{ padding: 20 }}>
+            <Skeleton lines={5} />
+          </div>
         </div>
       </div>
     );
   }
 
-  const breached = data.queues.reduce((n, q) => n + (q.breachedCount ?? 0), 0);
-  const unmeasured = data.queues.filter((q) => q.breachedCount === null).length;
+  const orderedQueues = [...data.queues].sort(byBreach);
+  const riskQueues = orderedQueues.filter((q) => (q.breachedCount ?? 0) > 0).slice(0, 3);
+  const overdueCount = data.queues.filter((q) => (q.breachedCount ?? 0) > 0).length;
+  const multiples = data.queues.map(multipleOf).filter((n): n is number => n !== null);
+  const maxMultiple = Math.max(1, ...multiples);
 
   return (
-    <div className="tg-stack">
-      <PageHeader title="Today">
-        {breached > 0 ? (
-          <>
-            {/* Ours, in our own words. "Breaching applications" would read as a
-                fact about the applicants; they submitted and waited. */}
-            We are past a promise we made on{' '}
-            <span className="font-mono tnum text-ink">{breached}</span>{' '}
-            {breached === 1 ? 'item' : 'items'}.
-          </>
-        ) : (
-          'Nothing here is past a promise we made.'
-        )}{' '}
-        {unmeasured > 0 && (
-          <>
-            {/* Said out loud rather than left to the queue rows: a workspace
-                that looks green because half of it is untimed is the same
-                defect as a missing value rendering as a passing one. */}
-            <span className="font-mono tnum text-ink">{unmeasured}</span> of the{' '}
-            <span className="font-mono tnum text-ink">{data.queues.length}</span> queues below{' '}
-            {unmeasured === 1 ? 'carries' : 'carry'} no promise at all, so nothing in{' '}
-            {unmeasured === 1 ? 'it' : 'them'} can be shown as late.
-          </>
+    <div className="overview-board">
+      <div className="ov-head">
+        <div>
+          <h1 className="ov-title">Operations overview</h1>
+          <p className="ov-sub">
+            What&rsquo;s late, stuck or unmeasured across the platform · as of{' '}
+            {formatAsOf(new Date())}
+          </p>
+        </div>
+        {(riskQueues.length > 0 || overdueCount > 0 || data.gaps.length > 0) && (
+          <div className="ov-health">
+            {riskQueues.length > 0 && (
+              <span className="ov-tag ov-tag--bad">
+                {riskQueues.length} critical
+              </span>
+            )}
+            {overdueCount > 0 && (
+              <span className="ov-tag ov-tag--warn">
+                {overdueCount} {plural(overdueCount, 'queue', 'queues')} overdue
+              </span>
+            )}
+            {data.gaps.length > 0 && (
+              <span className="ov-tag ov-tag--grey">{data.gaps.length} not measured</span>
+            )}
+          </div>
         )}
-      </PageHeader>
+      </div>
 
-      {data.metrics.length > 0 && <KpiRow label="Today" items={data.metrics.map(toKpi)} />}
+      {riskQueues.length > 0 && (
+        <section aria-labelledby="ov-r-h">
+          <div className="ov-sec-h">
+            <h2 id="ov-r-h">Fix these first</h2>
+            <p>Each one costs money or trust every day it waits.</p>
+          </div>
+          <div className="ov-risks">
+            {riskQueues.map((q) => (
+              <RiskCard key={q.key} queue={q} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {data.queues.length > 0 ? (
-        <QueueList label="What is stuck" items={data.queues.map(toQueue)} />
+        <section aria-labelledby="ov-q-h">
+          <div className="ov-sec-h">
+            <h2 id="ov-q-h">Work that&rsquo;s waiting</h2>
+            <p>Sorted by how far past our promise the oldest item is. Queues with no deadline come last.</p>
+          </div>
+          <div className="ov-card">
+            <div className="ov-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Queue</th>
+                    <th scope="col" className="num">
+                      Waiting
+                    </th>
+                    <th scope="col">Oldest</th>
+                    <th scope="col">Our promise</th>
+                    <th scope="col">How late</th>
+                    <th scope="col">
+                      <span className="sr-only">Open</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderedQueues.map((q) => (
+                    <QueueRow key={q.key} queue={q} maxMultiple={maxMultiple} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
       ) : (
         <EmptyState
           title="No queues in your slice"
-          body="Every queue on this screen is gated on the permission of the board behind it, and your account holds none of them. That is a role question, not an empty day — the numbers above are the part that is yours. Ask an administrator which section you should be in."
+          body="Every queue on this screen is gated on the permission of the board behind it, and your account holds none of them. That is a role question, not an empty day — the numbers in System health are the part that is yours. Ask an administrator which section you should be in."
         />
       )}
 
-      {data.gaps.length > 0 && (
-        <Section
-          title="Not on this screen, and why"
-          subtitle="Exceptions the operations spec asks for that nothing in this product can measure yet. Named rather than shown as zero, because a zero here would read as “nothing is wrong”."
-        >
-          <dl className="flex flex-col gap-4">
-            {data.gaps.map((gap) => (
-              <div key={gap.label} className="border-b border-rule-2 pb-4 last:border-b-0 last:pb-0">
-                <dt className="font-mono text-label uppercase tracking-[0.13em] text-ink-3">
-                  {gap.label}
-                </dt>
-                <dd className="mt-1 max-w-prose text-body-sm text-ink-2">{gap.reason}</dd>
+      {(data.metrics.length > 0 || data.gaps.length > 0) && (
+        <div className="ov-split">
+          {data.metrics.length > 0 && (
+            <section className="ov-panel" aria-labelledby="ov-s-h">
+              <h2 id="ov-s-h">System health</h2>
+              <p>Things that break quietly if nobody watches them.</p>
+              <div className="ov-sys">
+                {data.metrics.map((m) => (
+                  <SysItem key={m.key} metric={m} />
+                ))}
               </div>
-            ))}
-          </dl>
-        </Section>
+            </section>
+          )}
+
+          {data.gaps.length > 0 && (
+            <section className="ov-panel" aria-labelledby="ov-b-h">
+              <h2 id="ov-b-h">Not measured yet</h2>
+              <p>
+                Exceptions the operations spec asks for that nothing in this product can measure
+                yet. Named rather than shown as zero, because a zero here would read as &ldquo;all
+                fine&rdquo;.
+              </p>
+              <div className="ov-blind">
+                {data.gaps.map((gap) => (
+                  <div key={gap.label} className="ov-blind__item">
+                    <span className="ov-blind__name">{gap.label}</span>
+                    <span className="ov-blind__why">{gap.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );

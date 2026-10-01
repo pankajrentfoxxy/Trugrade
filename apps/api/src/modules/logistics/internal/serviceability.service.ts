@@ -97,6 +97,24 @@ export class ServiceabilityService {
   }
 
   /**
+   * The longest transit any active outbound carrier quotes to any pincode we
+   * serve, in days — the upper bound a "Delivery by" date can be built on
+   * before the buyer has given a pincode. Null when nothing is serviceable.
+   *
+   * Same carrier filter as `outboundServicesFor`: a carrier that cannot carry
+   * the outbound leg has no say in when a buyer's machine arrives.
+   */
+  async slowestOutboundTransitDays(): Promise<number | null> {
+    const [row] = await this.prisma.$queryRaw<Array<{ days: number | null }>>`
+      SELECT max(s.transit_days_max)::int AS days
+        FROM logistics.pincode_serviceability s
+        JOIN logistics.carrier c ON c.id = s.carrier_id
+       WHERE c.is_active
+         AND 'OUTBOUND' = ANY(c.supports_leg)`;
+    return row?.days ?? null;
+  }
+
+  /**
    * Every active carrier that can deliver **to** each of these pincodes.
    *
    * `supports_leg` is filtered to OUTBOUND on purpose. Porter is registered

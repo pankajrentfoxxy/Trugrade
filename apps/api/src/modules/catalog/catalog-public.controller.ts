@@ -3,6 +3,7 @@ import { Public } from '../../shared/auth/guards';
 import { PrismaService } from '../../shared/db/prisma.service';
 import { ListingService } from '../listing';
 import { OrderingService } from '../ordering';
+import { LogisticsService } from '../logistics';
 import { QcService } from '../qc';
 import {
   runSearch,
@@ -41,6 +42,7 @@ export class CatalogPublicController {
     private readonly listings: ListingService,
     private readonly qc: QcService,
     private readonly ordering: OrderingService,
+    private readonly logistics: LogisticsService,
   ) {}
 
   /**
@@ -93,7 +95,9 @@ export class CatalogPublicController {
   @Get('brands')
   @Public()
   @Header('Cache-Control', 'public, max-age=60')
-  async brands(): Promise<Array<{ name: string; slug: string; skuCount: number; inStock: number }>> {
+  async brands(): Promise<
+    Array<{ name: string; slug: string; skuCount: number; inStock: number }>
+  > {
     // The brand of a SKU is catalog's fact; the stock behind it is listing's.
     // Neither half can be read from the other's schema, so the two are fetched
     // in parallel and summed here on `sku_id` — the same key the JOIN used.
@@ -284,7 +288,11 @@ export class CatalogPublicController {
   @Header('Cache-Control', 'public, max-age=30')
   async search(@Query() query: Record<string, string | string[]>): Promise<SearchResponse> {
     const q = parseSearchQuery(query);
-    const [units, catalog] = await Promise.all([this.listings.sellableUnitFacts(), this.skuSpecs()]);
+    const [units, catalog, transitDaysMax] = await Promise.all([
+      this.listings.sellableUnitFacts(),
+      this.skuSpecs(),
+      this.logistics.slowestTransitDays(),
+    ]);
 
     const bySku = new Map(catalog.map((c) => [c.skuId, c]));
     const rows: SearchRow[] = units.flatMap((u) => {
@@ -327,6 +335,7 @@ export class CatalogPublicController {
       options: [],
       unavailable: 'Whether a charger is included is not recorded at inspection yet.',
     };
+    answer.transitDaysMax = transitDaysMax;
     return answer;
   }
 

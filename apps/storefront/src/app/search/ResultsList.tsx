@@ -1,152 +1,172 @@
-'use client';
-
-import * as React from 'react';
-import { DataBoard, GradeBadge, type Column } from '@trugrade/ui';
+import { GradeBadge } from '@trugrade/ui';
 import type { Grade } from '@trugrade/contracts';
-import type { SearchResult } from '../../lib/api';
 import Link from 'next/link';
+import type { Route } from 'next';
+import type { SearchResult } from '../../lib/api';
+import { brandPhoto } from '../../lib/brand-photo';
+import { DeliveryBy } from '../DeliveryBy';
+import { WishlistHeart } from '../WishlistHeart';
+import { storageShortLabel } from './storage-label';
+import { PLACEHOLDER_RATING, percentOff, placeholderMrp } from './placeholder-market';
 
 /**
- * List view — the same results as the grid, in the one table component.
+ * The list view: one wide card per model — picture, what the machine is,
+ * then the price and the way in.
  *
- * `DataBoard` is `packages/ui`'s table under the name the backlog uses; row
- * height comes from `data-density` on the app root, not from a prop here.
- * Writing a second table for the storefront is the failure the density rule
- * exists to prevent.
+ * Drawn to the supplied design, with three parts left out by direction: the
+ * compare checkbox and the Add to cart button. The heart saves the model at
+ * this grade to the wishlist, the same control the grid card carries.
  *
- * Every measurement that is missing renders as "Not measured" in `--ink-4`.
- * Never a zero: a machine whose battery we did not open the report on must not
- * sit in a column reading 0% beside one that genuinely measured 0%.
+ * What is real and what is not is the same as on the grid card: every spec,
+ * grade, battery band, unit count and price comes from the search response;
+ * the rating, the struck-through new price and the saving are the placeholders
+ * in `placeholder-market.ts`. A measurement the inspection did not take says
+ * "Not measured" — never a zero, which would read as a failed machine.
  */
 const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+const GRADES: readonly Grade[] = ['A_PLUS', 'A', 'B'];
+const isGrade = (value: string): value is Grade => (GRADES as readonly string[]).includes(value);
+const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 
 const NOT_MEASURED = <span className="notmeasured">Not measured</span>;
+
+function battery(r: SearchResult): React.ReactNode {
+  if (r.batteryMin === null || r.batteryMax === null || r.batteryMeasured === 0)
+    return NOT_MEASURED;
+  const band =
+    r.batteryMin === r.batteryMax ? `${r.batteryMin}%` : `${r.batteryMin}–${r.batteryMax}%`;
+  return (
+    <>
+      <span className="mono">{band}</span>{' '}
+      <span className="lrow-den mono">
+        ({`${r.batteryMeasured} of ${r.unitsAvailable}`} measured)
+      </span>
+    </>
+  );
+}
+
+function score(r: SearchResult): React.ReactNode {
+  if (r.avgQcScore === null) return NOT_MEASURED;
+  return <span className="mono">{Math.round(r.avgQcScore)} / 100</span>;
+}
+
+function LaptopShell(): React.JSX.Element {
+  return (
+    <svg className="lrow-shell" viewBox="0 0 150 80" fill="none" aria-hidden="true">
+      <rect x="27" y="10" width="96" height="56" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 70 h126 l-8 -4 H20 z" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function StarIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.6 14.9 8.7l6.6.8-4.9 4.6 1.3 6.5L12 17.4l-5.9 3.2 1.3-6.5L2.5 9.5l6.6-.8L12 2.6z" />
+    </svg>
+  );
+}
+
+function ListCard({
+  r,
+  deliveryBy,
+}: {
+  r: SearchResult;
+  deliveryBy: string | null;
+}): React.JSX.Element {
+  const photo = brandPhoto(r.brand);
+  const mrp = placeholderMrp(r.fromPrice);
+  const off = percentOff(r.fromPrice, mrp);
+  const kind = storageShortLabel(r.storageType);
+  const storage = r.storageGb > 0 ? `${r.storageGb} GB${kind ? ` ${kind}` : ''}` : null;
+  const memory = r.ramGb > 0 ? `${r.ramGb} GB` : null;
+  const config = [r.cpuLine, memory, storage].filter(Boolean).join(' / ');
+  const href = `/laptops/${r.skuId}?grade=${r.grade}` as Route;
+
+  return (
+    <article className="lrow">
+      <WishlistHeart
+        skuId={r.skuId}
+        grade={r.grade}
+        name={`${r.brand} ${r.model}`}
+        className="wl-heart lrow-heart"
+      />
+      <Link className="lrow-media" href={href} tabIndex={-1} aria-hidden="true">
+        {isGrade(r.grade) && <GradeBadge grade={r.grade} className="lrow-grade" />}
+        {photo ? <img className="lrow-photo" src={photo} alt="" loading="lazy" /> : <LaptopShell />}
+      </Link>
+
+      <div className="lrow-body">
+        <p className="lrow-brand">{r.brand}</p>
+        <h3 className="lrow-name">
+          <Link href={href}>
+            {r.brand} {r.model}
+            {config ? ` (${config})` : ''}
+          </Link>
+        </h3>
+        <p className="lrow-rate">
+          <span className="lrow-rate-pill">
+            <span className="mono">{PLACEHOLDER_RATING.value.toFixed(1)}</span>
+            <StarIcon />
+          </span>
+          <span>
+            <span className="mono">{PLACEHOLDER_RATING.count.toLocaleString('en-IN')}</span> ratings
+          </span>
+        </p>
+        <ul className="lrow-facts">
+          {r.cpuLine ? <li>{r.cpuLine} processor</li> : null}
+          {memory || storage ? (
+            <li>{[memory ? `${memory} RAM` : null, storage].filter(Boolean).join(' · ')}</li>
+          ) : null}
+          {r.displayLine ? <li>{r.displayLine} display</li> : null}
+          <li>
+            Grade {GRADE_LABEL[r.grade] ?? r.grade} · battery health {battery(r)} · inspection score{' '}
+            {score(r)}
+          </li>
+          <li>Tested on 12 areas, tamper-sealed, one GST invoice</li>
+        </ul>
+      </div>
+
+      <div className="lrow-side">
+        <p className="lrow-price">
+          <span className="lrow-now mono">₹{RUPEES.format(r.fromPrice)}</span>
+          <s className="lrow-mrp mono">₹{RUPEES.format(mrp)}</s>
+          <span className="lrow-off">
+            <span className="mono">{off}%</span> off
+          </span>
+        </p>
+        <p className="lrow-sub">incl. GST · from price</p>
+        <DeliveryBy date={deliveryBy} className="lrow-delivery" />
+        <p className="lrow-stock">
+          <span className="mono">{r.unitsAvailable}</span> sealed unit
+          {r.unitsAvailable === 1 ? '' : 's'} · <span className="mono">{r.supplyPoints}</span>{' '}
+          supply point{r.supplyPoints === 1 ? '' : 's'}
+          {r.cities.length > 0 ? ` · ${r.cities.join(', ')}` : ''}
+        </p>
+        <Link className="lrow-cta" href={href}>
+          View details
+        </Link>
+      </div>
+    </article>
+  );
+}
 
 export function ResultsList({
   results,
   sortLabel,
+  deliveryBy,
 }: {
   results: readonly SearchResult[];
   /** Announced with the count: a sort read off a header arrow is invisible. */
   sortLabel: string;
+  /** "Sat, 3 Oct" for a result, or null for none. */
+  deliveryBy?: (r: SearchResult) => string | null;
 }): React.JSX.Element {
-  /*
-   * Seven columns, not ten.
-   *
-   * Storefront density is comfortable — 20px of padding either side of every
-   * cell — so each extra column costs 40px before it holds anything. Ten
-   * columns pushed the landed price off the right edge behind a scrollbar,
-   * which is the one column nobody should have to go looking for. Dispatch and
-   * the supply point moved into the cells they qualify rather than being
-   * dropped: they are facts, and a fact is not deleted to make a table fit.
-   */
-  const columns: ReadonlyArray<Column<SearchResult>> = [
-    {
-      key: 'model',
-      header: 'Model',
-      cell: (r) => (
-        <span className="lmodel">
-          <b>
-            {r.brand} {r.model}
-          </b>
-          <span className="mono">{r.spec}</span>
-          <span className="lmeta mono">
-            {r.shipHours === null ? (
-              <span className="notmeasured">Dispatch time not set</span>
-            ) : (
-              <>Ships in {r.shipHours} h</>
-            )}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: 'grade',
-      header: 'Inspected grade',
-      cell: (r) => <GradeBadge grade={r.grade as Grade} />,
-    },
-    {
-      key: 'score',
-      header: 'Score',
-      numeric: true,
-      cell: (r) =>
-        r.avgQcScore === null ? (
-          NOT_MEASURED
-        ) : (
-          <span className="mono">
-            {r.avgQcScore}
-            <span className="denom"> / 100</span>
-          </span>
-        ),
-    },
-    {
-      key: 'battery',
-      header: 'Battery health',
-      numeric: true,
-      // The percentage carries its denominator, always: "88–95% · 8 of 8" is a
-      // fact; "88–95%" is a claim about units we may not have opened.
-      cell: (r) =>
-        r.batteryMeasured === 0 || r.batteryMin === null || r.batteryMax === null ? (
-          NOT_MEASURED
-        ) : (
-          <span className="mono">
-            {r.batteryMin === r.batteryMax ? `${r.batteryMin}%` : `${r.batteryMin}–${r.batteryMax}%`}
-            <span className="denom">
-              {' '}
-              · {r.batteryMeasured} of {r.unitsAvailable}
-            </span>
-          </span>
-        ),
-    },
-    {
-      key: 'units',
-      header: 'Sealed units',
-      numeric: true,
-      // A stock count is a fact. It is never dressed as urgency.
-      cell: (r) => (
-        <span className="lunits mono">
-          {r.unitsAvailable}
-          <span className="denom">
-            {r.supplyPoints} supply point{r.supplyPoints === 1 ? '' : 's'}
-          </span>
-          <span className="denom">{r.cities.join(', ')}</span>
-        </span>
-      ),
-    },
-    {
-      key: 'price',
-      header: 'From',
-      numeric: true,
-      cell: (r) => (
-        <span className="money">
-          ₹{RUPEES.format(r.fromPrice)}
-          <small>incl. GST</small>
-        </span>
-      ),
-    },
-    {
-      key: 'action',
-      header: 'Compare',
-      headerHidden: true,
-      // The canonical product route. It is built in T12; until then this is the
-      // one forward link on the screen, and it points where the model will live
-      // rather than at an invented substitute.
-      cell: (r) => (
-        <Link className="sel gh" href={`/laptops/${r.skuId}?grade=${r.grade}`}>
-          Compare
-        </Link>
-      ),
-    },
-  ];
-
   return (
-    <div className="tbl lview">
-      <DataBoard
-        caption={`${results.length} model${results.length === 1 ? '' : 's'} on this page, sorted by ${sortLabel}.`}
-        columns={columns}
-        rows={results}
-        rowKey={(r) => `${r.skuId}-${r.grade}`}
-      />
-    </div>
+    <section className="lrows" aria-label={`${results.length} models, sorted by ${sortLabel}`}>
+      {results.map((r) => (
+        <ListCard key={`${r.skuId}-${r.grade}`} r={r} deliveryBy={deliveryBy?.(r) ?? null} />
+      ))}
+    </section>
   );
 }

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Button, DataBoard, EmptyState, Input, KpiRow, cn, type Column } from '@trugrade/ui';
+import { DataBoard, EmptyState, cn, type Column } from '@trugrade/ui';
 import { daysSince } from '../lib/clock';
-import { Board, PageHeader } from '../lib/controls';
+import { Board } from '../lib/controls';
 import { useResource } from '../lib/useResource';
 import { useUrlState } from '../lib/urlState';
 
@@ -15,25 +15,29 @@ import { useUrlState } from '../lib/urlState';
  * this board never renders (the second one, if it ever exists) is ordered the
  * same way.
  *
- * REDESIGNED against a supplied mock (a KPI strip, a segmented type filter, an
- * independent "only overdue" toggle, a search box, richer row cells with an
- * avatar and a status note, and a proportional bar on how overdue a row is).
+ * DRAWN TO A SUPPLIED DESIGN, its markup and colours verbatim
+ * (`.review-queue-board`/`.rq-*` in `index.css`, `--admin-*` in
+ * `globals.css`) — same arrangement as `CatalogTree.tsx` and `OrderBoard.tsx`.
  * **The table itself is still `DataBoard`** — `09_FRONTEND_LOCKED.md`'s
  * density rule is "one DataBoard component, three settings", and the mock's
- * own hand-rolled `<table>` would have been a second one. Every richer cell
- * below is a `Column.cell` renderer inside the same board.
+ * own hand-rolled `<table>` would have been a second one. `.rq-card`/
+ * `.rq-table` are its `className` props; every richer cell is a `Column.cell`
+ * renderer inside the same board, and `c-biz`/`c-status`/`c-action` are each
+ * column's own `className`, which is what lets the mock's mobile card layout
+ * reach the right `<td>`s.
  *
- * **One thing from the mock was not carried over on purpose: the red
- * "overdue" colour.** T28's colour sweep already ran on this exact screen and
- * deliberately moved a breach off `--fail` onto `--warn`, on the number rather
- * than a chip — see the comment on `SlaCell` below for why a red mark against
- * an applicant's name reads as a verdict on THEM for a delay that is ours.
- * Reintroducing red here would undo that fix. The bar, the bold weight and the
- * "N days M h late" phrasing are kept; the colour is `--warn` throughout.
+ * ONE DELIBERATE REVERSAL from this file's own earlier history: T28's colour
+ * sweep had moved the breach indicator off `--fail` red onto amber, reasoning
+ * that a red mark against an applicant's name reads as a verdict on them for a
+ * delay that is ours. This pass puts the supplied design's red (`--admin-bad`)
+ * back, at the product owner's direction — the same red the catalog and
+ * orders boards already take verbatim for their own marks. If that reasoning
+ * should still hold here, swap `--admin-bad` for `--admin-warn` in the
+ * `.rq-late__*` rules in `index.css`; nothing else in this file depends on it.
  *
  * The stat tiles and every count are computed from the same `items` this page
- * already fetches — none of the mock's own sample numbers (its "31 days",
- * its named business) are hardcoded here; `CLAUDE.md` reserves counters and
+ * already fetches — none of the mock's own sample numbers (its "31 days", its
+ * named businesses) are hardcoded here; `CLAUDE.md` reserves counters and
  * scores for what the API actually returned.
  *
  * **Typeface: IBM Plex Sans/Mono, loaded once in `OpsShell.tsx`.** The
@@ -58,9 +62,6 @@ export interface ReviewQueueItem {
   slaHours: number | null;
 }
 
-/** Below this many hours left, a row is worth looking at before the others. */
-const WARN_AT_HOURS = 12;
-
 /** "6 h" under a day; "3 days 7 h" beyond it — the same number, read the way
  * a reviewer would say it rather than as three-digit hours. */
 function formatHours(hours: number): string {
@@ -74,43 +75,12 @@ function formatHours(hours: number): string {
 }
 
 /**
- * Hours, in the product's own mono type, rounded the way a person says them.
- *
- * The API sends one decimal place because it sorts on the value; a reviewer
- * reads "6 h", not "6.0 h", and a column of them has to line up.
- */
-function Hours({ value, tone }: { value: number; tone: 'ink' | 'warn' }): React.JSX.Element {
-  return (
-    <span className={cn('font-mono tnum', tone === 'warn' ? 'text-warn' : 'text-ink')}>
-      {formatHours(value)}
-    </span>
-  );
-}
-
-/**
  * The SLA column, which is the only reason this screen is ordered the way it is.
- *
- * **A breach is ours, and the colour says so.** `--fail` means FAIL, and a red
- * chip against an applicant's name because *we* were slow reads as a rejection
- * — T28's colour sweep found exactly that here. Nobody has been judged.
- *
- * **And the amber is on the number, not on a chip.** The first pass put a warn
- * `StatusPill` on every breached row, which on a real queue is fifteen outlined
- * amber chips down one column — a decorative wash, and the moment amber becomes
- * one of those it stops meaning anything. `09_FRONTEND_LOCKED.md` allows amber
- * for exactly three things and one of them is *a measured value*: the hours are
- * the measured value, so the hours carry the colour and the sentence carries
- * the meaning.
- *
- * The promise is named on every row rather than in the page header, because the
- * two org types are not owed the same thing and a header can only say one
- * number. Where the org type carries no promise at all, the clause is dropped
- * rather than defaulted — the same rule `QueueItem.slaHours` follows.
  *
  * `worstHours` is this render's worst BREACHED hour figure across the whole
  * queue (not just the rows currently shown) — the bar reads "how bad relative
- * to the worst one right now", the same relative reading the mock's bar widths
- * were going for, just computed rather than hand-set per row.
+ * to the worst one right now", the same relative reading the mock's hand-set
+ * bar widths were going for, just computed rather than per row.
  */
 function SlaCell({
   item,
@@ -122,16 +92,10 @@ function SlaCell({
   if (item.hoursRemaining === null) {
     // Not a dash, and not a tick. "No clock on this application" and "no time
     // left" must never look alike.
-    return <span className="text-body-sm text-ink-4">No promise recorded</span>;
+    return <span className="rq-none">No promise recorded</span>;
   }
 
-  const promise =
-    item.slaHours === null ? null : (
-      <span className="text-ink-4">
-        {' '}
-        of <span className="font-mono tnum">{item.slaHours} h</span>
-      </span>
-    );
+  const promise = item.slaHours === null ? null : <>{item.slaHours} h</>;
 
   if (item.slaBreached) {
     const pct =
@@ -139,28 +103,30 @@ function SlaCell({
         ? Math.max(6, Math.round((Math.abs(item.hoursRemaining) / worstHours) * 100))
         : 100;
     return (
-      <div className="flex flex-col gap-1">
-        <span className="text-body-sm font-semibold text-ink-2">
-          <Hours value={item.hoursRemaining} tone="warn" /> late
+      <div className="rq-late">
+        <span className="rq-late__main">{formatHours(item.hoursRemaining)} late</span>
+        <span className="rq-late__bar" aria-hidden="true">
+          <span style={{ width: `${pct}%` }} />
         </span>
-        <span
-          className="h-1 w-[140px] overflow-hidden rounded-full bg-warn-track"
-          aria-hidden="true"
-        >
-          <span className="block h-full rounded-full bg-warn" style={{ width: `${pct}%` }} />
+        <span className="rq-late__sub">
+          {promise ? <>Promised within {promise}</> : 'No promise recorded'}
+          {item.slaDueAt
+            ? ` · due ${new Date(item.slaDueAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+            : ''}
         </span>
-        <span className="text-label text-ink-3">Promised within{promise}</span>
       </div>
     );
   }
 
   return (
-    <span className="text-body-sm text-ink-2">
-      <Hours
-        value={item.hoursRemaining}
-        tone={item.hoursRemaining <= WARN_AT_HOURS ? 'warn' : 'ink'}
-      />{' '}
-      left{promise}
+    <span className="rq-left">
+      <span className="mono">{formatHours(item.hoursRemaining)}</span> left
+      {promise ? (
+        <>
+          {' '}
+          of <span className="mono">{promise}</span>
+        </>
+      ) : null}
     </span>
   );
 }
@@ -175,19 +141,19 @@ function daysAgo(iso: string): string {
 
 function WaitingCell({ item }: { item: ReviewQueueItem }): React.JSX.Element {
   if (item.submittedAt === null) {
-    return <span className="text-body-sm text-ink-4">Not submitted</span>;
+    return <span className="rq-none">Not submitted</span>;
   }
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="font-mono tnum text-body-sm text-ink-2">
+    <>
+      <div className="rq-date">
         {new Date(item.submittedAt).toLocaleDateString('en-IN', {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
         })}
-      </span>
-      <span className="text-label text-ink-3">{daysAgo(item.submittedAt)}</span>
-    </div>
+      </div>
+      <div className="rq-ago">{daysAgo(item.submittedAt)}</div>
+    </>
   );
 }
 
@@ -200,89 +166,57 @@ function initials(name: string): string {
 }
 
 function BusinessCell({ item }: { item: ReviewQueueItem }): React.JSX.Element {
+  const vendor = item.orgType === 'VENDOR';
   return (
-    <div className="flex items-center gap-3">
+    <div className="rq-biz">
       <span
-        className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] border border-rule bg-sheet-2 font-mono text-label text-ink-2"
+        className={cn('rq-avatar', vendor ? 'rq-avatar--vendor' : 'rq-avatar--buyer')}
         aria-hidden="true"
       >
         {initials(item.legalName)}
       </span>
-      <span className="min-w-0">
-        <Link
-          to={`/kyc/${item.orgId}`}
-          className="block truncate text-body-sm font-semibold text-ink underline decoration-rule underline-offset-4 hover:decoration-acc"
-        >
+      <div>
+        <Link to={`/kyc/${item.orgId}`} className="rq-biz__name">
           {item.legalName}
         </Link>
-        <span className="text-label text-ink-3">
+        <div className={cn('rq-biz__type', vendor ? 'rq-biz__type--vendor' : 'rq-biz__type--buyer')}>
           {item.orgType === 'VENDOR' ? 'Vendor' : item.orgType === 'BUYER' ? 'Buyer' : item.orgType}
-        </span>
-      </span>
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
- * The status pill, drawn to match the supplied design's exact two colours
- * rather than the shared `StatusPill`'s tone set, which doesn't offer this
- * light-blue/light-amber pairing. `--kyc-ready-*`/`--kyc-waiting-*` are this
- * screen's own tokens (`globals.css`), matching the mock's `--info`/`--warn`
- * tint-and-ink pairing hex for hex.
- *
- * `UNDER_REVIEW` isn't in the mock — it has no waiting-on-someone-else
- * meaning, so it keeps the product's own accent instead as an active state,
- * one of the three things that colour is for on this surface.
+ * The status pill. `UNDER_REVIEW` isn't in the mock — it has no
+ * waiting-on-someone-else meaning, so it keeps the product's own accent
+ * instead as an active state, one of the three things that colour is for on
+ * this surface.
  */
 type PillVariant = 'ready' | 'waiting' | 'active' | 'neutral';
 
-const PILL_CLASS: Readonly<Record<PillVariant, string>> = {
-  ready: 'bg-[var(--kyc-ready-tint)] text-[var(--kyc-ready-ink)]',
-  waiting: 'bg-[var(--kyc-waiting-tint)] text-[var(--kyc-waiting-ink)]',
-  active: 'bg-acc-wash text-acc-ink',
-  neutral: 'border border-rule bg-sheet-2 text-ink-2',
-};
-
-function Pill({ variant, label }: { variant: PillVariant; label: string }): React.JSX.Element {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-[7px] whitespace-nowrap rounded-full px-[11px] py-[4px] text-[13px] font-semibold',
-        PILL_CLASS[variant],
-      )}
-    >
-      <span className="h-[7px] w-[7px] rounded-full bg-current" aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-/**
- * What each reviewable status means and what a reviewer does next.
- *
- * `INFO_REQUESTED` reads as "waiting" (amber), never as a caution against the
- * applicant — waiting on their own reply is a normal place for an
- * application to sit, the same reasoning `SlaCell` above states for the
- * breach colour, just carried by the mock's own amber pill rather than a
- * neutral one.
- */
 const STATUS_META: Readonly<Record<string, { label: string; variant: PillVariant; note: string }>> =
   {
     KYC_SUBMITTED: { label: 'KYC submitted', variant: 'ready', note: 'Ready for review' },
     UNDER_REVIEW: { label: 'Under review', variant: 'active', note: 'Being reviewed' },
-    INFO_REQUESTED: { label: 'Info requested', variant: 'waiting', note: 'Waiting on their reply' },
+    INFO_REQUESTED: {
+      label: 'Info requested',
+      variant: 'waiting',
+      note: 'Waiting on their reply',
+    },
   };
 
 function StatusCell({ item }: { item: ReviewQueueItem }): React.JSX.Element {
   const meta = STATUS_META[item.status];
+  const variant = meta?.variant ?? 'neutral';
   return (
-    <div className="flex flex-col gap-1">
-      <Pill
-        variant={meta?.variant ?? 'neutral'}
-        label={meta?.label ?? item.status.replace(/_/g, ' ')}
-      />
-      {meta ? <span className="text-label text-ink-3">{meta.note}</span> : null}
-    </div>
+    <>
+      <span className={cn('rq-pill', `rq-pill--${variant}`)}>
+        <span className="dot" aria-hidden="true" />
+        {meta?.label ?? item.status.replace(/_/g, ' ')}
+      </span>
+      {meta ? <div className="rq-status-note">{meta.note}</div> : null}
+    </>
   );
 }
 
@@ -290,19 +224,19 @@ function ActionCell({ item }: { item: ReviewQueueItem }): React.JSX.Element {
   const navigate = useNavigate();
   const reviewable = item.status !== 'INFO_REQUESTED';
   return (
-    <Button
-      size="sm"
-      variant={reviewable ? 'primary' : 'secondary'}
+    <button
+      type="button"
+      className={cn('rq-btn', reviewable && 'rq-btn--primary')}
       onClick={() => navigate(`/kyc/${item.orgId}`)}
     >
       {reviewable ? 'Review KYC' : 'View'}
-    </Button>
+    </button>
   );
 }
 
-/** The four cuts a reviewer actually takes, now two independent facets rather
- * than one single-select list — a reviewer can ask for "vendors, only
- * overdue" at once, which the mock's own two separate controls intend. */
+/** The two independent facets a reviewer actually cuts by — the mock's own
+ * segmented type filter and separate overdue toggle, rather than one
+ * single-select list. A reviewer can ask for "vendors, only overdue" at once. */
 const TYPES = [
   { key: '', label: 'All' },
   { key: 'vendor', label: 'Vendors' },
@@ -356,33 +290,36 @@ export function ReviewQueueRoute(): React.JSX.Element {
   const longestWaitDays = oldest ? daysSince(oldest.submittedAt) : null;
 
   // Stated from what the data actually shows for each org type, never a
-  // hardcoded "48 for vendors, 24 for buyers" — that exact hardcoding is the
-  // bug `ReviewQueueItem.slaHours`'s own doc comment already warns against.
+  // hardcoded "48 for vendors, 24 for buyers".
   const vendorSla = all.find((i) => i.orgType === 'VENDOR' && i.slaHours !== null)?.slaHours;
   const buyerSla = all.find((i) => i.orgType === 'BUYER' && i.slaHours !== null)?.slaHours;
-  const promiseHint =
-    vendorSla !== undefined && buyerSla !== undefined
-      ? `We promise ${vendorSla} h for vendors, ${buyerSla} h for buyers`
-      : undefined;
 
   const columns: ReadonlyArray<Column<ReviewQueueItem>> = [
-    { key: 'legalName', header: 'Business', cell: (item) => <BusinessCell item={item} /> },
-    { key: 'status', header: 'Status', cell: (item) => <StatusCell item={item} /> },
-    { key: 'submitted', header: 'Submitted', cell: (item) => <WaitingCell item={item} /> },
+    { key: 'legalName', header: 'Business', className: 'c-biz', cell: (item) => <BusinessCell item={item} /> },
+    { key: 'status', header: 'Status', className: 'c-status', cell: (item) => <StatusCell item={item} /> },
+    { key: 'submitted', header: 'Submitted', className: 'c-sub', cell: (item) => <WaitingCell item={item} /> },
     {
       key: 'sla',
       header: 'Overdue by',
+      className: 'c-late',
       cell: (item) => <SlaCell item={item} worstHours={worstHours} />,
     },
-    { key: 'action', header: '', cell: (item) => <ActionCell item={item} /> },
+    {
+      key: 'action',
+      header: '',
+      headerHidden: true,
+      className: 'c-action num',
+      cell: (item) => <ActionCell item={item} />,
+    },
   ];
 
   if (items && items.length === 0) {
     return (
-      <div className="tg-stack">
-        <PageHeader title="Review queue">
-          Applications waiting on a decision, ordered by our own deadline.
-        </PageHeader>
+      <div className="review-queue-board">
+        <div>
+          <h1 className="rq-title">Review queue</h1>
+          <p className="rq-sub">KYC checks for new vendors and buyers. The most overdue are at the top.</p>
+        </div>
         <EmptyState
           title="Queue clear"
           body="Every submitted application has been decided. New ones appear here the moment a vendor or buyer submits, and the clock starts then."
@@ -391,74 +328,73 @@ export function ReviewQueueRoute(): React.JSX.Element {
     );
   }
 
+  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
   return (
-    <div className="tg-stack">
-      <PageHeader title="Review queue">
-        {items ? (
-          <>
-            <span className="font-mono tnum text-ink">{all.length}</span> waiting, ordered by our
-            own deadline — the ones we have already broken first.{' '}
-            {breached > 0 ? (
-              <>
-                {/* Ours, in our own words. "Breaching applications" would read as a
-                    fact about the applicants; they submitted and waited. */}
-                We are past our own promise on{' '}
-                <span className="font-mono tnum text-ink">{breached}</span> of them.
-              </>
-            ) : (
-              'Every one of them is still inside the promise we made.'
-            )}
-          </>
-        ) : (
-          'Loading the applications waiting on a decision.'
-        )}
-      </PageHeader>
+    <div className="review-queue-board">
+      <div>
+        <h1 className="rq-title">Review queue</h1>
+        <p className="rq-sub">
+          {items
+            ? 'KYC checks for new vendors and buyers. The most overdue are at the top.'
+            : 'Loading the applications waiting on a decision.'}
+        </p>
+      </div>
 
       {items ? (
-        <KpiRow
-          label="Review queue at a glance"
-          items={[
-            {
-              key: 'waiting',
-              label: 'Waiting for review',
-              value: all.length,
-              unit: 'businesses',
-              hint: `${all.filter((i) => i.orgType === 'VENDOR').length} vendors · ${all.filter((i) => i.orgType === 'BUYER').length} buyers`,
-            },
-            {
-              key: 'breached',
-              label: 'Past our promise',
-              value: breached,
-              unit: `of ${all.length}`,
-              hint: promiseHint,
-            },
-            {
-              key: 'longest',
-              label: 'Longest wait',
-              value: longestWaitDays,
-              unit: longestWaitDays !== null ? (longestWaitDays === 1 ? 'day' : 'days') : undefined,
-              hint: oldest
-                ? `${oldest.legalName}, since ${new Date(oldest.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
-                : undefined,
-            },
-          ]}
-        />
+        <div className="rq-stats">
+          <div className="rq-stat">
+            <span className="rq-stat__label">Waiting for review</span>
+            <span className="rq-stat__value">
+              {all.length}
+              <small>{all.length === 1 ? 'business' : 'businesses'}</small>
+            </span>
+            <span className="rq-stat__meta">
+              {all.filter((i) => i.orgType === 'VENDOR').length} vendors ·{' '}
+              {all.filter((i) => i.orgType === 'BUYER').length} buyers
+            </span>
+          </div>
+          <div className={cn('rq-stat', breached > 0 && 'rq-stat--late')}>
+            <span className="rq-stat__label">Past our promise</span>
+            <span className="rq-stat__value">
+              {breached}
+              <small>of {all.length}</small>
+            </span>
+            {vendorSla !== undefined && buyerSla !== undefined ? (
+              <span className="rq-stat__meta">
+                We promise {vendorSla} h for vendors, {buyerSla} h for buyers
+              </span>
+            ) : null}
+          </div>
+          <div className="rq-stat">
+            <span className="rq-stat__label">Longest wait</span>
+            {longestWaitDays !== null ? (
+              <>
+                <span className="rq-stat__value">
+                  {longestWaitDays}
+                  <small>{longestWaitDays === 1 ? 'day' : 'days'}</small>
+                </span>
+                {oldest ? (
+                  <span className="rq-stat__meta">
+                    {oldest.legalName}, since{' '}
+                    {new Date(oldest.submittedAt).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="rq-stat__value" style={{ color: 'var(--admin-faint)' }}>
+                Not measured
+              </span>
+            )}
+          </div>
+        </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-3">
-        <Input
-          className="min-w-[240px] flex-1"
-          label="Search"
-          type="search"
-          placeholder="Business name"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <div
-          className="inline-flex gap-0.5 rounded-lg bg-sheet-3 p-[3px]"
-          role="group"
-          aria-label="Business type"
-        >
+      <div className="rq-toolbar">
+        <div className="rq-seg" role="group" aria-label="Business type">
           {TYPES.map((t) => {
             const pressed = type === t.key;
             const count = all.filter((i) => matchesType(t.key, i)).length;
@@ -468,36 +404,49 @@ export function ReviewQueueRoute(): React.JSX.Element {
                 type="button"
                 aria-pressed={pressed}
                 onClick={() => setType(t.key)}
-                className={cn(
-                  'flex h-10 items-center gap-2 rounded px-3 text-body-sm font-semibold',
-                  pressed ? 'bg-sheet text-ink shadow-sm' : 'text-ink-2 hover:text-ink',
-                )}
               >
-                {t.label}
-                <span className="font-mono text-label text-ink-3">{count}</span>
+                {t.label} <span>{count}</span>
               </button>
             );
           })}
         </div>
         <button
           type="button"
+          className="rq-toggle"
           aria-pressed={onlyOverdue === 'true'}
           onClick={() => setOnlyOverdue(onlyOverdue === 'true' ? '' : 'true')}
-          className={cn(
-            'flex h-10 items-center gap-2 rounded-lg border px-3 text-body-sm font-semibold',
-            onlyOverdue === 'true'
-              ? 'border-warn-line bg-warn-wash text-warn'
-              : 'border-rule bg-sheet text-ink-2 hover:text-ink',
-          )}
         >
-          <span className="h-2 w-2 rounded-full bg-warn" aria-hidden="true" />
-          Only overdue
-          <span className="font-mono text-label">{breached}</span>
+          <span className="dot" aria-hidden="true" />
+          Only overdue <span className="mono">{breached}</span>
         </button>
+        <span className="rq-spacer" />
+        <label className="rq-search">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search business name"
+            aria-label="Search business name"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
       </div>
 
-      <Board>
+      <Board className="rq-card">
         <DataBoard
+          className="rq-table"
           caption={
             items
               ? `${rows.length} of ${all.length} applications, ordered by our own deadline, the ones we have already broken first.`
@@ -515,6 +464,15 @@ export function ReviewQueueRoute(): React.JSX.Element {
             />
           }
         />
+        {items && rows.length > 0 ? (
+          <div className="rq-foot">
+            <span>
+              Showing <strong>{rows.length}</strong> of <strong>{all.length}</strong> · sorted by
+              deadline, most overdue first
+            </span>
+            <span>Times shown as of today, {today}</span>
+          </div>
+        ) : null}
       </Board>
     </div>
   );

@@ -11,7 +11,8 @@ import Link from 'next/link';
  * reads as Trugrade before a single word of the form is read, and a way back to
  * the shop that is a link, not a nav.
  *
- * Sign-in omits the site footer so the card fills the viewport; other auth
+ * `/sign-in` and `/register` are the exception: their layouts add the site
+ * header and footer, and the card drops its own brand line there. Other auth
  * routes still carry the Rule 4(2) disclosure from the root layout.
  *
  * Under 760px the two columns stack, with the panel shortened to its heading:

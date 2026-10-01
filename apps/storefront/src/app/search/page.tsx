@@ -20,8 +20,10 @@ import type { Metadata } from 'next';
 import { getSearch } from '../../lib/api';
 import { FilterRail } from '../FilterRail';
 import { Pager } from './Pager';
+import { PromoStrip } from './PromoStrip';
 import { ResultBar } from './ResultBar';
 import { toApiQueryString, toQueryString } from './query';
+import { deliveryByLabel } from '../../lib/delivery-date';
 import { SORTS } from './sorts';
 import { ResultsList } from './ResultsList';
 import { SearchResultCard } from './SearchResultCard';
@@ -57,12 +59,12 @@ export default async function SearchPage({
   ]);
 
   const view = params.view === 'list' ? 'list' : 'grid';
-  const pincode = typeof params.pin === 'string' && params.pin !== '' ? params.pin : null;
   const sort = typeof params.sort === 'string' ? params.sort : 'price';
   const sortLabel = SORTS.find((s) => s.value === sort)?.label ?? SORTS[0]!.label;
 
   return (
     <>
+      <PromoStrip />
       <div className="body srp">
         <div className="wrap">
           {/*
@@ -101,9 +103,10 @@ export default async function SearchPage({
               <main>
                 <ResultBar
                   query={query}
-                  total={data.total}
+                  units={data.units ?? null}
                   models={data.models}
-                  pincode={pincode}
+                  page={data.page}
+                  per={data.per}
                   sort={sort}
                   view={view}
                 />
@@ -124,11 +127,19 @@ export default async function SearchPage({
                     </p>
                   </div>
                 ) : view === 'list' ? (
-                  <ResultsList results={data.results} sortLabel={sortLabel} />
+                  <ResultsList
+                    results={data.results}
+                    sortLabel={sortLabel}
+                    deliveryBy={(r) => deliveryByLabel(r.shipHours, data.transitDaysMax)}
+                  />
                 ) : (
                   <div className="pcclist">
                     {data.results.map((r) => (
-                      <SearchResultCard key={`${r.skuId}-${r.grade}`} r={r} />
+                      <SearchResultCard
+                        key={`${r.skuId}-${r.grade}`}
+                        r={r}
+                        deliveryBy={deliveryByLabel(r.shipHours, data.transitDaysMax)}
+                      />
                     ))}
                   </div>
                 )}

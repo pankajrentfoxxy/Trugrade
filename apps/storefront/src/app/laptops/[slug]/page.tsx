@@ -45,10 +45,15 @@ import { PincodeForm } from './PincodeForm';
 import { ConfigPicker } from './ConfigPicker';
 import { PanelGallery } from './PanelGallery';
 import { ReviewsSection } from './ReviewsSection';
-import { PRODUCT_RATING, Stars } from './product-rating';
+import { PRODUCT_RATING } from './product-rating';
 import { FullSpecifications } from './FullSpecifications';
 import { QASection } from './QASection';
 import { RelatedProducts } from './RelatedProducts';
+import { BRAND } from '@trugrade/config/brand';
+import { OFFER } from '../../../lib/offer';
+import { deliveryByLabel } from '../../../lib/delivery-date';
+import { storageShortLabel } from '../../search/storage-label';
+import { ClockIcon, ReturnIcon, ShieldIcon, TagIcon, TruckIcon } from './det-icons';
 
 /** The prices are landed to the reader's pincode, so nothing here is cacheable. */
 export const dynamic = 'force-dynamic';
@@ -75,6 +80,12 @@ function savingAgainstNew(
 
 const GRADE_LABEL: Record<string, string> = { A_PLUS: 'A+', A: 'A', B: 'B' };
 const GRADES = new Set(['A_PLUS', 'A', 'B']);
+/** What a grade looks like, in the words the grade pill's heading uses. */
+const GRADE_MEANING: Record<string, string> = {
+  A_PLUS: 'Near-new, no visible marks',
+  A: 'Minor signs of use',
+  B: 'Visible signs of use',
+};
 
 type Params = { slug: string };
 type Search = Record<string, string | string[] | undefined>;
@@ -98,6 +109,14 @@ export async function generateMetadata({
     description: `Inspected ${sku.brandName} ${sku.modelName} — ${specLine(sku)}. Compare every supply point on landed price, inspection score and measured battery health.`,
   };
 }
+
+/**
+ * More than five supply points read best as columns, one per supply point,
+ * with the facts down the left; five or fewer stay one row per supply point.
+ */
+const COMPARE_FROM = 6;
+const boardLayout = (count: number): 'compare' | 'table' =>
+  count >= COMPARE_FROM ? 'compare' : 'table';
 
 export default async function ProductPage({
   params,
@@ -212,6 +231,22 @@ export default async function ProductPage({
           needsPincode: false,
         };
 
+  const shortStorage = storageShortLabel(sku.storageType);
+  const storageLabel = `${sku.storageGb} GB${shortStorage ? ` ${shortStorage}` : ''}`;
+
+  // The dispatch time of what the panel sells, from the search index's row
+  // for this configuration at this grade, and the lane's transit from the
+  // board: their sum is the date. Either missing, and no date is drawn.
+  const indexRow = variants.find((r) => r.skuId === sku.skuId && r.grade === board.grade) ?? null;
+  const shipHours = indexRow?.shipHours ?? null;
+  // "Intel Core i5-1035G4" from the index where it has the row; the bare
+  // model number from the catalogue otherwise.
+  const cpuName = indexRow?.cpuLine ?? sku.cpuModel;
+  const deliveryDate =
+    board.delivery.kind === 'DELIVERABLE'
+      ? deliveryByLabel(shipHours, board.delivery.etaDays)
+      : null;
+
   const batteryValues = board.offers.flatMap((o) =>
     o.batteryHealthPct ? [o.batteryHealthPct.min, o.batteryHealthPct.max] : [],
   );
@@ -268,65 +303,41 @@ export default async function ProductPage({
             {/* RIGHT — what the machine is, what it costs, and the switches. */}
             <div className="det">
               {/*
-                The title, and the same headline rating "Ratings and reviews"
-                gives further down, on the same line where there is room. It
-                is a link to that section rather than a second, disconnected
-                number — one placeholder figure for the page (see
-                `PRODUCT_RATING` in `product-rating.tsx`), not two.
+                The record's head, top to bottom: brand and series, the model,
+                its configuration in one line, then the rating and the stock.
+                The rating is the same placeholder figure "Ratings and reviews"
+                gives further down (`PRODUCT_RATING`), and a link to it.
               */}
-              <div className="det-head">
-                <h1 className="det-title">
-                  {sku.brandName} {sku.modelName}
-                </h1>
-                <a className="det-rating" href="#rev-h">
-                  <Stars rating={PRODUCT_RATING.average} />
-                  <span className="mono">{PRODUCT_RATING.average.toFixed(1)}</span>
-                  <span>
-                    (<span className="mono">{PRODUCT_RATING.count}</span> ratings)
-                  </span>
+              <p className="det-kicker">
+                {sku.brandName}
+                {sku.seriesName ? <> &middot; {sku.seriesName}</> : null}
+              </p>
+              <h1 className="det-title">
+                {sku.brandName} {sku.modelName}
+              </h1>
+              <p className="det-spec">
+                {cpuName} &middot; {sku.ramGb} GB RAM &middot; {storageLabel} &middot;{' '}
+                {sku.screenSizeIn}&quot; {sku.resolution}
+              </p>
+              <p className="det-meta">
+                <a className="det-rate" href="#rev-h">
+                  <span className="mono">{PRODUCT_RATING.average.toFixed(1)}</span> &#9733;
                 </a>
-              </div>
-
-              <div className="meta-row">
-                <span className="dchip hl">Grade {gradeLabel}</span>
-                {batteryLabel ? (
-                  <span className="dchip mono">Battery {batteryLabel}</span>
-                ) : (
-                  <span className="dchip notmeasured">Battery not measured</span>
-                )}
-                <span className="dchip mono">{sku.cpuModel}</span>
-                <span className="dchip mono">{sku.ramGb} GB RAM</span>
-                <span className="dchip mono">
-                  {sku.storageGb} GB {sku.storageType.replace('_', ' ')}
+                <span>
+                  <span className="mono">{PRODUCT_RATING.count}</span> ratings
                 </span>
-                <span className="dchip mono">
-                  {sku.screenSizeIn}&quot; {sku.resolution}
-                </span>
-                {/*
-                  A seventh chip in the row's own shape — not a "5 more"
-                  overflow badge off to the side — pointing straight at
-                  "Full specifications" further down the record, since that
-                  is where the rest of the declared spec actually lives now.
-                  "More…", not the section's own title repeated: it reads as
-                  the row's own overflow rather than a duplicate heading.
-                */}
-                <a className="dchip dchip-more" href="#fullspec-h">
-                  More…
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 5v14M5 12l7 7 7-7" />
-                  </svg>
-                </a>
-              </div>
+                {shown ? (
+                  <>
+                    <span className="det-dot" aria-hidden="true" />
+                    <span>
+                      <span className="mono">{shown.unitsAvailable}</span> sealed unit
+                      {shown.unitsAvailable === 1 ? '' : 's'} in stock
+                    </span>
+                  </>
+                ) : null}
+              </p>
 
-              <div className="mt-5">
+              <div className="det-price">
                 {(() => {
                   const price = lowest
                     ? Number(lowest.unitPrice)
@@ -359,111 +370,206 @@ export default async function ProductPage({
                           </span>
                         </>
                       ) : null}
-                      
                     </div>
                   );
                 })()}
-                {/* Tax and freight are said once, under the pincode box below,
-                    where the destination that decides them is entered. */}
+                {/* The board's own words: the figure is our unit price, and
+                    GST and freight are added at checkout. Never "inclusive". */}
+                <p className="price-note">
+                  Before GST &middot; tax and freight added at checkout against your pincode
+                </p>
+                <ul className="det-offers">
+                  <li>
+                    <TagIcon />
+                    <span>
+                      <b>Fleet week:</b> {OFFER.volumeDetail}
+                    </span>
+                  </li>
+                  <li>
+                    <TagIcon />
+                    <span>
+                      <b>First order:</b> {OFFER.firstOrderDetail}{' '}
+                      <code className="det-code">{OFFER.code}</code>
+                    </span>
+                  </li>
+                </ul>
               </div>
 
-              <h2 className="sec-t">Choose grade</h2>
-              {/*
-                All three grades, always, and every one of them a live link.
-                The processor, memory and storage rows below are drawn for the
-                grade chosen here, so a grade chip is the way into that grade's
-                stock even when THIS configuration has none at it: the link
-                then opens the model's nearest configuration that is sealed at
-                that grade — cheapest first, the index's own order — and the
-                rows below show what that grade holds. Only when the whole
-                model has nothing at a grade does the chip open this same
-                configuration there, where the board says so in words.
-              */}
-              <div className="grades" role="group" aria-label="Inspected grade">
-                {ALL_GRADES.map((code) => {
-                  const label = GRADE_LABEL[code] ?? code;
-                  const on = code === board.grade;
-                  const heldHere = board.grades.some((x) => x.grade === code);
-                  const sibling = heldHere ? null : (variants.find((r) => r.grade === code) ?? null);
-                  return (
-                    <Link
-                      key={code}
-                      className={on ? 'gpill on' : 'gpill'}
-                      aria-current={on ? 'true' : undefined}
-                      href={
-                        href(sibling ? sibling.skuId : slug, {
-                          ...query,
-                          grade: code,
-                          sp: undefined,
-                          city: undefined,
-                        }) as Route
-                      }
-                    >
-                      <b>Grade {label}</b>
-                    </Link>
-                  );
-                })}
-              </div>
+              <div className="det-sec">
+                <h2 className="sec-t">
+                  Grade<span className="sec-val">: Grade {gradeLabel} &mdash; {GRADE_MEANING[board.grade] ?? ''}</span>
+                </h2>
+                {/*
+                  All three grades, always, and every one of them a live link.
+                  The rows below are drawn for the grade chosen here, so a grade
+                  pill is the way into that grade's stock even when THIS
+                  configuration has none at it: the link then opens the model's
+                  nearest configuration sealed at that grade — cheapest first,
+                  the index's own order. Only when the whole model has nothing at
+                  a grade does the pill open this same configuration there, where
+                  the board says so in words.
+                */}
+                <div className="grades" role="group" aria-label="Inspected grade">
+                  {ALL_GRADES.map((code) => {
+                    const label = GRADE_LABEL[code] ?? code;
+                    const on = code === board.grade;
+                    const held = board.grades.find((x) => x.grade === code) ?? null;
+                    const sibling = held ? null : (variants.find((r) => r.grade === code) ?? null);
+                    return (
+                      <Link
+                        key={code}
+                        className={on ? 'gpill on' : 'gpill'}
+                        aria-current={on ? 'true' : undefined}
+                        href={
+                          href(sibling ? sibling.skuId : slug, {
+                            ...query,
+                            grade: code,
+                            sp: undefined,
+                            city: undefined,
+                          }) as Route
+                        }
+                      >
+                        <b>Grade {label}</b>
+                      </Link>
+                    );
+                  })}
+                </div>
 
-              {/*
-                Processor, memory and storage, chosen like grade. Each pill is
-                a sibling SKU of this model; the pincode and supply-point
-                selection carry over, the grade follows where it can. Rows
-                appear only where the model differs — see `ConfigPicker`.
-              */}
-              <ConfigPicker
-                variants={variants}
-                current={{ skuId: sku.skuId, grade: board.grade }}
-                hrefFor={(skuId, toGrade) =>
-                  href(skuId, { ...query, grade: toGrade, sp: undefined, city: undefined })
-                }
-              />
-
-              {/*
-                The pincode comes right after the grade/config switches: a
-                buyer settles what they want first, then where it is going.
-                The declared specification used to sit here too, as a short
-                accordion, but it now duplicates the "Full specifications"
-                section further down the record — one place for it, not two.
-                The form carries the grade and supply point so the answer
-                lands on the same configuration.
-              */}
-              <h2 className="sec-t">Check delivery</h2>
-              <div className="pin-blk">
-                <PincodeForm
-                  action={`/laptops/${encodeURIComponent(slug)}`}
-                  hidden={[
-                    ...(board.grade ? [{ name: 'grade', value: board.grade }] : []),
-                    ...(selected
-                      ? [
-                          { name: 'sp', value: selected.supplyPointCode },
-                          { name: 'city', value: selected.city },
-                        ]
-                      : []),
-                  ]}
-                  initialPincode={board.pincode ?? askedPin ?? ''}
-                  initialError={
-                    askedPin && pincode === null
-                      ? 'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
-                      : null
+                {/*
+                  Memory, storage and processor, chosen like grade. Each pill is
+                  a sibling SKU of this model; the pincode carries over, the
+                  grade follows where it can — see `ConfigPicker`.
+                */}
+                <ConfigPicker
+                  variants={variants}
+                  current={{ skuId: sku.skuId, grade: board.grade }}
+                  gradeLabel={gradeLabel}
+                  hrefFor={(skuId, toGrade) =>
+                    href(skuId, { ...query, grade: toGrade, sp: undefined, city: undefined })
                   }
-                  buttonLabel={board.pincode ? 'Update' : 'Check delivery'}
-                >
-                  {board.delivery.kind === 'DELIVERABLE' && lowest ? (
+                />
+              </div>
+
+              {/*
+                The pincode, once the buyer has settled what they want. The form
+                carries the grade and supply point so the answer lands on the
+                same configuration. With a lane we serve, the line under it is
+                the date: the dispatch time plus the lane's transit.
+              */}
+              <div className="det-sec">
+                <h2 className="sec-t">Check delivery</h2>
+                <div className="pin-blk">
+                  <PincodeForm
+                    action={`/laptops/${encodeURIComponent(slug)}`}
+                    hidden={[
+                      ...(board.grade ? [{ name: 'grade', value: board.grade }] : []),
+                      ...(selected
+                        ? [
+                            { name: 'sp', value: selected.supplyPointCode },
+                            { name: 'city', value: selected.city },
+                          ]
+                        : []),
+                    ]}
+                    initialPincode={board.pincode ?? askedPin ?? ''}
+                    initialError={
+                      askedPin && pincode === null
+                        ? 'That is not a pincode. Six digits, and the first one is never 0 — for example 110001.'
+                        : null
+                    }
+                    buttonLabel="Check"
+                  >
+                    {board.delivery.kind === 'DELIVERABLE' && lowest ? (
+                      <span className="det-deliver">
+                        <TruckIcon />
+                        <span>
+                          {deliveryDate ? (
+                            <>
+                              Delivery by <b>{deliveryDate}</b> to {board.pincode}
+                            </>
+                          ) : (
+                            <>Delivery available to {board.pincode}</>
+                          )}
+                          {shipHours !== null ? (
+                            <>
+                              {' '}
+                              &middot; ships in <span className="mono">{shipHours}</span> h
+                            </>
+                          ) : null}
+                        </span>
+                      </span>
+                    ) : board.delivery.kind === 'UNSERVICEABLE' ? (
+                      <>
+                        We cannot deliver to <b>{board.pincode}</b> yet. Try another pincode.
+                      </>
+                    ) : (
+                      'Six digits. We quote the real freight for the lane, not an average.'
+                    )}
+                  </PincodeForm>
+                </div>
+              </div>
+
+              {/*
+                What the machine is, in five lines, from the catalogue and the
+                board — nothing here is written for the page. A battery the
+                board has not measured says so rather than being left out.
+              */}
+              <div className="det-sec">
+                <h2 className="sec-t">Highlights</h2>
+                <ul className="det-hl">
+                  <li>
+                    {cpuName} &middot; {sku.ramGb} GB RAM &middot; {storageLabel}
+                  </li>
+                  <li>
+                    {sku.screenSizeIn}&quot; {sku.isTouch ? 'touchscreen' : 'display'}, {sku.resolution}
+                  </li>
+                  {sku.osSupported ? <li>{sku.osSupported}</li> : null}
+                  <li>
+                    {batteryLabel ? (
+                      <>
+                        Battery health <span className="mono">{batteryLabel}</span> of original,
+                        measured per unit
+                      </>
+                    ) : (
+                      <span className="notmeasured">Battery health not measured yet</span>
+                    )}
+                  </li>
+                  <li>
+                    Grade {gradeLabel} &mdash; {(GRADE_MEANING[board.grade] ?? '').toLowerCase()}
+                  </li>
+                </ul>
+              </div>
+
+              <div className="det-sec">
+                <ul className="det-trust">
+                  <li>
+                    <ShieldIcon />
+                    <b>12-area inspection</b>
+                    <span>sealed after testing</span>
+                  </li>
+                  {lowest ? (
+                    <li>
+                      <ClockIcon />
+                      <b>
+                        <span className="mono">{lowest.totalWarrantyMonths}</span>-month warranty
+                      </b>
+                      <span>from {BRAND.name}</span>
+                    </li>
+                  ) : null}
+                  <li>
+                    <ReturnIcon />
+                    <b>48-hour reject</b>
+                    <span>inspect on arrival</span>
+                  </li>
+                </ul>
+                <p className="det-sold">
+                  Sold by <b>{BRAND.legalEntity}</b> on one GST invoice
+                  {lowest ? (
                     <>
-                      <b>Delivery available.</b> {lowest.dispatchCommitment}
-                      {board.delivery.etaDays > 0 ? (
-                        <>
-                          , then <b>{board.delivery.etaDays}</b> day
-                          {board.delivery.etaDays === 1 ? '' : 's'} transit to {board.pincode}
-                        </>
-                      ) : null}
-                      .
+                      {' '}
+                      &middot; ships from <b>{lowest.city}</b>
                     </>
-                  ) : (
-                    'Six digits. We quote the real freight for the lane, not an average.'
-                  )}
-                </PincodeForm>
+                  ) : null}
+                </p>
               </div>
 
               {/*
@@ -560,7 +666,7 @@ export default async function ProductPage({
                   <>
                     {regular.length > 0 && (
                       <Board
-                        layout="table"
+                        layout={boardLayout(regular.length)}
                         rows={regular}
                         pool="REGULAR"
                         pincode={board.pincode}
@@ -571,7 +677,7 @@ export default async function ProductPage({
                     )}
                     {margin.length > 0 && (
                       <Board
-                        layout="table"
+                        layout={boardLayout(margin.length)}
                         rows={margin}
                         pool="MARGIN"
                         pincode={board.pincode}

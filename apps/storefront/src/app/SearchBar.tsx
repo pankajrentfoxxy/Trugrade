@@ -32,8 +32,18 @@ import { useRouter } from 'next/navigation';
  */
 const CERT_PATTERN = /^(TG-)?CERT-[A-Z0-9-]{6,}$/i;
 
+/**
+ * The two processor combinations offered first, by direction — the same pair
+ * the filter rail's search box pins. Each opens the board with the family and
+ * the generation ticked together.
+ */
+const PINNED: readonly Suggestion[] = [
+  { group: 'Popular', badge: 'CPU', label: 'i5 · 11th gen', href: '/search?cpu=Core+i5&gen=11th' },
+  { group: 'Popular', badge: 'CPU', label: 'i7 · 11th gen', href: '/search?cpu=Core+i7&gen=11th' },
+];
+
 interface Suggestion {
-  group: 'Models' | 'Configuration' | 'Look up a specific machine';
+  group: 'Popular' | 'Models' | 'Configuration' | 'Look up a specific machine';
   badge: string;
   label: string;
   count?: number;
@@ -82,9 +92,10 @@ export function SearchBar(): React.JSX.Element {
       },
     ];
 
-    if (!term) return lookup;
+    if (!term) return [...PINNED, ...lookup];
 
     return [
+      ...PINNED,
       {
         group: 'Models',
         badge: 'MODEL',
@@ -130,7 +141,7 @@ export function SearchBar(): React.JSX.Element {
     }
   };
 
-  const groups = ['Models', 'Configuration', 'Look up a specific machine'] as const;
+  const groups = ['Popular', 'Models', 'Configuration', 'Look up a specific machine'] as const;
   let index = -1;
 
   return (

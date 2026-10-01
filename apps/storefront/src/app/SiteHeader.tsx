@@ -47,6 +47,7 @@ import { SearchBar } from './SearchBar';
 import { AccountMenu } from './AccountMenu';
 import { AuthButtons } from './auth/AuthButtons';
 import { CartNavLink } from './CartNavLink';
+import { WishlistNavLink } from './WishlistNavLink';
 import { LocationPicker } from './LocationPicker';
 
 /**
@@ -145,12 +146,7 @@ export async function SiteHeader({
               <Link href="/legal/grievance" className="hide-md">
                 Help
               </Link>
-              <a
-                href={sellUrl}
-                className="util-promo"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={sellUrl} className="util-promo" target="_blank" rel="noopener noreferrer">
                 Sell on {BRAND.name} &rarr;
               </a>
             </div>
@@ -200,12 +196,14 @@ export async function SiteHeader({
                 bar, and the cart moves inboard to make room for it. */}
             {user ? (
               <>
+                <WishlistNavLink signedIn />
                 <CartNavLink signedIn />
                 <AccountMenu fullName={user.fullName} sellUrl={sellUrl} />
               </>
             ) : (
               <>
                 <AuthButtons sellUrl={sellUrl} />
+                <WishlistNavLink signedIn={false} />
                 <CartNavLink signedIn={false} />
               </>
             )}

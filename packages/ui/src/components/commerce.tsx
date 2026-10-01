@@ -758,6 +758,116 @@ const OFFER_COLUMNS = [
   'Dispatch',
 ] as const;
 
+/**
+ * The `compare` rendering: supply points across the top, facts down the left.
+ *
+ * Every cell is the same one the row table draws, so the two layouts cannot
+ * disagree about a value; only the axes are swapped. The first column holds
+ * the fact names and stays put while a wide board scrolls sideways.
+ */
+function OfferCompareTable({
+  offers,
+  caption,
+  landedBoard,
+  rowProps,
+}: {
+  offers: readonly SupplyPointOffer[];
+  caption: string;
+  landedBoard: boolean;
+  rowProps: (offer: SupplyPointOffer) => OfferRowProps;
+}): React.JSX.Element {
+  const baseId = React.useId();
+  for (const offer of offers) assertSupplyPointOnly(offer);
+  const keyOf = (offer: SupplyPointOffer): string =>
+    `${offer.supplyPointCode}-${offer.city}-${offer.grade}`;
+
+  const facts: Array<[string, (offer: SupplyPointOffer) => React.ReactNode]> = [
+    [
+      landedBoard ? 'Landed price' : 'Unit price',
+      (offer) => <PriceCell {...rowProps(offer)} />,
+    ],
+    ['Battery health', (offer) => batteryRange(offer.batteryHealthPct)],
+    ['Total warranty', (offer) => `${offer.totalWarrantyMonths} months`],
+    ['Units available', (offer) => offer.unitsAvailable],
+    ['Inspected', (offer) => <QcExpiry offer={offer} />],
+    [
+      'Dispatch',
+      (offer) => <span title={offer.dispatchCommitment}>{dispatchShort(offer.dispatchCommitment)}</span>,
+    ],
+  ];
+
+  const factHead = 'offer-cmp-fact tg-cell text-left text-ink';
+
+  return (
+    <div className="offer-cmp overflow-x-auto">
+      <table className="w-full border-collapse text-body-sm">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr className="border-b border-rule align-top">
+            <th scope="col" className={factHead}>
+              Supply point
+            </th>
+            {offers.map((offer) => {
+              const props = rowProps(offer);
+              return (
+                <th key={keyOf(offer)} scope="col" className="tg-cell text-left">
+                  <span className="flex flex-col gap-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-ink">
+                        {supplyPointLabel(offer.supplyPointCode, offer.city).split(' · ')[0]}
+                      </span>
+                      {props.lowestLanded && <span className="offer-lowest">Lowest</span>}
+                    </span>
+                    <span className="text-body-sm font-normal text-ink-2">
+                      {offer.city} · {offer.quality.unitsInspected} unit
+                      {offer.quality.unitsInspected === 1 ? '' : 's'} inspected
+                    </span>
+                  </span>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {facts.map(([label, cell]) => (
+            <tr key={label} className="border-b border-rule-2 align-top">
+              <th scope="row" className={factHead}>
+                {label}
+              </th>
+              {offers.map((offer) => (
+                <td key={keyOf(offer)} className="tg-cell tnum text-ink">
+                  {cell(offer)}
+                </td>
+              ))}
+            </tr>
+          ))}
+          <tr className="align-top">
+            <th scope="row" className={factHead}>
+              <span className="sr-only">Add to cart</span>
+            </th>
+            {offers.map((offer, i) => {
+              const props = rowProps(offer);
+              return (
+                <td key={keyOf(offer)} className="tg-cell">
+                  <OfferAction
+                    offer={offer}
+                    onAdd={props.onAdd}
+                    cartQty={props.cartQty}
+                    cartBusy={props.cartBusy}
+                    onCartQtyChange={props.onCartQtyChange}
+                    idPrefix={`${baseId}-${i}`}
+                    emphasis={props.emphasis}
+                  />
+                </td>
+              );
+            })}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export interface OfferGridProps {
   offers: readonly SupplyPointOffer[];
   /**
@@ -770,8 +880,10 @@ export interface OfferGridProps {
    * `responsive` — table from the `md` breakpoint up, cards below (default).
    * `cards` — always cards; use when the board sits in a narrow column.
    * `table` — always the wide comparison table.
+   * `compare` — the table turned on its side: one column per supply point,
+   *   one row per fact, so a buyer reads across to compare a single fact.
    */
-  layout?: 'responsive' | 'cards' | 'table';
+  layout?: 'responsive' | 'cards' | 'table' | 'compare';
   onAdd?: (offer: SupplyPointOffer, quantity: number) => void;
   cartQtyFor?: (offer: SupplyPointOffer) => number | null;
   cartBusyFor?: (offer: SupplyPointOffer) => boolean;
@@ -874,6 +986,15 @@ export function OfferGrid({
             </tbody>
           </table>
         </div>
+      ) : null}
+
+      {layout === 'compare' ? (
+        <OfferCompareTable
+          offers={offers}
+          caption={caption}
+          landedBoard={landedBoard}
+          rowProps={rowProps}
+        />
       ) : null}
 
       {showCards ? (

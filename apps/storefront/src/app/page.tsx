@@ -12,6 +12,7 @@ import { HomeBanners } from './HomeBanners';
 import { SiteHeader } from './SiteHeader';
 import { SuggestedRow, type SuggestedItem } from './SuggestedRow';
 import { brandPhoto } from '../lib/brand-photo';
+import { deliveryByLabel } from '../lib/delivery-date';
 import { percentOff, placeholderMrp } from './search/placeholder-market';
 import { WhyTrugrade } from './WhyTrugrade';
 
@@ -99,7 +100,7 @@ const RUPEES = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
  * the parts that exist — `i5-1135G7 · 16/512 · 14″` — and the "% off" is the search page's placeholder MRP
  * — see `SuggestedRow.tsx` for what on the card is real and what is not.
  */
-function toSuggested(r: SearchResult): SuggestedItem {
+function toSuggested(r: SearchResult, transitDaysMax?: number | null): SuggestedItem {
   const parts: string[] = [];
   if (r.cpuLine) parts.push(r.cpuLine);
   // `16/512`, the way the reference card writes RAM and storage in gigabytes.
@@ -120,6 +121,7 @@ function toSuggested(r: SearchResult): SuggestedItem {
     mrp: RUPEES.format(placeholderMrp(r.fromPrice)),
     off: percentOff(r.fromPrice, placeholderMrp(r.fromPrice)),
     photo: brandPhoto(r.brand),
+    deliveryBy: deliveryByLabel(r.shipHours, transitDaysMax),
   };
 }
 
@@ -166,8 +168,7 @@ export default async function HomePage({
   // down to is the one this render picked the machine by. The rule itself
   // takes the time as an argument, so it is tested against fixed instants;
   // this is only the request's wall clock being handed to it.
-  const dealSlot =
-    results.length > 0 ? dealOfDaySlot(new Date().getTime(), results.length) : null;
+  const dealSlot = results.length > 0 ? dealOfDaySlot(new Date().getTime(), results.length) : null;
   const deal = dealSlot ? results[dealSlot.index] : undefined;
 
   return (
@@ -193,7 +194,9 @@ export default async function HomePage({
           is the one block on the page with a clock on it. Rendered only when
           there is stock to feature; a deal strip with no machine in it is a
           clock counting to nothing. */}
-        {deal && dealSlot && <DealOfDay item={toSuggested(deal)} endsAt={dealSlot.endsAt} />}
+        {deal && dealSlot && (
+          <DealOfDay item={toSuggested(deal, search?.transitDaysMax)} endsAt={dealSlot.endsAt} />
+        )}
 
         {/* The photo hero: the claim and the two ways in, straight after the
           day's deal. Marketing copy, not a database read — see the file's own
@@ -204,7 +207,11 @@ export default async function HomePage({
           row, straight under the hero: the claim, then machines to act on it.
           Rendered only when there is stock to suggest; an empty row with a
           heading is a sentence about nothing. */}
-        {results.length > 0 && <SuggestedRow items={results.slice(0, 12).map(toSuggested)} />}
+        {results.length > 0 && (
+          <SuggestedRow
+            items={results.slice(0, 12).map((r) => toSuggested(r, search?.transitDaysMax))}
+          />
+        )}
 
         {/* Supplied promotional creatives, one centred with its neighbours
           peeking in. Not a database read — see the file's own header. */}
