@@ -101,6 +101,38 @@ export function FilterRail({ facets, query, total, baseline }: FilterRailProps):
     commit(next);
   };
 
+  /**
+   * One more word, typed into the box and applied with Enter.
+   *
+   * **A word that names a filter option IS that filter.** "apple" is the Apple
+   * brand, "16 GB" is the 16 GB memory option, "latitude" is the Latitude
+   * series — so they tick that box, exactly as a click on it would. Typed as a
+   * text search instead, "apple" narrowed every other brand to zero and left
+   * Apple as a tick that followed from the search and could not be cleared;
+   * as the brand filter it is a tick the buyer can clear, and the other
+   * brands keep their counts, because a group's counts leave its own filter
+   * out. The match is the whole word against an option's label or value,
+   * case aside — "i5" is not "Core i5", and goes to the search.
+   *
+   * **Anything else is a search term.** Each is its own `q` in the URL and its
+   * own chip, so "acer" and "i5" can be taken back one at a time. The API reads
+   * one `q` and matches every word in it, so `toApiQueryString` joins them
+   * with spaces on the way out; the URL keeps them apart for the chips.
+   */
+  const addTerm = (term: string): void => {
+    const word = term.trim();
+    if (!word) return;
+    const option = optionNamed(facets, word);
+    if (option) {
+      if (!params.getAll(option.key).includes(option.value)) toggle(option.key, option.value);
+      return;
+    }
+    const next = new URLSearchParams(params);
+    if (next.getAll('q').includes(word)) return;
+    next.append('q', word);
+    commit(next);
+  };
+
   /** A radio-style pill group: picking the active one clears it. */
   const pick = (key: string, value: string): void =>
     setValue(key, params.get(key) === value ? '' : value);
@@ -186,13 +218,7 @@ export function FilterRail({ facets, query, total, baseline }: FilterRailProps):
           <label className="sr-only" htmlFor="fwithin">
             Search within results
           </label>
-          <Debounced
-            id="fwithin"
-            type="text"
-            placeholder="Search within results"
-            value={params.get('q') ?? ''}
-            onCommit={(v) => setValue('q', v)}
-          />
+          <TermInput id="fwithin" placeholder="Search within results" onAdd={addTerm} />
         </div>
 
         {applied.length > 0 && (
@@ -495,6 +521,7 @@ const PRICE_BANDS: ReadonlyArray<{ label: string; min: string; max: string }> = 
 
 /** Keys that hold several values at once, so a chip removes one rather than all. */
 const MULTI = new Set([
+  'q',
   'brand',
   'series',
   'cpu',
@@ -511,6 +538,28 @@ const MULTI = new Set([
   'warr',
 ]);
 const isMulti = (key: string): boolean => MULTI.has(key);
+
+/**
+ * The filter option a typed word names, if it names one: the whole word
+ * against an option's label or value, case aside, in the groups that take
+ * several values. Null when it names none, which makes it a search term.
+ */
+function optionNamed(
+  facets: Record<string, FacetGroup>,
+  word: string,
+): { key: string; value: string } | null {
+  const wanted = word.toLowerCase();
+  for (const key of MULTI) {
+    if (key === 'q') continue;
+    const group = facets[key];
+    if (!group || group.unavailable) continue;
+    const hit = group.options.find(
+      (o) => o.label.toLowerCase() === wanted || o.value.toLowerCase() === wanted,
+    );
+    if (hit) return { key, value: hit.value };
+  }
+  return null;
+}
 
 /** What an applied chip says. A chip reading `bmin=85` is a chip nobody can read. */
 function chipLabel(facets: Record<string, FacetGroup>, key: string, value: string): string {
@@ -785,6 +834,40 @@ function Band({
  * all filters, following a shared link — replaces what is in the box, while
  * typing is never interrupted mid-word by a round trip.
  */
+/**
+ * The search-within box. It applies on Enter and empties, so the next word can
+ * be typed straight away; what was applied is the chip above the groups, which
+ * is also where it is taken back. It used to apply as you typed and keep the
+ * text, which left the box and the chip saying the same thing twice and no
+ * way to add a second word without losing the first.
+ */
+function TermInput({
+  onAdd,
+  ...rest
+}: {
+  onAdd: (term: string) => void;
+} & Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'onKeyDown'
+>): React.JSX.Element {
+  const [local, setLocal] = React.useState('');
+  return (
+    <input
+      {...rest}
+      type="text"
+      value={local}
+      enterKeyHint="search"
+      onChange={(e) => setLocal(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        onAdd(local);
+        setLocal('');
+      }}
+    />
+  );
+}
+
 function Debounced({
   value,
   onCommit,

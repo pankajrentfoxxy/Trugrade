@@ -140,3 +140,91 @@
 .profile-hub-clauses li + li {
   margin-top: 10px;
 }
+
+/* A card, read: label on the left, the saved value on the right, one rule
+   between rows. Nothing here is a field — it is what "View" opens once the
+   cards are locked. */
+.profile-facts {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 0;
+}
+
+.profile-facts > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.profile-facts > div:last-child {
+  border-bottom: 0;
+}
+
+.profile-facts dt {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.profile-facts dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* A missing value never renders as a present one. */
+.profile-facts dd[data-missing='true'] {
+  color: var(--ink-4);
+}
+
+/* The one control a read-only row may carry: open the thing the row names.
+   Text, not a filled button — the panel has no primary action, and a row of
+   three filled buttons would say otherwise. */
+.profile-facts-action {
+  margin-left: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--acc-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.profile-facts-action:hover {
+  color: var(--ink);
+}
+
+.profile-facts-action:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.profile-facts-action:disabled {
+  cursor: progress;
+  text-decoration: none;
+}
+
+/* A row that has something to say wraps, so the message sits under its own
+   label and value rather than squeezed between them. */
+.profile-facts > div[data-has-note='true'] {
+  flex-wrap: wrap;
+}
+
+/* What went wrong and what to do about it, in words. */
+.profile-facts-note {
+  flex: 1 0 100%;
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  text-align: left;
+}

@@ -8,7 +8,7 @@
  * "Not given", never a blank row and never left out.
  */
 import * as React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { ResumableOnboarding } from '@trugrade/contracts';
 import { ToastProvider } from '@trugrade/ui';
@@ -23,6 +23,39 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
   usePathname: () => '/profile',
 }));
+
+// The Preferences card, read, lists the buyer's uploads and opens them.
+jest.mock('../../register/api', () => ({
+  ...jest.requireActual('../../register/api'),
+  getDocuments: jest.fn(),
+  getDocumentUrl: jest.fn(),
+}));
+import { getDocumentUrl, getDocuments } from '../../register/api';
+
+const listDocuments = getDocuments as jest.MockedFunction<typeof getDocuments>;
+const documentUrl = getDocumentUrl as jest.MockedFunction<typeof getDocumentUrl>;
+
+/** A file as the documents endpoint lists it. */
+const file = (docType: string, id: string, status = 'VERIFIED') =>
+  ({
+    id,
+    docType,
+    label: docType,
+    originalFilename: `${id}.pdf`,
+    mime: 'application/pdf',
+    sizeBytes: 1024,
+    status,
+    documentDate: null,
+    exifStrippedAt: null,
+    avVerdict: null,
+    rejectionReason: null,
+  }) as never;
+
+beforeEach(() => {
+  listDocuments.mockReset();
+  documentUrl.mockReset();
+  listDocuments.mockResolvedValue({ ok: true, data: [] } as never);
+});
 
 const section = (id: string) => PROFILE_SECTIONS.find((s) => s.id === id)!;
 
@@ -69,7 +102,9 @@ const ANSWERS: ResumableOnboarding['answers'] = {
     yearEstablished: '2014',
   },
   CONTACTS_ADDRESSES: {
-    billing: [{ line1: 'Plot 4', line2: 'Sector 9', city: 'Jaipur', state: '08', pincode: '302001' }],
+    billing: [
+      { line1: 'Plot 4', line2: 'Sector 9', city: 'Jaipur', state: '08', pincode: '302001' },
+    ],
     delivery: [
       {
         label: 'Rajasthan warehouse',
@@ -167,5 +202,102 @@ describe('the locked hub', () => {
     const facts = within(screen.getByRole('dialog')).getByTestId('section-facts');
     expect(within(facts).getAllByText('Not given').length).toBeGreaterThan(0);
     expect(within(facts).queryByText('✓')).toBeNull();
+  });
+});
+
+describe('the Preferences card, read: the documents', () => {
+  const openPreferences = async () => {
+    hub(onboarding(ANSWERS));
+    fireEvent.click(screen.getAllByRole('button', { name: 'View' })[3]!);
+    const dialog = screen.getByRole('dialog');
+    await waitFor(() => expect(listDocuments).toHaveBeenCalled());
+    return dialog;
+  };
+
+  it('reads "Not uploaded" for every document when there are no files, and offers nothing to open', async () => {
+    const dialog = await openPreferences();
+    const docs = within(await within(dialog).findByTestId('document-facts'));
+    await waitFor(() => expect(docs.getAllByText('Not uploaded')).toHaveLength(4));
+    expect(docs.queryByText('Uploaded')).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: /^View / })).toBeNull();
+    // The preference facts are still beneath.
+    expect(within(dialog).getByTestId('section-facts')).toBeInTheDocument();
+  });
+
+  it('offers View beside a file that exists, and only beside one', async () => {
+    listDocuments.mockResolvedValue({
+      ok: true,
+      data: [file('GST_CERTIFICATE', 'doc-gst'), file('PAN_CARD', 'doc-pan', 'REJECTED')],
+    } as never);
+    const dialog = await openPreferences();
+    expect(
+      await within(dialog).findByRole('button', { name: 'View GST certificate' }),
+    ).toBeInTheDocument();
+    // Rejected is not uploaded.
+    expect(within(dialog).queryByRole('button', { name: 'View PAN card' })).toBeNull();
+    const docs = within(within(dialog).getByTestId('document-facts'));
+    expect(docs.getAllByText('Uploaded')).toHaveLength(1);
+    expect(docs.getAllByText('Not uploaded')).toHaveLength(3);
+  });
+
+  it('opens the file through a fresh link, in a new tab', async () => {
+    listDocuments.mockResolvedValue({ ok: true, data: [file('PAN_CARD', 'doc-pan')] } as never);
+    documentUrl.mockResolvedValue({
+      ok: true,
+      data: { url: 'https://files.example/signed/doc-pan', expiresInSeconds: 60 },
+    } as never);
+    const opened = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const dialog = await openPreferences();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'View PAN card' }));
+    expect(documentUrl).toHaveBeenCalledWith('doc-pan');
+    await waitFor(() =>
+      expect(opened).toHaveBeenCalledWith(
+        'https://files.example/signed/doc-pan',
+        '_blank',
+        'noopener,noreferrer',
+      ),
+    );
+    opened.mockRestore();
+  });
+
+  it("says so, in the server's words, when a file will not open — and opens nothing", async () => {
+    listDocuments.mockResolvedValue({ ok: true, data: [file('PAN_CARD', 'doc-pan')] } as never);
+    documentUrl.mockResolvedValue({
+      ok: false,
+      status: 503,
+      code: 'PROVIDER_ERROR',
+      message: 'File storage did not answer. Try again in a moment.',
+    } as never);
+    const opened = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const dialog = await openPreferences();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'View PAN card' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'We could not open this file. File storage did not answer. Try again in a moment.',
+    );
+    expect(opened).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('button', { name: 'View PAN card' })).toBeEnabled();
+    opened.mockRestore();
+  });
+
+  it('never says "Not uploaded" when it could not check, and can try again', async () => {
+    listDocuments.mockResolvedValue({
+      ok: false,
+      status: 503,
+      code: 'UNKNOWN',
+      message: 'Something went wrong at our end.',
+    } as never);
+    const dialog = await openPreferences();
+    expect(await within(dialog).findByTestId('documents-unavailable')).toHaveTextContent(
+      'We could not load your documents. That is on our side, not yours.',
+    );
+    const docs = within(within(dialog).getByTestId('document-facts'));
+    expect(docs.getAllByText('Could not check')).toHaveLength(4);
+    expect(docs.queryByText('Not uploaded')).toBeNull();
+
+    listDocuments.mockResolvedValue({ ok: true, data: [file('PAN_CARD', 'doc-pan')] } as never);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }));
+    expect(
+      await within(dialog).findByRole('button', { name: 'View PAN card' }),
+    ).toBeInTheDocument();
   });
 });

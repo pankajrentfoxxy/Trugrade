@@ -256,14 +256,6 @@ export const NAV: readonly NavEntry[] = [
     surface: 'VENDOR',
   },
   {
-    to: '/vendor/documents',
-    label: 'Documents',
-    permission: 'listing.own.read',
-    group: 'Account',
-    orgType: 'VENDOR',
-    surface: 'VENDOR',
-  },
-  {
     to: '/vendor/profile',
     label: 'Profile',
     permission: 'listing.own.read',

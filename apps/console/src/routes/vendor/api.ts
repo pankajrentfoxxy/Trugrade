@@ -133,7 +133,6 @@ export const API = {
    * by this one endpoint.
    */
   payables: '/api/vendor/payables',
-  documents: '/api/onboarding/documents',
 
   /**
    * The vendor's own QC visits (T30) — org-scoped, and NOT the QC console's
@@ -299,16 +298,6 @@ export interface VendorFacility {
   pincode: string;
   dispatchFrom: string | null;
   unitsHeld: number;
-}
-
-export interface VendorDocument {
-  id: string;
-  docType: string;
-  label: string;
-  originalFilename: string | null;
-  status: string;
-  expiresOn: IsoDate | null;
-  uploadedAt: IsoDate;
 }
 
 /** Grades this vendor said they supply. Empty is never returned — the API falls back to all. */

@@ -4,14 +4,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** Hub restyle scope — board shells; visit/correction record routes stay in their files. */
+/**
+ * Hub restyle scope — board shells; visit/correction record routes stay in
+ * their files. `Documents.tsx` was in this list until the screen was removed:
+ * the profile's Documents card now lists and opens the files, and a budget
+ * that counted the copy of a screen that no longer exists would count nothing.
+ */
 const STAGE7_FILES = [
   'Dashboard.tsx',
   'Listings.tsx',
   'listings/CreateListingDialog.tsx',
   'Payouts.tsx',
   'Facilities.tsx',
-  'Documents.tsx',
 ] as const;
 
 /** Rough count of the same files before Stage 7 hub trim (board shells only). */

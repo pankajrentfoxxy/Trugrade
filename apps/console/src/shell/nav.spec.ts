@@ -60,8 +60,10 @@ describe('the org-type gate', () => {
 });
 
 /**
- * The supplier hub rail is ten places, and the four routes it leaves out are
- * still routes.
+ * The supplier hub rail is nine places, and the four routes it leaves out are
+ * still routes. (It was ten: Documents came off it when the profile's
+ * Documents card learned to open a file, which the Documents screen never
+ * could; that address now redirects to the profile.)
  *
  * Both halves matter. A rail that grows an item per route stops being a map and
  * becomes an index; a route dropped from the rail with no link on the screen
@@ -81,7 +83,7 @@ describe('the supplier hub rail', () => {
     ],
   });
 
-  it('shows the ten places, in order, and nothing else', () => {
+  it('shows the nine places, in order, and nothing else', () => {
     const railed = visibleGroups(owner)
       .flatMap(([, entries]) => entries)
       .filter((e) => e.surface === 'VENDOR' && e.rail !== false)
@@ -96,7 +98,6 @@ describe('the supplier hub rail', () => {
       'Payouts',
       'Team',
       'Facilities',
-      'Documents',
       'Profile',
     ]);
   });

@@ -1626,6 +1626,17 @@ button.ulink{background:none;border:0;padding:0;cursor:pointer;font:inherit;text
 .facts dt{font-size:12.5px;color:var(--ink-3)}
 .facts dd{font-size:13px;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
 .facts .denom{display:block;font-size:10px}
+/* The one control a read-only row may carry: open the thing the row names.
+   Text, not a filled button — the panel has no primary action. */
+.facts-action{margin-left:12px;padding:0;border:0;background:none;font:inherit;font-weight:700;
+  color:var(--acc-ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.facts-action:hover{color:var(--ink)}
+.facts-action:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.facts-action:disabled{cursor:progress;text-decoration:none}
+/* A row with something to say wraps, so the message sits under its own label
+   and value rather than squeezed between them. */
+.facts>div[data-has-note="true"]{flex-wrap:wrap}
+.facts-note{flex:1 0 100%;margin:6px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink);text-align:left}
 .why .whybody{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .why p{font-size:12.5px;line-height:1.6;color:var(--ink-2);margin:0}
 .why b{color:var(--ink)}

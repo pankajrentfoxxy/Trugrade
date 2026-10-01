@@ -14,6 +14,7 @@ import { useAuth } from '../../../lib/auth';
 import { useResource } from '../../../lib/useResource';
 import { useOnboardingReload } from '../../../lib/vendorOnboarding';
 import { SubmitForReview } from './SubmitForReview';
+import { SectionViewDialog } from './SectionView';
 import { API, type OrgProfile } from '../profile-api';
 import { ContactSection } from './sections/ContactSection';
 import { BusinessGstSection } from './sections/BusinessGstSection';
@@ -53,6 +54,7 @@ export function ProfileHub(): React.JSX.Element {
   const [onboarding, setOnboarding] = React.useState<ResumableOnboarding | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState<ProfileSectionId | null>(null);
+  const [viewing, setViewing] = React.useState<ProfileSectionId | null>(null);
   const toast = useToast();
 
   const loadOnboarding = React.useCallback(async (): Promise<void> => {
@@ -188,11 +190,41 @@ export function ProfileHub(): React.JSX.Element {
                 >
                   {done ? 'Edit' : 'Fill now'}
                 </Button>
-              ) : null}
+              ) : (
+                // Locked is not hidden. A verified supplier could see one line
+                // of their own GSTIN or pickup address and nothing more; this
+                // opens the card to read, with nothing on it that writes — the
+                // same control the buyer's profile has.
+                <Button
+                  className="profile-hub-action"
+                  variant="secondary"
+                  onClick={() => setViewing(section.id)}
+                >
+                  View
+                </Button>
+              )}
             </article>
           );
         })}
       </div>
+
+      {onboarding ? (
+        <SectionViewDialog
+          section={PROFILE_SECTIONS.find((s) => s.id === viewing) ?? null}
+          onboarding={onboarding}
+          account={
+            profile
+              ? {
+                  fullName: profile.fullName,
+                  email: profile.email,
+                  mobile: profile.mobile,
+                  legalName: profile.legalName,
+                }
+              : null
+          }
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
 
       <ContactSection
         open={open === 'account'}

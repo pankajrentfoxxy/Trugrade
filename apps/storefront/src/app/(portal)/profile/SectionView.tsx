@@ -3,8 +3,13 @@
 import * as React from 'react';
 import type { ResumableOnboarding } from '@trugrade/contracts';
 import { Modal } from '@trugrade/ui';
-import type { SessionView } from '../../register/api';
-import { stateName, stateNameForGstin } from '../../register/picklists';
+import {
+  getDocumentUrl,
+  getDocuments,
+  type KycDocument,
+  type SessionView,
+} from '../../register/api';
+import { BUYER_DOCUMENTS, stateName, stateNameForGstin } from '../../register/picklists';
 import type { ProfileSectionDef } from './sections.config';
 
 /**
@@ -20,6 +25,13 @@ import type { ProfileSectionDef } from './sections.config';
  * **A missing value is "Not given", in `--ink-4`.** Never a blank row, and
  * never left out — a card that shows six facts when it has six and four when
  * it has four is a card nobody can tell is incomplete.
+ *
+ * **The Preferences card can open its documents.** Its uploads are the one
+ * answer that is not a value but a thing — "Uploaded" says a file exists and
+ * nothing about which — so each uploaded document has a View control that
+ * opens the file itself, through the same short-lived link the checklist uses
+ * while the card is still editable. Still read-only: it opens, it does not
+ * replace or remove. The supplier hub's Documents card does the same.
  */
 
 export interface Fact {
@@ -94,7 +106,10 @@ export function sectionFacts(
         ...(trade && trade !== legal ? [{ label: 'Trading as', value: trade }] : []),
         { label: 'Constitution', value: str(company, 'constitution')?.replace(/_/g, ' ') ?? null },
         { label: 'Registered in', value: str(company, 'yearEstablished'), mono: true },
-        { label: 'State of registration', value: gstin ? (stateNameForGstin(gstin) ?? null) : null },
+        {
+          label: 'State of registration',
+          value: gstin ? (stateNameForGstin(gstin) ?? null) : null,
+        },
         { label: 'Billing address', value: address(billing) },
         { label: 'Billing city', value: str(billing, 'city') },
         { label: 'Billing state', value: stateName(str(billing, 'state') ?? '') ?? null },
@@ -154,6 +169,7 @@ export function SectionViewDialog({
   onClose: () => void;
 }): React.JSX.Element {
   const facts = section ? sectionFacts(section, onboarding, session) : [];
+  const withDocuments = section?.id === 'preferences';
   return (
     <Modal
       open={section !== null}
@@ -163,6 +179,7 @@ export function SectionViewDialog({
       // It asks for nothing, so a click beside it may close it.
       dismissOnBackdrop
     >
+      {withDocuments ? <DocumentFacts /> : null}
       <dl className="facts" data-testid="section-facts">
         {facts.map((f) => (
           <div key={f.label}>
@@ -176,5 +193,115 @@ export function SectionViewDialog({
         ))}
       </dl>
     </Modal>
+  );
+}
+
+/** What each document type is called — the same words the checklist uses. */
+const DOCUMENT_LABEL: Readonly<Record<string, string>> = {
+  GST_CERTIFICATE: 'GST certificate',
+  PAN_CARD: 'PAN card',
+  SIGNATORY_ID: 'Signatory ID',
+  PO_TEMPLATE: 'Purchase order template',
+};
+
+const labelOf = (docType: string, file: KycDocument | undefined): string =>
+  DOCUMENT_LABEL[docType] ?? file?.label ?? docType.toLowerCase().replace(/_/g, ' ');
+
+/**
+ * The documents the Preferences card holds, read, with a way to open each.
+ *
+ * Mounted only while its dialog is showing, so the file list is read when the
+ * buyer asks for it and not on every visit to the hub. The buyer's step saves
+ * no record of which documents were sent — the checklist reads the list each
+ * time — so the list is the only source here: a row is "Uploaded" when a file
+ * of that type exists that a reviewer has not rejected, and a View control
+ * appears only beside a file that is actually in the list.
+ *
+ * EVERY STATE
+ * -----------
+ *   - **Reading the list**: the rows say so, rather than "Not uploaded" about
+ *     a file that is merely slow to list.
+ *   - **The list would not load**: the rows say they could not be checked,
+ *     the note says it is on our side, and offers to try again.
+ *   - **Opening a file**: that row's control says "Opening…" and is disabled.
+ *   - **A file would not open**: a message under that row, in the server's
+ *     words, and the control is there to try again.
+ */
+function DocumentFacts(): React.JSX.Element {
+  const [docs, setDocs] = React.useState<KycDocument[] | null>(null);
+  const [listError, setListError] = React.useState<string | null>(null);
+  const [opening, setOpening] = React.useState<string | null>(null);
+  const [rowError, setRowError] = React.useState<Readonly<Record<string, string>>>({});
+
+  const load = React.useCallback((): void => {
+    setListError(null);
+    void getDocuments().then((result) => {
+      if (result.ok) setDocs(result.data);
+      else setListError(result.message);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  const view = async (type: string, id: string): Promise<void> => {
+    setOpening(type);
+    setRowError(({ [type]: _cleared, ...rest }) => rest);
+    const result = await getDocumentUrl(id);
+    setOpening(null);
+    if (!result.ok) {
+      setRowError((e) => ({ ...e, [type]: result.message }));
+      return;
+    }
+    window.open(result.data.url, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <>
+      <dl className="facts" data-testid="document-facts">
+        {BUYER_DOCUMENTS.map(({ docType }) => {
+          const file = docs?.find((d) => d.docType === docType && d.status !== 'REJECTED');
+          const label = labelOf(docType, file);
+          const problem = rowError[docType];
+          return (
+            <div key={docType} data-has-note={problem ? 'true' : undefined}>
+              <dt>{label}</dt>
+              {file ? (
+                <dd>
+                  <span>Uploaded</span>
+                  <button
+                    type="button"
+                    className="facts-action"
+                    disabled={opening === docType}
+                    aria-label={`View ${label}`}
+                    onClick={() => void view(docType, file.id)}
+                  >
+                    {opening === docType ? 'Opening…' : 'View'}
+                  </button>
+                </dd>
+              ) : (
+                <dd className="ink4">
+                  {docs ? 'Not uploaded' : listError ? 'Could not check' : 'Checking…'}
+                </dd>
+              )}
+              {problem ? (
+                <p className="facts-note" role="alert">
+                  We could not open this file. {problem}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </dl>
+      {listError ? (
+        <p className="facts-note" role="alert" data-testid="documents-unavailable">
+          We could not load your documents. That is on our side, not yours. {listError}{' '}
+          <button type="button" className="facts-action" onClick={load}>
+            Try again
+          </button>
+        </p>
+      ) : null}
+    </>
   );
 }

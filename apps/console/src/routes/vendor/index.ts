@@ -16,7 +16,6 @@ import { VendorProfileRoute } from './Profile';
 import { ListingWizardRoute } from './wizard/Wizard';
 import { VendorTeamRoute } from './Team';
 import { VendorFacilitiesRoute } from './Facilities';
-import { VendorDocumentsRoute } from './Documents';
 import { VendorDispatchRoute } from './Dispatch';
 import { VendorPayoutsRoute } from './Payouts';
 
@@ -180,9 +179,13 @@ export const vendorRoutes: VendorRoute[] = [
     element: guarded('listing.own.read', VendorFacilitiesRoute),
   },
   {
+    // The Documents screen is gone: it listed a supplier's uploads without
+    // being able to open one, and the profile's Documents card now does both.
+    // The address still resolves, to the profile, so a bookmark or a link in
+    // an old email lands on the screen that replaced it rather than on a 404.
     path: '/vendor/documents',
     permission: 'listing.own.read',
-    element: guarded('listing.own.read', VendorDocumentsRoute),
+    element: React.createElement(Navigate, { to: '/vendor/profile', replace: true }),
   },
   {
     path: '/vendor/dispatch',

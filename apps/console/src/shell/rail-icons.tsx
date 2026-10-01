@@ -105,11 +105,6 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M9.4 10.2h1.4M13.2 10.2h1.4" />
     </Glyph>
   ),
-  '/vendor/documents': (
-    <Glyph>
-      <path d="M3.2 19V5.6a1 1 0 0 1 1-1h4.4l2 2.6h10.2V19a1 1 0 0 1-1 1H4.2a1 1 0 0 1-1-1z" />
-    </Glyph>
-  ),
   '/vendor/profile': (
     <Glyph>
       <circle cx="12" cy="8.4" r="3.6" />

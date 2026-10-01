@@ -20,10 +20,11 @@
  *    as 0% would be a misrepresentation of the machine.
  */
 import * as React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { findVendorIdentityLeaks, type VendorIdentity } from '@trugrade/contracts';
 import { FilterRail } from '../FilterRail';
+import { toApiQueryString } from './query';
 import { ResultsList } from './ResultsList';
 import type { FacetGroup, SearchResult } from '../../lib/api';
 
@@ -187,7 +188,8 @@ describe('the search board reproduces its URL', () => {
     expect(screen.getByRole('checkbox', { name: /^B · good/ })).not.toBeChecked();
 
     // The free-text and range values, back in their boxes.
-    expect(screen.getByPlaceholderText('Search within results')).toHaveValue('aspire');
+    // The box is for the NEXT word; the applied one is the chip below it.
+    expect(screen.getByPlaceholderText('Search within results')).toHaveValue('');
     expect(screen.getByLabelText(/Minimum measured battery health/)).toHaveValue(85);
 
     // Every applied filter is a removable chip, and each one reads as English
@@ -285,6 +287,68 @@ describe('the search board reproduces its URL', () => {
     };
     render(<FilterRail facets={narrowed} query="series=Aspire" total={48} />);
     expect(screen.getByRole('checkbox', { name: /^Acer/ })).not.toBeChecked();
+  });
+
+  it('applies a search word on Enter, as its own chip, and empties the box for the next', () => {
+    render(<FilterRail facets={facets()} query="q=acer" total={48} />);
+    const box = screen.getByPlaceholderText('Search within results');
+    // The word already applied is a chip, not text in the box.
+    expect(box).toHaveValue('');
+    expect(screen.getByRole('button', { name: /“acer”/ })).toBeInTheDocument();
+
+    fireEvent.change(box, { target: { value: '  i5 ' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+
+    // Appended, trimmed, beside the first — never in place of it.
+    expect(push).toHaveBeenCalledTimes(1);
+    const target = new URLSearchParams(String(push.mock.calls[0]![0]).split('?')[1]);
+    expect(target.getAll('q')).toEqual(['acer', 'i5']);
+    expect(box).toHaveValue('');
+  });
+
+  it('applies a word that names a filter option as that filter, not as a search', () => {
+    render(<FilterRail facets={facets()} query="" total={48} />);
+    const box = screen.getByPlaceholderText('Search within results');
+
+    // The brand, by its label, case aside.
+    fireEvent.change(box, { target: { value: 'ACER' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    let target = new URLSearchParams(String(push.mock.calls[0]![0]).split('?')[1]);
+    expect(target.getAll('brand')).toEqual(['acer']);
+    expect(target.get('q')).toBeNull();
+
+    // The memory option, by its label.
+    fireEvent.change(box, { target: { value: '16 GB' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    target = new URLSearchParams(String(push.mock.calls[1]![0]).split('?')[1]);
+    expect(target.getAll('ram')).toEqual(['16']);
+    expect(target.get('q')).toBeNull();
+
+    // Part of a label is not the label: a search term, as before.
+    fireEvent.change(box, { target: { value: 'i5' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    target = new URLSearchParams(String(push.mock.calls[2]![0]).split('?')[1]);
+    expect(target.getAll('q')).toEqual(['i5']);
+    expect(box).toHaveValue('');
+  });
+
+  it('does not apply an empty or repeated word, and nothing applies without Enter', () => {
+    // 'thinkpad' names no option in the fixture, so it is a plain search term.
+    render(<FilterRail facets={facets()} query="q=thinkpad" total={48} />);
+    const box = screen.getByPlaceholderText('Search within results');
+    fireEvent.change(box, { target: { value: 'lenovo' } });
+    expect(push).not.toHaveBeenCalled();
+    fireEvent.change(box, { target: { value: '   ' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.change(box, { target: { value: 'thinkpad' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('sends every word to the API as one term, which matches all of them', () => {
+    expect(
+      new URLSearchParams(toApiQueryString({ q: ['acer', 'i5'], brand: 'acer' })).get('q'),
+    ).toBe('acer i5');
   });
 
   it('arrives with no box ticked and no filter applied', () => {
